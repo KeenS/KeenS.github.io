@@ -15,6 +15,7 @@ footer: true
  + [Qiita](http://qiita.com/)
  + [COOKPAD](http://cookpad.com/)
  + [LispHub](http://lisphub.jp/)
+ + [Markdown記法詳解](http://blog.2310.net/archives/6)
  + [Lisp Web Tale](http://lispwebtales.ppenev.com/) -- LispでWebアプリを開発したときのお話を本にしたものをWebで公開したものだそうです
  + [マッキーのはてブ](http://namareba.hatenablog.com)
  + [beeEaMa姉さんのブログ](http://amacbee.github.io/)
