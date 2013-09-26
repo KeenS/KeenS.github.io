@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Github | κeenのHappy Hacκing Blog]]></title>
   <link href="http://KeenS.github.io/blog/categories/github/atom.xml" rel="self"/>
   <link href="http://KeenS.github.io/"/>
-  <updated>2013-09-26T22:55:00+09:00</updated>
+  <updated>2013-09-26T23:40:06+09:00</updated>
   <id>http://KeenS.github.io/</id>
   <author>
     <name><![CDATA[κeen]]></name>
@@ -12,6 +12,163 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Octopressのgistプラグインが動かなかったので修正した]]></title>
+    <link href="http://KeenS.github.io/blog/2013/09/26/patch-to-gist-plugin/"/>
+    <updated>2013-09-26T22:57:00+09:00</updated>
+    <id>http://KeenS.github.io/blog/2013/09/26/patch-to-gist-plugin</id>
+    <content type="html"><![CDATA[<p>どうもGithubのgistのURLが変わってる(?)っぽくてOctopressのgistプラグインが動いてくれなかったので修正しました。</p>
+
+<!-- more -->
+
+
+<p>Octopressの最新版でも修正されてなかったっぽいです。自分の使い方が悪かったのかなぁ…</p>
+
+<p>原因は生のソースコードを取ってくるときに<code>"https://raw.github.com/gist/#{gist}/#{file}"</code>にアクセスするんですがそいつが404返すんですね。ブラウザからgistにいって"view raw"をクリックすると<code>"https://gist.github.com/#{gist_id}/#{gist}/raw/#{file}"</code>でした。gist_idってかGithubアカウントです。この辺、挙動が怪しくて、gist_idがなくてもリダイレクトしてくれたりしてくれなかったりします。APIによって違うようです。問題の<code>raw</code>APIはリダイレクトしてくれないので割と大きめにプラグインを書き換える必要がありました。
+<code>
+diff --cc plugins/gist_tag.rb
+index 1620345,0000000..58acd2a
+mode 100644,000000..100644
+--- a/plugins/gist_tag.rb
++++ b/plugins/gist_tag.rb
+@@@ -1,105 -1,0 +1,105 @@@
+ +# A Liquid tag for Jekyll sites that allows embedding Gists and showing code for non-JavaScript enabled browsers and readers.
+ +# by: Brandon Tilly
+ +# Source URL: https://gist.github.com/1027674
+ +# Post http://brandontilley.com/2011/01/31/gist-tag-for-jekyll.html
+ +#
+ +# Example usage:  //embeds a gist for this plugin
+ +
+ +require 'cgi'
+ +require 'digest/md5'
+ +require 'net/https'
+ +require 'uri'
+ +
+ +module Jekyll
+ +  class GistTag &lt; Liquid::Tag
+ +    def initialize(tag_name, text, token)
+ +      super
+ +      @text           = text
+ +      @cache_disabled = false
+ +      @cache_folder   = File.expand_path "../.gist-cache", File.dirname(__FILE__)
+ +      FileUtils.mkdir_p @cache_folder
+ +    end
+ +
+ +    def render(context)
+-       if parts = @text.match(/([a-zA-Z\d]*) (.*)/)
+-         gist, file = parts[1].strip, parts[2].strip
+-         script_url = script_url_for gist, file
+-         code       = get_cached_gist(gist, file) || get_gist_from_web(gist, file)
+++      if parts = @text.match(/([a-zA-Z]*) ([a-zA-Z\d]*) (.*)/)
+++        gist_id, gist, file = parts[1].strip, parts[2].strip, parts[3].strip
+++        script_url = script_url_for gist_id, gist, file
+++        code       = get_cached_gist(gist_id, gist, file) || get_gist_from_web(gist_id, gist, file)
+ +        html_output_for script_url, code
+ +      else
+ +        ""
+ +      end
+ +    end
+ +
+ +    def html_output_for(script_url, code)
+ +      code = CGI.escapeHTML code
+ +      &lt;&lt;-HTML
+ +&lt;div&gt;&lt;script src='#{script_url}'&gt;&lt;/script&gt;
+ +&lt;noscript&gt;&lt;pre&gt;&lt;code&gt;#{code}&lt;/code&gt;&lt;/pre&gt;&lt;/noscript&gt;&lt;/div&gt;
+ +      HTML
+ +    end
+ +
+-     def script_url_for(gist_id, filename)
+-       url = "https://gist.github.com/#{gist_id}.js"
+++    def script_url_for(gist_id, gist, filename)
+++      url = "https://gist.github.com/#{gist_id}/#{gist}.js"
+ +      url = "#{url}?file=#{filename}" unless filename.nil? or filename.empty?
+ +      url
+ +    end
+ +
+-     def get_gist_url_for(gist, file)
+-       "https://raw.github.com/gist/#{gist}/#{file}"
+++    def get_gist_url_for(gist_id, gist, file)
+++      "https://gist.github.com/#{gist_id}/#{gist}/raw/#{file}"
+ +    end
+ +
+-     def cache(gist, file, data)
+-       cache_file = get_cache_file_for gist, file
+++    def cache(gist_id, gist, file, data)
+++      cache_file = get_cache_file_for gist_id, gist, file
+ +      File.open(cache_file, "w") do |io|
+ +        io.write data
+ +      end
+ +    end
+ +
+-     def get_cached_gist(gist, file)
+++    def get_cached_gist(gist_id, gist, file)
+ +      return nil if @cache_disabled
+-       cache_file = get_cache_file_for gist, file
+++      cache_file = get_cache_file_for gist_id, gist, file
+ +      File.read cache_file if File.exist? cache_file
+ +    end
+ +
+-     def get_cache_file_for(gist, file)
+++    def get_cache_file_for(gist_id, gist, file)
+ +      bad_chars = /[^a-zA-Z0-9\-_.]/
+ +      gist      = gist.gsub bad_chars, ''
+ +      file      = file.gsub bad_chars, ''
+-       md5       = Digest::MD5.hexdigest "#{gist}-#{file}"
+-       File.join @cache_folder, "#{gist}-#{file}-#{md5}.cache"
+++      md5       = Digest::MD5.hexdigest "#{gist_id}-#{gist}-#{file}"
+++      File.join @cache_folder, "#{gist_id}-#{gist}-#{file}-#{md5}.cache"
+ +    end
+ +
+-     def get_gist_from_web(gist, file)
+-       gist_url          = get_gist_url_for gist, file
+++    def get_gist_from_web(gist_id, gist, file)
+++      gist_url          = get_gist_url_for gist_id, gist, file
+ +      raw_uri           = URI.parse gist_url
+ +      proxy             = ENV['http_proxy']
+ +      if proxy
+ +        proxy_uri       = URI.parse(proxy)
+ +        https           = Net::HTTP::Proxy(proxy_uri.host, proxy_uri.port).new raw_uri.host, raw_uri.port
+ +      else
+ +        https           = Net::HTTP.new raw_uri.host, raw_uri.port
+ +      end
+ +      https.use_ssl     = true
+ +      https.verify_mode = OpenSSL::SSL::VERIFY_NONE
+ +      request           = Net::HTTP::Get.new raw_uri.request_uri
+ +      data              = https.request request
+ +      if data.code.to_i != 200
+ +        raise RuntimeError, "Gist replied with #{data.code} for #{gist_url}"
+ +      end
+ +      data              = data.body
+-       cache gist, file, data unless @cache_disabled
+++      cache gist_id, gist, file, data unless @cache_disabled
+ +      data
+ +    end
+ +  end
+ +
+ +  class GistTagNoCache &lt; GistTag
+ +    def initialize(tag_name, text, token)
+ +      super
+ +      @cache_disabled = true
+ +    end
+ +  end
+ +end
+ +
+ +Liquid::Template.register_tag('gist', Jekyll::GistTag)
+ +Liquid::Template.register_tag('gistnocache', Jekyll::GistTagNoCache)
+</code>
+なんかOctopressのブランチが面倒だったり<code>magit.el</code>の使い方がよく分らなかったのでアレですが伝えたいことは伝わるdiffだと思います。</p>
+
+<p>見ての通り<code>gist_id</code>というパラメーターを追加してリクエストURLをちょこっと書き換えただけです。この修正を加えたあとは</p>
+
+<pre><code>{%  gist KeenS 6688683 script.lisp %}
+</code></pre>
+
+<p>で使えます。</p>
+
+<p>本当にこれでいいのかなあ…なんか違う気がするけどこれしかないのだから仕方がないですね。正確な情報を持ってる方いらっしゃいましたらコメントお願いします。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Gitあれこれ]]></title>
