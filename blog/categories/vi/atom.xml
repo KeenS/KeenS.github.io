@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: vi | κeenのHappy Hacκing Blog]]></title>
+  <link href="http://KeenS.github.io/blog/categories/vi/atom.xml" rel="self"/>
+  <link href="http://KeenS.github.io/"/>
+  <updated>2013-12-13T05:10:31+09:00</updated>
+  <id>http://KeenS.github.io/</id>
+  <author>
+    <name><![CDATA[κeen]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[.emacsの整理をした話 + EmacsとViとShellとLispを悪魔合体させたら超絶便利だった]]></title>
+    <link href="http://KeenS.github.io/blog/2013/12/13/dot-emacs-clean-up/"/>
+    <updated>2013-12-13T02:55:00+09:00</updated>
+    <id>http://KeenS.github.io/blog/2013/12/13/dot-emacs-clean-up</id>
+    <content type="html"><![CDATA[<p>やや長いタイトルですが・・・
+年末になって大掃除がやってきましたね。みなさんもそろそろ.emacsの大掃除をしましょう。</p>
+
+<!-- more -->
+
+
+<p>私の.emacsは元々1300行ちょいあってEmacsの起動に7~8秒(体感)かかってましたが
+大掃除&amp;高速化をした結果800行弱、起動に1秒(体感)ほどになったので整理の仕方を共有しますね。
+initローダーとかは使ってません。ぜんぶ<code>init.el</code>に書いてます。</p>
+
+<h1>1. Emacsの最新版を使う</h1>
+
+<p>結構重要です。「標準のやつだと欲いこの機能がないから拡張パッケージ入れた」なんてのも最新版では改善されていたりします。
+例えば私は<code>emacs-w3m</code>を使っていましたが、Emacsのmasterブランチには<code>eww</code>なるEmacs Lisp製のブラウザが入っているのでそれを使うようにしました。</p>
+
+<p>ただ、これが絶対的正義かというとそうでもなく、パッケージで入れてない分
+Ubuntuのインプットメソッドとの連携部分がなかったので<code>uim.el</code>を入れる
+必要が出てきたりと、面倒な部分もありました。Emacs標準のインプットメソッドはどうにも使いものにならず、
+<code>ddskk</code>もuim-skkとコンフリクトする(というか<code>C-j</code>上書きとかありえない)ので使いません。インプットメソッドの切り替え部分は</p>
+
+<p><code>common-lisp
+(global-set-key (kbd "&lt;hiragana-katakana&gt;") #'uim-mode)
+(global-set-key (kbd "&lt;zenkaku-hankaku&gt;") #'uim-mode) (autoload #'uim-mode "uim" nil t)
+</code>
+になりました。</p>
+
+<h1>2. 普段使わない設定は全部消す</h1>
+
+<p>基本ですね。私は<code>summary-edit.el</code>だとか<code>multiverse.el</code>だとかるびきちさんの本を読んで便利そうだから入れたものの、
+結局使わなかったものの設定&amp;elispをごっそり削除。
+あとかなりの言語に対してデフォルトで<code>auto-mode-alist</code>が設定されていたので<code>auto-mode-alist</code>の設定も全部消して、必要になったら書き足すようにしました。</p>
+
+<h1>3. 普段使っていても代替の効くものは削除</h1>
+
+<p>これは高速化の意味と自分の環境に依存しない意味があります。
+最近、自分のラップトップ以外でもEmacsを触ることが多くあって、デフォルトのキーを上書きして使ってる部分で何度も誤操作したのでそれを減らす目的です。
+<code>bm.el</code>は<code>C-x r SPC</code>の<code>register</code>系で対応(registerは覚えれば使い出がありそうなのでいつか解説書くかもです)、<code>open-junk-file.el</code>は<code>~/tmp</code>を作って対応、
+<code>recentf-ext.el</code>は<code>helm-file-buffers</code>だとか。</p>
+
+<p>あと全て<code>helm.el</code>に置き換えて<code>helm.el</code>と<code>anything.el</code>が混在してる状態をどうにかしたかったのですが、<code>php-completion.el</code>かなにかが依存しててトドメを刺せませんでした。</p>
+
+<p>あと、<code>viewer</code>の代替を探していたらタイトルにあるように悪魔合体が起きたので後で書きますね。</p>
+
+<h1>4. できる限り標準のものを使う</h1>
+
+<p>標準で提供されているパッケージは<code>autoload</code>が<code>emacs</code>バイナリに組込まれてる(と思う)ので起動時のオーバーヘッドはありません。
+<code>flymake.el</code>や<code>ruby-mode.el</code>が標準で提供されてるのに気付いたのでそれを使ったりなど。一度<code>(emacsroot)/lisp</code>以下を眺めてみることをお勧めします。結構発見があるものです。</p>
+
+<h1>5.<code>autoload</code>を使う</h1>
+
+<p><code>autoload</code>とはファイルの読み込みを必要になるまで遅らせる仕組みです。「必要になる」ってのはそのファイルで定義されている関数が呼ばれたときです。
+賢い<code>require</code>と思えば良いでしょう。</p>
+
+<pre><code>(autoload #'関数名 "関数が呼ばれたときに読むファイル名" nil interactivep)
+</code></pre>
+
+<p>みたいに使います。<code>interactivep</code>の部分は<code>M-x</code>で呼ぶものなら<code>t</code>、そうでなければ<code>nil</code>です。
+<code>require</code>を<code>autoload</code>で書き換えていけば理論上起動時の読み込み0にできるのでかなり高速化できます。</p>
+
+<p>が、実際は一々<code>autoload</code>書くのはしんどいので次です。</p>
+
+<h1>6.できる限り<code>package.el</code>を使う</h1>
+
+<p><code>package.el</code>は必要な関数の<code>autoload</code>を自動生成して読み込んでおいてくれるのでかなりの手間が省けます。
+自動生成された<code>autoload</code>は<code>elpa/パッケージのディレクトリ/パッケージ-autoloads.el</code>にあるので確認しながら<code>init.el</code>の邪魔なものを消していきます。
+これでかなり<code>init.el</code>の行数が減ります。今まで無駄な設定していたんだなと気付きます。</p>
+
+<h1>7. <code>eval-after-load</code>を使う</h1>
+
+<p>8割程の設定は<code>autoload</code>で対応できるのですが、
+踏み込んだ設定をしているとパッケージの内部の関数を使ってしまって
+どうしてもその式が評価される前にパッケージが読み込まれている必要があることがあります。</p>
+
+<p>そんなときは<code>eval-after-load</code>を使います。名前のまんま、ロードした後で<code>eval</code>してくれます。</p>
+
+<pre><code>(eval-after-load 'ファイル名
+    '式)
+</code></pre>
+
+<p>の形で使います。複数の式を使いたい場合は<code>progn</code>を使って</p>
+
+<pre><code>(eval-after-load 'ファイル名
+    '(progn
+         式1
+         式2...))
+</code></pre>
+
+<p>のように使います。あるパッケージの拡張パッケージなんかもここで読むと良いかもしれません。</p>
+
+<h1>8.その他</h1>
+
+<p>メールクライアントを標準のものにしようとしましたが、<code>gnus.el</code>はちょっと受け付けなくてその他はimapを喋らないので断念。
+でも色々調べてたら<code>mew</code>より<code>wanderlust</code>の方が良いようなので使い初めました。表示が綺麗で良いですね。
+HTMLのレンダリングも<code>emacs-w3m</code>に頼らず標準の<code>shr.el</code>を使っているのも◎。</p>
+
+<p>同じような経緯で<code>JDEE</code>をやめて<code>malabar.el</code>を使うようにしました。ただ、私は<code>maven</code>使いではないので微妙ではあります。
+まあ、そもそもプロジェクト単位でJavaを書くことがないってのもあるんですが。Androidのスケルトンがantなのでantでできたら嬉しいなーって。</p>
+
+<h1>EmacsとViとShellとLispを悪魔合体させた話</h1>
+
+<p>私はEmacsの狂信者ですが読み専のときはちょいちょいviを使うこともあります。片手で操作できるのは便利です。
+Emacsで読み専といえば<code>view-mode</code>です。そこでもhjklを使うべく<code>view-mode-map</code>に手を加えてましたが、大掃除ということで全部削除。</p>
+
+<p>その後で<code>emacsroot/lisp/emulate/</code>以下を読んでいるとなんかviのエミュレーターが3つも見付かりました。<code>vi.el</code>、<code>vip.el</code>、<code>viper.el</code>です。
+後者になるほどviとの互換性が高くなります。とりあえずは<code>hjkl</code>が使えれば良いので<code>vi.el</code>を使ってみたところ、ん〜…といったところ。<code>vip.el</code>と試して結局<code>viper.el</code>に落ち着きました。</p>
+
+<pre><code>(global-set-key (kbd "C-x C-q") #'(lambda ()
+                    (interactive)
+                    (toggle-viper-mode)
+                    (force-mode-line-update)))
+</code></pre>
+
+<p>設定はこんな感じです。<code>toggle-viper-mode</code>してもモードラインの表示が変わらないことがあったので<code>force-mode-line-update</code>を加えました。</p>
+
+<p><code>viper.el</code>は単なるviのエミュレートだけではなく、Levelに応じて良い感じにemacsと悪魔合体してくれます。私は最高レベルの5にしました。"C-x C-s"など
+基本的なコマンドはそのまま使えるようになってます。<code>:</code>で始まるvi(ex)のコマンドも使えます。"C-z"でemacs&lt;&ndash;>viを切り替えたり。非常に便利です。</p>
+
+<p>尚、私はvi使いであってvim使いではないのでevilは使いません。</p>
+
+<p>もう一つ、shellの話。今までは<code>multiterm</code> x <code>zsh</code>な感じでしたが、「できる限り標準のものを使う」方針で<code>eshell</code>に切り替えました。<code>eshell</code>はEmacs Lispで書かれたshellです。これが思った以上に便利です。
+るびきちさんの本では標準出力とエラー出力の切り分けができてないと書かれてましたがそれは修正されてるようです。</p>
+
+<p>あとは<code>/dev/kill</code>だとか<code>&gt;&gt;&gt;</code>だとかバッファへのリダイレクトだとか<code>grep</code>の上書きだとか色々楽しい拡張もあるのですが、一番は<code>eshell</code>がLispであること。
+<code>eshell</code>上で任意のEmacs Lisp式を実行できます。最近Emacs LispやLispに精通してきたので非常に有り難いです。
+それにファイルを開くときもその後で同じディレクトリのファイルを開くことが多いので一旦 <code>cd</code>してから<code>find-file</code>をするとアクセスし易くて捗ります。
+もう起動時に<code>eshell</code>が立ち上がるようにして、基本そこから操作するようにしてます。guakeもそんなに使わなくなりました。
+他の環境でも使えるので安心して依存できます。</p>
+
+<p>で、ファイルを開くときはどうしてるかというと実はemacsの<code>find-file</code>ではなくviの<code>:e file-name</code>です。Emacs上でLispで出来たShellを使いつつviを動かしてます。
+かなり人を選びますが「EmacsのヘビーユーザーでLispに精通しててviを便利だと思ってる人」は試してみてはいかがでしょうか。</p>
+]]></content>
+  </entry>
+  
+</feed>
