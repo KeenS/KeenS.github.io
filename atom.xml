@@ -4,7 +4,7 @@
   <title><![CDATA[κeenのHappy Hacκing Blog]]></title>
   <link href="http://KeenS.github.io/atom.xml" rel="self"/>
   <link href="http://KeenS.github.io/"/>
-  <updated>2013-12-16T22:39:11+09:00</updated>
+  <updated>2014-01-19T19:16:36+09:00</updated>
   <id>http://KeenS.github.io/</id>
   <author>
     <name><![CDATA[κeen]]></name>
@@ -12,6 +12,180 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[RSPiでMongoDBを動かし、twitter post alertを作った話]]></title>
+    <link href="http://KeenS.github.io/blog/2014/01/19/rspi-plus-mongodb-plus-twitter/"/>
+    <updated>2014-01-19T18:17:00+09:00</updated>
+    <id>http://KeenS.github.io/blog/2014/01/19/rspi-plus-mongodb-plus-twitter</id>
+    <content type="html"><![CDATA[<p>κeenです。ここのところ寒い日が続いてますね。寒いと家に扃(ひきこも)ってTweet数が急上昇します。  すると一日に何postしてるか気になるのでカウンタを作りました。<br/>
+そのときの苦労話です。</p>
+
+<!-- more -->
+
+
+<p>ただ、どうせ記録取るなら色々やりたいので一日のpost数、fav数、そしてメンヘラなことにフォロー/フォロワー全員のidを毎日記録することにしました。これで誰にリムられたかブロられたか一目瞭然ですね。</p>
+
+<p>ここで一つ問題が。post, fav数は良いのですがフォロー/フォロワーのid一覧は毎日変わるのでmysqlで管理するのはちょっと面倒かなと。なのでMongoDBで管理することにしたいんですが、<code>apt</code>にないんですよね。仕方ないので手動ビルドで対応しました。</p>
+
+<h2>MongoDBのビルド</h2>
+
+<p><a href="http://c-mobberley.com/wordpress/index.php/2013/10/14/raspberry-pi-mongodb-installation-the-working-guide/">ここ</a>を参考に</p>
+
+<pre><code>cd ~/compile
+sudo apt-get install build-essential libboost-filesystem-dev libboost-program-options-dev libboost-system-dev libboost-thread-dev scons libboost-all-dev python-pymongo git
+git clone https://github.com/skrabban/mongo-nonx86
+cd mongo-nonx86
+sudo scons
+</code></pre>
+
+<p>としました。が、<code>scons</code>に一晩かかるとのことなので放置してたら何故かraspberry piが落ちてる…<br/>
+気をとりなおして再起動。もう一度<code>sudo scons</code>すると今度はエラー終了。<code>sig 9 killed</code>…いや、私なにもしてないですよ?ダメ元で今度は</p>
+
+<pre><code>sudo scons install
+</code></pre>
+
+<p>したら完走。良ク分カラン。</p>
+
+<h2>MongoDBのインストール</h2>
+
+<p>さっきのでインストール終わったと思うでしょ？違うんですよ。<code>init.d</code>だとか<code>mongodb.conf</code>だとかは配置されてないんですよ。<code>debian/</code>以下に色々入ってるので</p>
+
+<pre><code>cd debian
+sudo cp mongodb.conf /etc/mongodb.conf
+</code></pre>
+
+<p>までは良いのですが、<code>init.d</code>と<code>mongodb.upstart</code>の<code>mongod</code>のパスが<code>/usr/bin/mongod</code>でハードコードされてるんですよ。上の<code>sudo scons install</code>だと<code>/usr/local/bin/mongod</code>です。さらに起動オプションに<code>--dbpadh /var/lib/mongodb</code>と<code>--logpath /var/log/mongodb/mongodb.log</code>が指定されていて、<code>mongodb.conf</code>で上書きしているにも係らずそこまでのパスが存在しないとエラー吐いて起動してくれないので修正。<br/>
+<code>mongodb.upstart</code>は直ぐ分かるので良いとして、<code>init.d</code>は</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>48d47
+</span><span class='line'>&lt; 
+</span><span class='line'>50c49
+</span><span class='line'>&lt; DAEMON=/usr/bin/mongod
+</span><span class='line'>---
+</span><span class='line'>&gt; DAEMON=/usr/local/bin/mongod
+</span><span class='line'>100c99
+</span><span class='line'>&lt; DAEMON_OPTS="$DAEMON_OPTS --config $CONF"
+</span><span class='line'>---
+</span><span class='line'>&gt; DAEMON_OPTS="run --config $CONF"
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>な感じの修正です。なんか空行が一つ減ってますが気にしない。<br/>
+ここまでしたらようやく</p>
+
+<pre><code>chmod +x init.d mongodb.upstart
+sudo cp init.d /etc/init.d/mongodb
+sudo cp mongodb.upstart /etc/init/mongodb
+</code></pre>
+
+<p>で完了です。<code>man</code>とかもあるのですが配置の仕方が分からないので放置←</p>
+
+<pre><code>sudo service mongodb start
+mongo
+</code></pre>
+
+<p>で接続確認できます。</p>
+
+<h2>Twitterのpostを集約する</h2>
+
+<p>ビックリするくらい簡単。twitterのAPI keyを持ってる前提ですが。</p>
+
+<pre><code>sudo gem install twitter mongo
+</code></pre>
+
+<p>で必要なgemをインストールし、
+<code>~/.twitter.rb</code>に</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="vg">$client</span> <span class="o">=</span> <span class="ss">Twitter</span><span class="p">:</span><span class="ss">:REST</span><span class="o">::</span><span class="no">Client</span><span class="o">.</span><span class="n">new</span> <span class="k">do</span> <span class="o">|</span><span class="n">conf</span><span class="o">|</span>
+</span><span class='line'>  <span class="n">conf</span><span class="o">.</span><span class="n">consumer_key</span> <span class="o">=</span> <span class="s2">&quot;yours&quot;</span>
+</span><span class='line'>  <span class="n">conf</span><span class="o">.</span><span class="n">consumer_secret</span> <span class="o">=</span> <span class="s2">&quot;yours&quot;</span>
+</span><span class='line'>  <span class="n">conf</span><span class="o">.</span><span class="n">access_token</span> <span class="o">=</span> <span class="s2">&quot;yours&quot;</span>
+</span><span class='line'>  <span class="n">conf</span><span class="o">.</span><span class="n">access_token_secret</span> <span class="o">=</span> <span class="s2">&quot;yours&quot;</span>
+</span><span class='line'><span class="k">end</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>と保存しておきます。昔と形式が変わりましたね。この形式になってからスレッドセーフになり、Twitter Stream APIにも対応してるようです。</p>
+
+<p>集計ですが</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="c1">#! /usr/local/bin/ruby</span>
+</span><span class='line'><span class="c1"># coding: utf-8</span>
+</span><span class='line'><span class="nb">require</span> <span class="s1">&#39;twitter&#39;</span>
+</span><span class='line'><span class="nb">require</span> <span class="s1">&#39;mongo&#39;</span>
+</span><span class='line'><span class="nb">require</span> <span class="s1">&#39;time&#39;</span>
+</span><span class='line'><span class="nb">load</span> <span class="s2">&quot;~/.twitter.rb&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">doc</span> <span class="o">=</span>  <span class="p">{</span> <span class="s2">&quot;tweets&quot;</span>    <span class="o">=&gt;</span> <span class="vg">$client</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">tweets_count</span><span class="p">,</span>
+</span><span class='line'>         <span class="s2">&quot;favs&quot;</span>      <span class="o">=&gt;</span> <span class="vg">$client</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">favorites_count</span><span class="p">,</span>
+</span><span class='line'>         <span class="s2">&quot;followers&quot;</span> <span class="o">=&gt;</span> <span class="vg">$client</span><span class="o">.</span><span class="n">friend_ids</span><span class="o">.</span><span class="n">to_a</span><span class="p">,</span>
+</span><span class='line'>         <span class="s2">&quot;friends&quot;</span>   <span class="o">=&gt;</span> <span class="vg">$client</span><span class="o">.</span><span class="n">follower_ids</span><span class="o">.</span><span class="n">to_a</span><span class="p">,</span>
+</span><span class='line'>         <span class="s2">&quot;timestamp&quot;</span> <span class="o">=&gt;</span>  <span class="no">Time</span><span class="o">.</span><span class="n">now</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s2">&quot;%Y%m%d%H%M%S&quot;</span><span class="p">)}</span>
+</span><span class='line'><span class="n">col</span> <span class="o">=</span>  <span class="ss">Mongo</span><span class="p">:</span><span class="ss">:Connection</span><span class="o">.</span><span class="n">new</span><span class="o">.</span><span class="n">db</span><span class="p">(</span><span class="s2">&quot;twitter&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">collection</span><span class="p">(</span><span class="s2">&quot;tweets&quot;</span><span class="p">)</span>
+</span><span class='line'><span class="n">last</span> <span class="o">=</span> <span class="n">col</span><span class="o">.</span><span class="n">find</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="o">[</span><span class="s2">&quot;timestamp&quot;</span><span class="p">,</span><span class="ss">:desc</span><span class="o">]</span><span class="p">)</span><span class="o">.</span><span class="n">first</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">tweets_sub</span> <span class="o">=</span> <span class="n">doc</span><span class="o">[</span><span class="s2">&quot;tweets&quot;</span><span class="o">]</span> <span class="o">-</span> <span class="n">last</span><span class="o">[</span><span class="s2">&quot;tweets&quot;</span><span class="o">]</span>
+</span><span class='line'><span class="n">favs_sub</span> <span class="o">=</span> <span class="n">doc</span><span class="o">[</span><span class="s2">&quot;favs&quot;</span><span class="o">]</span> <span class="o">-</span> <span class="n">last</span><span class="o">[</span><span class="s2">&quot;favs&quot;</span><span class="o">]</span>
+</span><span class='line'><span class="n">followers_sub</span> <span class="o">=</span> <span class="n">doc</span><span class="o">[</span><span class="s2">&quot;followers&quot;</span><span class="o">].</span><span class="n">length</span> <span class="o">-</span> <span class="n">last</span><span class="o">[</span><span class="s2">&quot;followers&quot;</span><span class="o">].</span><span class="n">length</span>
+</span><span class='line'><span class="n">friends_sub</span> <span class="o">=</span> <span class="n">doc</span><span class="o">[</span><span class="s2">&quot;friends&quot;</span><span class="o">].</span><span class="n">length</span> <span class="o">-</span> <span class="n">last</span><span class="o">[</span><span class="s2">&quot;friends&quot;</span><span class="o">].</span><span class="n">length</span>
+</span><span class='line'><span class="n">col</span><span class="o">.</span><span class="n">insert</span> <span class="n">doc</span>
+</span><span class='line'><span class="n">message</span> <span class="o">=</span> <span class="s2">&quot;前回計測(</span><span class="si">#{</span><span class="no">Time</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">last</span><span class="o">[</span><span class="s2">&quot;timestamp&quot;</span><span class="o">]</span><span class="p">)</span><span class="o">.</span><span class="n">strftime</span> <span class="s2">&quot;%Y-%m-%d %H:%M:%S&quot;</span><span class="si">}</span><span class="s2">)以降</span><span class="se">\n</span><span class="s2">&quot;</span>
+</span><span class='line'><span class="n">message</span> <span class="o">+=</span> <span class="s2">&quot;</span><span class="si">#{</span><span class="n">tweets_sub</span><span class="si">}</span><span class="s2">回ツイートし</span><span class="se">\n</span><span class="s2">&quot;</span>
+</span><span class='line'><span class="n">message</span> <span class="o">+=</span> <span class="s2">&quot;</span><span class="si">#{</span><span class="n">favs_sub</span><span class="si">}</span><span class="s2">回favり</span><span class="se">\n</span><span class="s2">&quot;</span>
+</span><span class='line'><span class="n">message</span> <span class="o">+=</span> <span class="s2">&quot;友達は</span><span class="si">#{</span><span class="n">friends_sub</span><span class="o">.</span><span class="n">abs</span><span class="si">}</span><span class="s2">人</span><span class="si">#{</span><span class="n">friends_sub</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="o">?</span> <span class="s2">&quot;増え&quot;</span> <span class="p">:</span> <span class="s2">&quot;減り&quot;</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+</span><span class='line'><span class="n">message</span> <span class="o">+=</span> <span class="s2">&quot;フォロワーは</span><span class="si">#{</span><span class="n">followers_sub</span><span class="o">.</span><span class="n">abs</span><span class="si">}</span><span class="s2">人</span><span class="si">#{</span><span class="n">followers_sub</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="o">?</span> <span class="s2">&quot;増え&quot;</span> <span class="p">:</span> <span class="s2">&quot;減り&quot;</span><span class="si">}</span><span class="s2">ました&quot;</span>
+</span><span class='line'><span class="vg">$client</span><span class="o">.</span><span class="n">update</span> <span class="n">message</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>で全部です。Rubyのハッシュ+配列がそのままinsert/selectできるのでぜんぜんMongoDBを意識しなくて良いですね。</p>
+
+<p>ところで<code>datetime</code>型が無さげだったので<code>timestamp</code>をソートキー兼idにするために<code>YYYYMMDDHHMMSS</code>形式の文字列で格納してます(整数は8bitまでっぽかったです)。他に良い方法があると思うのですが思いつきませんでした。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[.emacsの整理をした話 + EmacsとViとShellとLispを悪魔合体させたら超絶便利だった]]></title>
@@ -1850,114 +2024,6 @@ source/images/social/に
 
 <p>16x16で白い部分のみ、背景透過でだれか作って下さい←<br/>
 因みに私の作った画像は自由にご使用下さい。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Redmineのインストール]]></title>
-    <link href="http://KeenS.github.io/blog/2013/09/05/install-redmine/"/>
-    <updated>2013-09-05T16:35:00+09:00</updated>
-    <id>http://KeenS.github.io/blog/2013/09/05/install-redmine</id>
-    <content type="html"><![CDATA[<p>私はバイトではプロジェクト管理に<a href="http://backlog.jp">Backlog</a>のサービスを利用してますが、同様のOSSに<a href="http://redmine.jp">Redmine</a>なるものがあると聞いて動かしてみたときのメモ。</p>
-
-<!-- more -->
-
-
-<p>以下、公式の引用。</p>
-
-<blockquote><p>Redmineはオープンソースのプロジェクト管理ソフトウェアです。</p>
-
-<p>プロジェクトのタスク管理、進捗管理、情報共有が行えます。SubversionやGitなどのバージョン管理システムとの連携機能も備えており、ソフトウェア開発やwebサイト制作などのITプロジェクトで特に威力を発揮します。</p></blockquote>
-
-<p>Redmineの管理団体(？)が<a href="http://hosting.redmine.jp/">MyRedmine</a>というホスティングサービスを提供してたりしますが、今回はこれをローカルで動かします。</p>
-
-<p><a href="http://redmine.jp/guide/RedmineInstall/">公式ドキュメント</a>を参考に作業していきます。</p>
-
-<p>まずはダウンロード。現在の最新版は2.3.2だそうです。</p>
-
-<pre><code>$cd ~/Ruby
-$svn checkout http://svn.redmine.org/redmine/branches/2.3-stable redmine    
-</code></pre>
-
-<p>んで、グローバルの空間を汚したくないので新たにGemsetを作ります。本来ならbundler仕事なのですが、railsのバージョンとか仕組みの問題が面倒臭そうだったのでGemsetで管理。</p>
-
-<pre><code>$rvm use --create 1.9.3@redmine
-$cd redmine
-$echo ruby-1.9.3-p448 &gt; .ruby-version
-$echo redmine &gt; .ruby-gemset
-</code></pre>
-
-<p>これで~/Ruby/redmineにcdすると自動的にrvmが1.9.3@redmineに切り替えてくれます。<br/>
-※注意<br/>
-<code>.rvmrc</code>に<code>rvm use 1.9.3@redmine</code>と書いてたら怒られます。<code>.ruby-version</code>と<code>.ruby-gemset</code>がバージョン管理システムに依存しない新しい書き方だそうです。</p>
-
-<p>データベースはデフォルトだとMySQLを使う設定になってますがこんなお試しにのためにMySQLを動かしたくないのでSQLiteに変更。</p>
-
-<pre><code>$cp config/{database.yml.example, database.yml}
-</code></pre>
-
-<p>のあと、database.ymlのproductionの部分を以下のように変更。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='yaml'><span class='line'><span class="l-Scalar-Plain">production</span><span class="p-Indicator">:</span>
-</span><span class='line'><span class="err">    </span><span class="l-Scalar-Plain">adapter</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">sqlite3</span>
-</span><span class='line'><span class="err">    </span><span class="l-Scalar-Plain">database</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">db/redmine.sqlite3</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>あとは<code>bundle install</code>。(bundlerはインストールされてる前提です)</p>
-
-<pre><code>$bundle install --without development test
-</code></pre>
-
-<p>すると…あれ？RMagickでコケる…。公式ドキュメントには <code>bundle</code>の<code>--without</code>に<code>rmagick</code>を加えろと書いてますが画像扱えないのは悔しいので色々調べた結果、</p>
-
-<pre><code>$sudo apt-get install libmagic-dev libmagickwand-dev
-</code></pre>
-
-<p>で依存関係を満せるようです。これでようやく<code>bundle install</code>が通ります。</p>
-
-<p>ここまできたらあとはドキュメント通り。</p>
-
-<pre><code>$rake generate_secret_token
-$RAILS_ENV=production rake db:migrate
-$RAILS_ENV=production rake redmine:load_default_data
-$rails s
-</code></pre>
-
-<p>…あれ？<code>rails s</code>でコケる。<br/>
-これは自分がrailsに慣れてなかったのが問題のようで、正しくは</p>
-
-<pre><code>$rails s -e production
-</code></pre>
-
-<p>だそうです。</p>
-
-<pre><code>$RAILS_ENV=production rails s
-</code></pre>
-
-<p>としても同じ。これで<a href="http://localhost:3000">localhost:3000</a>にアクセスするとRedmineが開きます。</p>
-
-<p><img src="http://KeenS.github.io/images/redmine-home.png" title="redmine-home" alt="Redmineのホーム画面"></p>
-
-<p>因みにAdminのID、パスワードはadminだそうです。</p>
-
-<p>データベースの設定のexample部分にjenkinsとかいう文字列があったけど連携できるのかなぁ。要調査。</p>
-
-<hr />
-
-<h3>補足</h3>
-
-<p>デフォルトのWEBrickだと遅いのでGemfileに</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="n">gem</span> <span class="s2">&quot;thin&quot;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>を加えて、<code>bundle install</code>し直すと自動的にThinを使ってくれるそうです。</p>
 ]]></content>
   </entry>
   

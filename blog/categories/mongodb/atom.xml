@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: MongoDB | κeenのHappy Hacκing Blog]]></title>
+  <link href="http://KeenS.github.io/blog/categories/mongodb/atom.xml" rel="self"/>
+  <link href="http://KeenS.github.io/"/>
+  <updated>2014-01-19T19:16:36+09:00</updated>
+  <id>http://KeenS.github.io/</id>
+  <author>
+    <name><![CDATA[κeen]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[RSPiでMongoDBを動かし、twitter post alertを作った話]]></title>
+    <link href="http://KeenS.github.io/blog/2014/01/19/rspi-plus-mongodb-plus-twitter/"/>
+    <updated>2014-01-19T18:17:00+09:00</updated>
+    <id>http://KeenS.github.io/blog/2014/01/19/rspi-plus-mongodb-plus-twitter</id>
+    <content type="html"><![CDATA[<p>κeenです。ここのところ寒い日が続いてますね。寒いと家に扃(ひきこも)ってTweet数が急上昇します。  すると一日に何postしてるか気になるのでカウンタを作りました。<br/>
+そのときの苦労話です。</p>
+
+<!-- more -->
+
+
+<p>ただ、どうせ記録取るなら色々やりたいので一日のpost数、fav数、そしてメンヘラなことにフォロー/フォロワー全員のidを毎日記録することにしました。これで誰にリムられたかブロられたか一目瞭然ですね。</p>
+
+<p>ここで一つ問題が。post, fav数は良いのですがフォロー/フォロワーのid一覧は毎日変わるのでmysqlで管理するのはちょっと面倒かなと。なのでMongoDBで管理することにしたいんですが、<code>apt</code>にないんですよね。仕方ないので手動ビルドで対応しました。</p>
+
+<h2>MongoDBのビルド</h2>
+
+<p><a href="http://c-mobberley.com/wordpress/index.php/2013/10/14/raspberry-pi-mongodb-installation-the-working-guide/">ここ</a>を参考に</p>
+
+<pre><code>cd ~/compile
+sudo apt-get install build-essential libboost-filesystem-dev libboost-program-options-dev libboost-system-dev libboost-thread-dev scons libboost-all-dev python-pymongo git
+git clone https://github.com/skrabban/mongo-nonx86
+cd mongo-nonx86
+sudo scons
+</code></pre>
+
+<p>としました。が、<code>scons</code>に一晩かかるとのことなので放置してたら何故かraspberry piが落ちてる…<br/>
+気をとりなおして再起動。もう一度<code>sudo scons</code>すると今度はエラー終了。<code>sig 9 killed</code>…いや、私なにもしてないですよ?ダメ元で今度は</p>
+
+<pre><code>sudo scons install
+</code></pre>
+
+<p>したら完走。良ク分カラン。</p>
+
+<h2>MongoDBのインストール</h2>
+
+<p>さっきのでインストール終わったと思うでしょ？違うんですよ。<code>init.d</code>だとか<code>mongodb.conf</code>だとかは配置されてないんですよ。<code>debian/</code>以下に色々入ってるので</p>
+
+<pre><code>cd debian
+sudo cp mongodb.conf /etc/mongodb.conf
+</code></pre>
+
+<p>までは良いのですが、<code>init.d</code>と<code>mongodb.upstart</code>の<code>mongod</code>のパスが<code>/usr/bin/mongod</code>でハードコードされてるんですよ。上の<code>sudo scons install</code>だと<code>/usr/local/bin/mongod</code>です。さらに起動オプションに<code>--dbpadh /var/lib/mongodb</code>と<code>--logpath /var/log/mongodb/mongodb.log</code>が指定されていて、<code>mongodb.conf</code>で上書きしているにも係らずそこまでのパスが存在しないとエラー吐いて起動してくれないので修正。<br/>
+<code>mongodb.upstart</code>は直ぐ分かるので良いとして、<code>init.d</code>は</p>
+
+<p>```
+48d47
+&lt;
+50c49</p>
+
+<h2>&lt; DAEMON=/usr/bin/mongod</h2>
+
+<blockquote><p>DAEMON=/usr/local/bin/mongod
+100c99</p>
+
+<h2>&lt; DAEMON_OPTS=&ldquo;$DAEMON_OPTS &mdash;config $CONF&rdquo;</h2>
+
+<p>DAEMON_OPTS=&ldquo;run &mdash;config $CONF&rdquo;</p></blockquote>
+
+<p>```
+な感じの修正です。なんか空行が一つ減ってますが気にしない。<br/>
+ここまでしたらようやく</p>
+
+<pre><code>chmod +x init.d mongodb.upstart
+sudo cp init.d /etc/init.d/mongodb
+sudo cp mongodb.upstart /etc/init/mongodb
+</code></pre>
+
+<p>で完了です。<code>man</code>とかもあるのですが配置の仕方が分からないので放置←</p>
+
+<pre><code>sudo service mongodb start
+mongo
+</code></pre>
+
+<p>で接続確認できます。</p>
+
+<h2>Twitterのpostを集約する</h2>
+
+<p>ビックリするくらい簡単。twitterのAPI keyを持ってる前提ですが。</p>
+
+<pre><code>sudo gem install twitter mongo
+</code></pre>
+
+<p>で必要なgemをインストールし、
+<code>~/.twitter.rb</code>に
+<code>ruby
+$client = Twitter::REST::Client.new do |conf|
+  conf.consumer_key = "yours"
+  conf.consumer_secret = "yours"
+  conf.access_token = "yours"
+  conf.access_token_secret = "yours"
+end
+</code>
+と保存しておきます。昔と形式が変わりましたね。この形式になってからスレッドセーフになり、Twitter Stream APIにも対応してるようです。</p>
+
+<p>集計ですが
+```ruby</p>
+
+<h1>! /usr/local/bin/ruby</h1>
+
+<h1>coding: utf-8</h1>
+
+<p>require &lsquo;twitter&rsquo;
+require &lsquo;mongo&rsquo;
+require &lsquo;time&rsquo;
+load &ldquo;~/.twitter.rb&rdquo;</p>
+
+<p>doc =  { &ldquo;tweets&rdquo;    => $client.user.tweets_count,</p>
+
+<pre><code>     "favs"      =&gt; $client.user.favorites_count,
+     "followers" =&gt; $client.friend_ids.to_a,
+     "friends"   =&gt; $client.follower_ids.to_a,
+     "timestamp" =&gt;  Time.now.strftime("%Y%m%d%H%M%S")}
+</code></pre>
+
+<p>col =  Mongo::Connection.new.db(&ldquo;twitter&rdquo;).collection(&ldquo;tweets&rdquo;)
+last = col.find.sort([&ldquo;timestamp&rdquo;,:desc]).first</p>
+
+<p>tweets_sub = doc[&ldquo;tweets&rdquo;] &ndash; last[&ldquo;tweets&rdquo;]
+favs_sub = doc[&ldquo;favs&rdquo;] &ndash; last[&ldquo;favs&rdquo;]
+followers_sub = doc[&ldquo;followers&rdquo;].length &ndash; last[&ldquo;followers&rdquo;].length
+friends_sub = doc[&ldquo;friends&rdquo;].length &ndash; last[&ldquo;friends&rdquo;].length
+col.insert doc
+message = &ldquo;前回計測(#{Time.parse(last["timestamp&rdquo;]).strftime &ldquo;%Y-%m-%d %H:%M:%S&rdquo;})以降\n"
+message += &ldquo;#{tweets_sub}回ツイートし\n&rdquo;
+message += &ldquo;#{favs_sub}回favり\n&rdquo;
+message += &ldquo;友達は#{friends_sub.abs}人#{friends_sub >= 0 ? "増え&rdquo; : &ldquo;減り&rdquo;}\n"
+message += &ldquo;フォロワーは#{followers_sub.abs}人#{followers_sub >= 0 ? "増え&rdquo; : &ldquo;減り&rdquo;}ました"
+$client.update message</p>
+
+<p>```
+で全部です。Rubyのハッシュ+配列がそのままinsert/selectできるのでぜんぜんMongoDBを意識しなくて良いですね。</p>
+
+<p>ところで<code>datetime</code>型が無さげだったので<code>timestamp</code>をソートキー兼idにするために<code>YYYYMMDDHHMMSS</code>形式の文字列で格納してます(整数は8bitまでっぽかったです)。他に良い方法があると思うのですが思いつきませんでした。</p>
+]]></content>
+  </entry>
+  
+</feed>
