@@ -4,7 +4,7 @@
   <title><![CDATA[κeenのHappy Hacκing Blog]]></title>
   <link href="http://KeenS.github.io/atom.xml" rel="self"/>
   <link href="http://KeenS.github.io/"/>
-  <updated>2014-01-24T06:36:15+09:00</updated>
+  <updated>2014-01-27T16:10:29+09:00</updated>
   <id>http://KeenS.github.io/</id>
   <author>
     <name><![CDATA[κeen]]></name>
@@ -12,6 +12,987 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[CIMの解説をしてみる コマンド編]]></title>
+    <link href="http://KeenS.github.io/blog/2014/01/27/cim-explanation/"/>
+    <updated>2014-01-27T13:55:00+09:00</updated>
+    <id>http://KeenS.github.io/blog/2014/01/27/cim-explanation</id>
+    <content type="html"><![CDATA[<p>先日LTで紹介したCIMが思いの外反響を呼んでる(Githubのstarが15)ので解説でもしてみます。</p>
+
+<p>コマンド編の次は実装編です。これでバグにエンカウントしたときの調査とか完璧ですね。</p>
+
+<!-- more -->
+
+
+<h1>インストーラ</h1>
+
+<p>READMEにあるように</p>
+
+<pre><code>curl https://raw.github.com/KeenS/CIM/master/scripts/cim_installer | /bin/sh
+</code></pre>
+
+<p>で<code>~/.cim/</code>にインストールできます。パスを変えたければ</p>
+
+<pre><code>CIM_HOME=/path/to/cim curl https://raw.github.com/KeenS/CIM/master/scripts/cim_installer | /bin/sh
+</code></pre>
+
+<p>でOK。Cシェル系なら</p>
+
+<pre><code>env CIM_HOME /path/to/cim curl https://raw.github.com/KeenS/CIM/master/scripts/cim_installer | /bin/sh
+</code></pre>
+
+<p>でしょうか。</p>
+
+<p>ここでは<code>curl</code>を使ってますが<code>wget -O -</code>とか<code>fetch -o -</code>など標準出力に吐ければなんでも良いです。</p>
+
+<p>あ、でも<code>CIM_HOME</code>を指定してインストールしたときにバグがある気がしてきました。今から直します。</p>
+
+<p>CIMを使うにはシェルの起動時に初期化が必要ですが、インストーラが初期化ファイルを読みにいく処理を<code>.*rc</code>に書き出してくれます。Bourne Shellは<code>.profile</code>ですね。<br/>
+書き出すファイルは<code>$SHELL</code>を見てます。<code>csh</code>、<code>tcsh</code>、<code>sh</code>、<code>bash</code>、<code>zsh</code>に対応してます。</p>
+
+<p>あと<code>~/.emacs.d/eshell/</code>が存在したら<code>~/.emacs.d/eshell/profile</code>にも初期化処理を書き出します。一時期パスが間違ってて<code>~/.emacs.d/profile</code>に書き出してました。ごめんなさい。<br/>
+vimshell(だっけ？)でも初期化さえしてしまえば使えると思うので誰か初期化処理書いて下さい。</p>
+
+<h1><code>cim</code></h1>
+
+<p>とりあえず<code>help</code>見ておきましょう。</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ cim help
+</span><span class='line'>CIM -- Common Lisp Implementation Manager
+</span><span class='line'>
+</span><span class='line'>Commands currently available
+</span><span class='line'>install &lt;impl[-version]&gt;       ;; Install the impl.
+</span><span class='line'>use &lt;impl[-version]&gt;           ;; Use specified impl as `cl' command's backend.
+</span><span class='line'>resume [rm] [resume..]           ;; Resume suspended installation(s) or give it up.
+</span><span class='line'>list &lt;command&gt;             ;; List available target of &lt;command&gt;
+</span><span class='line'>reinstall &lt;impl[-version]&gt;     ;; Reinstall the impl.
+</span><span class='line'>clean &lt;impl&gt;|all           ;; Clean downloaded archive and src of the impl.
+</span><span class='line'>distclean &lt;impl&gt;|all           ;; Clean built dists.
+</span><span class='line'>uninstall &lt;impl[-version]&gt;     ;; Uninstall the impl.
+</span><span class='line'>purge &lt;impl&gt;|all           ;; Just clean and uninstall the impl.
+</span><span class='line'>info                         ;; Display current state.
+</span><span class='line'>get                  ;; Upgrade cim itself.
+</span><span class='line'>version                  ;; Show the version
+</span><span class='line'>help &lt;command&gt;             ;; Show help for &lt;command&gt;. If no commands are specified, show this help.
+</span><span class='line'>
+</span><span class='line'>If you want detailed help, type `cim help &lt;command&gt;'.</span></code></pre></td></tr></table></div></figure>
+
+
+<h2><code>cim install</code></h2>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ cim help install
+</span><span class='line'>Usage:
+</span><span class='line'>
+</span><span class='line'>  cim install &lt;impl[-version]&gt;
+</span><span class='line'> 
+</span><span class='line'>Description:
+</span><span class='line'>
+</span><span class='line'>Install the given lisp implementation to cim directory.
+</span><span class='line'>If version is not specified, install the latest version.
+</span><span class='line'>If you want to pass specific options to 'configure' script,
+</span><span class='line'>prefix 'flags='.
+</span><span class='line'>
+</span><span class='line'>Examples:
+</span><span class='line'>
+</span><span class='line'>  # install sbcl-1.1.14
+</span><span class='line'>  cim install sbcl-1.1.14
+</span><span class='line'>  
+</span><span class='line'>  # install latest clisp with option.
+</span><span class='line'>  flags='--with-libsigsegv-prefix=/usr/local' cim install clisp
+</span><span class='line'>
+</span><span class='line'>To show available lisp implementations, type 'cim list install'.
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>インストールします。はい。
+<code>&lt;impl[-version]&gt;</code>ってのは<code>sbcl</code>とか<code>clisp-2.48</code>とかですね。バージョンを指定しなかったら最新版になります。
+<code>cim list install</code>でインストール可能なものを表示しますが載ってない古いバージョンとかもインストールできる筈です。多分。</p>
+
+<p><code>configure</code>スクリプトに渡すフラグを指定したいときは<code>flags='flag....' cim install</code>とします。ヘルプにあるように<code>libsigsegv</code>のパスを指定しないとFreeBSDでclispをインストールできなかったので用意しました。</p>
+
+<p>Allegroはライセンス表示した方が良いのかなーとか考えてます。</p>
+
+<h2><code>cim use</code></h2>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>Usage:
+</span><span class='line'>
+</span><span class='line'>  cim use &lt;impl[-version]&gt; [--default]
+</span><span class='line'>
+</span><span class='line'>Description:
+</span><span class='line'>
+</span><span class='line'>Use &lt;impl&gt; as background for 'cl' command. It also affects bare lisp command.
+</span><span class='line'>If version is not given, use latest version.
+</span><span class='line'>If --default is given, use the specified implementation at initial state.
+</span><span class='line'>
+</span><span class='line'>Examples:
+</span><span class='line'>
+</span><span class='line'>  # use the latest sbcl
+</span><span class='line'>  cim use sbcl
+</span><span class='line'>  sbcl --version
+</span><span class='line'>  -&gt; SBCL 1.1.14
+</span><span class='line'>  # use old sbcl
+</span><span class='line'>  cim use sbcl-1.1.10
+</span><span class='line'>  sbcl --version
+</span><span class='line'>  -&gt; SBCL 1.1.10
+</span><span class='line'>
+</span><span class='line'>  # use ccl-1.9 and set it default
+</span><span class='line'>  cim use ccl-1.9 --default
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>cl</code>コマンドのバックエンドの切り替えと処理系のバージョンの両方を切り替えます。処理系の指定の仕方は<code>install</code>に同じ。じゃなかった。<code>install</code>に加えて<code>/bin:/usr/bin:/usr/local/bin</code>にあるものを<code>xxx-system</code>として指定できます。<code>sbcl-system</code>とか。</p>
+
+<p>例えば</p>
+
+<pre><code>cim use clisp-2.48
+</code></pre>
+
+<p>ってやると<code>cl</code>コマンドがバックエンドとしてclispのバージョン2.48を使うようになりますし、<code>clisp</code>コマンドのバージョンも2.48になります。
+この<code>clisp</code>の部分はリンクを貼り替えてて、一つのシェルで変更すると他のシェルにも影響が及ぶ問題があるのでそのうち直します。これ結構面倒なのでそのうちです。<br/>
+clisp = clisp-2.48な状態で<code>cim use sbcl</code>するとclisp = clisp-2.48なまま<code>cl</code>のバックエンドがsbclになります。上手く使って下さい。</p>
+
+<p><code>--default</code>を付けると次回からのデフォルト値を指定したものにしつつ<code>cim use</code>します。</p>
+
+<h2><code>cim resume</code></h2>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ cim help resume
+</span><span class='line'>Usage:
+</span><span class='line'>
+</span><span class='line'>  cim resume [rm] &lt;impl[-version]&gt; | all
+</span><span class='line'>
+</span><span class='line'>Description:
+</span><span class='line'>
+</span><span class='line'>Resume interrupted installation of &lt;impl&gt;. If &lt;version&gt; is not given, the latest version is used.
+</span><span class='line'>If 'rm' is given, remove &lt;impl&gt; from 'resume' list.
+</span><span class='line'>If target is 'all', do on all the available target.
+</span><span class='line'>
+</span><span class='line'>Examples:
+</span><span class='line'>
+</span><span class='line'>  # resume the installation of clisp with configure flags
+</span><span class='line'>  flags='--with-libsigsegv-path=/usr/local' cim resume clisp
+</span><span class='line'>
+</span><span class='line'>  # remove all the available target.
+</span><span class='line'>  cim resume rm all
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>cim install</code>がエラー終了したり<code>Ctrl-C</code>で中断したりしたやつを再開してくれるコマンドです。<code>cim install sbcl</code>を中断したなら<code>cim resume sbcl</code>で再開できます。<code>cim resume all</code>で中断された全てのインストールを再開します。終了ステータスは再開してもまたエラーで終了したやつの数になります。</p>
+
+<p><code>cim resume rm sbcl</code>だと<code>cim list resume</code>の結果から<code>sbcl</code>を削除できます。<code>resume</code>はしませんよ。<code>cim resume rm all</code>とかも可能です。</p>
+
+<h2><code>cim list</code></h2>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ cim help list
+</span><span class='line'>Usage:
+</span><span class='line'>
+</span><span class='line'>  cim list &lt;subcommand&gt;
+</span><span class='line'>
+</span><span class='line'>Description:
+</span><span class='line'>
+</span><span class='line'>List available target for subcommand.
+</span><span class='line'>
+</span><span class='line'>Examples:
+</span><span class='line'>
+</span><span class='line'>  # list available lisp implementation to install
+</span><span class='line'>  cim list install
+</span><span class='line'>
+</span><span class='line'>  # show available target for list
+</span><span class='line'>  cim list list
+</span><span class='line'>
+</span><span class='line'>  # targets for subsubcommands are also available
+</span><span class='line'>  cim list resume rm
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>さっきから出てきてるので分かるかと思いますが、可能なターゲットを表示します。将来的には<code>zsh</code>の補完候補にも使うつもりです。そのときは<code>-b, --batch</code>オプションでhuman readableかmachine readableかを分けようかなと。</p>
+
+<h2><code>cim reinstall</code></h2>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ cim help reinstall
+</span><span class='line'>Usage:
+</span><span class='line'>
+</span><span class='line'>  cim reinstall &lt;impl[-version]&gt; | all
+</span><span class='line'> 
+</span><span class='line'>Description:
+</span><span class='line'>
+</span><span class='line'>Force install already installed implementaion(s). Downloaded archives are resued if available
+</span><span class='line'>If version is not specified, install the latest version.
+</span><span class='line'>If target is 'all', do on all the available targets.
+</span><span class='line'>
+</span><span class='line'>Examples:
+</span><span class='line'>
+</span><span class='line'>  # reinstall sbcl-1.1.14
+</span><span class='line'>  cim reinstall sbcl-1.1.14
+</span><span class='line'>  
+</span><span class='line'>  # reinstall all installed lisp impls
+</span><span class='line'>  cim reinstall all
+</span><span class='line'>
+</span><span class='line'>To show available lisp implementations, type 'cim list reinstall'.
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>cim install</code>は既にインストールされているものはインストールできないのですが、<code>reinstall</code>を使えば可能です。ダウンロードしたアーカイブがあればそれを使います。なければダウンロードから始めます。<code>all</code>は察しのようにインストール済のものを全て<code>reinstall</code>します。</p>
+
+<h2><code>cim clean</code></h2>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ cim help clean
+</span><span class='line'>Usage:
+</span><span class='line'>
+</span><span class='line'>  cim clean &lt;impl[-version]&gt; | all
+</span><span class='line'> 
+</span><span class='line'>Description:
+</span><span class='line'>
+</span><span class='line'>Remove donwloaded archives and extracted sources of the given lisp implementations.
+</span><span class='line'>If version is not specified, install the latest version.
+</span><span class='line'>If target is 'all', do on all the available targets.
+</span><span class='line'>
+</span><span class='line'>Examples:
+</span><span class='line'>
+</span><span class='line'>  # clean sbcl-1.1.14
+</span><span class='line'>  cim clean sbcl-1.1.14
+</span><span class='line'>  
+</span><span class='line'>  # clean all installed lisp impls
+</span><span class='line'>  cim clean all
+</span><span class='line'>
+</span><span class='line'>To show available lisp implementations, type 'cim list clean'.
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>cim install</code>は基本的に不要なものも削除しないので、それが嫌なら<code>clean</code>を使いましょうというスタンスです。アーカイブとソースを削除します。</p>
+
+<h2><code>cim distclean</code></h2>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$cim help distclean
+</span><span class='line'>Usage:
+</span><span class='line'>
+</span><span class='line'>  cim distclean &lt;impl[-version]&gt; | all
+</span><span class='line'> 
+</span><span class='line'>Description:
+</span><span class='line'>
+</span><span class='line'>Clean built files of the given lisp implementation. It doesn't mean uninstall.
+</span><span class='line'>If version is not specified, install the latest version.
+</span><span class='line'>If target is 'all', do on all the available targets.
+</span><span class='line'>
+</span><span class='line'>Examples:
+</span><span class='line'>
+</span><span class='line'>  # distclean sbcl-1.1.14
+</span><span class='line'>  cim distclean sbcl-1.1.14
+</span><span class='line'>  
+</span><span class='line'>  # distclean all installed lisp impls
+</span><span class='line'>  cim distclean all
+</span><span class='line'>
+</span><span class='line'>To show available lisp implementations, type 'cim list distclean'.
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>cim clean</code>より控えめなコマンドです。コンパイルするときに<code>make</code>で生成されたファイルを削除します。<code>make clean</code>的な。</p>
+
+<h2><code>cim uninstall</code></h2>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ cim help uninstall
+</span><span class='line'>Usage:
+</span><span class='line'>
+</span><span class='line'>  cim uninstall &lt;impl[-version]&gt; | all
+</span><span class='line'> 
+</span><span class='line'>Description:
+</span><span class='line'>
+</span><span class='line'>Uninstall the given lisp implementaion(s). It does't remove donwloaded archives and extracted sources.
+</span><span class='line'>If version is not specified, install the latest version.
+</span><span class='line'>If target is 'all', do on all the available targets.
+</span><span class='line'>
+</span><span class='line'>Examples:
+</span><span class='line'>
+</span><span class='line'>  # uninstall sbcl-1.1.14
+</span><span class='line'>  cim uninstall sbcl-1.1.14
+</span><span class='line'>  
+</span><span class='line'>  # uninstall all installed lisp impls
+</span><span class='line'>  cim uninstall all
+</span><span class='line'>
+</span><span class='line'>To show available lisp implementations, type 'cim list uninstall'.
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>アンインストールします。はい。ただしダウンロードしたアーカイブとソースは削除しません。</p>
+
+<h2><code>cim purge</code></h2>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ cim help purge
+</span><span class='line'>Usage:
+</span><span class='line'>
+</span><span class='line'>  cim purge &lt;impl[-version]&gt; | all
+</span><span class='line'>
+</span><span class='line'>Description:
+</span><span class='line'>
+</span><span class='line'>Uninstall and clean up downloaded files of the given lisp implementation.
+</span><span class='line'>This command is equivalent to 'clean' and 'uninstall'.
+</span><span class='line'>
+</span><span class='line'>Examples:
+</span><span class='line'>
+</span><span class='line'>  # purge the latest sbcl
+</span><span class='line'>  cim purge sbcl
+</span><span class='line'>
+</span><span class='line'>To show available target for 'purge', type 'cim list purge'
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>uninstall</code>のアーカイブとソースを削除する版です。</p>
+
+<h2><code>cim info</code></h2>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ cim help info
+</span><span class='line'>Usage:
+</span><span class='line'>
+</span><span class='line'>  cim info
+</span><span class='line'>
+</span><span class='line'>Description:
+</span><span class='line'>
+</span><span class='line'>Display information for current cim. It includes environment variables that cim uses, what current and default lisp implementation is, what version of each implementation is used, and where system lisp is.
+</span><span class='line'>
+</span><span class='line'>Example:
+</span><span class='line'>
+</span><span class='line'>  # display info
+</span><span class='line'>  cim info
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>現在の状態を表示します。こんな感じ。</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ cim info
+</span><span class='line'>CIM_ID   = 22176
+</span><span class='line'>CIM_HOME = /home/kim/.cim
+</span><span class='line'>
+</span><span class='line'>current lisp = sbcl-system
+</span><span class='line'>default lisp = sbcl-system
+</span><span class='line'>
+</span><span class='line'>abcl  = abcl-1.2.1
+</span><span class='line'>alisp = alisp-9.0
+</span><span class='line'>ccl   = ccl-1.9
+</span><span class='line'>clisp = clisp-2.49
+</span><span class='line'>ecl   = ecl-13.5.1
+</span><span class='line'>gcl   = gcl-2.6.9
+</span><span class='line'>sbcl  = sbcl-system
+</span><span class='line'>
+</span><span class='line'>sbcl-system  = /usr/local/bin/sbcl
+</span><span class='line'>gcl-system   = /usr/bin/gcl
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>CIM_ID</code>ってのは<code>cim</code>がそれぞれのシェルの状態を管理するためのIDです。まあ、そのシェルのプロセスIDですね。逆にプロセスIDの取得と環境変数の設定さえできれば<code>cim</code>は動かせるのでEmacsでも簡単に動きます。</p>
+
+<h2><code>cim get</code></h2>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ cim help get
+</span><span class='line'>Usage:
+</span><span class='line'>  cim get
+</span><span class='line'>
+</span><span class='line'>Description:
+</span><span class='line'>
+</span><span class='line'>Upgrade to the latest cim.
+</span><span class='line'>
+</span><span class='line'>Examples:
+</span><span class='line'>
+</span><span class='line'>  cim get
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>cim自身のアップデートです。なんでこんな名前かというと<code>rvm</code>がそうだからです。現状はgithubのKeenS/CIMのmasterからとってきます。stable版ができたらstableに変更しますね。実はブランチを指定してとってくる方法もあったりはします。<code>cim get --branch stable</code>か <code>CIM_INSTALL_BRANCH=stable cim get</code>です。まだブランチが無いので意味ないんですけどね。</p>
+
+<p>この辺で気付いたかもしれませんが結構環境変数で制御できるようにデザインされてます。rubyがそんな感じだからです。</p>
+
+<h2><code>cim version</code></h2>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ cim help version
+</span><span class='line'>Usage:
+</span><span class='line'>
+</span><span class='line'>  cim version
+</span><span class='line'>
+</span><span class='line'>Description:
+</span><span class='line'>
+</span><span class='line'>Show current cim's version
+</span><span class='line'>
+</span><span class='line'>Example:
+</span><span class='line'>
+</span><span class='line'>  cim version
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>めちゃくちゃバグがあるのにversionが1.0.0に見えるの気のせいです。きっと100点中の1点なんですよ。</p>
+
+<h2><code>cim help</code></h2>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ cim help help
+</span><span class='line'>Help for 'help' is not prepared, sorry.</span></code></pre></td></tr></table></div></figure>
+
+
+<p>あー。<code>help</code>のhelp用意してなかったー。まあ、上で使ったのが全てです。</p>
+
+<h1><code>cl</code></h1>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ cl -h
+</span><span class='line'>Usage: cl [switchs] [--] [programfile] [argumensts]
+</span><span class='line'>
+</span><span class='line'>-C DIR          set *default-pathname-defaults* DIR.
+</span><span class='line'>-d, --debug     set debugging flags (push :debug into *features*)
+</span><span class='line'>-e, --eval SEXP one line of script. Several -e's are allowed. Omit [programfile]
+</span><span class='line'>-f, --load FILE load the FILE
+</span><span class='line'>-i EXT          edit *argv* files in place and make backup with the extension .EXT
+</span><span class='line'>-l LIBRARY      quickload the LIBRARY
+</span><span class='line'>-L LIBRARY      quickload and use-package the LIBRARY
+</span><span class='line'>-r, --repl      run repl
+</span><span class='line'>-q, --no-init   do not load $CIM_HOME/init.lisp
+</span><span class='line'>--no-rl         do not use rlwrap. This is effective only when --repl is specified
+</span><span class='line'>--no-right      do not display right prompt. This is effective only when --repl is specified
+</span><span class='line'>--no-color      do not use color. This is effective only when --repl is specified
+</span><span class='line'>-h, --help      print this help
+</span><span class='line'>-v, --version   print the version
+</span><span class='line'>
+</span><span class='line'>If neither programfile, -e (--eval) nor -r (--repl) are specified, cl reads scripts from the standard input and then eval them.
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>まあ、見たら分かりますね。ruby由来のオプションとShelly由来のオプションと私の好みのオプションがあります。<code>cl</code>を起動する方法は</p>
+
+<ul>
+<li><code>cl script.lisp</code></li>
+<li><code>cl &lt; script.lisp</code></li>
+<li><code>cl -e sexp</code></li>
+<li><code>cl -r</code></li>
+</ul>
+
+
+<p>です。<code>cl script.lisp</code>はシェバン(最初の行が<code>#!</code>なもの)を無視します。</p>
+
+<p>また、これも環境変数<code>LISP_IMPL</code>でバックエンドを制御できます。これはShelly由来ですね。</p>
+
+<p>もう一つ、デバッガは起動しません。スクリプトやワンライナーはエラーを吐いて終了して欲しいですし次に述べますがREPLも目的からしてデバッガは相応しくないと思うからです。因みにですが<code>-d</code>オプションをつけてもデバッガは起動しません。理由はオプション解析のほとんどをLispに任せているので起動時のオブションである<code>--disable-debugger</code>を制御できないからです。需要が高そうならシェルスクリプト内で解析して頑張ってみます。</p>
+
+<p>あ、<code>-c, --compile FILE</code>オプションつけ忘れてた。いつか入れます。<code>(compile-file FILE)</code>で可能でしょうからすぐに入るはずです。</p>
+
+<h2><code>cl -r</code></h2>
+
+<p>一応開発向けではなくて、ちょっと試したいときや初心者が本を片手に動かすときを想定して作ってます。エラーはメッセージのみ表示。ちょっと試したいときはあんまりデバッガを必要としませんしスタックトレースもどうせ深さ1~2なのであまり必要でないからです。なにより初心者にとってデバッガは何をして良いか分かりませんし覚えても処理系毎に操作が違います。その辺を分り易い統一インターフェースを作ることも考えたのですが「それって<code>swank</code>」って結論に至ったのでこのままです。</p>
+
+<h1><code>ql</code></h1>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>ql -- Command line interface for quicklisp
+</span><span class='line'>
+</span><span class='line'>Commands currently available
+</span><span class='line'>deps &lt;system&gt;           ;; Install dependencies of &lt;system&gt;.
+</span><span class='line'>help [command]            ;; Show help.
+</span><span class='line'>install[quickload] &lt;system&gt;...  ;; Install given system.
+</span><span class='line'>list {remote | local}     ;; List available/installed systems.
+</span><span class='line'>search[system-propos] &lt;keyword&gt; ;; Search quicklisp.
+</span><span class='line'>uninstall &lt;system&gt;          ;; Uninstall system.
+</span><span class='line'>update [system]           ;; Update dist info and installed systems.</span></code></pre></td></tr></table></div></figure>
+
+
+<p>一番未完成なコマンドです。主な理由は私が<code>quicklisp</code>の使い方を分かってないからです。</p>
+
+<h2><code>ql deps</code></h2>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ ql help deps
+</span><span class='line'>Usage:
+</span><span class='line'>
+</span><span class='line'>  ql deps [--path &lt;path&gt;] &lt;system&gt;
+</span><span class='line'>
+</span><span class='line'>Description:
+</span><span class='line'>
+</span><span class='line'>Install dependencies of given system. If path is specified, install dependencies there.
+</span><span class='line'>Once you run 'ql --path &lt;path&gt; deps', you don't need to specify '--path' because the path is written out to '.quicklisp-path' in current directory.
+</span><span class='line'>You can run 'ql deps' for a local system if '.asd' file is in current directory.
+</span><span class='line'>This command is useful when you want to separate quicklisps for local project.
+</span><span class='line'>
+</span><span class='line'>Example:
+</span><span class='line'>
+</span><span class='line'>  ql deps --path ./quicklisp my-project
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>rubyの<code>bundler</code>を参考に作りました。<code>Gemfile</code>に対応する<code>QLfile</code>でも読もうかと思いましたが良く考えたら<code>.asd</code>で十分じゃんとの思いに至ったのでカレントパスの<code>asd</code>ファイルを読みます。<br/>
+が、奴は依存システムのバージョンまでは指定できなかった気がするのでやっぱり必要な気がします。</p>
+
+<p><code>ql deps --path ./ql myapp</code>とすると依存システム(+新たな<code>quicklisp</code>本体)を<code>./ql</code>にインストールしてくれます。<code>quicklisp</code>本体のインストールは不要ですがどうやったら回避できるかは今模索中です。<br/>
+<code>--path</code>の位置が<code>cim use --default</code>と違うのでご注意下さい。これは主に内部で使ってる<code>parse-option</code>の欠陥に由来します。<br/>
+一度指定すると<code>.quicklisp-path</code>にパスを書き出してくれるので次回からは必要なくなります。カレントディレクトリに複数の<code>asd</code>ファイルがあってそれぞれでパスを使い分けたいとかはできません。<br/>
+あと、最大の欠陥として<code>./ql</code>にシステムをインストールしてもそれを読み込みにいくコマンドがないので実用性ゼロです← まあ、<code>cl</code>あたりを弄ってカレントパスに<code>.quicklisp-path</code>があったら読みにいくようにします。その辺は<code>.lisp-impl</code>とかも含めて考えます。</p>
+
+<h2><code>ql help</code></h2>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ ql help help
+</span><span class='line'>Help for 'help' is not prepared, sorry.
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>こいつもhelp用意してなかった。まあ、良いや。</p>
+
+<h2><code>ql install</code></h2>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ ql help install
+</span><span class='line'>Usage:
+</span><span class='line'>
+</span><span class='line'>  ql install &lt;system&gt;...
+</span><span class='line'>
+</span><span class='line'>Description:
+</span><span class='line'>
+</span><span class='line'>Install given system(s) to $CIM_HOME/quicklisp.
+</span><span class='line'>
+</span><span class='line'>Example:
+</span><span class='line'>
+</span><span class='line'>  # install clack
+</span><span class='line'>  ql install clack
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>なんでこいつがhelpの先頭に居ないんでしょうね。<code>cim</code>に比べて適当ですね。</p>
+
+<p><code>ql quickload</code>っていう別名も持ってます。<code>ql help</code>には<code>quickload</code>が本名で<code>install</code>がエイリアスって書いてありましたが実装ミスりました。</p>
+
+<p>名前の通り<code>ql:quickload</code>します。<code>system</code>は複数指定できます。</p>
+
+<h2><code>ql list</code></h2>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ ql list
+</span><span class='line'>Usage:
+</span><span class='line'>
+</span><span class='line'>  ql list {remote | [local]}
+</span><span class='line'>
+</span><span class='line'>Description:
+</span><span class='line'>
+</span><span class='line'>List installed systems. if 'remote' is given, list all the available systems. 'ql list local' is equivalent to 'ql list'.
+</span><span class='line'>
+</span><span class='line'>Example:
+</span><span class='line'>
+</span><span class='line'>  ql list remote
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>cim list</code>と使い方が違ってアレですね。現状<code>quicklisp</code>に登録されているもの全てを表示する<code>ql list remote</code>とインストールしたものだけを表示する<code>ql list [local]</code>があります。<code>ql deps</code>でパスを指定したやつらにも使いたかったのですが方法が分かんないのでとりあえず先送りです。</p>
+
+<h2><code>ql search</code></h2>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ ql help search
+</span><span class='line'>Usage:
+</span><span class='line'>
+</span><span class='line'>  ql search &lt;keyword&gt;
+</span><span class='line'>
+</span><span class='line'>Description:
+</span><span class='line'>
+</span><span class='line'>Search quicklisp for &lt;keyword&gt;.
+</span><span class='line'>
+</span><span class='line'>Example:
+</span><span class='line'>
+</span><span class='line'>  ql search http
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>別名<code>system-apropos</code>。別名と本名が<code>ql help</code>と違うのも単に<code>ql:system-apropos</code>を呼ぶのも<code>ql install</code>と同じです。出力結果をもうちょっと制御したいなと思ってます。</p>
+
+<h2><code>ql uninstall</code></h2>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ ql help uninstall
+</span><span class='line'>Usage:
+</span><span class='line'>
+</span><span class='line'>  ql uninstall &lt;system&gt;...
+</span><span class='line'>
+</span><span class='line'>Description:
+</span><span class='line'>
+</span><span class='line'>Uninstall given system(s).
+</span><span class='line'>
+</span><span class='line'>Example:
+</span><span class='line'>
+</span><span class='line'>  ql uninstall caveman clack
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>ql:uninstall</code>に同じ。以上。</p>
+
+<h2><code>ql update</code></h2>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ ql help update
+</span><span class='line'>Usage:
+</span><span class='line'>
+</span><span class='line'>  ql update [client]
+</span><span class='line'>
+</span><span class='line'>Description:
+</span><span class='line'>
+</span><span class='line'>Update installed systems. If target 'client' is given, update quicklisp itself.
+</span><span class='line'>
+</span><span class='line'>Example:
+</span><span class='line'>
+</span><span class='line'>  ql update client
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>ql:update-all-dists</code>か<code>ql:update-client</code>かを選べます。最初はsystem毎にアップデートしたかったのですが無理っぽいので止めました。</p>
+
+<h1>おわりに</h1>
+
+<p>とりあえずCIMの機能はこれで全部です。あ、開発用に<code>cim reset</code>とかありますけど使わないで下さい。とういうか使うなよ。絶対使うなよ。</p>
+
+<p>これら使ってみてバグがあったらgithubのissueに投げるなりtwitterで報告するなりして下さい。</p>
+
+<p>ところでCIMは私はちむと読んでます。しー・あい・えむと読む人も居るようです。何でも良いです。プロジェクトとしてのちむとコマンドとしてのちむを区別するためにコマンドは小文字で<code>cim</code>、そして<code>cim</code>、<code>cl</code>、<code>ql</code>を含んだプロジェクトは大文字でCIMと書くことにします。今考えました。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Lisp Meet Up #13でLTしてきました]]></title>
@@ -1937,42 +2918,6 @@ C : C-B'-A'
 </code></pre>
 
 <p>して<code>octomacs-new-post</code>から投稿してます。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Qiitaのユーザーヒアリングを受けてきました。]]></title>
-    <link href="http://KeenS.github.io/blog/2013/09/13/met-qiita-engineer/"/>
-    <updated>2013-09-13T18:20:00+09:00</updated>
-    <id>http://KeenS.github.io/blog/2013/09/13/met-qiita-engineer</id>
-    <content type="html"><![CDATA[<p>今日の夕方、Qiitaのユーザーヒアリングを受けたのでその報告です。</p>
-
-<!-- more -->
-
-
-<p>ユーザーヒアリングはQiitaがサービス向上のために「Qiitaアカウントを持っていてストックをするなど活動はしているが投稿をしてない人」を対象に「ねえ？なんで投稿しないの？ねえ、どうしてなの？Qiitaより良いサービスがあるの？そっか。私じゃだめなの？」って聞いてまわる活動です(違</p>
-
-<p>場所は駒場キャンパスのイタリアントマトで、小西さんと高橋さん
-<img src="http://KeenS.github.io/images/qiita-engineers.jpg" title="Qiita-engineers" alt="左が小西さん、右が高橋さん">
-と色々お話させていただきました。二方とも気さくで話しやすく、ちょいちょい脱線しながらも「ブログあるしー」とか「これどうしたらいいんでしょうねとか書きこめないしー」とか答えてました。</p>
-
-<p>一番大きかったのはバグ報告ができたのとqiita.elをメンテナンスしてほしいっていう要望を伝えれたところですかね。バグ伝えたときは割とマジになって詳細聞いてくれましたw</p>
-
-<p>話を聞くに全社員5人だそうです。それで5つのプロダクトを回してるんだとか。大変そうですね。</p>
-
-<p>あとは、記念品。
-<img src="http://KeenS.github.io/images/cards.jpg" title="Cards-and-stackers" alt="いただいた名刺とステッカー">
-名刺の色はEmacerが薄紫でVimmerが黒だそうです。面白い。</p>
-
-<p>最後に他にQiitaのユーザーヒアリングの対象になりそうな人(プログラマだけど情報をアウトプットしてない人)が知り合いにいないかとかバイト募集してるんで興味ありそうな人いたら声掛けて下さいとか言われました。バイトは顧客開拓か、できそうならデータマイニングらへんになるそうです。<br/>
-興味のある方いましたら是非どうぞ。</p>
-
-<p>あとで左上のソーシャルのところにQiita加えます(今は画像作る時間がない</p>
-
-<h2>2013/09/17追記</h2>
-
-<p>Qiitaをソーシャルに加えました。やりかたは<a href="blog/2013/09/07/cookpad/">COOKPADの記事</a>参照。<br/>
-画像はまーる書いてちょんなので簡単に作れると思いますが<a href="http://KeenS.github.io/images/social/qiita.png">こちら</a>です。御自由にお使い下さい。</p>
 ]]></content>
   </entry>
   

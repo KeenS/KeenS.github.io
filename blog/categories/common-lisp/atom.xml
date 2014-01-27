@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Common Lisp | κeenのHappy Hacκing Blog]]></title>
   <link href="http://KeenS.github.io/blog/categories/common-lisp/atom.xml" rel="self"/>
   <link href="http://KeenS.github.io/"/>
-  <updated>2014-01-24T06:36:15+09:00</updated>
+  <updated>2014-01-27T16:10:29+09:00</updated>
   <id>http://KeenS.github.io/</id>
   <author>
     <name><![CDATA[κeen]]></name>
@@ -12,6 +12,675 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[CIMの解説をしてみる コマンド編]]></title>
+    <link href="http://KeenS.github.io/blog/2014/01/27/cim-explanation/"/>
+    <updated>2014-01-27T13:55:00+09:00</updated>
+    <id>http://KeenS.github.io/blog/2014/01/27/cim-explanation</id>
+    <content type="html"><![CDATA[<p>先日LTで紹介したCIMが思いの外反響を呼んでる(Githubのstarが15)ので解説でもしてみます。</p>
+
+<p>コマンド編の次は実装編です。これでバグにエンカウントしたときの調査とか完璧ですね。</p>
+
+<!-- more -->
+
+
+<h1>インストーラ</h1>
+
+<p>READMEにあるように</p>
+
+<pre><code>curl https://raw.github.com/KeenS/CIM/master/scripts/cim_installer | /bin/sh
+</code></pre>
+
+<p>で<code>~/.cim/</code>にインストールできます。パスを変えたければ</p>
+
+<pre><code>CIM_HOME=/path/to/cim curl https://raw.github.com/KeenS/CIM/master/scripts/cim_installer | /bin/sh
+</code></pre>
+
+<p>でOK。Cシェル系なら</p>
+
+<pre><code>env CIM_HOME /path/to/cim curl https://raw.github.com/KeenS/CIM/master/scripts/cim_installer | /bin/sh
+</code></pre>
+
+<p>でしょうか。</p>
+
+<p>ここでは<code>curl</code>を使ってますが<code>wget -O -</code>とか<code>fetch -o -</code>など標準出力に吐ければなんでも良いです。</p>
+
+<p>あ、でも<code>CIM_HOME</code>を指定してインストールしたときにバグがある気がしてきました。今から直します。</p>
+
+<p>CIMを使うにはシェルの起動時に初期化が必要ですが、インストーラが初期化ファイルを読みにいく処理を<code>.*rc</code>に書き出してくれます。Bourne Shellは<code>.profile</code>ですね。<br/>
+書き出すファイルは<code>$SHELL</code>を見てます。<code>csh</code>、<code>tcsh</code>、<code>sh</code>、<code>bash</code>、<code>zsh</code>に対応してます。</p>
+
+<p>あと<code>~/.emacs.d/eshell/</code>が存在したら<code>~/.emacs.d/eshell/profile</code>にも初期化処理を書き出します。一時期パスが間違ってて<code>~/.emacs.d/profile</code>に書き出してました。ごめんなさい。<br/>
+vimshell(だっけ？)でも初期化さえしてしまえば使えると思うので誰か初期化処理書いて下さい。</p>
+
+<h1><code>cim</code></h1>
+
+<p>とりあえず<code>help</code>見ておきましょう。</p>
+
+<p>```
+$ cim help
+CIM &mdash; Common Lisp Implementation Manager</p>
+
+<p>Commands currently available
+install &lt;impl[-version]>       ;; Install the impl.
+use &lt;impl[-version]>           ;; Use specified impl as `cl' command&rsquo;s backend.
+resume [rm] [resume..]         ;; Resume suspended installation(s) or give it up.
+list <command>             ;; List available target of <command>
+reinstall &lt;impl[-version]>     ;; Reinstall the impl.
+clean <impl>|all           ;; Clean downloaded archive and src of the impl.
+distclean <impl>|all           ;; Clean built dists.
+uninstall &lt;impl[-version]>     ;; Uninstall the impl.
+purge <impl>|all           ;; Just clean and uninstall the impl.
+info                       ;; Display current state.
+get                ;; Upgrade cim itself.
+version                ;; Show the version
+help <command>             ;; Show help for <command>. If no commands are specified, show this help.</p>
+
+<p>If you want detailed help, type `cim help <command>&lsquo;.
+```</p>
+
+<h2><code>cim install</code></h2>
+
+<p>```
+$ cim help install
+Usage:</p>
+
+<pre><code>cim install &lt;impl[-version]&gt;
+</code></pre>
+
+<p>Description:</p>
+
+<p>Install the given lisp implementation to cim directory.
+If version is not specified, install the latest version.
+If you want to pass specific options to &lsquo;configure&rsquo; script,
+prefix &lsquo;flags=&rsquo;.</p>
+
+<p>Examples:</p>
+
+<pre><code># install sbcl-1.1.14
+cim install sbcl-1.1.14
+
+# install latest clisp with option.
+flags='--with-libsigsegv-prefix=/usr/local' cim install clisp
+</code></pre>
+
+<p>To show available lisp implementations, type &lsquo;cim list install&rsquo;.</p>
+
+<p><code>``
+インストールします。はい。
+</code>&lt;impl[-version]><code>ってのは</code>sbcl<code>とか</code>clisp-2.48<code>とかですね。バージョンを指定しなかったら最新版になります。
+</code>cim list install`でインストール可能なものを表示しますが載ってない古いバージョンとかもインストールできる筈です。多分。</p>
+
+<p><code>configure</code>スクリプトに渡すフラグを指定したいときは<code>flags='flag....' cim install</code>とします。ヘルプにあるように<code>libsigsegv</code>のパスを指定しないとFreeBSDでclispをインストールできなかったので用意しました。</p>
+
+<p>Allegroはライセンス表示した方が良いのかなーとか考えてます。</p>
+
+<h2><code>cim use</code></h2>
+
+<p>```
+Usage:</p>
+
+<pre><code>cim use &lt;impl[-version]&gt; [--default]
+</code></pre>
+
+<p>Description:</p>
+
+<p>Use <impl> as background for &lsquo;cl&rsquo; command. It also affects bare lisp command.
+If version is not given, use latest version.
+If &mdash;default is given, use the specified implementation at initial state.</p>
+
+<p>Examples:</p>
+
+<pre><code># use the latest sbcl
+cim use sbcl
+sbcl --version
+-&gt; SBCL 1.1.14
+# use old sbcl
+cim use sbcl-1.1.10
+sbcl --version
+-&gt; SBCL 1.1.10
+
+# use ccl-1.9 and set it default
+cim use ccl-1.9 --default
+</code></pre>
+
+<p><code>``
+</code>cl<code>コマンドのバックエンドの切り替えと処理系のバージョンの両方を切り替えます。処理系の指定の仕方は</code>install<code>に同じ。じゃなかった。</code>install<code>に加えて</code>/bin:/usr/bin:/usr/local/bin<code>にあるものを</code>xxx-system<code>として指定できます。</code>sbcl-system`とか。</p>
+
+<p>例えば</p>
+
+<pre><code>cim use clisp-2.48
+</code></pre>
+
+<p>ってやると<code>cl</code>コマンドがバックエンドとしてclispのバージョン2.48を使うようになりますし、<code>clisp</code>コマンドのバージョンも2.48になります。
+この<code>clisp</code>の部分はリンクを貼り替えてて、一つのシェルで変更すると他のシェルにも影響が及ぶ問題があるのでそのうち直します。これ結構面倒なのでそのうちです。<br/>
+clisp = clisp-2.48な状態で<code>cim use sbcl</code>するとclisp = clisp-2.48なまま<code>cl</code>のバックエンドがsbclになります。上手く使って下さい。</p>
+
+<p><code>--default</code>を付けると次回からのデフォルト値を指定したものにしつつ<code>cim use</code>します。</p>
+
+<h2><code>cim resume</code></h2>
+
+<p>```
+$ cim help resume
+Usage:</p>
+
+<pre><code>cim resume [rm] &lt;impl[-version]&gt; | all
+</code></pre>
+
+<p>Description:</p>
+
+<p>Resume interrupted installation of <impl>. If <version> is not given, the latest version is used.
+If &lsquo;rm&rsquo; is given, remove <impl> from &lsquo;resume&rsquo; list.
+If target is &lsquo;all&rsquo;, do on all the available target.</p>
+
+<p>Examples:</p>
+
+<pre><code># resume the installation of clisp with configure flags
+flags='--with-libsigsegv-path=/usr/local' cim resume clisp
+
+# remove all the available target.
+cim resume rm all
+</code></pre>
+
+<p><code>``
+</code>cim install<code>がエラー終了したり</code>Ctrl-C<code>で中断したりしたやつを再開してくれるコマンドです。</code>cim install sbcl<code>を中断したなら</code>cim resume sbcl<code>で再開できます。</code>cim resume all`で中断された全てのインストールを再開します。終了ステータスは再開してもまたエラーで終了したやつの数になります。</p>
+
+<p><code>cim resume rm sbcl</code>だと<code>cim list resume</code>の結果から<code>sbcl</code>を削除できます。<code>resume</code>はしませんよ。<code>cim resume rm all</code>とかも可能です。</p>
+
+<h2><code>cim list</code></h2>
+
+<p>```
+$ cim help list
+Usage:</p>
+
+<pre><code>cim list &lt;subcommand&gt;
+</code></pre>
+
+<p>Description:</p>
+
+<p>List available target for subcommand.</p>
+
+<p>Examples:</p>
+
+<pre><code># list available lisp implementation to install
+cim list install
+
+# show available target for list
+cim list list
+
+# targets for subsubcommands are also available
+cim list resume rm
+</code></pre>
+
+<p>```</p>
+
+<p>さっきから出てきてるので分かるかと思いますが、可能なターゲットを表示します。将来的には<code>zsh</code>の補完候補にも使うつもりです。そのときは<code>-b, --batch</code>オプションでhuman readableかmachine readableかを分けようかなと。</p>
+
+<h2><code>cim reinstall</code></h2>
+
+<p>```
+$ cim help reinstall
+Usage:</p>
+
+<pre><code>cim reinstall &lt;impl[-version]&gt; | all
+</code></pre>
+
+<p>Description:</p>
+
+<p>Force install already installed implementaion(s). Downloaded archives are resued if available
+If version is not specified, install the latest version.
+If target is &lsquo;all&rsquo;, do on all the available targets.</p>
+
+<p>Examples:</p>
+
+<pre><code># reinstall sbcl-1.1.14
+cim reinstall sbcl-1.1.14
+
+# reinstall all installed lisp impls
+cim reinstall all
+</code></pre>
+
+<p>To show available lisp implementations, type &lsquo;cim list reinstall&rsquo;.</p>
+
+<p><code>``
+</code>cim install<code>は既にインストールされているものはインストールできないのですが、</code>reinstall<code>を使えば可能です。ダウンロードしたアーカイブがあればそれを使います。なければダウンロードから始めます。</code>all<code>は察しのようにインストール済のものを全て</code>reinstall`します。</p>
+
+<h2><code>cim clean</code></h2>
+
+<p>```
+$ cim help clean
+Usage:</p>
+
+<pre><code>cim clean &lt;impl[-version]&gt; | all
+</code></pre>
+
+<p>Description:</p>
+
+<p>Remove donwloaded archives and extracted sources of the given lisp implementations.
+If version is not specified, install the latest version.
+If target is &lsquo;all&rsquo;, do on all the available targets.</p>
+
+<p>Examples:</p>
+
+<pre><code># clean sbcl-1.1.14
+cim clean sbcl-1.1.14
+
+# clean all installed lisp impls
+cim clean all
+</code></pre>
+
+<p>To show available lisp implementations, type &lsquo;cim list clean&rsquo;.</p>
+
+<p><code>``
+</code>cim install<code>は基本的に不要なものも削除しないので、それが嫌なら</code>clean`を使いましょうというスタンスです。アーカイブとソースを削除します。</p>
+
+<h2><code>cim distclean</code></h2>
+
+<p>```
+$cim help distclean
+Usage:</p>
+
+<pre><code>cim distclean &lt;impl[-version]&gt; | all
+</code></pre>
+
+<p>Description:</p>
+
+<p>Clean built files of the given lisp implementation. It doesn&rsquo;t mean uninstall.
+If version is not specified, install the latest version.
+If target is &lsquo;all&rsquo;, do on all the available targets.</p>
+
+<p>Examples:</p>
+
+<pre><code># distclean sbcl-1.1.14
+cim distclean sbcl-1.1.14
+
+# distclean all installed lisp impls
+cim distclean all
+</code></pre>
+
+<p>To show available lisp implementations, type &lsquo;cim list distclean&rsquo;.</p>
+
+<p><code>``
+</code>cim clean<code>より控えめなコマンドです。コンパイルするときに</code>make<code>で生成されたファイルを削除します。</code>make clean`的な。</p>
+
+<h2><code>cim uninstall</code></h2>
+
+<p>```
+$ cim help uninstall
+Usage:</p>
+
+<pre><code>cim uninstall &lt;impl[-version]&gt; | all
+</code></pre>
+
+<p>Description:</p>
+
+<p>Uninstall the given lisp implementaion(s). It does&rsquo;t remove donwloaded archives and extracted sources.
+If version is not specified, install the latest version.
+If target is &lsquo;all&rsquo;, do on all the available targets.</p>
+
+<p>Examples:</p>
+
+<pre><code># uninstall sbcl-1.1.14
+cim uninstall sbcl-1.1.14
+
+# uninstall all installed lisp impls
+cim uninstall all
+</code></pre>
+
+<p>To show available lisp implementations, type &lsquo;cim list uninstall&rsquo;.</p>
+
+<p>```
+アンインストールします。はい。ただしダウンロードしたアーカイブとソースは削除しません。</p>
+
+<h2><code>cim purge</code></h2>
+
+<p>```
+$ cim help purge
+Usage:</p>
+
+<pre><code>cim purge &lt;impl[-version]&gt; | all
+</code></pre>
+
+<p>Description:</p>
+
+<p>Uninstall and clean up downloaded files of the given lisp implementation.
+This command is equivalent to &lsquo;clean&rsquo; and &lsquo;uninstall&rsquo;.</p>
+
+<p>Examples:</p>
+
+<pre><code># purge the latest sbcl
+cim purge sbcl
+</code></pre>
+
+<p>To show available target for &lsquo;purge&rsquo;, type &lsquo;cim list purge&rsquo;</p>
+
+<p><code>``
+</code>uninstall`のアーカイブとソースを削除する版です。</p>
+
+<h2><code>cim info</code></h2>
+
+<p>```
+$ cim help info
+Usage:</p>
+
+<pre><code>cim info
+</code></pre>
+
+<p>Description:</p>
+
+<p>Display information for current cim. It includes environment variables that cim uses, what current and default lisp implementation is, what version of each implementation is used, and where system lisp is.</p>
+
+<p>Example:</p>
+
+<pre><code># display info
+cim info
+</code></pre>
+
+<p>```
+現在の状態を表示します。こんな感じ。</p>
+
+<p>```
+$ cim info
+CIM_ID   = 22176
+CIM_HOME = /home/kim/.cim</p>
+
+<p>current lisp = sbcl-system
+default lisp = sbcl-system</p>
+
+<p>abcl  = abcl-1.2.1
+alisp = alisp-9.0
+ccl   = ccl-1.9
+clisp = clisp-2.49
+ecl   = ecl-13.5.1
+gcl   = gcl-2.6.9
+sbcl  = sbcl-system</p>
+
+<p>sbcl-system  = /usr/local/bin/sbcl
+gcl-system   = /usr/bin/gcl</p>
+
+<p>```</p>
+
+<p><code>CIM_ID</code>ってのは<code>cim</code>がそれぞれのシェルの状態を管理するためのIDです。まあ、そのシェルのプロセスIDですね。逆にプロセスIDの取得と環境変数の設定さえできれば<code>cim</code>は動かせるのでEmacsでも簡単に動きます。</p>
+
+<h2><code>cim get</code></h2>
+
+<p>```
+$ cim help get
+Usage:</p>
+
+<pre><code>cim get
+</code></pre>
+
+<p>Description:</p>
+
+<p>Upgrade to the latest cim.</p>
+
+<p>Examples:</p>
+
+<pre><code>cim get
+</code></pre>
+
+<p>```</p>
+
+<p>cim自身のアップデートです。なんでこんな名前かというと<code>rvm</code>がそうだからです。現状はgithubのKeenS/CIMのmasterからとってきます。stable版ができたらstableに変更しますね。実はブランチを指定してとってくる方法もあったりはします。<code>cim get --branch stable</code>か <code>CIM_INSTALL_BRANCH=stable cim get</code>です。まだブランチが無いので意味ないんですけどね。</p>
+
+<p>この辺で気付いたかもしれませんが結構環境変数で制御できるようにデザインされてます。rubyがそんな感じだからです。</p>
+
+<h2><code>cim version</code></h2>
+
+<p>```
+$ cim help version
+Usage:</p>
+
+<pre><code>cim version
+</code></pre>
+
+<p>Description:</p>
+
+<p>Show current cim&rsquo;s version</p>
+
+<p>Example:</p>
+
+<pre><code>cim version
+</code></pre>
+
+<p>```
+めちゃくちゃバグがあるのにversionが1.0.0に見えるの気のせいです。きっと100点中の1点なんですよ。</p>
+
+<h2><code>cim help</code></h2>
+
+<p><code>
+$ cim help help
+Help for 'help' is not prepared, sorry.
+</code>
+あー。<code>help</code>のhelp用意してなかったー。まあ、上で使ったのが全てです。</p>
+
+<h1><code>cl</code></h1>
+
+<p>```
+$ cl -h
+Usage: cl [switchs] [&mdash;] [programfile] [argumensts]</p>
+
+<p>-C DIR          set <em>default-pathname-defaults</em> DIR.
+-d, &mdash;debug     set debugging flags (push :debug into <em>features</em>)
+-e, &mdash;eval SEXP one line of script. Several -e&rsquo;s are allowed. Omit [programfile]
+-f, &mdash;load FILE load the FILE
+-i EXT          edit <em>argv</em> files in place and make backup with the extension .EXT
+-l LIBRARY      quickload the LIBRARY
+-L LIBRARY      quickload and use-package the LIBRARY
+-r, &mdash;repl      run repl
+-q, &mdash;no-init   do not load $CIM_HOME/init.lisp
+&mdash;no-rl         do not use rlwrap. This is effective only when &mdash;repl is specified
+&mdash;no-right      do not display right prompt. This is effective only when &mdash;repl is specified
+&mdash;no-color      do not use color. This is effective only when &mdash;repl is specified
+-h, &mdash;help      print this help
+-v, &mdash;version   print the version</p>
+
+<p>If neither programfile, -e (&mdash;eval) nor -r (&mdash;repl) are specified, cl reads scripts from the standard input and then eval them.</p>
+
+<p>```</p>
+
+<p>まあ、見たら分かりますね。ruby由来のオプションとShelly由来のオプションと私の好みのオプションがあります。<code>cl</code>を起動する方法は</p>
+
+<ul>
+<li><code>cl script.lisp</code></li>
+<li><code>cl &lt; script.lisp</code></li>
+<li><code>cl -e sexp</code></li>
+<li><code>cl -r</code></li>
+</ul>
+
+
+<p>です。<code>cl script.lisp</code>はシェバン(最初の行が<code>#!</code>なもの)を無視します。</p>
+
+<p>また、これも環境変数<code>LISP_IMPL</code>でバックエンドを制御できます。これはShelly由来ですね。</p>
+
+<p>もう一つ、デバッガは起動しません。スクリプトやワンライナーはエラーを吐いて終了して欲しいですし次に述べますがREPLも目的からしてデバッガは相応しくないと思うからです。因みにですが<code>-d</code>オプションをつけてもデバッガは起動しません。理由はオプション解析のほとんどをLispに任せているので起動時のオブションである<code>--disable-debugger</code>を制御できないからです。需要が高そうならシェルスクリプト内で解析して頑張ってみます。</p>
+
+<p>あ、<code>-c, --compile FILE</code>オプションつけ忘れてた。いつか入れます。<code>(compile-file FILE)</code>で可能でしょうからすぐに入るはずです。</p>
+
+<h2><code>cl -r</code></h2>
+
+<p>一応開発向けではなくて、ちょっと試したいときや初心者が本を片手に動かすときを想定して作ってます。エラーはメッセージのみ表示。ちょっと試したいときはあんまりデバッガを必要としませんしスタックトレースもどうせ深さ1~2なのであまり必要でないからです。なにより初心者にとってデバッガは何をして良いか分かりませんし覚えても処理系毎に操作が違います。その辺を分り易い統一インターフェースを作ることも考えたのですが「それって<code>swank</code>」って結論に至ったのでこのままです。</p>
+
+<h1><code>ql</code></h1>
+
+<p>```
+ql &mdash; Command line interface for quicklisp</p>
+
+<p>Commands currently available
+deps <system>           ;; Install dependencies of <system>.
+help [command]          ;; Show help.
+install[quickload] <system>&hellip;  ;; Install given system.
+list {remote | local}       ;; List available/installed systems.
+search[system-propos] <keyword> ;; Search quicklisp.
+uninstall <system>          ;; Uninstall system.
+update [system]             ;; Update dist info and installed systems.
+<code>``
+一番未完成なコマンドです。主な理由は私が</code>quicklisp`の使い方を分かってないからです。</p>
+
+<h2><code>ql deps</code></h2>
+
+<p>```
+$ ql help deps
+Usage:</p>
+
+<pre><code>ql deps [--path &lt;path&gt;] &lt;system&gt;
+</code></pre>
+
+<p>Description:</p>
+
+<p>Install dependencies of given system. If path is specified, install dependencies there.
+Once you run &lsquo;ql &mdash;path <path> deps&rsquo;, you don&rsquo;t need to specify &lsquo;&mdash;path&rsquo; because the path is written out to &lsquo;.quicklisp-path&rsquo; in current directory.
+You can run &lsquo;ql deps&rsquo; for a local system if &lsquo;.asd&rsquo; file is in current directory.
+This command is useful when you want to separate quicklisps for local project.</p>
+
+<p>Example:</p>
+
+<pre><code>ql deps --path ./quicklisp my-project
+</code></pre>
+
+<p><code>``
+rubyの</code>bundler<code>を参考に作りました。</code>Gemfile<code>に対応する</code>QLfile<code>でも読もうかと思いましたが良く考えたら</code>.asd<code>で十分じゃんとの思いに至ったのでカレントパスの</code>asd`ファイルを読みます。<br/>
+が、奴は依存システムのバージョンまでは指定できなかった気がするのでやっぱり必要な気がします。</p>
+
+<p><code>ql deps --path ./ql myapp</code>とすると依存システム(+新たな<code>quicklisp</code>本体)を<code>./ql</code>にインストールしてくれます。<code>quicklisp</code>本体のインストールは不要ですがどうやったら回避できるかは今模索中です。<br/>
+<code>--path</code>の位置が<code>cim use --default</code>と違うのでご注意下さい。これは主に内部で使ってる<code>parse-option</code>の欠陥に由来します。<br/>
+一度指定すると<code>.quicklisp-path</code>にパスを書き出してくれるので次回からは必要なくなります。カレントディレクトリに複数の<code>asd</code>ファイルがあってそれぞれでパスを使い分けたいとかはできません。<br/>
+あと、最大の欠陥として<code>./ql</code>にシステムをインストールしてもそれを読み込みにいくコマンドがないので実用性ゼロです← まあ、<code>cl</code>あたりを弄ってカレントパスに<code>.quicklisp-path</code>があったら読みにいくようにします。その辺は<code>.lisp-impl</code>とかも含めて考えます。</p>
+
+<h2><code>ql help</code></h2>
+
+<p>```
+$ ql help help
+Help for &lsquo;help&rsquo; is not prepared, sorry.</p>
+
+<p>```
+こいつもhelp用意してなかった。まあ、良いや。</p>
+
+<h2><code>ql install</code></h2>
+
+<p>```
+$ ql help install
+Usage:</p>
+
+<pre><code>ql install &lt;system&gt;...
+</code></pre>
+
+<p>Description:</p>
+
+<p>Install given system(s) to $CIM_HOME/quicklisp.</p>
+
+<p>Example:</p>
+
+<pre><code># install clack
+ql install clack
+</code></pre>
+
+<p>```</p>
+
+<p>なんでこいつがhelpの先頭に居ないんでしょうね。<code>cim</code>に比べて適当ですね。</p>
+
+<p><code>ql quickload</code>っていう別名も持ってます。<code>ql help</code>には<code>quickload</code>が本名で<code>install</code>がエイリアスって書いてありましたが実装ミスりました。</p>
+
+<p>名前の通り<code>ql:quickload</code>します。<code>system</code>は複数指定できます。</p>
+
+<h2><code>ql list</code></h2>
+
+<p>```
+$ ql list
+Usage:</p>
+
+<pre><code>ql list {remote | [local]}
+</code></pre>
+
+<p>Description:</p>
+
+<p>List installed systems. if &lsquo;remote&rsquo; is given, list all the available systems. &lsquo;ql list local&rsquo; is equivalent to &lsquo;ql list&rsquo;.</p>
+
+<p>Example:</p>
+
+<pre><code>ql list remote
+</code></pre>
+
+<p>```</p>
+
+<p><code>cim list</code>と使い方が違ってアレですね。現状<code>quicklisp</code>に登録されているもの全てを表示する<code>ql list remote</code>とインストールしたものだけを表示する<code>ql list [local]</code>があります。<code>ql deps</code>でパスを指定したやつらにも使いたかったのですが方法が分かんないのでとりあえず先送りです。</p>
+
+<h2><code>ql search</code></h2>
+
+<p>```
+$ ql help search
+Usage:</p>
+
+<pre><code>ql search &lt;keyword&gt;
+</code></pre>
+
+<p>Description:</p>
+
+<p>Search quicklisp for <keyword>.</p>
+
+<p>Example:</p>
+
+<pre><code>ql search http
+</code></pre>
+
+<p>```</p>
+
+<p>別名<code>system-apropos</code>。別名と本名が<code>ql help</code>と違うのも単に<code>ql:system-apropos</code>を呼ぶのも<code>ql install</code>と同じです。出力結果をもうちょっと制御したいなと思ってます。</p>
+
+<h2><code>ql uninstall</code></h2>
+
+<p>```
+$ ql help uninstall
+Usage:</p>
+
+<pre><code>ql uninstall &lt;system&gt;...
+</code></pre>
+
+<p>Description:</p>
+
+<p>Uninstall given system(s).</p>
+
+<p>Example:</p>
+
+<pre><code>ql uninstall caveman clack
+</code></pre>
+
+<p><code>``
+</code>ql:uninstall`に同じ。以上。</p>
+
+<h2><code>ql update</code></h2>
+
+<p>```
+$ ql help update
+Usage:</p>
+
+<pre><code>ql update [client]
+</code></pre>
+
+<p>Description:</p>
+
+<p>Update installed systems. If target &lsquo;client&rsquo; is given, update quicklisp itself.</p>
+
+<p>Example:</p>
+
+<pre><code>ql update client
+</code></pre>
+
+<p>```</p>
+
+<p><code>ql:update-all-dists</code>か<code>ql:update-client</code>かを選べます。最初はsystem毎にアップデートしたかったのですが無理っぽいので止めました。</p>
+
+<h1>おわりに</h1>
+
+<p>とりあえずCIMの機能はこれで全部です。あ、開発用に<code>cim reset</code>とかありますけど使わないで下さい。とういうか使うなよ。絶対使うなよ。</p>
+
+<p>これら使ってみてバグがあったらgithubのissueに投げるなりtwitterで報告するなりして下さい。</p>
+
+<p>ところでCIMは私はちむと読んでます。しー・あい・えむと読む人も居るようです。何でも良いです。プロジェクトとしてのちむとコマンドとしてのちむを区別するためにコマンドは小文字で<code>cim</code>、そして<code>cim</code>、<code>cl</code>、<code>ql</code>を含んだプロジェクトは大文字でCIMと書くことにします。今考えました。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Lisp Meet Up #13でLTしてきました]]></title>
@@ -476,26 +1145,6 @@ Hello κeen
 
 <p>としても同じです。
 一部の処理系ではこのようなことが出来ますが、コマンドライン引数の渡し方とかも処理系依存なのでポータブルに書くなら一つ試してみてはいかがでしょうか。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Google Common Lispスタイルガイド]]></title>
-    <link href="http://KeenS.github.io/blog/2013/09/21/google-commonlisp-style-guide/"/>
-    <updated>2013-09-21T17:00:00+09:00</updated>
-    <id>http://KeenS.github.io/blog/2013/09/21/google-commonlisp-style-guide</id>
-    <content type="html"><![CDATA[<p>この度、<a href="http://google-styleguide.googlecode.com/svn/trunk/lispguide.xml">Google Common Lispスタイルガイド</a>が<a href="http://google-common-lisp-style-guide-ja.cddddr.org/">日本語に</a>なりました。</p>
-
-<!-- more -->
-
-
-<p>私が見付けた時点でほとんど日本語になってたのですが、ちょいちょい訳し残しがあったのでお手伝いをして、とりあえず英文は消えました。</p>
-
-<p>ただまあこれで完成かというとそうでもなく、第一段階で「とりあえず」日本語になっただけ。第二段階がまだ残ってます。直訳も多々ありますし記法が統一できてなかったりします。</p>
-
-<p>ですがこれで英語が苦手な方でも読めるかと思いますので読んでみて、変なところがあったらじゃんじゃんPull-Req送って下さい。マスターリポジトリは@massoさんの<a href="https://github.com/g000001/google-common-lisp-style-guide-ja">https://github.com/g000001/google-common-lisp-style-guide-ja</a>です。コメントに元の英文とか訳者のコメントとか残ってるので日本語が訳わかめな状態だったらそっちの方が分り易いかもしれません。</p>
-
-<p>みなさん第二段階のご協力お願いします。</p>
 ]]></content>
   </entry>
   
