@@ -4,13 +4,15 @@ title: "Rails Tutorial"
 date: 2013-09-03 22:15
 comments: true
 sharing: true
-categories: [Ruby,Ruby on Rails, Git, Heroku, Web Development]
+categories: [Git, Heroku, Ruby, Ruby on Rails, Web Development]
 ---
 夜中にコーヒー飲むと眠れなくなりますね。昨晩もコーヒー飲んだら朝まで眠れず、寝たのが朝8時半、起きたのが16時でした。明日提出のレポート終ってないのに…
 
 さて、かなり良いRuby on Railsのチュートリアルを見付けたので紹介します。  
-[Ruby on Rails チュートリアル：実例を使ってRailsを学ぼう](http://railstutorial.jp)
+ [Ruby on Rails チュートリアル：実例を使ってRailsを学ぼう](http://railstutorial.jp)
+
 <!-- more -->
+
 これはただのrailsの紹介ではなくてgitだとかherokuだとかを使ってかなり実践的にアプリケーションを作ていくものです。1, 2章で軽くrailsを動かしてみたあと、3章以降でテスト駆動開発でアプリケーションを構築していきます。
 
 このテスト駆動開発の環境がすばらしいのなんのって、最初動かしたとき思わずニヤリとしました。しかも何故か(何も設定してないのに)Emacsのモードバーの色がテストの結果に応じて変わるという。  
@@ -19,3 +21,5 @@ categories: [Ruby,Ruby on Rails, Git, Heroku, Web Development]
 文体も訳本にありがちな片言の日本語ではなく読み易いですし、Ruby自体の解説もあり、「Scaffoldを使えば簡単にできるんだぜ~」じゃなくてちゃんとMVCの関係とかを解説して身に付いた上で「今後はScaffoldでより手軽に作れるよ」なのでRailsに限らずWeb開発のチュートリアルとして秀逸でした。
 
 私もまだ5章までしか進めてないのですが是非一度試してみて下さい
+
+
