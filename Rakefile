@@ -22,9 +22,11 @@ blog_index_dir  = 'source'    # directory for your blog's index page (if you put
 deploy_dir      = "_deploy"   # deploy directory (for Github pages deployment)
 stash_dir       = "_stash"    # directory to stash posts for speedy generation
 posts_dir       = "_posts"    # directory for blog files
+slides_dir      = "_slides"    # directory for slides
 themes_dir      = ".themes"   # directory for blog files
 new_post_ext    = "markdown"  # default new post file extension when using the new_post task
 new_page_ext    = "markdown"  # default new page file extension when using the new_page task
+new_slide_ext   = "markdown"  # default new slide file extension when using the new_slide task
 server_port     = "4000"      # port for preview server eg. localhost:4000
 
 
@@ -155,6 +157,32 @@ task :new_page, :filename do |t, args|
     end
   else
     puts "Syntax error: #{args.filename} contains unsupported characters"
+  end
+end
+
+# usage rake new_post[my-new-slide] or rake new_post['my new slide'] or rake new_post (defaults to "new-slide")
+desc "Begin a new slide in #{source_dir}/#{slides_dir}"
+task :new_slide, :title do |t, args|
+  if args.title
+    title = args.title
+  else
+    title = get_stdin("Enter a title for your post: ")
+  end
+  raise "### You haven't set anything up yet. First run `rake install` to set up an Octopress theme." unless File.directory?(source_dir)
+  mkdir_p "#{source_dir}/#{slides_dir}"
+  filename = "#{source_dir}/#{slides}/#{title.to_url}.#{new_slide_ext}"
+  if File.exist?(filename)
+    abort("rake aborted!") if ask("#{filename} already exists. Do you want to overwrite?", ['y', 'n']) == 'n'
+  end
+  puts "Creating new post: #{filename}"
+  open(filename, 'w') do |post|
+    post.puts "---"
+    post.puts "layout: slide"
+    post.puts "title: \"#{title.gsub(/&/,'&amp;')}\""
+    post.puts "date: #{Time.now.strftime('%Y-%m-%d %H:%M')}"
+    post.puts "categories: "
+    post.puts "---"
+    post.puts ""
   end
 end
 
