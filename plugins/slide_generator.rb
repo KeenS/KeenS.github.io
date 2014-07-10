@@ -28,7 +28,6 @@ module Jekyll
     attr_accessor :url_base, :categories, :tags, :date, :description, :format, :date_formatted
 
     def initialize(site, base, dir, name)
-      p dir
       @dir  = "/_slides/"
       @site = site
       @base = base
