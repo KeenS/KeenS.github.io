@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: redmine | κeenのHappy Hacκing Blog]]></title>
+  <link href="http://KeenS.github.io/categories/redmine/atom.xml" rel="self"/>
+  <link href="http://KeenS.github.io/"/>
+  <updated>2014-07-10T23:30:22+09:00</updated>
+  <id>http://KeenS.github.io/</id>
+  <author>
+    <name><![CDATA[κeen]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[Redmineのインストール]]></title>
+    <link href="http://KeenS.github.io/blog/2013/09/05/install-redmine/"/>
+    <updated>2013-09-05T16:35:00+09:00</updated>
+    <id>http://KeenS.github.io/blog/2013/09/05/install-redmine</id>
+    <content type="html"><![CDATA[<p>私はバイトではプロジェクト管理に <a href="http://backlog.jp">Backlog</a>のサービスを利用してますが、同様のOSSに <a href="http://redmine.jp">Redmine</a>なるものがあると聞いて動かしてみたときのメモ。</p>
+
+<!-- more -->
+
+
+<p>以下、公式の引用。</p>
+
+<blockquote><p>Redmineはオープンソースのプロジェクト管理ソフトウェアです。</p>
+
+<p>プロジェクトのタスク管理、進捗管理、情報共有が行えます。SubversionやGitなどのバージョン管理システムとの連携機能も備えており、ソフトウェア開発やwebサイト制作などのITプロジェクトで特に威力を発揮します。</p></blockquote>
+
+<p>Redmineの管理団体(？)が <a href="http://hosting.redmine.jp/">MyRedmine</a>というホスティングサービスを提供してたりしますが、今回はこれをローカルで動かします。</p>
+
+<p><a href="http://redmine.jp/guide/RedmineInstall/">公式ドキュメント</a>を参考に作業していきます。</p>
+
+<p>まずはダウンロード。現在の最新版は2.3.2だそうです。</p>
+
+<pre><code>$cd ~/Ruby
+$svn checkout http://svn.redmine.org/redmine/branches/2.3-stable redmine
+</code></pre>
+
+<p>んで、グローバルの空間を汚したくないので新たにGemsetを作ります。本来ならbundler仕事なのですが、railsのバージョンとか仕組みの問題が面倒臭そうだったのでGemsetで管理。</p>
+
+<pre><code>$rvm use --create 1.9.3@redmine
+$cd redmine
+$echo ruby-1.9.3-p448 &gt; .ruby-version
+$echo redmine &gt; .ruby-gemset
+</code></pre>
+
+<p>これで~/Ruby/redmineにcdすると自動的にrvmが1.9.3@redmineに切り替えてくれます。<br/>
+※注意<br/>
+<code>.rvmrc</code>に<code>rvm use 1.9.3@redmine</code>と書いてたら怒られます。<code>.ruby-version</code>と<code>.ruby-gemset</code>がバージョン管理システムに依存しない新しい書き方だそうです。</p>
+
+<p>データベースはデフォルトだとMySQLを使う設定になってますがこんなお試しにのためにMySQLを動かしたくないのでSQLiteに変更。</p>
+
+<pre><code>$cp config/{database.yml.example, database.yml}
+</code></pre>
+
+<p>のあと、database.ymlのproductionの部分を以下のように変更。</p>
+
+<p><figure class="code"><figcaption><span></span></figcaption><div class="highlight"><table><tr>
+<td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+</pre></td>
+<td class="code"><pre><code class="yaml"><span class="line"><span class="l-Scalar-Plain">production</span><span class="p-Indicator">:</span>
+</span><span class="line"><span class="err"> </span><span class="l-Scalar-Plain">adapter</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">sqlite3</span>
+</span><span class="line"><span class="err"> </span><span class="l-Scalar-Plain">database</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">db/redmine.sqlite3</span>
+</span></code></pre></td>
+</tr></table></div></figure></p>
+
+<p>あとは<code>bundle install</code>。(bundlerはインストールされてる前提です)</p>
+
+<pre><code>$bundle install --without development test
+</code></pre>
+
+<p>すると…あれ？RMagickでコケる…。公式ドキュメントには <code>bundle</code>の<code>--without</code>に<code>rmagick</code>を加えろと書いてますが画像扱えないのは悔しいので色々調べた結果、</p>
+
+<pre><code>$sudo apt-get install libmagic-dev libmagickwand-dev
+</code></pre>
+
+<p>で依存関係を満せるようです。これでようやく<code>bundle install</code>が通ります。</p>
+
+<p>ここまできたらあとはドキュメント通り。</p>
+
+<pre><code>$rake generate_secret_token
+$RAILS_ENV=production rake db:migrate
+$RAILS_ENV=production rake redmine:load_default_data
+$rails s
+</code></pre>
+
+<p>…あれ？<code>rails s</code>でコケる。<br/>
+これは自分がrailsに慣れてなかったのが問題のようで、正しくは</p>
+
+<pre><code>$rails s -e production
+</code></pre>
+
+<p>だそうです。</p>
+
+<pre><code>$RAILS_ENV=production rails s
+</code></pre>
+
+<p>としても同じ。これで <a href="http://localhost:3000">localhost:3000</a>にアクセスするとRedmineが開きます。</p>
+
+<p><img src="/images/redmine-home.png" title="redmine-home" alt="Redmineのホーム画面" /></p>
+
+<p>因みにAdminのID、パスワードはadminだそうです。</p>
+
+<p>データベースの設定のexample部分にjenkinsとかいう文字列があったけど連携できるのかなぁ。要調査。</p>
+
+<hr />
+
+<h3>補足</h3>
+
+<p>デフォルトのWEBrickだと遅いのでGemfileに</p>
+
+<p><figure class="code"><figcaption><span></span></figcaption><div class="highlight"><table><tr>
+<td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+</pre></td>
+<td class="code"><pre><code class="ruby"><span class="line"><span class="n">gem</span> <span class="s2">&ldquo;thin&rdquo;</span>
+</span></code></pre></td>
+</tr></table></div></figure></p>
+
+<p>を加えて、<code>bundle install</code>し直すと自動的にThinを使ってくれるそうです。</p>
+]]></content>
+  </entry>
+  
+</feed>
