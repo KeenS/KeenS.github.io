@@ -28,6 +28,8 @@ module Jekyll
     attr_accessor :description, :format, :url_base
 
 
+    MATCHER = /(.*)(\.[^.]+)$/
+
     def containing_dir(source, dir)
       return File.join(source, dir, '_slides')
     end
@@ -45,6 +47,12 @@ module Jekyll
       end
     end
 
+    def process(name)
+      slug, ext = *name.match(MATCHER)
+      self.slug = slug
+      self.ext = ext
+    end
+
     def previous
       pos = site.slides.index {|slide| slide.equal?(self) }
       if pos && pos > 0
@@ -56,7 +64,7 @@ module Jekyll
 
 
     def url
-      @url ||= File.join(url_base, @dir, File.basename(name, ".*")) + ".html"
+      @url ||= File.expand_path(File.join(url_base, @dir, File.basename(name, ".*")) + ".html", "/")
     end
 
     def destination(dest)
@@ -90,22 +98,19 @@ module Jekyll
       end
     end
 
-
-
+    def post_attr_hash(post_attr)
+      # Build a hash map based on the specified post attribute ( post attr =>
+      # array of posts ) then sort each array in reverse order.
+      hash = Hash.new { |h, key| h[key] = [] }
+      posts.each { |p| p.send(post_attr.to_sym).each { |t| hash[t] << p } }
+      slides.each { |p| p.send(post_attr.to_sym).each { |t| hash[t] << p } }
+      hash.values.each { |posts| posts.sort!.reverse! }
+      hash
+    end
 
     def read_slides(dir)
       slides = self.read_content("", "_slides", Slide)
       slides
-    end
-
-    def categories
-      hash = post_attr_hash('categories')
-      self.slides.each do |slide|
-        slide.categories.each do |cat|
-          hash[cat] = (hash[cat] || []).concat [slide]
-        end
-      end
-      hash
     end
 
     def write_slide(slide, dir)

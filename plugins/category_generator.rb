@@ -91,14 +91,7 @@ module Jekyll
     #  +category+     is the category currently being processed.
     def write_category_index(category_dir, category)
       index = CategoryIndex.new(self, self.source, category_dir, category)
-      payload = site_payload
-      self.slides.each do |slide|
-        slide.categories.each do |cat|
-          payload['site']['categories'][cat] = (payload['site']['categories'][cat] || []).concat [slide]
-        end
-      end
-      
-      index.render(self.layouts, payload)
+      index.render(self.layouts, site_payload)
       index.write(self.dest)
       # Record the fact that this page has been added, otherwise Site::cleanup will remove it.
       self.pages << index
