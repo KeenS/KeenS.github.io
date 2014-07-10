@@ -180,7 +180,9 @@ task :new_slide, :title do |t, args|
     post.puts "layout: slide"
     post.puts "title: \"#{title.gsub(/&/,'&amp;')}\""
     post.puts "date: #{Time.now.strftime('%Y-%m-%d %H:%M')}"
+    post.pust "format: "
     post.puts "categories: "
+    post.puts "description: "
     post.puts "---"
     post.puts ""
   end
