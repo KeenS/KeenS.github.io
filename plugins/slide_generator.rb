@@ -24,90 +24,93 @@ require 'jekyll'
 
 module Jekyll
 
-  class Slide < Page
-    attr_accessor :url_base, :categories, :tags, :date, :description, :format, :date_formatted
+  class Slide < Post
+    attr_accessor :url_base, :categories, :tags, :date, :description, :format
 
-    def initialize(site, base, dir, name)
-      @dir  = "/_slides/"
-      @site = site
-      @base = base
-      @name = name
-      @date_formatted = "aaa"
-      process(name)
-      read_yaml(File.join(base, @dir), name)
+    # def initialize(site, base, dir, name)
+    #   @dir  = "/_slides/"
+    #   @site = site
+    #   @base = base
+    #   @name = name
+    #   process(name)
+    #   read_yaml(File.join(base, @dir), name)
 
-      data.default_proc = proc do |hash, key|
-        site.frontmatter_defaults.find(File.join(dir, name), type, key)
-      end
+    #   data.default_proc = proc do |hash, key|
+    #     site.frontmatter_defaults.find(File.join(dir, name), type, key)
+    #   end
 
-      if data.has_key?('date')
-        self.date = Time.parse(data["date"].to_s)
-      end
+    #   if data.has_key?('date')
+    #     self.date = Time.parse(data["date"].to_s)
+    #   end
 
-      populate_categories
-      populate_tags
-            format = self.site.config['date_format']
+    #   populate_categories
+    #   populate_tags
+    #   format = self.site.config['date_format']
 
-      unless self.data['date'].nil?
+    #   unless self.data['date'].nil?
 
-        date_f = DateFormat.format_date(self.data['date'], format) unless self.data['date'].nil?
-        date_t = DateFormat.time_tag(self.data['date'], date_f, 'published')
+    #     date_f = DateFormat.format_date(self.data['date'], format) unless self.data['date'].nil?
+    #     date_t = DateFormat.time_tag(self.data['date'], date_f, 'published')
 
-        self.data['date_formatted'] = date_f
-        self.data['time_tag'] = date_t
-      end
+    #     self.data['date_formatted'] = date_f
+    #     self.data['time_tag'] = date_t
+    #   end
 
-      unless self.data['updated'].nil?
-        updated = Time.parse(self.data['updated'].to_s)
-        updated_f = DateFormat.format_date(self.data['updated'], format)
-        updated_t = DateFormat.time_tag(self.date, date_f, 'updated')
+    #   unless self.data['updated'].nil?
+    #     updated = Time.parse(self.data['updated'].to_s)
+    #     updated_f = DateFormat.format_date(self.data['updated'], format)
+    #     updated_t = DateFormat.time_tag(self.date, date_f, 'updated')
 
-        self.data['updated'] = updated
-        self.data['updated_formatted'] = updated_f
-        self.data['updated_time_tag'] = updated_t
-      end
+    #     self.data['updated'] = updated
+    #     self.data['updated_formatted'] = updated_f
+    #     self.data['updated_time_tag'] = updated_t
+    #   end
+    # end
+
+    def containing_dir(source, dir)
+      return File.join(source, dir, '_slides')
     end
 
     def self.valid? file
       true
     end
 
-    def title
-      data.fetch("title", titleized_slug)
-    end
+    # def title
+    #   data.fetch("title", titleized_slug)
+    # end
 
-    def destination(dir)
-      File.join(@site.dest, url)
-    end
+    # def destination(dir)
+    #   File.join(@site.dest, url)
+    # end
 
-    def populate_categories
-      categories_from_data = Utils.pluralized_array_from_hash(data, 'category', 'categories')
-      self.categories = (
-        Array(categories) + categories_from_data
-      ).map {|c| c.to_s.downcase}.flatten.uniq
-    end
+    # def populate_categories
+    #   categories_from_data = Utils.pluralized_array_from_hash(data, 'category', 'categories')
+    #   self.categories = (
+    #     Array(categories) + categories_from_data
+    #   ).map {|c| c.to_s.downcase}.flatten.uniq
+    # end
 
-    def populate_tags
-      self.tags = Utils.pluralized_array_from_hash(data, "tag", "tags").flatten
-    end
+    # def populate_tags
+    #   self.tags = Utils.pluralized_array_from_hash(data, "tag", "tags").flatten
+    # end
 
-    def url_placeholders
-      {
-        :year => date.strftime("%Y"),
-        :month => date.strftime("%m"),
-        :day => date.strftime("%d"),
-        # :title => title,
-        :i_day => date.strftime("%d").to_i.to_s,
-        :i_month => date.strftime("%m").to_i.to_s,
-        :short_month => date.strftime("%b"),
-        :short_year => date.strftime("%y"),
-        :y_day => date.strftime("%j"),
-        :path => @url_base,
-        :basename => basename,
-        :categories => (categories || []).map { |c| c.to_s }.join('/'),
-        :output_ext => output_ext
-      }
-    end
+    # def url_placeholders
+    #   {
+    #     :year => date.strftime("%Y"),
+    #     :month => date.strftime("%m"),
+    #     :day => date.strftime("%d"),
+    #     # :title => title,
+    #     :i_day => date.strftime("%d").to_i.to_s,
+    #     :i_month => date.strftime("%m").to_i.to_s,
+    #     :short_month => date.strftime("%b"),
+    #     :short_year => date.strftime("%y"),
+    #     :y_day => date.strftime("%j"),
+    #     :path => @url_base,
+    #     :basename => basename,
+    #     :categories => (categories || []).map { |c| c.to_s }.join('/'),
+    #     :output_ext => output_ext
+    #   }
+    # end
 
     def transform
       self.content = content
@@ -133,11 +136,9 @@ module Jekyll
 
     def categories
       hash = post_attr_hash('categories')
-      self.pages.each do |page|
-        if page.respond_to? :categories
-          page.categories.each do |cat|
-            hash[cat] = (hash[cat] || []).concat [page]
-          end
+      self.slides.each do |slide|
+        slide.categories.each do |cat|
+          hash[cat] = (hash[cat] || []).concat [slide]
         end
       end
       hash
@@ -149,8 +150,7 @@ module Jekyll
       slide.write(dir)
       self.slides << slide
       # Record the fact that this page has been added, otherwise Site::cleanup will remove it.
-      self.pages << slide
-      self.categories
+      # self.posts << slide
     end
 
     def write_slides
@@ -176,7 +176,7 @@ module Jekyll
 ===============================================
  Error for slide_generator.rb plugin
 -----------------------------------------------
- No 'slide.hmtl' in source/_layouts/
+ No 'slide.html' in source/_layouts/
  Perhaps you haven't installed a theme yet.
 ===============================================
 
