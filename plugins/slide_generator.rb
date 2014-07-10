@@ -25,47 +25,8 @@ require 'jekyll'
 module Jekyll
 
   class Slide < Post
-    attr_accessor :url_base, :categories, :tags, :date, :description, :format
+    attr_accessor :description, :format, :url_base
 
-    # def initialize(site, base, dir, name)
-    #   @dir  = "/_slides/"
-    #   @site = site
-    #   @base = base
-    #   @name = name
-    #   process(name)
-    #   read_yaml(File.join(base, @dir), name)
-
-    #   data.default_proc = proc do |hash, key|
-    #     site.frontmatter_defaults.find(File.join(dir, name), type, key)
-    #   end
-
-    #   if data.has_key?('date')
-    #     self.date = Time.parse(data["date"].to_s)
-    #   end
-
-    #   populate_categories
-    #   populate_tags
-    #   format = self.site.config['date_format']
-
-    #   unless self.data['date'].nil?
-
-    #     date_f = DateFormat.format_date(self.data['date'], format) unless self.data['date'].nil?
-    #     date_t = DateFormat.time_tag(self.data['date'], date_f, 'published')
-
-    #     self.data['date_formatted'] = date_f
-    #     self.data['time_tag'] = date_t
-    #   end
-
-    #   unless self.data['updated'].nil?
-    #     updated = Time.parse(self.data['updated'].to_s)
-    #     updated_f = DateFormat.format_date(self.data['updated'], format)
-    #     updated_t = DateFormat.time_tag(self.date, date_f, 'updated')
-
-    #     self.data['updated'] = updated
-    #     self.data['updated_formatted'] = updated_f
-    #     self.data['updated_time_tag'] = updated_t
-    #   end
-    # end
 
     def containing_dir(source, dir)
       return File.join(source, dir, '_slides')
@@ -75,42 +36,37 @@ module Jekyll
       true
     end
 
-    # def title
-    #   data.fetch("title", titleized_slug)
-    # end
+    def next
+      pos = site.slides.index {|slide| slide.equal?(self) }
+      if pos && pos < site.slides.length - 1
+        site.slides[pos + 1]
+      else
+        nil
+      end
+    end
 
-    # def destination(dir)
-    #   File.join(@site.dest, url)
-    # end
+    def previous
+      pos = site.slides.index {|slide| slide.equal?(self) }
+      if pos && pos > 0
+        site.slides[pos - 1]
+      else
+        nil
+      end
+    end
 
-    # def populate_categories
-    #   categories_from_data = Utils.pluralized_array_from_hash(data, 'category', 'categories')
-    #   self.categories = (
-    #     Array(categories) + categories_from_data
-    #   ).map {|c| c.to_s.downcase}.flatten.uniq
-    # end
 
-    # def populate_tags
-    #   self.tags = Utils.pluralized_array_from_hash(data, "tag", "tags").flatten
-    # end
+    def url
+      @url ||= File.join(url_base, @dir, File.basename(name, ".*")) + ".html"
+    end
 
-    # def url_placeholders
-    #   {
-    #     :year => date.strftime("%Y"),
-    #     :month => date.strftime("%m"),
-    #     :day => date.strftime("%d"),
-    #     # :title => title,
-    #     :i_day => date.strftime("%d").to_i.to_s,
-    #     :i_month => date.strftime("%m").to_i.to_s,
-    #     :short_month => date.strftime("%b"),
-    #     :short_year => date.strftime("%y"),
-    #     :y_day => date.strftime("%j"),
-    #     :path => @url_base,
-    #     :basename => basename,
-    #     :categories => (categories || []).map { |c| c.to_s }.join('/'),
-    #     :output_ext => output_ext
-    #   }
-    # end
+    def destination(dest)
+      # The url needs to be unescaped in order to preserve the correct filename
+      path = File.join(dest,  URL.unescape_path(url))
+      path = File.join(path, "index.html") if path[/\.html$/].nil?
+      path
+    end
+
+
 
     def transform
       self.content = content
@@ -118,16 +74,24 @@ module Jekyll
 
   end
 
-  class Page
-
-    def self.valid? file
-      true
-    end
+  def Page.valid? filename
+    true
   end
 
   class Site
 
     attr_accessor :slides
+
+    def each_site_file
+      %w(slides posts pages static_files docs_to_write).each do |type|
+        send(type).each do |item|
+          yield item
+        end
+      end
+    end
+
+
+
 
     def read_slides(dir)
       slides = self.read_content("", "_slides", Slide)
@@ -147,10 +111,8 @@ module Jekyll
     def write_slide(slide, dir)
       slide.url_base = dir
       slide.render(self.layouts, site_payload)
-      slide.write(dir)
+      slide.write(self.dest)
       self.slides << slide
-      # Record the fact that this page has been added, otherwise Site::cleanup will remove it.
-      # self.posts << slide
     end
 
     def write_slides
