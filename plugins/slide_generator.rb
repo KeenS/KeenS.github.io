@@ -127,6 +127,8 @@ module Jekyll
         read_slides(dir).each do |slide|
           self.write_slide(slide, dir)
         end
+        @slides.sort!
+        @slides.reverse!
         self.read_content(dir, "", Page).each do |index|
           payload = site_payload
           payload["site"].merge!({ "slides"=> slides })
