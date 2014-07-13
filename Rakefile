@@ -118,6 +118,8 @@ task :new_post, :title do |t, args|
     post.puts "comments: true"
     post.puts "categories: "
     post.puts "---"
+    post.puts ""
+    post.puts "<!-- more -->"
   end
 end
 
@@ -163,6 +165,7 @@ end
 # usage rake new_post[my-new-slide] or rake new_post['my new slide'] or rake new_post (defaults to "new-slide")
 desc "Begin a new slide in #{source_dir}/#{slides_dir}"
 task :new_slide, :title do |t, args|
+  puts args
   if args.title
     title = args.title
   else
@@ -174,13 +177,13 @@ task :new_slide, :title do |t, args|
   if File.exist?(filename)
     abort("rake aborted!") if ask("#{filename} already exists. Do you want to overwrite?", ['y', 'n']) == 'n'
   end
-  puts "Creating new post: #{filename}"
+  puts "Creating new slide: #{filename}"
   open(filename, 'w') do |post|
     post.puts "---"
     post.puts "layout: slide"
     post.puts "title: \"#{title.gsub(/&/,'&amp;')}\""
     post.puts "date: #{Time.now.strftime('%Y-%m-%d %H:%M')}"
-    post.pust "format: "
+    post.puts "format: "
     post.puts "categories: "
     post.puts "description: "
     post.puts "---"
