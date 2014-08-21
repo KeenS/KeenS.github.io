@@ -33,6 +33,9 @@ aaa
 -!-aaa
 ```
 ですが、
+```
+aaa-!-aaa
+```
 ↓ `C-o`
 ```
 aaa-!-
@@ -40,9 +43,9 @@ aaa
 ```
 です。
 
-`C-o`の改行後にインデントする版を捜したのですが`C-M-o (split-line)`という近い関数はあるもののまさにというのはありませんでした。
+`C-o`の改行後にインデントする版を捜したのですが`C-M-o (split-line)`という近いコマンドはあるもののまさにというのはありませんでした。
 
-※trunkではデフォルトで`electric-indent-mode`がデフォルトでonになってるので`C-m/RET`と`C-j`が入れ替わります。  
+※trunkではデフォルトで`electric-indent-mode`がonになってるので`C-m/RET`と`C-j`が入れ替わります。  
 ※現在行と改行した先の行両方をインデントする`indent-then-newline-and-indent`という関数もあります。
 
 ## `M-^`(`delete-indentation`)
@@ -51,11 +54,11 @@ aaa
 ## `C-M-j`(`indent-new-comment-line`)
 コメント内で使う`C-j`です。
 ```lisp
-;;; This is comment-!-
+;;; This is a comment-!-
 ```
 ↓ `C-M-j`
 ```lisp
-;;; This is comment
+;;; This is a comment
 ;;; -!-
 ```
 です。
@@ -121,6 +124,52 @@ nextのkillコマンドでkillした内容をkill-ringにappendします。チ�
 
 ## `M-- M-u`(`upcase-word`)
 `upcase-word`はカーソルの次の単語を大文字にしますが、負の前置引数を与えると直前の単語を大文字にしてくれます。ちょっと押し辛いですが一応覚えておきましょう。`M-- M-l`(`capitalize-word`)もそれなりに使えるかもしれません。
+
+# complete系
+`icomplete-mode`するとミニバッファでの入力時に補完候補が随時表示されますが、実はあの候補に色々操作出来るのです。
+
+## `M-p` / `M-n`
+ヒストリを辿れます
+
+## `C-j`
+先頭の候補に決定します。
+
+## `C-,` / `C-.`
+候補を後/先に送ります。キーボードを見て&lt; / &gt;を押せば良いので簡単ですね。
+
+## `C-M-i`
+先頭の候補を補完します。続けて`C-M-i`すると順次次候補になります。
+
+## `C-r`
+ヒストリを検索します。
+
+## `C-s`
+ミニバッファ内を前方検索します。あまり需要なさそうですね。
+
+# isearch
+isearchはカーソルをバッファに残したままミニバッファを編集するのでキーバインドが特殊です。
+
+## `C-s`(`isearch-repeat-forward`)
+検索文字列が空の状態で`C-s`すると前回の検索文字列で検索します。
+
+## `C-j`(`isearch-printing-char`)
+RETが決定に使われてるので改行はC-jになります。
+
+## `C-w`(`isearch-yank-word-or-char`)
+カーソル下の単語又は文字を検索文字列にします。連続して押すと範囲を広げます。
+
+## `C-M-w`(`isearch-del-char`)
+1文字削除します。`DEL`(`isearch-delete-char`)とは違って削除してもバッファのポイントは戻りません。
+
+## `C-M-y`(`isearch-yank-char`)
+カーソル下の文字を検索文字列に足します。
+
+## `M-s C-e`(`isearch-yank-line`)
+カーソルから行末までを検索文字列にします。
+
+## `M-s `(`isearch-toggle-`)系
+isearchには実は文字列検索だけでなく、さまざまな検索方法があります。
+`M-s _`(`isearch-toggle-symbol`)、`M-s c`(`isearch-toggle-case-fold`)、`M-s r`(`isearch-toggle-regexp`)、`M-s w`(`isearch-toggle-word`)、あたりを覚えておくと良いでしょう。
 
 # バッファ/ウィンドウ系
 ## split-threshold
@@ -259,12 +308,23 @@ region-rectangleをレジスタに登録します。
 frameset(フレームの数や位置、サイズ、そしてそれぞれのフレームのwindow-configuration)をレジスタに登録します。復元は`C-x r j`(`jump-to-register`)です。
 
 
-尚、キーは割り当てられてませんがキーボードマクロの保存/実行やレジスタにappend/prependするコマンドもあるようです。
+## 蛇足
+キーは割り当てられてませんがキーボードマクロの保存/実行やレジスタにappend/prependするコマンドもあるようです。
+
+同じ`C-x r`のプリフィクスの機能にブックマークがありますが、るびきちさんの本に載ってるので割愛します。
 
 # vc(バージョン管理)系
-詳しい使い方は多数の記事があると思うのでそちらに任せるとして、よく使うものを紹介します。
+詳しい使い方は多数の記事があると思うのでそちらに任せるとして、よく使うものを紹介します。尚、るびきちさんの本の頃からは大分進化してるのでvcに関しては参考にしない方が良いかと思います。例えば`git init`相当をするコマンド(`vc-create-repo`)は追加されてます。その他mergeやpull/pushなども。
 
-尚、私が最近gitしか使ってないので他のvcsでどうなるかは分かりません。一応vc.el自体vcsの差異を吸収するものなのですが、vcs固有の挙動もあるのです。
+各vcsの対応状況は
+
+> ;; Supported version-control systems presently include CVS, RCS, GNU  
+> ;; Arch, Subversion, Bzr, Git, Mercurial, Monotone and SCCS  
+> ;; (or its free replacement, CSSC).
+
+とあります。かなり多いですね。というかこんなにvcsあったんですね。
+
+私が最近gitしか使ってないので他のvcsでどうなるかは分かりません。一応vc.el自体vcsの差異を吸収するものなのですが、vcs固有の挙動もあるのです。
 
 ## `C-x v =`(`vc-diff`)
 `git diff <バッファのファイル>`相当です。大体、しばらく作業してそろそろコミットするかーって時に使います。表示されるバッファはdiff-modeになっているのでdiffの部分でRETすると変更箇所にジャンプ出来ます。
@@ -274,4 +334,138 @@ frameset(フレームの数や位置、サイズ、そしてそれぞれのフ�
 
 私もそこまで深追いしてないのでlogバッファでの操作の調査は読者の課題とする。
 
-## 
+## `C-x v v`(`vc-next-action`)
+vcの中で一番有名なコマンドでしょうから詳細は省きます。私が強調したいのはコミットログ書くときのlog-editモードです。地味に機能強化されてます。`C-c C-d`(`log-edit-show-diff`)でdiffを表示したり`C-c C-e`(`vc-git-log-edit-toggle-amend`)でamendにしたり出来ます。詳しくは`C-c ?`(`log-edit-mode-help`)して下さい。
+
+## `C-x v d`(`vc-dir`)
+ディレクトリ単位での機能を使えます。というかファイル単位でない機能(つまりvcsの多くの機能)を使えます。最近はvcを使うときはこれがメインになってます。色々機能があるので`<f1> b`(`describe-bindings`)して確認して下さい。
+
+## `C-x v u`(`vc-revert`)
+これは逆に使ってはいけないコマンドです。バッファのファイルのみをリバートする(`git checkout -- <バッファのファイル>`相当)と思いきや、`git reset --hard`するようです。no more被害者。
+
+# view-mode
+かなりキーバインドが特殊ですが割と便利な機能です。ここで紹介したもの以外にもキーはバインドされてますが非自明なのは大体こんなもんでしょう。
+
+## `RET`(`View-scroll-line-forward`) / `y`(`View-scroll-line-backward`)
+上下に1行スクロールします。ありそうで他にない機能です。
+
+## `/`(`View-search-regexp-forward`) / `\`(`View-search-regexp-backward`)
+まさかのviバインド。ちゃんと`n`(`View-search-last-regexp-forward`)と`p`(`View-search-last-regexp-backward`)も用意されてます。
+
+## `s`(`isearch-forward`) / `r` (`isearch-backward`)
+`C-`がなくなっただけですね。他にも`C-`がなくなっただけのコマンドはいっぱいありますが`/`/`\`との比較で出しました。
+
+## `m`(`point-to-register`) / `'`(`register-to-point`)
+`m`でマークして`'`でジャンプです。
+
+## やめる系
+なぜか一杯あります。前提として、view-modeは別のファイルから「view-modeで(時に別ウィンドウで)ファイルを開く」系のコマンドで呼ばれることが多いというのがあります。
+
+| コマンド                   | 説明
+|:---------------------------|:----
+| `e`(`View-exit`)           | view-modeを抜ける。
+| `E`(`View-exit-and-edit`)  | view-modeを抜けてバッファを編集出来るようにする。つまり、read-only-modeも抜ける。
+| `c`(`View-leave`)          | view-modeを抜けてバッファを切り替えるがバッファはkillしない。
+| `C`(`View-kill-and-leave`) | view-modeを抜けてバッファをkillして以前のバッファに切り替る。
+| `q`(`View-quit`)           | view-modeを抜けてウィンドウ内の状態を元に戻し、フォーカスも戻す。大抵バッファをkillする。
+| `Q`(`View-quit-all`)       | view-modeを抜けてウィンドウ構成を元に戻す。大抵バッファをkillする。
+
+うん。覚えられね。
+
+# dired系
+便利なのに情報が少ないdired系。私はUbuntuのUnityを捨ててStumpwmを使っているのでファイルエクスプローラは専らEmacsですからよく使います。[以前のエントリ](http://localhost:4000/blog/2013/10/04/emacs-dired/)以外の便利機能を紹介します。
+
+因みに呆れるほどキーがバインドされてるのでここで紹介するのはほんの一部です。画像のサムネイル関連の機能なんかもあります。
+
+## `+`(`dired-create-directory`)
+ディレクトリを作ります。
+
+## `(`(`dired-hide-ditail-mode`)
+初期状態では`ls -l`っぽい内容が表示されてますが`ls`に変更出来ます。
+
+## `v`(`dired-view-file`)
+ポイント下のファイルをview-modeで開きます。view-modeでは`q`でバッファを閉じれるので、あるディレクトリ下のファイルを連続して読みたいときに便利です。
+
+## `o`(`dired-find-file-other-window`)
+別ウィンドウでファイルを開きます。
+
+## `C-o`(`dired-display-file`)
+別ウィンドウでファイルを開きますが、フォーカスは移りません。
+
+diredに限らず、ファイルへのリンクをリスト表示するバッファでは大抵`v`と`o`と`C-o`が使えます。
+
+## `i`(`dired-maybe-insert-subdir`)
+バッファの下にポイント下のディレクトリの内容を追加します。ツリー表示にする機能はないようです。
+
+## `%`(`dired--regexp`)系
+`% C`(`dired-do-copy-regexp`)など色々あるのですがとりあえず使いそうなのは`% g`(`dired-mark-files-containing-regexp`)と`% m`(`dired-mark-files-regexp`)ですかね。
+
+拡張子でマークするコマンドがあった気がしたのですが見当りませんでした。
+
+## 検索/置換系
+これも色々ある上にキーバインドが覚えづらいです。ポイント下又はマークしたファイル全てに操作を行います。キーを覚えるより`M-x`で実行した方が速そうですね。
+
+| キー          | コマンド
+|:--------------|:-------------------------------
+| `Q`           | `dired-do-query-replace-regexp`
+| `M-s a C-s`   | `dired-do-isearch`
+| `M-s a C-M-s` | `dired-do-isearch-regexp`
+
+# eww (Emacs Web WOWer)
+elispで書かれたブラウザ(正確にはWOWerらしい)です。レンダリングエンジンにはかつてgnusで使われて今は別プロジェクトになったshr.el(Simple HTML Renderer)が使われています。HTMLの他に簡単なCSSも理解します。
+
+libxsltなどのSGML解析系のライブラリを有効にしてビルドしないと使えないのでEmacsを野良ビルドする人は要注意です。
+
+## `M-x eww`
+URL又はキーワードで検索します。検索エンンジンは`eww-search-prefix`で制御出来ます。
+
+googleで検索したかったら
+```lisp
+(setq-default eww-search-prefix "https://www.google.co.jp/search?q=")
+```
+です。
+
+## キーバインド
+infoライクに設定されてます。そんなに多くないのですが、一部抜粋すると`n`(`eww-next-url`)、`p`(`eww-previous-url`)、`l`(`eww-back-url`)、`r`(`eww-forward-url`)、`H`(`eww-list-histories`)、`&`(`eww-browse-with-external-browser`)、`b`(`eww-add-bookmark`)、`B`(`eww-list-bookmarks`)、`q`(`quit-window`)です。
+
+`n` / `p`と`l` / `r`の違いは、`l` / `r`はヒストリを辿る機能、`n` / `p`はヘッダに`<link rel="Next/Prev" ...>`が設定されているときにそれを辿ります。あまり馴染がないかもしれませんが広告料稼ぐためにページ分割しているサイトが多いので結構便利ですよ。
+
+# newsticker
+最後に最近見付けたRSS/Atomリーダーの紹介です。
+
+先ず、こんな感じの設定をします。ニュースサイトは自分の好きなものを選んで下さい。
+
+```lisp
+(setq-default newsticker-url-list '(("産経" "http://sankei.jp.msn.com/rss/news/points.xml")
+                                    ("朝日-IT/Sci" "http://rss.asahi.com/rss/asahi/science.rdf")
+                                    ("技術評論社" "http://rss.rssad.jp/rss/gihyo/feed/rss2?rss")
+                                    ("Planet Lisp" "http://planet.lisp.org/rss20.xml")
+                                    ("Hacker News" "https://news.ycombinator.com/rss")))
+(setq-default newsticker-url-list-defaults
+              '(("LWN (Linux Weekly News)" "http://lwn.net/headlines/rss")))
+(setq-default newsticker-retrieval-interval 0)
+(setq newsticker-html-renderer #'shr-render-region)
+```
+で、`M-x newsticker-show-news`でニュースを取ってきてくれます。
+
+3ペインの画面(treeview)になるかと思いますが、基本操作を覚えれば`C-x o`で移動する必要はありません。
+
+## `f`(`newsticker-treeview-next-feed`) / `F`(`newsticker-treeview-prev-feed`)
+ニュースサイト間を移動します。
+
+## `n`(`newsticker-treeview-next-item`) / `p`(`newsticker-treeview-prev-item`)
+ニュース間を移動します。
+
+## `SPC`(`newsticker-treeview-next-page`)
+ニュースのページを送ります。戻すキーは無いようです。
+
+## `v`(`newsticker-treeview-browse-url`)
+今開いているニュースをブラウザで開きます。RSSは概要しか送られてこないのでこの機能は必須ですね。
+
+## `q`(`newsticker-treeview-quit`)
+画面を閉じます。
+
+# 最後に
+いかがだったでしょうか。ちょっと長いので途中読み飛ばし気味だったかもしれませんが1つでも覚えていただけたら幸いです。
+
+因みに、このエントリを書き始めたのは8/13だったのですが、あまりに長く、途中合宿を挟んだりしたので公開は8/20になってしまいました。
