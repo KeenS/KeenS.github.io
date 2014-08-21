@@ -26,59 +26,17 @@ Emacsの標準ライブラリ`dired.el`を読んでたら色々発見があっ�
 
 勿論、他にもコマンドはあります。同じような使い方のできる代表的なものを挙げると、
 
-<thead>
-<tr>
-<th></th>
-<th> コマンド </th>
-<th> 操作(実行されるLinuxコマンド) </th>
-</tr>
-</thead><tbody>
-<tr>
-<td></td>
-<td> <code>C</code> </td>
-<td> コピー(<code>cp</code>)</td>
-</tr>
-<tr>
-<td></td>
-<td> <code>R</code> </td>
-<td> リネーム/移動(<code>mv</code>)</td>
-</tr>
-<tr>
-<td></td>
-<td> <code>D</code> </td>
-<td> 削除(<code>rm</code>)</td>
-</tr>
-<tr>
-<td></td>
-<td> <code>M</code> </td>
-<td> 権限操作(<code>chmod</code>)</td>
-</tr>
-<tr>
-<td></td>
-<td> <code>G</code> </td>
-<td> グループ変更(<code>chgrp</code>)</td>
-</tr>
-<tr>
-<td></td>
-<td> <code>O</code> </td>
-<td> 所有権変更(<code>chown</code>)</td>
-</tr>
-<tr>
-<td></td>
-<td> <code>Z</code> </td>
-<td> 圧縮/展開(<code>compress/uncompress/gunzip/bunzip/unzip</code>)</td>
-</tr>
-<tr>
-<td></td>
-<td> <code>B</code> </td>
-<td> (*.elファイルの)バイトコンパイル</td>
-</tr>
-<tr>
-<td></td>
-<td> <code>!</code> </td>
-<td> 任意のコマンドの実行。デフォルトで空気読んだコマンドになってる。</td>
-</tr>
-</tbody>
+| コマンド | 操作(実行されるLinuxコマンド)
+|:--------|:-----------------------------
+| `C`     | コピー(`cp`)
+| `R`     | リネーム/移動 (`mv`)
+| `D`     | 削除(`rm`)
+| `M`     | 権限操作(`chmod`)
+| `G`     | グループ変更(`chgrp`)
+| `O`     | 所有権変更(`chown`)
+| `Z`     | 圧縮/展開(`compress/uncompress/gunzip/bunzip/unzip`)
+| `B`     | (*.elファイルの)バイトコンパイル
+| `!`     | 任意のコマンドの実行。デフォルトで空気読んだコマンドになってる。
 
 他にも無数に操作はありますがファイル操作はこんなものでしょう。あとはバッファを閉じる`q`や親ディレクトリに移動する`^`、バッファの更新を行なう`g`、マークを外す`u`(`U`で全解除)を覚えていれば操作には困らない筈です。
 
