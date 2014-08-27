@@ -4,7 +4,7 @@
   <title><![CDATA[κeenのHappy Hacκing Blog]]></title>
   <link href="http://KeenS.github.io/atom.xml" rel="self"/>
   <link href="http://KeenS.github.io/"/>
-  <updated>2014-08-21T13:36:30+09:00</updated>
+  <updated>2014-08-27T22:05:42+09:00</updated>
   <id>http://KeenS.github.io/</id>
   <author>
     <name><![CDATA[κeen]]></name>
@@ -12,6 +12,69 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Common LispでSIGINTを捉える]]></title>
+    <link href="http://KeenS.github.io/blog/2014/08/27/sigint-in-common-lisp/"/>
+    <updated>2014-08-27T21:45:37+09:00</updated>
+    <id>http://KeenS.github.io/blog/2014/08/27/sigint-in-common-lisp</id>
+    <content type="html"><![CDATA[<p>κeenです。もうすぐShibuya.lisp TT #8 ですね。今回はCIMのREPLの改善をしてたら詰まったところがあったので共有します。</p>
+
+<!-- more -->
+
+
+<p>結論を書いちゃうと</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+</pre></td><td class='code'><pre><code class='lisp'><span class='line'><span class="p">(</span><span class="nb">defvar</span> <span class="vg">*interrupt-condition*</span>
+</span><span class='line'>  <span class="c1">;; It seems abcl does not raise any conditions</span>
+</span><span class='line'>  <span class="o">#+</span><span class="nv">allegro</span> <span class="ss">&#39;excl:interrupt-signal</span>
+</span><span class='line'>  <span class="o">#+</span><span class="nv">ccl</span> <span class="ss">&#39;ccl:interrupt-signal-condition</span>
+</span><span class='line'>  <span class="o">#+</span><span class="nv">clisp</span> <span class="ss">&#39;system::simple-interrupt-condition</span>
+</span><span class='line'>  <span class="o">#+</span><span class="nv">ecl</span> <span class="ss">&#39;ext:interactive-interrupt</span>
+</span><span class='line'>  <span class="o">#+</span><span class="nv">sbcl</span> <span class="ss">&#39;sb-sys:interactive-interrupt</span>
+</span><span class='line'>  <span class="o">#-</span><span class="p">(</span><span class="nb">or</span> <span class="nv">allegro</span> <span class="nv">ccl</span> <span class="nv">clisp</span> <span class="nv">ecl</span> <span class="nv">sbcl</span><span class="p">)</span> <span class="ss">&#39;no-conditon-known</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="p">(</span><span class="nb">defmacro</span> <span class="nv">with-handle-interrupt</span> <span class="p">(</span><span class="k">&amp;body</span> <span class="nv">body</span><span class="p">)</span>
+</span><span class='line'>  <span class="o">`</span><span class="p">(</span><span class="nb">handler-case</span>
+</span><span class='line'>       <span class="o">#-</span><span class="nv">ccl</span><span class="p">(</span><span class="k">progn</span>
+</span><span class='line'>              <span class="o">,@</span><span class="nv">body</span><span class="p">)</span>
+</span><span class='line'>       <span class="o">#+</span><span class="nv">ccl</span> <span class="p">(</span><span class="k">let</span> <span class="p">((</span><span class="nv">ccl:*break-hook*</span> <span class="p">(</span><span class="k">lambda</span> <span class="p">(</span><span class="kt">condition</span> <span class="nv">hook</span><span class="p">)</span>
+</span><span class='line'>                                       <span class="p">(</span><span class="k">declare</span> <span class="p">(</span><span class="k">ignore</span> <span class="nv">hook</span><span class="p">))</span>
+</span><span class='line'>                                       <span class="p">(</span><span class="nb">error</span> <span class="kt">condition</span><span class="p">))))</span>
+</span><span class='line'>               <span class="o">,@</span><span class="nv">body</span><span class="p">)</span>
+</span><span class='line'>       <span class="p">(</span><span class="o">#.</span><span class="vg">*interrupt-condition*</span> <span class="p">(</span><span class="nv">c</span><span class="p">)</span>
+</span><span class='line'>         <span class="p">(</span><span class="nv">handle-interrupt</span> <span class="nv">c</span><span class="p">))))</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>こんな感じです。ABCLがコンディションを投げずに即終了してる(?)っぽいのでABCLに対しては無力です。もしかしたらJava側で捉えないといけないのかもしれません。
+因みにどうやってそれぞれのコンディション名を調べたかというと、<code>(handler-case (loop) (condition (c) (print c)))</code>を各処理系のREPLで実行して<code>^C</code>しました。
+Allegro CLは<code>interrupt-signal</code>がconditionのサブクラスでなかった(<code>serious-condition</code>だった)のでちょいと困りましたね。結局マニュアル読みました。</p>
+
+<p>CIMのコードなので上記以外の処理系には対応してないです。</p>
+
+<p>今回詰まったのはCCLですね。<code>ccl:interrupt-signal-condition</code>は定義してあるもののユーザーより先に処理系が処理するので無意味でした。なので<code>ccl:*break-hook*</code>を使って処理系が捉えるより早くコンディションを発生させました。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[isucon夏期講習2014に参加してきた]]></title>
@@ -3683,53 +3746,6 @@ before pass to Clack application."
 <h2>まとめ</h2>
 
 <p>誰得</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[UbuntuでEmacsからGPGを透過的に扱う]]></title>
-    <link href="http://KeenS.github.io/blog/2013/12/04/emacs-gpg/"/>
-    <updated>2013-12-04T22:52:00+09:00</updated>
-    <id>http://KeenS.github.io/blog/2013/12/04/emacs-gpg</id>
-    <content type="html"><![CDATA[<p>暗号化といえばGPGですがEmacsからGPGで暗号化されたファイルを編集しようとすると毎回パスワードを訊かれて鬱陶しいです。これはキーリングを登録することで解決できました。</p>
-
-<!-- more -->
-
-
-<h2>Step1 Keyringに登録する</h2>
-
-<p>Dashboardから[key]で検索すると[パスワードと鍵]が見付かります。左上の[+]で新たにキーリングを追加します。</p>
-
-<p><img src="http://KeenS.github.io/images/2013-12-04-1.png" title="keyring" alt="こんな感じ" /></p>
-
-<p>GPGを選択します</p>
-
-<p><img src="http://KeenS.github.io/images/2013-12-04-2.png" title="Selecting GPG" alt="こんな感じ" /></p>
-
-<p>必要な情報を入力します。このメールアドレスは実在しなくても作れますが、ブルートフォースかけられたときの警告とかに使われそうなので実在した方が良い気がします。とりあえず後で使うので覚えておいて下さい。</p>
-
-<p><img src="http://KeenS.github.io/images/2013-12-04-3.png" title="'Input info &quot;こんな感じ&quot;" alt="'Input info &quot;こんな感じ&quot;" /></p>
-
-<p>あとはパスワードのプロンプトが出るので入力して、エントロピーを発生させたら終わりです。</p>
-
-<h2>Step2 ファイルを準備する</h2>
-
-<p>ここが肝です。ファイルの先頭に</p>
-
-<pre><code>-*- epa-file-encrypt-to: (my@mailaddress) -*-
-</code></pre>
-
-<p>を挿入します。既存の暗号化されたファイルでも同じです。</p>
-
-<h2>Step3 暗号化する</h2>
-
-<p><code>M-x epa-encrypt-file</code>で暗号化できます。暗号化するファイル名を指定したらキーリングを選べます</p>
-
-<p><img src="http://KeenS.github.io/images/2013-12-04-4.png" title="Selecting GPG" alt="こんな感じ" /></p>
-
-<h2>Step4 編集する</h2>
-
-<p>あとはもう透過的に使えます。でもなんか実験してたらファイル保存できなかった。先にGPGで暗号化してたやつはできたのに。要調査です。</p>
 ]]></content>
   </entry>
   

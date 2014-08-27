@@ -4,7 +4,7 @@
   <title><![CDATA[Category: lisp | κeenのHappy Hacκing Blog]]></title>
   <link href="http://KeenS.github.io/categories/lisp/atom.xml" rel="self"/>
   <link href="http://KeenS.github.io/"/>
-  <updated>2014-08-21T13:36:30+09:00</updated>
+  <updated>2014-08-27T22:05:42+09:00</updated>
   <id>http://KeenS.github.io/</id>
   <author>
     <name><![CDATA[κeen]]></name>
@@ -12,6 +12,53 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Common LispでSIGINTを捉える]]></title>
+    <link href="http://KeenS.github.io/blog/2014/08/27/sigint-in-common-lisp/"/>
+    <updated>2014-08-27T21:45:37+09:00</updated>
+    <id>http://KeenS.github.io/blog/2014/08/27/sigint-in-common-lisp</id>
+    <content type="html"><![CDATA[<p>κeenです。もうすぐShibuya.lisp TT #8 ですね。今回はCIMのREPLの改善をしてたら詰まったところがあったので共有します。</p>
+
+<!-- more -->
+
+
+<p>結論を書いちゃうと</p>
+
+<p>```lisp
+(defvar <em>interrupt-condition</em>
+  ;; It seems abcl does not raise any conditions
+  #+allegro &lsquo;excl:interrupt-signal
+  #+ccl 'ccl:interrupt-signal-condition
+  #+clisp 'system::simple-interrupt-condition
+  #+ecl 'ext:interactive-interrupt
+  #+sbcl 'sb-sys:interactive-interrupt
+  #&ndash;(or allegro ccl clisp ecl sbcl) 'no-conditon-known)</p>
+
+<p>(defmacro with-handle-interrupt (&amp;body body)
+  `(handler-case</p>
+
+<pre><code>   #-ccl(progn
+          ,@body)
+   #+ccl (let ((ccl:*break-hook* (lambda (condition hook)
+                                   (declare (ignore hook))
+                                   (error condition))))
+           ,@body)
+   (#.*interrupt-condition* (c)
+     (handle-interrupt c))))
+</code></pre>
+
+<p>```</p>
+
+<p>こんな感じです。ABCLがコンディションを投げずに即終了してる(?)っぽいのでABCLに対しては無力です。もしかしたらJava側で捉えないといけないのかもしれません。
+因みにどうやってそれぞれのコンディション名を調べたかというと、<code>(handler-case (loop) (condition (c) (print c)))</code>を各処理系のREPLで実行して<code>^C</code>しました。
+Allegro CLは<code>interrupt-signal</code>がconditionのサブクラスでなかった(<code>serious-condition</code>だった)のでちょいと困りましたね。結局マニュアル読みました。</p>
+
+<p>CIMのコードなので上記以外の処理系には対応してないです。</p>
+
+<p>今回詰まったのはCCLですね。<code>ccl:interrupt-signal-condition</code>は定義してあるもののユーザーより先に処理系が処理するので無意味でした。なので<code>ccl:*break-hook*</code>を使って処理系が捉えるより早くコンディションを発生させました。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Cloud9の紹介とLispのセットアップ]]></title>
@@ -470,54 +517,6 @@ LispっぽくJSを書ける感じ</li>
 
 
 <p>以上</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Lisp Meet Up #16 でLTしてきました。]]></title>
-    <link href="http://KeenS.github.io/blog/2014/04/25/lisp-meet-up-number-16/"/>
-    <updated>2014-04-25T01:35:00+09:00</updated>
-    <id>http://KeenS.github.io/blog/2014/04/25/lisp-meet-up-number-16</id>
-    <content type="html"><![CDATA[<p>κeenです。年度末/年度始めで色々あり、しばらく更新できてませんでしたが <a href="http://atnd.org/events/49370">Lisp Meet Up Presented by Shibuya.lisp #16</a>に参加してきたのでレポートです。</p>
-
-<!-- more -->
-
-
-<p>最近はLisp Meet Upも盛況で毎回ほぼ満席ですね。今回も満席でした。というか立ち見出てました。</p>
-
-<p>自己紹介では初参加の方が多くてCLerが多い印象でした。昔研究とかでCL使ってて久し振りに、とか。私個人的にはTwitterでフォローしてる方々とお会い出来て楽しかったです。</p>
-
-<p>LTは私とTOYOZUMIさんが告知してました。しかしTOYOZUMIさんは当日体調が悪くて欠席したので私と飛び入りのchikuさんで計2件のLTがありました。TOYOZUMIさんは何回かに分けて発表するうちの1回だったので次回LTしていただけるかと思います。</p>
-
-<p>私のやつは↓です。時間ギリギリで作ったのであんまりいじめないで下さい。因みにまだソースはgithubに上げてないです（後述）</p>
-
-<iframe src="http://www.slideshare.net/slideshow/embed_code/33794330" width="427" height="356" frameborder="0" marginwidth="0" marginheight="0" scrolling="no" style="border:1px solid #CCC; border-width:1px 1px 0; margin-bottom:5px; max-width: 100%;" allowfullscreen> </iframe>
-
-
-<p> <strong><a href="https://www.slideshare.net/blackenedgold/lisp-meetup16" title="CL21で色々なデータ構造を実装してみようとした">CL21で色々なデータ構造を実装してみようとした</a></strong> from <strong><a href="http://www.slideshare.net/blackenedgold">blackenedgold</a></strong></p>
-
-<p>会場からはCL21作者のにとりさんから「abstract-sequenceは最低限実装しなきゃいけないメソッドは少ない」との指摘がありましたがqueueとして機能するために色々頑張ったのです。</p>
-
-<p>abstract-setとかは欲しいですねとの声もありました。issueに上げておきますかな</p>
-
-<p>また、chikuさんからheapの実装について色々と指摘があり、 <a href="http://www.amazon.co.jp/%E3%82%A2%E3%83%AB%E3%82%B4%E3%83%AA%E3%82%BA%E3%83%A0%E3%82%A4%E3%83%B3%E3%83%88%E3%83%AD%E3%83%80%E3%82%AF%E3%82%B7%E3%83%A7%E3%83%B3-%E7%AC%AC3%E7%89%88-%E7%B7%8F%E5%90%88%E7%89%88-%E4%B8%96%E7%95%8C%E6%A8%99%E6%BA%96MIT%E6%95%99%E7%A7%91%E6%9B%B8-%E3%82%B3%E3%83%AB%E3%83%A1%E3%83%B3/dp/476490408X">Introduction to Algorithms</a>という本を紹介されました。とりあえず大学の図書館から借りてきたのでそれを読んだらcl21-data-collectionsに手を加えてgithubに上げます。</p>
-
-<p>次はchikuさんから <a href="https://github.com/chiku-samugari/chiku.util">chiku-utils</a>というオレオレライブラリの紹介がありました。スライドは見付け次第貼りますね。結構便利そうな関数やマクロがあったので一度見てみると良いかもしれません。</p>
-
-<p>その後は休憩からのぐだぐだ時間でした。chikuさんの発表の中で出てきた<code>keymin</code>という関数について会場から一般的には<code>argmin</code>と言うとの指摘があり、その場でかにたんが<code>argmin</code>の定義の数式を書いたことから私とかにたんとラジカルこうじさんでマスハラをしあってました。というか主にかにたんがマスハラしてました。Lispの話はあまりしませんでしたね… あとは私がゼミで <a href="http://www.amazon.co.jp/gp/product/0124077269/ref=oh_details_o00_s00_i00?ie=UTF8&amp;psc=1">パタヘネ</a>を読んでることからパタヘネってC言語の入門書だよねとかの会話とか。StumpWMについてもちょっと話したかな？</p>
-
-<p>そうだ。次回のScheme回は <a href="https://bitbucket.org/ktakashi/sagittarius-scheme/overview">Sagittarius</a>の作者のKeiさんが次回LTする気満々とのことで話題に上がってました。それに <a href="https://github.com/wasabiz/picrin">picrin</a>の作者のわざびず君も来るかもとかですしTOYOZUMIさんの連作もありますし次回は長くなるか2回に分けるかになるかもしれません。</p>
-
-<p>その後の懇親会は9人が参加でしたがアルコールを飲む方はあまりいませんでしたね。飲んでたのは3~4人かな?多くの方が普通にお酒に弱いだとかバイクで来てるだとか次の日仕事があるとかですね。もう普通に食事でも良いのでは。私のいたテーブルでの会話は佐野さんがLispの本をめっちゃ持ってるだとかでしたね。実践Common Lispを訳者ということを割り引いても多いくらい持ってるそうです。CLtL2とかもめっちゃ持ってるそうです。謎ですね。</p>
-
-<p>今回のまとめ</p>
-
-<ul>
-<li>かにたんをホワイトボードに近付けてはいけない</li>
-</ul>
-
-
-<p>最後になりますがイベント管理や会場手配など運営の方々ありがとう御座いまいした。</p>
 ]]></content>
   </entry>
   
