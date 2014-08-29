@@ -1,11 +1,11 @@
 <!doctype html>
 <html lang="ja">
 
-  <title>(S式で書く(altJS)達)  | κeenのHappy Hacκing Blog</title>
+  <title>Introduction to CIM  | κeenのHappy Hacκing Blog</title>
 
   <meta name="author" content="κeen"> 
   
-  <meta name="description" content="天下一altJS武闘大会でLTしたときの資料です。 元々はorg-modeでEmacsで発表してましたがこのブログに載せる為に変換しました。 "> <meta name="keywords" content="">
+  <meta name="description" content="CIMの紹介スライド。 もしかしたらShibuya.lisp TT #8で喋るかも。 "> <meta name="keywords" content="">
 
   <link href="/atom.xml" rel="alternate" title="κeenのHappy Hacκing Blog" type="application/atom+xml">
   <link rel="canonical" href="">
@@ -83,119 +83,198 @@
                        data-separator="\n\n"
                        data-vertical="\n\n">
                 <script type="text/template">
-                  # (S式で書く(altJS)達)
-<2014-06-08 日>  
+                  # Introduction to CIM
+<hr />
+
 κeen(@blackenedgold)  
-天下一altJS武闘会(#tenka1altJS)  
-@渋谷プライムプラザ四階
 
-## 自己紹介
- + κeen
- + 東大数学科の4年生
- + Twit : @blackenedgold
- + Github : KeenS
- + Blog : [κeenのHappy Hacκing Blog](http://KeenS.github.io/)
- + Shibuya.lispにいます。(2014-06〜運営になりました)
- + Lisp, Ruby, OCaml, Shell Scriptあたりを書きます
+## 突然ですが
+Common Lispのスクリプトファイルの実行方法知ってますか？
 
-## お品書き
- - (ボツ) Shen.js
- - (ボツ) Embedable Common Lisp with Emscripten
- - (ボツ) Picrin with Emscripten
- - (ボツ) オレオレaltJSの作り方の話
- - ParenScript
-
-## Shen.js
-Shenの公式ページより
+sbcl
 
-  + パターンマッチ
-  + λ計算ベース
-  + マクロ
-  + 遅延評価も可能
-  + 静的型検査
-  + 関数的なPrologの統合
-  + ビルトインコンパイラコンパイラ
+    sbcl --script $file
 
-これのJS実装もある。
+ecl
+
+    ecl -shell $file
+
+ccl
+
+    ccl -e $file -e '(quit)'
+
+...
+
+<strong>シバン可搬性のあるスクリプトが書けない</strong>
 
-### 例
+## そこで、こんなの書きました
+<hr />
+
+```sh
+case "$LISP_IMPL" in
+    sbcl*)
+        sbcl --script $1
+        ;;
+    clisp*)
+        clisp -on-error exit -i $1
+        ;;
+    ecl*)
+        ecl -shell $1
+        ;;
+    ccl*)
+...
+```
+
+## でも問題がある
+<hr />
+
+* どの処理系をバックエンドに使うか
+* 処理系のパスをどう捜すか
+* そもそもどうやって使ってもらうか
+
+## κeenの答え
+<hr />
+
+> 処理系の管理までやってしまおう。
+> そうしたら一緒に使ってもらえる。
+
+＿人人人人人人＿  
+＞　CIMの誕生　＜  
+￣Y^Y^Y^Y^Y￣
+
+## CIMとは
+<hr />
+
+* Common Lisp Implementation Manager
+* ちむ
+* Rubyのrvmを強く意識
+* Common Lisp処理系のインストール、切り替え、コマンドラインインターフェースなど。
+* `cim`、 `cl`、 `ql`コマンドから成る
+* B Shell スクリプト製(マルチプラットフォーム対応のため)
+* 2013/10くらいからぼちぼち開発
+
+## `cim`コマンドについて
+<hr />
+
+インストール
+
+    cim install sbcl
+
+バックエンドの切り替え
+
+    cim use sbcl
+
+現在情報
+
+    cim info
+
+CIMのアップデート
+
+    cim get
+
+など。
+
+## `cl`コマンドについて
+<hr />
+
+* 最初に紹介したシェルスクリプトベース
+* コマンドラインからCommon Lispを使うことを重視
+* シバン対応も。
+* REPLは独自実装(デバッガを黙らせるのが主な目的)
+* オプションはrubyを意識
+
+## 少しシバンの話
+<hr \>
+
+### だめな例
 ```lisp
-(define factorial
-  0 -> 1
-  X -> (* X (factorial (- X 1))))
+#!cl
+(write-line "ok")
 ```
-
-そもそもaltJSじゃない…
-
-ボツ
-
-## ECL with Emscripten
-  + ANSI Common Lisp準拠のCommon Lisp処理系
-  + LispをコンパイルしてCを吐く
-  + Emscriptenでコンパイルすれば…
-
-`#include <ecl/ecl-cmp.h>`
-が悪さをしてコンパイル出来ない
-
-ボツ
-
-##  picrin
-  + R7RS small準拠を目指すScheme処理系
-  + R7RS準拠の中では唯一Emscriptenで
-    コンパイル出来るらしい
-  + SDLもEmscriptenで動くらしいから
-    組み合わせればウハウハじゃね？
-
-コンパイル出来ない…
-( `va_args` は64bit x Clang3.3では
-コンパイル出来ないとか言われる。回避策も効かない)
-
-ボツ
-
-##  オレオレaltJSの作り方の話
-escodegenを使う
-```javascript
-{
-    type: 'BinaryExpression',
-    operator: '+',
-    left: { type: 'Literal', value: 40 },
-    right: { type: 'Literal', value: 2 }
-}
-→40 + 2
+```lisp
+#!/home/kim/.cim/bin/cl
+(write-line "ok")
 ```
-
-オレオレaltJS(S式)  
- ↓ read  
-リスト  
- ↓ 変換  (find-file "~/Lisp/translate.lisp")  
-リスト  
- ↓ cl-json  
-JSON  
- ↓ escodegen  
-JS
-
-escodegenのドキュメントがあんまりない…
-
-ボツ
-
-## ParenScript
-  + Common Lisp製
-  + Weblocks(WAF)に採用されるなどの実績/伝統
-  + Common LispのサブセットをJSにコンパイル
-  + 実際はCommon Lispのマクロなので
-    Common Lispに組み込んで使える
-  + ランタイムライブラリは必要ない
-  + Lispを無理矢理変換するというより
-    LispっぽくJSを書ける感じ
-
-### 例
-~/Lisp/parenscript.lisp
+```lisp
+#!/usr/bin/env cl -q
+(write-line "ok")
+```
+
+### 推奨される例
+```lisp
+#!/bin/sh
+#|
+exec cl --  "$0" "$@"
+|#
+(write-line "ok")
+```
 
- + `(@ obj property)` でプロパティ参照
- + `(chain obj function/property)` でメソッドチェーン
-など
 
-以上
+## `ql`コマンドについて
+<hr />
+
+* quicklispのコマンドラインインターフェース
+* まだ未熟
+* rubyのgem的な。
+* 最近`ql install`を高速化
+
+## その他の話
+<hr />
+
+### 対応処理系
+* 処理系はabcl, alisp, ccl, clisp, ecl, sbcl対応
+* 基本ビルドする
+* gclはANSIじゃないのでドロップ
+* lispworks他商用ははインストール出来ないのでドロップ
+* mkcl対応する？
+* CMU CLはつらい…
+
+### 実装
+* B Shell スクリプトで書いたの失敗だった?
+* つらい
+* 開発速度に影響
+* テスト（=品質）にも影響
+* sbclがじゃじゃ馬でつらい
+
+### 方針
+* コマンドラインユーティリティである
+* 基本POSIX以外に依存しない
+* 極力環境に影響しない(rvmがひどいのを嫌って)
+* clコマンドはあくまで薄いラッパ
+* asdfも使わない
+
+## [半年前](http://www.slideshare.net/blackenedgold/cim-common-lisp-implementation-manager?ref=http://keens.github.io/blog/2014/01/24/lisp-meet-up-number-13/)から何が変わったか
+<hr />
+
+* バグ潰し
+* その他細かな改善
+  + ダンプされたコアを読み込む機能
+  + SIGINTをハンドル
+  + ビルド時のログ制御
+* ぼちぼちテスト書き始めた
+
+## 将来の話
+<hr />
+
+* テストと品質の安定化
+* バイナリ配布の処理系は大人しくバイナリ使う？
+* 最適なビルドオプション
+* コアダンプ機能
+* Lispスクリプト(実行可能ファイル)インストーラ
+* もうちょっとquicklispとの連携
+* ユーザー拡張
+
+## 関連リソース
+<hr />
+
+* [The problem with Lisp ](http://pupeno.com/2007/08/26/the-problem-with-lisp/) : Lispはコマンドが作れないから流行らないという分析
+* [CIMの解説をしてみる コマンド編 | κeenのHappy Hacκing Blog](http://keens.github.io/blog/2014/01/27/cim-explanation/) : CIMの解説記事
+* [shelly](https://github.com/fukamachi/shelly) : CIMを使うCLのコマンドラインインターフェース
+* [lsp](https://github.com/snmsts/lsp) : CIMのC実装
+* [qlot](https://github.com/fukamachi/qlot) : `ql`よりリッチなquicklispラッパ
+
+<span style="font-size:600%">以上</span>  
+何か質問あればどうぞ
 
                 </script>
               </section>
