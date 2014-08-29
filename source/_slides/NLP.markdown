@@ -4,7 +4,9 @@ title: "言葉遣いの時代変遷を追う"
 date: 2014-07-09 11:06
 format: markdown
 categories: [言語処理]
-description: 言語情報処理の授業の発表用
+description: "言語情報処理の授業の発表用<br>
+
+"
 ---
 
 # 言葉遣いの時代変遷を追う

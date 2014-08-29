@@ -4,7 +4,9 @@ title: "(S式で書く(altJS)達)"
 date: 2014-07-13 21:17
 format: markdown
 categories: [lisp, altJS]
-description: 天下一altJS武闘大会でLTしたときの資料です
+description: "天下一altJS武闘大会でLTしたときの資料です。<br>
+元々はorg-modeでEmacsで発表してましたがこのブログに載せる為に変換しました。
+"
 ---
 # (S式で書く(altJS)達)
 <2014-06-08 日>  

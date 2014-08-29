@@ -4,7 +4,10 @@ title: "Cloud 9の紹介"
 date: 2014-07-29 01:29
 format: markdown
 categories: [Lisp Meet Up, Lisp, IDE, Editor, 開発環境]
-description: "Lisp Meet Up #19 での発表資料です。WEBベースのIDE Cloud 9でのLisp対応について。"
+description: "Lisp Meet Up #19 での発表資料です。<br>
+WEBベースのIDE Cloud 9でのLisp対応について。
+
+"
 ---
 # Cloud 9の紹介
 <hr />
