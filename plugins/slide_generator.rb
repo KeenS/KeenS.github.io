@@ -25,11 +25,13 @@ require 'jekyll'
 module Jekyll
 
   class Slide < Post
-    attr_accessor :description, :format, :url_base
+    attr_accessor :description, :format, :url_base, :nslides
 
 
     MATCHER = /(.*)(\.[^.]+)$/
 
+    # Attributes for Liquid templates
+    ATTRIBUTES_FOR_LIQUID = EXCERPT_ATTRIBUTES_FOR_LIQUID + %w[content excerpt nslides]
     def containing_dir(source, dir)
       return File.join(source, dir, '_slides')
     end
@@ -77,6 +79,7 @@ module Jekyll
 
 
     def transform
+      self.nslides = content.scan(/\n\n|\n\n/).length + 1
       self.content = content
     end
 
