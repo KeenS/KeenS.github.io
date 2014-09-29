@@ -4,7 +4,7 @@
   <title><![CDATA[Category: lisp | κeenのHappy Hacκing Blog]]></title>
   <link href="http://KeenS.github.io/categories/lisp/atom.xml" rel="self"/>
   <link href="http://KeenS.github.io/"/>
-  <updated>2014-08-30T15:54:02+09:00</updated>
+  <updated>2014-09-29T17:30:41+09:00</updated>
   <id>http://KeenS.github.io/</id>
   <author>
     <name><![CDATA[κeen]]></name>
@@ -12,6 +12,566 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[PicrinのGCの話、もといGCの話]]></title>
+    <link href="http://KeenS.github.io/slide/picrin-gc.html"/>
+    <updated>2014-09-29T14:37:00+09:00</updated>
+    <id>http://KeenS.github.io/slide/picrin-gc.markdown</id>
+    <content type="html"><![CDATA[<h1>PicrinのGCの話、もといGCの話</h1>
+
+<hr />
+
+<p>Lisp Meet Up presented by Shibuya.lisp #20<br/>
+2014-09-29<br/>
+κeen(@blackenedgold)</p>
+
+<h1>自己紹介</h1>
+
+<hr />
+
+<ul>
+<li>κeen</li>
+<li>東大数学科の4年生</li>
+<li>ソーシャルアカウントは上のアイコン達から。</li>
+<li>Lisp, Ruby, OCaml, Shell Scriptあたりを書きます</li>
+<li><a href="https://github.com/picrin-scheme/picrin">picrin</a>のコミッタです</li>
+</ul>
+
+
+<h1>picrin</h1>
+
+<hr />
+
+<p><img src="/images/picrin/picrin-logo-fin01-02.png" alt="picrin" /></p>
+
+<h1>picrin</h1>
+
+<hr />
+
+<ul>
+<li>R7RS compatibility</li>
+<li>bytecode interpreter (based on stack VM)</li>
+<li>internal representation by nan-boxing</li>
+<li>conservative call/cc implementation (users can freely interleave native stack with VM stack)</li>
+<li>exact GC (simple mark and sweep, partially reference count is used as well)</li>
+<li>string representation by rope data structure</li>
+</ul>
+
+
+<h1>picrin</h1>
+
+<hr />
+
+<ul>
+<li>R7RS compatibility</li>
+<li><strong>bytecode interpreter (based on stack VM)</strong></li>
+<li>internal representation by nan-boxing</li>
+<li>conservative call/cc implementation (users can freely interleave native stack with VM stack)</li>
+<li><strong>exact GC (simple mark and sweep, partially reference count is used as well)</strong></li>
+<li><strong>string representation by rope data structure</strong></li>
+</ul>
+
+
+<h1>picrin開発者の不満</h1>
+
+<hr />
+
+<ul>
+<li>picrinの起動が遅い<!-- .element: class="fragment" data-fragment-index="1" -->
+
+<ul>
+<li>2秒くらいかかる <!-- .element: class="fragment" data-fragment-index="1" --></li>
+</ul>
+</li>
+<li>picrinのテストが遅い<!-- .element: class="fragment" data-fragment-index="2" -->
+
+<ul>
+<li>16秒くらいかかる <!-- .element: class="fragment" data-fragment-index="2" --></li>
+</ul>
+</li>
+</ul>
+
+
+<h1>少しGCの話</h1>
+
+<hr />
+
+<p>GC(ごみ集め)とは</p>
+
+<ul>
+<li>使われていないオブジェクトを自動的に解法する
+
+<ul>
+<li>メモリ管理に煩わせられないで済む</li>
+<li>メモリーリークを防ぐ。</li>
+</ul>
+</li>
+<li>「使われていないオブジェクト」を判定するのはいくつかアルゴリズムがある</li>
+</ul>
+
+
+<h1>GCのアルゴリズム</h1>
+
+<hr />
+
+<h2>主なGCのアルゴリズム</h2>
+
+<ul>
+<li>マーク&amp;スイープ</li>
+<li>参照カウント</li>
+<li>Copying GC</li>
+</ul>
+
+
+<h1>GCのアルゴリズム</h1>
+
+<hr />
+
+<h2>マーク&amp;スイープ</h2>
+
+<ol>
+<li>あらかじめ全てのオブジェクトはどこかで一元管理する<!-- .element: class="fragment" data-fragment-index="1" --></li>
+<li>一元管理元(ヒープ(ページ))でメモリが足りなくなったらGCを開始<!-- .element: class="fragment" data-fragment-index="2" --></li>
+<li>スタックに載っているオブジェクト、変数に格納されているオブジェクトにマークする<!-- .element: class="fragment" data-fragment-index="3" --></li>
+<li>そこから辿れるオブジェクトも再帰的にマークする<!-- .element: class="fragment" data-fragment-index="4" --></li>
+<li>ヒープからマークされていないオブジェクトを開放する<!-- .element: class="fragment" data-fragment-index="5" --></li>
+<li>それでもメモリが足りなければ一ヒープのページを増やす<!-- .element: class="fragment" data-fragment-index="6" --></li>
+<li>増やせなければメモリを使い果したのでabort<!-- .element: class="fragment" data-fragment-index="7" --></li>
+</ol>
+
+
+<h1>GCのアルゴリズム</h1>
+
+<hr />
+
+<h2>マーク&amp;スイープの特徴</h2>
+
+<ul>
+<li>そこそこ速い</li>
+<li>正確に集められる</li>
+<li>GC以外ではメモリ管理を考えなくて良い(≒プラグインは書き易い)</li>
+<li>長生きのオブジェクトは何度もマークされる(=>世代別GC)</li>
+<li>負荷は1点に集中する</li>
+<li>メモリの断片化が起きる(=オブジェクトのアロケートが遅くなる)</li>
+</ul>
+
+
+<h1>GCのアルゴリズム</h1>
+
+<hr />
+
+<h2>参照カウント</h2>
+
+<ol>
+<li>オブジェクトに他から参照されている数(参照カウント)を記憶させる<!-- .element: class="fragment" data-fragment-index="1" --></li>
+<li>オブジェクトの参照を変えるときはその都度参照カウントを変える<!-- .element: class="fragment" data-fragment-index="2" --></li>
+<li>参照カウントが0になったら開放する<!-- .element: class="fragment" data-fragment-index="3" --></li>
+</ol>
+
+
+<h1>GCのアルゴリズム</h1>
+
+<hr />
+
+<h2>参照カウントの特徴</h2>
+
+<ul>
+<li>負荷は分散する</li>
+<li>GCの実装は楽</li>
+<li>少し遅い(必ずfreeする必要がある)</li>
+<li>正確でない(循環参照に弱い)(cf. 大相撲の星の回しあい)</li>
+<li>プラグインは面倒</li>
+</ul>
+
+
+<h1>GCのアルゴリズム</h1>
+
+<hr />
+
+<h2>Copying GC</h2>
+
+<ol>
+<li>オブジェクトプールを2つ用意する(1, 2)とする<!-- .element: class="fragment" data-fragment-index="1" --></li>
+<li>オブジェクトを確保するときは必ず1に確保する<!-- .element: class="fragment" data-fragment-index="2" --></li>
+<li>1のメモリが足りなくなったらgcを開始<!-- .element: class="fragment" data-fragment-index="3" --></li>
+<li>1の生きているオブジェクトを再帰的に2に移動する<!-- .element: class="fragment" data-fragment-index="4" --></li>
+<li>1に残っているものは全てゴミとして良い<!-- .element: class="fragment" data-fragment-index="5" --></li>
+<li>1、2のラベルを付け換える<!-- .element: class="fragment" data-fragment-index="6" --></li>
+</ol>
+
+
+<h1>GCのアルゴリズム</h1>
+
+<hr />
+
+<h2>Copying GCの特徴</h2>
+
+<ul>
+<li>正確</li>
+<li>メモリの断片化が起きない(Windowsのデフラグ)(=アロケートが速くなる)</li>
+<li>負荷は1点に集中する</li>
+<li>遅い(オブジェクトの移動が必要)</li>
+<li>メモリ食う(オブジェクトプール2つ分)</li>
+<li>ポインタも変わるため、ハッシュの再計算などが必要</li>
+</ul>
+
+
+<h1>GCのアルゴリズム</h1>
+
+<hr />
+
+<h2>GCの主な属性</h2>
+
+<ul>
+<li>世代別
+
+<ul>
+<li>新しいオブジェクトだけGCの対象にする<!-- .element: class="fragment" data-fragment-index="1" --></li>
+</ul>
+</li>
+<li>正確
+
+<ul>
+<li>ゴミは必ず回収する<!-- .element: class="fragment" data-fragment-index="2" --></li>
+</ul>
+</li>
+<li>インクリメンタル
+
+<ul>
+<li>一度にやらずに少しづつGCを進める<!-- .element: class="fragment" data-fragment-index="3" --></li>
+</ul>
+</li>
+</ul>
+
+
+<h1>picrinのGC</h1>
+
+<hr />
+
+<p><img src="/images/picrin/picrin-logo-fin01-02.png" alt="picrin" /></p>
+
+<h1>picrinのGC</h1>
+
+<hr />
+
+<ul>
+<li>基本は普通の正確なマーク&amp;スイープ
+
+<ul>
+<li>Copying GCはlightweightでない</li>
+</ul>
+</li>
+<li>ropeには参照カウント
+
+<ul>
+<li>ropeには循環参照が起きない</li>
+</ul>
+</li>
+</ul>
+
+
+<h1>picrinのGC</h1>
+
+<hr />
+
+<ul>
+<li>基本はマーク&amp;スイープ</li>
+</ul>
+
+
+<blockquote><ol>
+<li>スタックに載っているオブジェクト、変数に格納されているオブジェクトにマークする</li>
+</ol>
+</blockquote>
+
+<ul>
+<li>schemeの変数はそのまま</li>
+<li>Cの変数は読めないのでアリーナという場所を用意してC内ではそこに一時保管してもらう
+
+<ul>
+<li>スコープはFILOなのでスタックを用いればヒープより速くアロケート出来る</li>
+</ul>
+</li>
+</ul>
+
+
+<h1>picrinのチューニング</h1>
+
+<h2>プロファイルをとってみる</h2>
+
+<hr />
+
+<p> % cumulative self self total
+time seconds seconds calls s/call s/call name
+37.14 0.78 0.78 13136494 0.00 0.00 XROPE_DECREF
+23.81 1.28 0.50 1544 0.00 0.00 gc_sweep_phase
+15.72 1.61 0.33 59344814 0.00 0.00 gc_mark_object
+10.00 1.82 0.21 1544 0.00 0.00 gc_mark_phase
+6.67 1.96 0.14 1544 0.00 0.00 gc_mark_trie
+2.38 2.01 0.05 6523 0.00 0.00 pic_apply</p>
+
+<p><span style="font-size:200%">ほとんどGCですね。<br/>
+本当にありがとう御座いました。</span></p>
+
+<h1>解決案</h1>
+
+<hr />
+
+<ul>
+<li>GCのアルゴリズムを変える</li>
+<li>オブジェクトをアロケートしないようにする</li>
+<li>パラメーターをいじる</li>
+</ul>
+
+
+<h1>解決案</h1>
+
+<hr />
+
+<ul>
+<li>GCのアルゴリズムを変える</li>
+<li>オブジェクトをアロケートしないようにする</li>
+<li><strong>パラメーターをいじる</strong></li>
+</ul>
+
+
+<h1>GCに関連するパラメータ</h1>
+
+<hr />
+
+<p>元々tinyに設計されている
+```C
+/<em> アリーナのサイズ </em>/</p>
+
+<h1>define PIC_ARENA_SIZE 1000</h1>
+
+<p>/<em> ヒープページのサイズ </em>/</p>
+
+<h1>define PIC_HEAP_PAGE_SIZE 10000</h1>
+
+<p>/<em> シンボルプール(ハッシュ)のサイズ </em>/</p>
+
+<h1>define PIC_SYM_POOL_SIZE 128</h1>
+
+<p>```</p>
+
+<h1>GCに関連するパラメータ</h1>
+
+<hr />
+
+<p>チューニング後
+```C
+/<em> アリーナのサイズ </em>/</p>
+
+<h1>define PIC_ARENA_SIZE 8 * 1024</h1>
+
+<p>/<em> ヒープページのサイズ </em>/</p>
+
+<h1>define PIC_HEAP_PAGE_SIZE 2 * 1024 * 1024</h1>
+
+<p>/<em> シンボルプール(ハッシュ)のサイズ </em>/</p>
+
+<h1>define PIC_SYM_POOL_SIZE 2048</h1>
+
+<p>```</p>
+
+<h1>結果</h1>
+
+<hr />
+
+<ul>
+<li><p>昔</p>
+
+<blockquote><p>テストに16秒</p></blockquote></li>
+<li><p>変更後</p>
+
+<blockquote><p>time make test-r7rs
+make test-r7rs  <strong>1.68s</strong> user 0.23s system 98% cpu 1.931 total
+<!-- .element: class="fragment" data-fragment-index="1" --></p></blockquote></li>
+</ul>
+
+
+<h1>今後</h1>
+
+<hr />
+
+<ul>
+<li>GCのアルゴリズムを変える</li>
+<li>世代別GCにしたいよねー</li>
+<li>そもそもマーク&amp;スイープの実装が適当すぎるだとか。協議中。</li>
+<li>組み込み目指すならインクリメンタル性必要では？</li>
+<li>オブジェクトをアロケートしないようにする
+
+<ul>
+<li>バイトコンパイルするときにもめちゃくちゃアロケートしてる。その辺どうにかする。</li>
+<li><a href="https://github.com/picrin-scheme/picrin/pull/207">Fast Reader</a></li>
+</ul>
+</li>
+</ul>
+
+
+<h1>まとめ</h1>
+
+<hr />
+
+<ul>
+<li>基本的なGCの解説をした</li>
+<li>picrinのGCの戦略を話した</li>
+<li>GCチューニング大事</li>
+</ul>
+
+
+<p><span style="font-size:600%">以上</span><br/>
+何か質問あればどうぞ</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Shibuya.lisp Tech Talk #8を運営&amp;LTしてきました]]></title>
+    <link href="http://KeenS.github.io/blog/2014/09/16/lisp-tech-talk-8/"/>
+    <updated>2014-09-16T21:04:12+09:00</updated>
+    <id>http://KeenS.github.io/blog/2014/09/16/lisp-tech-talk-8</id>
+    <content type="html"><![CDATA[<p>κeenです。レポートに追われ試験があり合宿に行きで2週間以上空きましたが8/30にShibuya.lisp TT #8の運営をしつつLT枠での参加もしてきたので報告です。何かそこそこ大きなイベントの運営をされる方の参考になれば。</p>
+
+<!-- more -->
+
+
+<h1>キックオフミーティング</h1>
+
+<p>キックオフミーティングが6月にありました。集まったのは5人。potix2(@potix2)さん、chikuさん、深町(@nitro_idiot)さんかにたん(@kazh98)、私。Shibuya.lispの運営はもうちょい居る筈なんですけど引く手数多のLisper達はきっと忙しいんでしょうね。</p>
+
+<p>Shibuya.lisp TTを開催するかを含めて話し合いました。開催されるとなれば3年振りです。</p>
+
+<p>一番の懸案事項はTTをする人がいるかでした。招待講演のアテを話し合ったりTT枠とLT枠のバランスを話し合ったりして開催可能だろうと判断しました。その場で予想参加人数、タイムテーブルや役割分担、TT枠やLT枠が応募多寡になったときの対応、懇親会をどうするかなどを話し合いました。</p>
+
+<p>やっぱりその時点では会場が決まってないので不確定要素が多く、「会場次第」が多かったかと思います。そのときの予想や要求を元に会場の条件を絞った訳ですが。</p>
+
+<p>必要と判断された役職は、</p>
+
+<ul>
+<li>懇親会</li>
+<li>司会</li>
+<li>誘導</li>
+<li>照明</li>
+<li>マイク</li>
+<li>受付</li>
+<li>会計</li>
+<li>広報</li>
+<li>動画</li>
+<li>タイムキーパ</li>
+<li>コーヒーのケータリングとかお茶とかお菓子の準備</li>
+</ul>
+
+
+<p>でした。5人だとどうしても人数が足りないので運営手伝いも募集することになりました。</p>
+
+<h1>会場決定</h1>
+
+<p>mixi様より(鈴木さん経由で)会場を提供頂きました。スクリーン2枚、飲食OK、懇親会もその場でOK、ハンディカムの貸し出しありの至れり尽せりです。鈴木さんありがとう御座います。</p>
+
+<h1>広報</h1>
+
+<p>広報担当のかにたんがTwitterやMeet Upで宣伝したりchikuさんがTokyo.cljに参加して宣伝したりで広報活動を行なってきました。結果、60人の枠がほぼ埋まる(キャンセル含めれば超過)程度の人数が集りました。かにたんありがとう。</p>
+
+<p>懸案事項だったTTの発表者は早々に埋まり、むしろ応募多寡だろうと予想されたLT枠が半分しか埋まらなくて焦りました。</p>
+
+<h1>ビデオ</h1>
+
+<p>映像に詳しいTOYOZUMIさんに相談したところ、発表者の映像出力をキャプチャする手段があるとのことなので</p>
+
+<ol>
+<li>特殊機器による映像出力のキャプチャ</li>
+<li>ハンディカムによる発表者の録画</li>
+<li>WebカメラによるUstream配信</li>
+</ol>
+
+
+<p>の3つを行ない、3.はリアルタイムに、1.、2.を合成したものを録画映像として配信することになりました。一応私がビデオ担当でしたが一人では無理なのでchikuさんやかにたんと一緒に予行演習を行ないました。</p>
+
+<p>扱いの分からぬ機器に悪戦苦闘し、一応動かすことは出来たものの不安が残るので、上手く動いたシナリオと動かなかったシナリオを用意しました。</p>
+
+<h1>その他</h1>
+
+<p>懇親会の手配やら会計やらがどうだったかは分かりません。何も気にすることが無い程スムーズに進んでたんでしょう。potix2さんと深町さんありがとうございます。</p>
+
+<h1>当日</h1>
+
+<h2>準備</h2>
+
+<p>chikuさんと一緒に渋谷駅に集合し、ケータリングのコーヒーを持って会場入り。そのまま鈴木さんにお世話になりつつ会場設営。当初は私は会場設営はほどほどに、ビデオ関係の準備をしてる筈でしたが人が少ないのでそのまま設営をやってました。</p>
+
+<p>さらにThunderboltケーブルが不足ということでビックカメラまでダッシュ。雪駄+合宿で痛めた足で走るんじゃなかった。結局Thunderboltを買ってきても機器を上手く扱うことが出来ず、失敗した方のシナリオでオペレーションしてました。</p>
+
+<p>映像配信に関しては私のLinuxではUstream配信出来ないだとかWebカメラがスライドから遠くて見えないだとかがありましたが、全体は滞りなく進行。</p>
+
+<h2>Talk</h2>
+
+<p>TalkはLT枠は飛び入りが4人あり、結局良い感じに埋まりました。</p>
+
+<ul>
+<li>特別講演
+
+<ol>
+<li>笹川様 : 好きい夢の話 (<a href="https://drive.google.com/file/d/0B_H0_8eqWuVAN2NVeDBKTnlnV2M/edit?usp=sharing">ビデオ</a>)</li>
+</ol>
+</li>
+<li>TT
+
+<ol>
+<li>athosさん : genuine-hilighterの話 (<a href="https://drive.google.com/file/d/0B_H0_8eqWuVATE5nZ0Z4V3Zwdms/edit?usp=sharing">ビデオ</a>)</li>
+<li>深町さん : cl21の話 (<a href="https://drive.google.com/file/d/0B_H0_8eqWuVAY25lWGdiTGE5RmM/edit?usp=sharing">ビデオ</a>)</li>
+<li>豊住さん : 自作画像処理ライブラリの話 (<a href="https://drive.google.com/file/d/0B_H0_8eqWuVAYzhqZ2J5T0VKTXc/edit?usp=sharing">ビデオ</a>)</li>
+<li>横田さん : 型宣言と最適化の話 (<a href="https://drive.google.com/file/d/0B_H0_8eqWuVAZmJPaWpTMHZRUmc/edit?usp=sharing">ビデオ</a>)</li>
+</ol>
+</li>
+<li>LT (<a href="https://drive.google.com/file/d/0B_H0_8eqWuVAR21Pc2M4bmdpdlU/edit?usp=sharing">ビデオ 1~4</a>、<a href="https://drive.google.com/file/d/0B_H0_8eqWuVAaGNLTGpTWWh0ZFU/edit?usp=sharing">ビデオ 4~9</a>)
+
+<ol>
+<li>のぶかずさん : Shenの話</li>
+<li>κeen : moclの話</li>
+<li>かにたん : 床下LispとLisp Meet Upの話</li>
+<li>すてぃべあさん : EROSの話</li>
+<li>ねこはるさん : Clojureの型推論器の話</li>
+<li>Takagiさん: cl-cudaの話</li>
+<li>あんちべさん : Incanterの話</li>
+<li>TAKUFUKUSHIMAさん : Omの話</li>
+<li>zick_minohさん : 42の言語でLisp処理系を書いた話</li>
+</ol>
+</li>
+</ul>
+
+
+<p>と様々な内容に分かれて行われました。私の発表スライドは<a href="/slide/shibuya-dot-lisp-tt-number-8.html">ここ</a>にあります。</p>
+
+<h2>懇親会</h2>
+
+<p>箸が足りない、ケータリングのボットを返却し忘れるなどとトラブルはあったものの概ね問題なく進みました。出されたのはアルコール、ソフトドリンク、寿司、ピザです。</p>
+
+<p>だいたい言語毎に島が出来てたようです。私は撮影したビデオを取り込みつつ色々な島に入っていきました。Common Lisperでcl21コミッタでScheme実装者でClojureワナビーなのでどこにも入れて良いですね。ただ、前日スライドの微調整などであまり寝てなかったのでちょいちょい居眠りしてました。</p>
+
+<p>片付けが終って外に出るとみなさんが待ってて下さったのでぞろぞろ帰りました。TOYOZUMIさんが2次会にカラオケに行こうと皆さん誘ってました。私は行こうかと思ったのですがカラオケはジェネレーションギャップがあるとつらいので大人しく帰りました。</p>
+
+<h1>後日</h1>
+
+<p>返し忘れたケータリングのポットは後日chikuさんが返してくれました。</p>
+
+<p>録画した動画はちょいと梃摺りました。まず、長い動画なので動画サイズが4GBのところで切れてます。なのでその2つを結合し、さらにあまりにサイズが大きいので画質を落とす作業が必要でした。</p>
+
+<p>変換はavconv(ffmpegのフォーク。Ubuntuだとこれしか入らない)で行なったのですが、MPEG4をダイレクトには結合出来ないらしことに気付くまで何度も失敗しました(1つの動画の変換に4時間とか掛かるんですよ？しかもその間CPUは100%に張り付いてるのでPC使えない)。レポートやら試験やらの合間に行なったのでそれだけで数日使いました。最終的にはmpegtsなるフォーマットに変換してcatで結合すれば良いことが分かり、</p>
+
+<pre><code>(MP4 + MP4) -&gt; (mpegts + mpegts) -&gt; mpegts -&gt; MP4 -&gt; MP4(low quality)
+</code></pre>
+
+<p>の手順を踏んで最終動画を得ました。それでも1トークあたり1GBくらいのサイズがあります。もうちょい画質落としても良かったのかな。</p>
+
+<p>で、今アップロード中ですが私のポンコツWiMAXルータは高負荷に耐えられず1動画数時間掛かってます。その間全くネットが使えません。はぁ。</p>
+
+<p>実は今回の運営は私も含めTech Talk初参加の人がそれなりに居たのですがなんとか乗り切れましたね。講演をして下さった笹川様、会場を提供して下さったmixi様と鈴木さん、運営の手伝いをして下さった方々、ありがとう御座いました。そして運営のみなさん、発表者のみなさんお疲れ様でした。</p>
+
+<p>次回もTT開催出来ると良いですね。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Introduction to CIM]]></title>
@@ -607,207 +1167,6 @@ Allegro CLは<code>interrupt-signal</code>がconditionのサブクラスでな�
 <p>CIMのコードなので上記以外の処理系には対応してないです。</p>
 
 <p>今回詰まったのはCCLですね。<code>ccl:interrupt-signal-condition</code>は定義してあるもののユーザーより先に処理系が処理するので無意味でした。なので<code>ccl:*break-hook*</code>を使って処理系が捉えるより早くコンディションを発生させました。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Cloud9の紹介とLispのセットアップ]]></title>
-    <link href="http://KeenS.github.io/blog/2014/08/02/introduction-to-cloud9/"/>
-    <updated>2014-08-02T01:02:18+09:00</updated>
-    <id>http://KeenS.github.io/blog/2014/08/02/introduction-to-cloud9</id>
-    <content type="html"><![CDATA[<p>κeenです。先日のLisp Meet Upで紹介した<a href="https://c9.io">Cloud9</a>の詳解でも書きます。まあ、そんなに詳しくないんですけどね。</p>
-
-<!-- more -->
-
-
-<h1>Cloud9について</h1>
-
-<p>先日のスライドを見てない方はまず見て下さい。</p>
-
-<p><a href="http://keens.github.io/slide/cloud-9.html">Cloud 9の紹介 | κeenのHappy Hacκing Blog</a></p>
-
-<p>公式の詳解ムービー(en)もあります。まあ、一般的なIDEの機能は一通り揃ってるようです。git連携とかも。
-<a href="https://www.youtube.com/user/c9ide/videos?flow=grid&amp;view=1">CloudNine Ide &ndash; YouTube</a></p>
-
-<p>スライドでバックエンドは一人一つDockerが与えられるって書きましたが自分のVMをバックエンドにも出来るようです。</p>
-
-<p>省略しましたが他のユーザーとの連携機能も多数あって、チャットだとかワークスペースの共有だとかソーシャルコーディング関連も多数機能があります。全社導入の折には役立つ機能なんじゃないでしょうか。</p>
-
-<p>ローカルファイルをアップロードしたり逆にローカルにダウンロードとかも出来るようです。</p>
-
-<p>尚、IDE本体は<a href="https://github.com/ajaxorg/ace">ACEという名前でオープンソースで開発されてる</a>のでプラグインとかのドキュメントはそっちもあたると良いようです。</p>
-
-<h1>Cloud9事始め</h1>
-
-<p>スクショとかは適当にスライドを参照して下さい(手抜き)</p>
-
-<h2>アカウントを作る</h2>
-
-<p><a href="https://c9.io">c9.io</a>にアクセスしてGithubかBitbucketのアカウントでログイン出来ます(以後、Githubでログインしたものとします。Bitbucketの方は適宜読み替えて下さい)。Cloud9で書いたコードをHerokuやらなんやらに直接上げるつもりなら普通にCloud9アカウント作っても良いと思いますが、多くの場合どちらかとの連携を使うと思うので素直にGithubでログインしましょう。</p>
-
-<p>ログインしたらダッシュボードに飛ばされます。demo-projectと自分のGithubのプロジェクトがサイドバーにある筈です。</p>
-
-<h2>細かな設定</h2>
-
-<p>demo-projectでも開きましょうか。demo-projectを選択してstart editingです。</p>
-
-<p>IDEというかEditorの設定が出てくる筈です(多分)。キーバインディングとかタブ幅とか設定しましょう。そして、<code>C-h</code>で<code>backward-delete-char</code>出来ないと死んでしまう方のための設定はこちらです。Preferencesのkeybindingsのedit your keymap fileからkeymap fileに飛んで、
-```json
-[</p>
-
-<pre><code>{"command": "backspace", "keys":["Ctrl-H", "Backspace"]},
-{"command": "replace", "keys":["Alt-Shift-5"]}
-</code></pre>
-
-<p>]
-<code>``
-と編集、保存しましょう。どうも、キーにコマンドを割り当てるのではなく、コマンドにキーを割り当ててる(?)っぽいのでCtrl-Hを持ってる</code>replace`を別のキーにしないと動かないようでした。尚、これはファイルをいじらなくてもsearch keybindingsのところから目的のコマンドを捜して、keystrokeのところをクリックして、割り当てたいキーストロークをすれば割り当て出来るようです。その際、自分のkeymap fileも対応して書き変わります。</p>
-
-<h2>Common Lispのセットアップ</h2>
-
-<p>処理系のインストールはいくつか方法があります。</p>
-
-<ol>
-<li><code>apt-get</code>で入れる</li>
-<li>バイナリを落してくる</li>
-<li><a href="https://github.com/KeenS/CIM">CIM</a>を使う</li>
-</ol>
-
-
-<p>のいずれかの方法で処理系を入れて下さい。<code>apt-get</code>で入れる場合はかなり古いバージョンが入ります。CIMで入れる場合は<code>sudo apt-get install time</code>しておかないとSBCLのビルドが出来ませんでした。他の処理系は確認してないです。どの処理系でも良いんですがとりあえずSBCLを入れたってことで話進めますね。私がそれしか確認してないので。</p>
-
-<p>また、便利のためrlwrapを入れましょう。<code>sudo apt-get install rlwrap</code>です。</p>
-
-<p>そこまでいったらrun scriptを作りましょう。上のメニューバーから[Run]>[Run With]>[New Runner]と進みます。で、run scriptの内容はどの方法で処理系を入れたかに依るのですが、</p>
-
-<p>1の場合</p>
-
-<p>```json
-{</p>
-
-<pre><code>"cmd" : ["sudo", "rlwrap", "sbcl", "--load", "$file", "$args"],
-"info" : "Started SBCL :: $project_path$file_name",
-"env" : {},
-"selector" : "source.ext"
-</code></pre>
-
-<p>}
-```</p>
-
-<p>だそうです(<a href="http://cjelupton.wordpress.com/2014/07/24/hacking-lisp-in-the-cloud-pt-3/">引用元</a>)。<code>sudo</code>がついてるのはWEBアプリの場合0.0.0.0で待つためにroot権限が必要だからかな？</p>
-
-<p>これは実行した後でREPLに入ってデバッガとか扱う感じの設定ですね。<br/>
-単に実行したいだけののきは<code>--load</code>の部分を<code>--script</code>に変えれば良さそうです(未確認)<br/>
-2の場合も同じ設定でいけそうな気がします。PATHぐらい必要かな?(未確認)</p>
-
-<p>3の場合</p>
-
-<p>```json
-{</p>
-
-<pre><code>"cmd" : ["sudo", "cl", "$file", "$args"],
-"info" : "Started cl :: $project_path$file_name",
-"env" : {"CIM_HOME":"$HOME/.cim","PATH": "$CIM_HOME/bin:$PATH", "LISP_IMPL": "sbcl"},
-"selector" : "source.ext"
-</code></pre>
-
-<p>}
-```</p>
-
-<p>です。本来CIMは<code>$CIM_HOME/init.*</code>を呼ばないと動かないのですが、ショートカットする環境変数を設定することで無理矢理動かしてます。Cloud9のinitスクリプト(jsファイル)があるようなのでそこでCIMをinitしておけば無理せずとも出来そうですがあまり深く踏み込んでないです。</p>
-
-<p>尚、この設定は実行即終了のものです。実行してREPLに入りたい場合は<code>"cmd"</code>を<code>["cl","-rf", "$file", "$args"]</code>にすると出来ます。</p>
-
-<h2>動かしてみる</h2>
-
-<p>上記のrun scriptを設定、保存したらメニューバーから[File]>[New File]と進み、新しいファイルを作ります。<br/>
-一番簡単に
-<code>lisp
-(write-line "Hello Cloud9")
-</code>
-とでも書きましょうか。そして[>Run]してちょいと待つと実行出来る筈です。動かなかったら手動で[Run]>[Run With]>[My Runner]とかしてみましょう。ここまで来ればセットアップ完了です。</p>
-
-<h1>今後の課題というか要調査というか</h1>
-
-<h2>シンタックスハイライト</h2>
-
-<p>Lisp Meet Upでも喋りましたがハイライトが最悪です。ユーザー定義ハイライターも(少くともACEレベルでは)出来そうなのでどうにかする必要があります。</p>
-
-<h2>インデント</h2>
-
-<p>Lispのインデントはタブn個とかで済むようなものじゃなくてどのオペレータの中にいるかに依って変わります。その辺どうにかなって欲しいですね。
-もしかしたらClojureは上手くいってるかもしれないのでそこからインポートしてくれると嬉しいですね。</p>
-
-<h2>swankインターフェース</h2>
-
-<p>initスクリプトがあるって事はもしかしたらIDEもプログラマブルなのかもしれないのでswankインターフェースを作れるかもしれません。</p>
-
-<h2>CIMインターフェース</h2>
-
-<p>initスクリプトがあるって事は(ry。最終目標はメニューバーからどの処理系を使うか選択可能とかで。</p>
-
-<h1>まとめ</h1>
-
-<ul>
-<li>Cloud9を紹介した</li>
-<li>Common Lispのセットアップ方法を示した</li>
-<li>誰か諸問題解決して下さい</li>
-</ul>
-
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Lisp Meet Up #19でLTしてきました]]></title>
-    <link href="http://KeenS.github.io/blog/2014/07/30/lisp-meet-up-number-19/"/>
-    <updated>2014-07-30T00:30:40+09:00</updated>
-    <id>http://KeenS.github.io/blog/2014/07/30/lisp-meet-up-number-19</id>
-    <content type="html"><![CDATA[<p>κeenです毎月恒例の<a href="https://atnd.org/events/53246">Lisp Meet Up presented by Shibuya.lisp</a>でLTしてきたのでレポートです。</p>
-
-<!-- more -->
-
-
-<p>今回は募集20に対して参加登録20、参加18、LT4本と集りの良い会でした。</p>
-
-<p>自己紹介ではほぼCLの人ばっかりでした。珍しいところ（？）では数理システムの方が居たり会場を提供して下さってるサイバーエージェントの方が覗きにきてたり。</p>
-
-<p>LT1本目はTOYOZUMIさんから連作の一つのCommon Lisp最適化発展。画像のエッジ検出をするときの関数の最適化の話でした。カーネルを渡すだけで最適なコードを生成するそうです。コーナーケースのif式をループの外に追い出してたりと半分成程、あとはよく分かんない話してるなーって。<br/>
-最終的には<code>eval</code>を使ってるらしく、本当に速度出るの？って気になりましたが本人もやってみたところ速くなってビックリだったそうです。</p>
-
-<p>スライドはこちら。</p>
-
-<iframe src="//www.slideshare.net/slideshow/embed_code/37456264" width="427" height="356" frameborder="0" marginwidth="0" marginheight="0" scrolling="no" style="border:1px solid #CCC; border-width:1px 1px 0; margin-bottom:5px; max-width: 100%;" allowfullscreen> </iframe>
-
-
-<p> <div style="margin-bottom:5px"> <strong> <a href="https://www.slideshare.net/toyozumiKouichi/common-lisp-37456264" title="Common lisp最適化発展" target="_blank">Common lisp最適化発展</a> </strong> from <strong><a href="http://www.slideshare.net/toyozumiKouichi" target="_blank">Toyozumi Kouichi</a></strong> </div></p>
-
-<p>動画は今回から私が担当なので処理が終ったらリンク張ります。</p>
-
-<p>次はTakagiさんよりcl-cudaについて。話聞く前は「どうせC APIをCFFIで叩いただけだろ(ホジ」って思ってましたがさすがにGPGPUはそんなに簡単じゃなかったようです。
-cl-cudaはLispのAPIを叩いたらCUDA向けのCコードを吐いてCUDA専用のコンパイラ通してモジュールとして動的に読み込んで、ってやってくれるそうです。すごい。
-完成度も、CUDAを研究に使ってたchikuさんによると普通使う分にはほぼ困らなくて、あとは構造体のサポートがあれば良いかも程度だそうです。すごい。</p>
-
-<p>スライドはまだ見付けてないです。</p>
-
-<p>3番目は私から、WebブラウザベースのIDE、<a href="https://c9.io/">Cloud9</a>の紹介とLispの対応状況について。
-スライドはこのブログに載せてますが、こちら</p>
-
-<p><a href="http://keens.github.io/slide/cloud-9.html">Cloud 9の紹介 | κeenのHappy Hacκing Blog</a></p>
-
-<p>もうちょっと説明が欲しそうな雰囲気だったので別記事立てますね。@potix2さんが社内チャットに流したところなり反応が良かったようなので普通にIDEとして優れてるんじゃないでしょうか。</p>
-
-<p>最後はかにたん(@kazh98)から床下からLispが出てきた話。うん。本当に床下からLispが出てきた話でした。かにたんの研究室すごいですね。みなさんの家の床下にもLispがあるかもしれませんよm9っ。</p>
-
-<p>最後の最後にかにたんの研究室から出てきたLispについてTOYOZUMIさんがモニタをスクリーンに映しつつみんなで色々議論。なんかWEBのマニュアルがポルトガル語で書かれてたのでポルトガル語喋れる人捜したけど居なかったり。次回、床下Lispを動かしてみようってなりました。</p>
-
-<p>そこでもう閉場の時間だったので懇親会へ。11名が参加。</p>
-
-<p>私とかにたんとpotix2さんがschemeの実装の話してたり@mhkojiさんがhunchentootがありえないくらい遅いって話してたり色々でしたね。
-CIMの話も出てました。実用上Windowsサポートは外せないってことで@snmstsさんがCでCIMを書き直してるだとか@nitro_idiotさんがshellyでCIMを使うにあたってCIM側でコアのマネジメントして欲しいって言ってただとか。</p>
-
-<p>C CIMは面白そうですね。ビルドしなきゃいけないから手軽さの問題が…とかlibcurlに依存するとLinuxが…とか言ってたら「ディストリのパッケージシステムに乗せてしまえば問題無い」と一刀両断。その発想はなかった。むしろパッケージシステムに入った方が手軽。</p>
-
-<p>今からCloud9の記事とCIMのコアマネジメント頑張りますね。</p>
 ]]></content>
   </entry>
   

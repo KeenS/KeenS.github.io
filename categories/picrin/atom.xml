@@ -1,0 +1,430 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: picrin | κeenのHappy Hacκing Blog]]></title>
+  <link href="http://KeenS.github.io/categories/picrin/atom.xml" rel="self"/>
+  <link href="http://KeenS.github.io/"/>
+  <updated>2014-09-29T17:30:41+09:00</updated>
+  <id>http://KeenS.github.io/</id>
+  <author>
+    <name><![CDATA[κeen]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[PicrinのGCの話、もといGCの話]]></title>
+    <link href="http://KeenS.github.io/slide/picrin-gc.html"/>
+    <updated>2014-09-29T14:37:00+09:00</updated>
+    <id>http://KeenS.github.io/slide/picrin-gc.markdown</id>
+    <content type="html"><![CDATA[<h1>PicrinのGCの話、もといGCの話</h1>
+
+<hr />
+
+<p>Lisp Meet Up presented by Shibuya.lisp #20<br/>
+2014-09-29<br/>
+κeen(@blackenedgold)</p>
+
+<h1>自己紹介</h1>
+
+<hr />
+
+<ul>
+<li>κeen</li>
+<li>東大数学科の4年生</li>
+<li>ソーシャルアカウントは上のアイコン達から。</li>
+<li>Lisp, Ruby, OCaml, Shell Scriptあたりを書きます</li>
+<li><a href="https://github.com/picrin-scheme/picrin">picrin</a>のコミッタです</li>
+</ul>
+
+
+<h1>picrin</h1>
+
+<hr />
+
+<p><img src="/images/picrin/picrin-logo-fin01-02.png" alt="picrin" /></p>
+
+<h1>picrin</h1>
+
+<hr />
+
+<ul>
+<li>R7RS compatibility</li>
+<li>bytecode interpreter (based on stack VM)</li>
+<li>internal representation by nan-boxing</li>
+<li>conservative call/cc implementation (users can freely interleave native stack with VM stack)</li>
+<li>exact GC (simple mark and sweep, partially reference count is used as well)</li>
+<li>string representation by rope data structure</li>
+</ul>
+
+
+<h1>picrin</h1>
+
+<hr />
+
+<ul>
+<li>R7RS compatibility</li>
+<li><strong>bytecode interpreter (based on stack VM)</strong></li>
+<li>internal representation by nan-boxing</li>
+<li>conservative call/cc implementation (users can freely interleave native stack with VM stack)</li>
+<li><strong>exact GC (simple mark and sweep, partially reference count is used as well)</strong></li>
+<li><strong>string representation by rope data structure</strong></li>
+</ul>
+
+
+<h1>picrin開発者の不満</h1>
+
+<hr />
+
+<ul>
+<li>picrinの起動が遅い<!-- .element: class="fragment" data-fragment-index="1" -->
+
+<ul>
+<li>2秒くらいかかる <!-- .element: class="fragment" data-fragment-index="1" --></li>
+</ul>
+</li>
+<li>picrinのテストが遅い<!-- .element: class="fragment" data-fragment-index="2" -->
+
+<ul>
+<li>16秒くらいかかる <!-- .element: class="fragment" data-fragment-index="2" --></li>
+</ul>
+</li>
+</ul>
+
+
+<h1>少しGCの話</h1>
+
+<hr />
+
+<p>GC(ごみ集め)とは</p>
+
+<ul>
+<li>使われていないオブジェクトを自動的に解法する
+
+<ul>
+<li>メモリ管理に煩わせられないで済む</li>
+<li>メモリーリークを防ぐ。</li>
+</ul>
+</li>
+<li>「使われていないオブジェクト」を判定するのはいくつかアルゴリズムがある</li>
+</ul>
+
+
+<h1>GCのアルゴリズム</h1>
+
+<hr />
+
+<h2>主なGCのアルゴリズム</h2>
+
+<ul>
+<li>マーク&amp;スイープ</li>
+<li>参照カウント</li>
+<li>Copying GC</li>
+</ul>
+
+
+<h1>GCのアルゴリズム</h1>
+
+<hr />
+
+<h2>マーク&amp;スイープ</h2>
+
+<ol>
+<li>あらかじめ全てのオブジェクトはどこかで一元管理する<!-- .element: class="fragment" data-fragment-index="1" --></li>
+<li>一元管理元(ヒープ(ページ))でメモリが足りなくなったらGCを開始<!-- .element: class="fragment" data-fragment-index="2" --></li>
+<li>スタックに載っているオブジェクト、変数に格納されているオブジェクトにマークする<!-- .element: class="fragment" data-fragment-index="3" --></li>
+<li>そこから辿れるオブジェクトも再帰的にマークする<!-- .element: class="fragment" data-fragment-index="4" --></li>
+<li>ヒープからマークされていないオブジェクトを開放する<!-- .element: class="fragment" data-fragment-index="5" --></li>
+<li>それでもメモリが足りなければ一ヒープのページを増やす<!-- .element: class="fragment" data-fragment-index="6" --></li>
+<li>増やせなければメモリを使い果したのでabort<!-- .element: class="fragment" data-fragment-index="7" --></li>
+</ol>
+
+
+<h1>GCのアルゴリズム</h1>
+
+<hr />
+
+<h2>マーク&amp;スイープの特徴</h2>
+
+<ul>
+<li>そこそこ速い</li>
+<li>正確に集められる</li>
+<li>GC以外ではメモリ管理を考えなくて良い(≒プラグインは書き易い)</li>
+<li>長生きのオブジェクトは何度もマークされる(=>世代別GC)</li>
+<li>負荷は1点に集中する</li>
+<li>メモリの断片化が起きる(=オブジェクトのアロケートが遅くなる)</li>
+</ul>
+
+
+<h1>GCのアルゴリズム</h1>
+
+<hr />
+
+<h2>参照カウント</h2>
+
+<ol>
+<li>オブジェクトに他から参照されている数(参照カウント)を記憶させる<!-- .element: class="fragment" data-fragment-index="1" --></li>
+<li>オブジェクトの参照を変えるときはその都度参照カウントを変える<!-- .element: class="fragment" data-fragment-index="2" --></li>
+<li>参照カウントが0になったら開放する<!-- .element: class="fragment" data-fragment-index="3" --></li>
+</ol>
+
+
+<h1>GCのアルゴリズム</h1>
+
+<hr />
+
+<h2>参照カウントの特徴</h2>
+
+<ul>
+<li>負荷は分散する</li>
+<li>GCの実装は楽</li>
+<li>少し遅い(必ずfreeする必要がある)</li>
+<li>正確でない(循環参照に弱い)(cf. 大相撲の星の回しあい)</li>
+<li>プラグインは面倒</li>
+</ul>
+
+
+<h1>GCのアルゴリズム</h1>
+
+<hr />
+
+<h2>Copying GC</h2>
+
+<ol>
+<li>オブジェクトプールを2つ用意する(1, 2)とする<!-- .element: class="fragment" data-fragment-index="1" --></li>
+<li>オブジェクトを確保するときは必ず1に確保する<!-- .element: class="fragment" data-fragment-index="2" --></li>
+<li>1のメモリが足りなくなったらgcを開始<!-- .element: class="fragment" data-fragment-index="3" --></li>
+<li>1の生きているオブジェクトを再帰的に2に移動する<!-- .element: class="fragment" data-fragment-index="4" --></li>
+<li>1に残っているものは全てゴミとして良い<!-- .element: class="fragment" data-fragment-index="5" --></li>
+<li>1、2のラベルを付け換える<!-- .element: class="fragment" data-fragment-index="6" --></li>
+</ol>
+
+
+<h1>GCのアルゴリズム</h1>
+
+<hr />
+
+<h2>Copying GCの特徴</h2>
+
+<ul>
+<li>正確</li>
+<li>メモリの断片化が起きない(Windowsのデフラグ)(=アロケートが速くなる)</li>
+<li>負荷は1点に集中する</li>
+<li>遅い(オブジェクトの移動が必要)</li>
+<li>メモリ食う(オブジェクトプール2つ分)</li>
+<li>ポインタも変わるため、ハッシュの再計算などが必要</li>
+</ul>
+
+
+<h1>GCのアルゴリズム</h1>
+
+<hr />
+
+<h2>GCの主な属性</h2>
+
+<ul>
+<li>世代別
+
+<ul>
+<li>新しいオブジェクトだけGCの対象にする<!-- .element: class="fragment" data-fragment-index="1" --></li>
+</ul>
+</li>
+<li>正確
+
+<ul>
+<li>ゴミは必ず回収する<!-- .element: class="fragment" data-fragment-index="2" --></li>
+</ul>
+</li>
+<li>インクリメンタル
+
+<ul>
+<li>一度にやらずに少しづつGCを進める<!-- .element: class="fragment" data-fragment-index="3" --></li>
+</ul>
+</li>
+</ul>
+
+
+<h1>picrinのGC</h1>
+
+<hr />
+
+<p><img src="/images/picrin/picrin-logo-fin01-02.png" alt="picrin" /></p>
+
+<h1>picrinのGC</h1>
+
+<hr />
+
+<ul>
+<li>基本は普通の正確なマーク&amp;スイープ
+
+<ul>
+<li>Copying GCはlightweightでない</li>
+</ul>
+</li>
+<li>ropeには参照カウント
+
+<ul>
+<li>ropeには循環参照が起きない</li>
+</ul>
+</li>
+</ul>
+
+
+<h1>picrinのGC</h1>
+
+<hr />
+
+<ul>
+<li>基本はマーク&amp;スイープ</li>
+</ul>
+
+
+<blockquote><ol>
+<li>スタックに載っているオブジェクト、変数に格納されているオブジェクトにマークする</li>
+</ol>
+</blockquote>
+
+<ul>
+<li>schemeの変数はそのまま</li>
+<li>Cの変数は読めないのでアリーナという場所を用意してC内ではそこに一時保管してもらう
+
+<ul>
+<li>スコープはFILOなのでスタックを用いればヒープより速くアロケート出来る</li>
+</ul>
+</li>
+</ul>
+
+
+<h1>picrinのチューニング</h1>
+
+<h2>プロファイルをとってみる</h2>
+
+<hr />
+
+<p> % cumulative self self total
+time seconds seconds calls s/call s/call name
+37.14 0.78 0.78 13136494 0.00 0.00 XROPE_DECREF
+23.81 1.28 0.50 1544 0.00 0.00 gc_sweep_phase
+15.72 1.61 0.33 59344814 0.00 0.00 gc_mark_object
+10.00 1.82 0.21 1544 0.00 0.00 gc_mark_phase
+6.67 1.96 0.14 1544 0.00 0.00 gc_mark_trie
+2.38 2.01 0.05 6523 0.00 0.00 pic_apply</p>
+
+<p><span style="font-size:200%">ほとんどGCですね。<br/>
+本当にありがとう御座いました。</span></p>
+
+<h1>解決案</h1>
+
+<hr />
+
+<ul>
+<li>GCのアルゴリズムを変える</li>
+<li>オブジェクトをアロケートしないようにする</li>
+<li>パラメーターをいじる</li>
+</ul>
+
+
+<h1>解決案</h1>
+
+<hr />
+
+<ul>
+<li>GCのアルゴリズムを変える</li>
+<li>オブジェクトをアロケートしないようにする</li>
+<li><strong>パラメーターをいじる</strong></li>
+</ul>
+
+
+<h1>GCに関連するパラメータ</h1>
+
+<hr />
+
+<p>元々tinyに設計されている
+```C
+/<em> アリーナのサイズ </em>/</p>
+
+<h1>define PIC_ARENA_SIZE 1000</h1>
+
+<p>/<em> ヒープページのサイズ </em>/</p>
+
+<h1>define PIC_HEAP_PAGE_SIZE 10000</h1>
+
+<p>/<em> シンボルプール(ハッシュ)のサイズ </em>/</p>
+
+<h1>define PIC_SYM_POOL_SIZE 128</h1>
+
+<p>```</p>
+
+<h1>GCに関連するパラメータ</h1>
+
+<hr />
+
+<p>チューニング後
+```C
+/<em> アリーナのサイズ </em>/</p>
+
+<h1>define PIC_ARENA_SIZE 8 * 1024</h1>
+
+<p>/<em> ヒープページのサイズ </em>/</p>
+
+<h1>define PIC_HEAP_PAGE_SIZE 2 * 1024 * 1024</h1>
+
+<p>/<em> シンボルプール(ハッシュ)のサイズ </em>/</p>
+
+<h1>define PIC_SYM_POOL_SIZE 2048</h1>
+
+<p>```</p>
+
+<h1>結果</h1>
+
+<hr />
+
+<ul>
+<li><p>昔</p>
+
+<blockquote><p>テストに16秒</p></blockquote></li>
+<li><p>変更後</p>
+
+<blockquote><p>time make test-r7rs
+make test-r7rs  <strong>1.68s</strong> user 0.23s system 98% cpu 1.931 total
+<!-- .element: class="fragment" data-fragment-index="1" --></p></blockquote></li>
+</ul>
+
+
+<h1>今後</h1>
+
+<hr />
+
+<ul>
+<li>GCのアルゴリズムを変える</li>
+<li>世代別GCにしたいよねー</li>
+<li>そもそもマーク&amp;スイープの実装が適当すぎるだとか。協議中。</li>
+<li>組み込み目指すならインクリメンタル性必要では？</li>
+<li>オブジェクトをアロケートしないようにする
+
+<ul>
+<li>バイトコンパイルするときにもめちゃくちゃアロケートしてる。その辺どうにかする。</li>
+<li><a href="https://github.com/picrin-scheme/picrin/pull/207">Fast Reader</a></li>
+</ul>
+</li>
+</ul>
+
+
+<h1>まとめ</h1>
+
+<hr />
+
+<ul>
+<li>基本的なGCの解説をした</li>
+<li>picrinのGCの戦略を話した</li>
+<li>GCチューニング大事</li>
+</ul>
+
+
+<p><span style="font-size:600%">以上</span><br/>
+何か質問あればどうぞ</p>
+]]></content>
+  </entry>
+  
+</feed>
