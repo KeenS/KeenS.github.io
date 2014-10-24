@@ -17,7 +17,7 @@ READMEにあるように
 
     curl https://raw.github.com/KeenS/CIM/master/scripts/cim_installer | /bin/sh
 
-で`~/.cim/`にインストールできます。パスを変えたければ
+で`~/.cim/`にインストールできます。<s>パスを変えたければ
 
     CIM_HOME=/path/to/cim curl https://raw.github.com/KeenS/CIM/master/scripts/cim_installer | /bin/sh
 
@@ -25,7 +25,17 @@ READMEにあるように
 
     env CIM_HOME /path/to/cim curl https://raw.github.com/KeenS/CIM/master/scripts/cim_installer | /bin/sh
 
-でしょうか。
+でしょうか。</s>
+
+2014-10-20更新  
+CIM_HOMEの設定方法が間違ってました。正しくは
+
+    curl https://raw.github.com/KeenS/CIM/master/scripts/cim_installer | CIM_HOME=/path/to/cim /bin/sh
+で、Cシェル系なら
+
+    curl https://raw.github.com/KeenS/CIM/master/scripts/cim_installer | env CIM_HOME /path/to/cim /bin/sh
+です  
+更新ここまで
 
 ここでは`curl`を使ってますが`wget -O -`とか`fetch -o -`など標準出力に吐ければなんでも良いです。
 
