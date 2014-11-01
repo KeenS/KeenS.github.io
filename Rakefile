@@ -1,3 +1,4 @@
+# coding: utf-8
 require "rubygems"
 require "bundler/setup"
 require "stringex"
@@ -179,15 +180,34 @@ task :new_slide, :title do |t, args|
   end
   puts "Creating new slide: #{filename}"
   open(filename, 'w') do |post|
-    post.puts "---"
-    post.puts "layout: slide"
-    post.puts "title: \"#{title.gsub(/&/,'&amp;')}\""
-    post.puts "date: #{Time.now.strftime('%Y-%m-%d %H:%M')}"
-    post.puts "format: "
-    post.puts "categories: "
-    post.puts "description: "
-    post.puts "---"
-    post.puts ""
+    post.puts <<EOF
+---
+layout: slide
+title: \"#{title.gsub(/&/,'&amp;')}\"
+date: #{Time.now.strftime('%Y-%m-%d %H:%M')}
+format: markdown
+categories: 
+description: 
+---
+# #{title.gsub(/&/,'&amp;')}
+---
+#{Time.now.strftime('%Y-%m-%d')}  
+κeen(@blackenedgold)
+
+
+# About Me
+----------
+![κeenのアイコン](/images/icon.png)
+
+ + κeen
+ + 東大数学科の4年生
+ + ソーシャルアカウントは上のアイコン達から。
+ + Lisp, Ruby, OCaml, Shell Scriptあたりを書きます
+
+
+<span style="font-size:600%">以上</span>  
+何か質問あればどうぞ
+EOF
   end
 end
 
