@@ -232,9 +232,9 @@ C APIの項目があることにも触れる。
 * `syntax-rules` (R7RS)
 * `sc-macro-transformer`
 * `rsc-macro-transformer`
-* `er-macro-transformer`
 * `ir-macro-transformer`
-* `define-macro`
+* `er-macro-transformer`
+* `define-macro` (Common Lisp)
 
 参考: [様々な Hygienic Macro - 月の塵](http://d.hatena.ne.jp/leque/20080528/p1)
 
