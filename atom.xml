@@ -4,7 +4,7 @@
   <title><![CDATA[κeenのHappy Hacκing Blog]]></title>
   <link href="http://KeenS.github.io/atom.xml" rel="self"/>
   <link href="http://KeenS.github.io/"/>
-  <updated>2014-12-07T23:17:27+09:00</updated>
+  <updated>2014-12-08T06:40:19+09:00</updated>
   <id>http://KeenS.github.io/</id>
   <author>
     <name><![CDATA[κeen]]></name>
@@ -12,6 +12,155 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[割と処理系ポータブルなCommon Lisp実行可能ファイルを作る]]></title>
+    <link href="http://KeenS.github.io/blog/2014/12/08/ge-tochu-li-xi-potaburunacommon-lispshi-xing-ke-neng-huairuwozuo-ru/"/>
+    <updated>2014-12-08T06:17:12+09:00</updated>
+    <id>http://KeenS.github.io/blog/2014/12/08/ge-tochu-li-xi-potaburunacommon-lispshi-xing-ke-neng-huairuwozuo-ru</id>
+    <content type="html"><![CDATA[<p>κeenです。Lisp Advent Calendarはもう枠埋まっちゃったので普通にブログで。</p>
+
+<p>コマンドラインから実行可能なLispファイルをそれなりに多くの処理系で動くように作る話。</p>
+
+<!-- more -->
+
+
+<p>この話はCIMの生い立ちとも関連するんだけどシェルからLispを使いたいときは</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>#!/usr/bin/env sbcl --script
+</span><span class='line'>
+</span><span class='line'>...</span></code></pre></td></tr></table></div></figure>
+
+
+<p>なんて書いてた人も多いんじゃないかと思うんだけどこれは色々問題がある。</p>
+
+<ol>
+<li>envは環境に依っては/usr/local/bin/envだったりする</li>
+<li>envは環境に依っては複数引数を取れない。&#8221;sbcl &mdash;script&#8221;という名前のファイルを捜しにいく</li>
+<li>sbclでしか動かない</li>
+</ol>
+
+
+<p>この問題の扱いは一応解決策がある</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>#!/bin/sh
+</span><span class='line'>
+</span><span class='line'>#|
+</span><span class='line'>exec sbcl --script "$0" -- "$@"
+</span><span class='line'>|#
+</span><span class='line'>
+</span><span class='line'>...</span></code></pre></td></tr></table></div></figure>
+
+
+<p>3行目の<code>#|</code>がシェルのコメントでありLispのブロックコメントであるのがポイント。</p>
+
+<ol>
+<li>シェルは<code>#!/bin/sh</code>を見てシェルスクリプトとして実行する</li>
+<li>1,3行目はコメントなのでシェルは無視</li>
+<li>4行目でsbclにそのファイルを引数として与えてexecする。execしたあとはシェルには戻らないのでその後何が書いてあっても構わない</li>
+<li>sbclを<code>--script</code>付きで読んでるので1行目の<code>#!</code>で始まる行は無視する</li>
+<li>3~5行目はブロックコメントなのでsbclは無視</li>
+<li>それ以降がLispとして実行される</li>
+</ol>
+
+
+<p>というカラクリになっている。こういうのをピジン言語っていうんだけ？</p>
+
+<p>まあいいや。</p>
+
+<p>ところでこのブロックコメントの中にはシェルスクリプト書き放題だよね？そのシェルスクリプト内でどのLisp使うか決めたらポータブルになりそうじゃない？</p>
+
+<p>こういうのはどう？</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class='lisp'><span class='line'><span class="err">#</span><span class="nv">!/bin/sh</span>
+</span><span class='line'>
+</span><span class='line'><span class="cm">#|</span>
+</span><span class='line'><span class="cm">run_if_exists(){</span>
+</span><span class='line'><span class="cm"> command -v $1 &gt; /dev/null 2&gt;&amp;1 &amp;&amp; exec &quot;$@&quot;</span>
+</span><span class='line'><span class="cm">}</span>
+</span><span class='line'><span class="cm"> run_if_exists sbcl --noinform --no-sysinit --no-userinit --script &quot;$0&quot; -- &quot;$@&quot;</span>
+</span><span class='line'><span class="cm"> run_if_exists clisp -norc --quiet --silent -on-error exit  &quot;$0&quot; -- &quot;$@&quot;</span>
+</span><span class='line'><span class="cm"> run_if_exists ecl -norc -q -shell &quot;$0&quot; -- &quot;$@&quot;</span>
+</span><span class='line'><span class="cm"> run_if_exists mkcl -norc -q -shell &quot;$0&quot; -- &quot;$@&quot;</span>
+</span><span class='line'><span class="cm"> run_if_exists alisp -qq -#! &quot;$0&quot; -- &quot;$@&quot;</span>
+</span><span class='line'><span class="cm">|#</span>
+</span><span class='line'>
+</span><span class='line'><span class="p">(</span><span class="nb">write-line</span> <span class="p">(</span><span class="nb">lisp-implementation-type</span><span class="p">))</span>
+</span><span class='line'><span class="p">(</span><span class="nb">force-output</span><span class="p">)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>cclとabclは1行目のシェバンを読み飛ばせなかった&amp;評価結果をエコーバックしない方法が見当らなかったからパス。CMUCLは自分の環境で動かないから検証出来てない。</p>
+
+<p>これでポータブルに実行は可能。コマンドライン引数の扱いとかはライブラリを頼ってくれ。因みにCIMでは</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+</pre></td><td class='code'><pre><code class='lisp'><span class='line'>  <span class="o">#+</span><span class="nv">allegro</span>  <span class="p">(</span><span class="nb">cdr</span> <span class="p">(</span><span class="nv">system:command-line-arguments</span><span class="p">))</span>
+</span><span class='line'>  <span class="o">#+</span><span class="nv">sbcl</span> <span class="p">(</span><span class="nb">do*</span>  <span class="p">((</span><span class="nv">var</span> <span class="nv">sb-ext:*posix-argv*</span> <span class="p">(</span><span class="nb">cdr</span> <span class="nb">list</span><span class="p">))</span>
+</span><span class='line'>                <span class="p">(</span><span class="nb">list</span> <span class="nv">var</span> <span class="nv">var</span><span class="p">))</span>
+</span><span class='line'>               <span class="p">((</span><span class="nb">string=</span> <span class="p">(</span><span class="nb">car</span> <span class="nb">list</span><span class="p">)</span> <span class="s">&quot;--&quot;</span><span class="p">)</span> <span class="p">(</span><span class="nb">return</span> <span class="p">(</span><span class="nb">cdr</span> <span class="nb">list</span><span class="p">))))</span>
+</span><span class='line'>  <span class="o">#+</span><span class="nv">clisp</span> <span class="nv">ext:*args*</span>
+</span><span class='line'>  <span class="o">#+</span><span class="nv">ecl</span> <span class="p">(</span><span class="nb">do*</span>  <span class="p">((</span><span class="nv">var</span> <span class="p">(</span><span class="nv">si:command-args</span><span class="p">)</span> <span class="p">(</span><span class="nb">cdr</span> <span class="nb">list</span><span class="p">))</span>
+</span><span class='line'>               <span class="p">(</span><span class="nb">list</span> <span class="nv">var</span> <span class="nv">var</span><span class="p">))</span>
+</span><span class='line'>              <span class="p">((</span><span class="nb">string=</span> <span class="p">(</span><span class="nb">car</span> <span class="nb">list</span><span class="p">)</span> <span class="s">&quot;--&quot;</span><span class="p">)</span> <span class="p">(</span><span class="nb">return</span> <span class="p">(</span><span class="nb">cdr</span> <span class="nb">list</span><span class="p">))))</span>
+</span><span class='line'>  <span class="o">#+</span><span class="nv">abcl</span> <span class="nv">extensions:*command-line-argument-list*</span>
+</span><span class='line'>  <span class="o">#+</span><span class="nv">gcl</span> <span class="p">(</span><span class="nb">do*</span>  <span class="p">((</span><span class="nv">var</span> <span class="nv">si::*command-args*</span> <span class="p">(</span><span class="nb">cdr</span> <span class="nb">list</span><span class="p">))</span>
+</span><span class='line'>               <span class="p">(</span><span class="nb">list</span> <span class="nv">var</span> <span class="nv">var</span><span class="p">))</span>
+</span><span class='line'>              <span class="p">((</span><span class="nb">string=</span> <span class="p">(</span><span class="nb">car</span> <span class="nb">list</span><span class="p">)</span> <span class="s">&quot;--&quot;</span><span class="p">)</span> <span class="p">(</span><span class="nb">return</span> <span class="p">(</span><span class="nb">cdr</span> <span class="nb">list</span><span class="p">))))</span>
+</span><span class='line'>  <span class="o">#+</span><span class="nv">cmu</span> <span class="nv">ext:*command-line-words*</span>
+</span><span class='line'>  <span class="o">#+</span><span class="nv">ccl</span> <span class="nv">ccl:*unprocessed-command-line-arguments*</span>
+</span><span class='line'>  <span class="o">#+</span><span class="nv">mkcl</span> <span class="p">(</span><span class="nb">do*</span>  <span class="p">((</span><span class="nv">var</span> <span class="p">(</span><span class="nv">si:command-args</span><span class="p">)</span> <span class="p">(</span><span class="nb">cdr</span> <span class="nb">list</span><span class="p">))</span>
+</span><span class='line'>               <span class="p">(</span><span class="nb">list</span> <span class="nv">var</span> <span class="nv">var</span><span class="p">))</span>
+</span><span class='line'>              <span class="p">((</span><span class="nb">string=</span> <span class="p">(</span><span class="nb">car</span> <span class="nb">list</span><span class="p">)</span> <span class="s">&quot;--&quot;</span><span class="p">)</span> <span class="p">(</span><span class="nb">return</span> <span class="p">(</span><span class="nb">cdr</span> <span class="nb">list</span><span class="p">))))</span>
+</span><span class='line'>  <span class="o">#+</span><span class="nv">lispworks</span> <span class="nv">system:*line-arguments-list*</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>としている。参考までに。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[H2Oにpicrinを溶かす]]></title>
@@ -3900,165 +4049,6 @@ malaさんが飛び入りでさっきサイボウズの脆弱性を見付けた�
 <p>そこでブラウザのパーザを呼び出すAPIがあるのでそれを使ってDOMを作り、タグを洗い出す方法が考えられます。ここまでは良いのですが、最後HTMLに追加するときに文字列化してinnerHTMLで書き込もうとするとmXSSの危険性があるそうです。具体的には特定の状況で<code>&amp;lt;</code>や<code>&amp;gt;</code>が<code>&lt;</code>や<code>&gt;</code>に変化してしまい、入力と出力でDOM構造が変わってしまうことがあるそうです。怖い。</p>
 
 <p>セキュリティ大変ですね。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Cloud9の紹介とLispのセットアップ]]></title>
-    <link href="http://KeenS.github.io/blog/2014/08/02/introduction-to-cloud9/"/>
-    <updated>2014-08-02T01:02:18+09:00</updated>
-    <id>http://KeenS.github.io/blog/2014/08/02/introduction-to-cloud9</id>
-    <content type="html"><![CDATA[<p>κeenです。先日のLisp Meet Upで紹介した<a href="https://c9.io">Cloud9</a>の詳解でも書きます。まあ、そんなに詳しくないんですけどね。</p>
-
-<!-- more -->
-
-
-<h1>Cloud9について</h1>
-
-<p>先日のスライドを見てない方はまず見て下さい。</p>
-
-<p><a href="http://keens.github.io/slide/cloud-9.html">Cloud 9の紹介 | κeenのHappy Hacκing Blog</a></p>
-
-<p>公式の詳解ムービー(en)もあります。まあ、一般的なIDEの機能は一通り揃ってるようです。git連携とかも。
-<a href="https://www.youtube.com/user/c9ide/videos?flow=grid&amp;view=1">CloudNine Ide &ndash; YouTube</a></p>
-
-<p>スライドでバックエンドは一人一つDockerが与えられるって書きましたが自分のVMをバックエンドにも出来るようです。</p>
-
-<p>省略しましたが他のユーザーとの連携機能も多数あって、チャットだとかワークスペースの共有だとかソーシャルコーディング関連も多数機能があります。全社導入の折には役立つ機能なんじゃないでしょうか。</p>
-
-<p>ローカルファイルをアップロードしたり逆にローカルにダウンロードとかも出来るようです。</p>
-
-<p>尚、IDE本体は<a href="https://github.com/ajaxorg/ace">ACEという名前でオープンソースで開発されてる</a>のでプラグインとかのドキュメントはそっちもあたると良いようです。</p>
-
-<h1>Cloud9事始め</h1>
-
-<p>スクショとかは適当にスライドを参照して下さい(手抜き)</p>
-
-<h2>アカウントを作る</h2>
-
-<p><a href="https://c9.io">c9.io</a>にアクセスしてGithubかBitbucketのアカウントでログイン出来ます(以後、Githubでログインしたものとします。Bitbucketの方は適宜読み替えて下さい)。Cloud9で書いたコードをHerokuやらなんやらに直接上げるつもりなら普通にCloud9アカウント作っても良いと思いますが、多くの場合どちらかとの連携を使うと思うので素直にGithubでログインしましょう。</p>
-
-<p>ログインしたらダッシュボードに飛ばされます。demo-projectと自分のGithubのプロジェクトがサイドバーにある筈です。</p>
-
-<h2>細かな設定</h2>
-
-<p>demo-projectでも開きましょうか。demo-projectを選択してstart editingです。</p>
-
-<p>IDEというかEditorの設定が出てくる筈です(多分)。キーバインディングとかタブ幅とか設定しましょう。そして、<code>C-h</code>で<code>backward-delete-char</code>出来ないと死んでしまう方のための設定はこちらです。Preferencesのkeybindingsのedit your keymap fileからkeymap fileに飛んで、</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
-</span><span class='line'>    <span class="p">{</span><span class="nt">&quot;command&quot;</span><span class="p">:</span> <span class="s2">&quot;backspace&quot;</span><span class="p">,</span> <span class="nt">&quot;keys&quot;</span><span class="p">:[</span><span class="s2">&quot;Ctrl-H&quot;</span><span class="p">,</span> <span class="s2">&quot;Backspace&quot;</span><span class="p">]},</span>
-</span><span class='line'>    <span class="p">{</span><span class="nt">&quot;command&quot;</span><span class="p">:</span> <span class="s2">&quot;replace&quot;</span><span class="p">,</span> <span class="nt">&quot;keys&quot;</span><span class="p">:[</span><span class="s2">&quot;Alt-Shift-5&quot;</span><span class="p">]}</span>
-</span><span class='line'><span class="p">]</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>と編集、保存しましょう。どうも、キーにコマンドを割り当てるのではなく、コマンドにキーを割り当ててる(?)っぽいのでCtrl-Hを持ってる<code>replace</code>を別のキーにしないと動かないようでした。尚、これはファイルをいじらなくてもsearch keybindingsのところから目的のコマンドを捜して、keystrokeのところをクリックして、割り当てたいキーストロークをすれば割り当て出来るようです。その際、自分のkeymap fileも対応して書き変わります。</p>
-
-<h2>Common Lispのセットアップ</h2>
-
-<p>処理系のインストールはいくつか方法があります。</p>
-
-<ol>
-<li><code>apt-get</code>で入れる</li>
-<li>バイナリを落してくる</li>
-<li><a href="https://github.com/KeenS/CIM">CIM</a>を使う</li>
-</ol>
-
-
-<p>のいずれかの方法で処理系を入れて下さい。<code>apt-get</code>で入れる場合はかなり古いバージョンが入ります。CIMで入れる場合は<code>sudo apt-get install time</code>しておかないとSBCLのビルドが出来ませんでした。他の処理系は確認してないです。どの処理系でも良いんですがとりあえずSBCLを入れたってことで話進めますね。私がそれしか確認してないので。</p>
-
-<p>また、便利のためrlwrapを入れましょう。<code>sudo apt-get install rlwrap</code>です。</p>
-
-<p>そこまでいったらrun scriptを作りましょう。上のメニューバーから[Run]>[Run With]>[New Runner]と進みます。で、run scriptの内容はどの方法で処理系を入れたかに依るのですが、</p>
-
-<p>1の場合</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">{</span>
-</span><span class='line'>    <span class="nt">&quot;cmd&quot;</span> <span class="p">:</span> <span class="p">[</span><span class="s2">&quot;sudo&quot;</span><span class="p">,</span> <span class="s2">&quot;rlwrap&quot;</span><span class="p">,</span> <span class="s2">&quot;sbcl&quot;</span><span class="p">,</span> <span class="s2">&quot;--load&quot;</span><span class="p">,</span> <span class="s2">&quot;$file&quot;</span><span class="p">,</span> <span class="s2">&quot;$args&quot;</span><span class="p">],</span>
-</span><span class='line'>    <span class="nt">&quot;info&quot;</span> <span class="p">:</span> <span class="s2">&quot;Started SBCL :: $project_path$file_name&quot;</span><span class="p">,</span>
-</span><span class='line'>    <span class="nt">&quot;env&quot;</span> <span class="p">:</span> <span class="p">{},</span>
-</span><span class='line'>    <span class="nt">&quot;selector&quot;</span> <span class="p">:</span> <span class="s2">&quot;source.ext&quot;</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>だそうです(<a href="http://cjelupton.wordpress.com/2014/07/24/hacking-lisp-in-the-cloud-pt-3/">引用元</a>)。<code>sudo</code>がついてるのはWEBアプリの場合0.0.0.0で待つためにroot権限が必要だからかな？</p>
-
-<p>これは実行した後でREPLに入ってデバッガとか扱う感じの設定ですね。<br/>
-単に実行したいだけののきは<code>--load</code>の部分を<code>--script</code>に変えれば良さそうです(未確認)<br/>
-2の場合も同じ設定でいけそうな気がします。PATHぐらい必要かな?(未確認)</p>
-
-<p>3の場合</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">{</span>
-</span><span class='line'>    <span class="nt">&quot;cmd&quot;</span> <span class="p">:</span> <span class="p">[</span><span class="s2">&quot;sudo&quot;</span><span class="p">,</span> <span class="s2">&quot;cl&quot;</span><span class="p">,</span> <span class="s2">&quot;$file&quot;</span><span class="p">,</span> <span class="s2">&quot;$args&quot;</span><span class="p">],</span>
-</span><span class='line'>    <span class="nt">&quot;info&quot;</span> <span class="p">:</span> <span class="s2">&quot;Started cl :: $project_path$file_name&quot;</span><span class="p">,</span>
-</span><span class='line'>    <span class="nt">&quot;env&quot;</span> <span class="p">:</span> <span class="p">{</span><span class="nt">&quot;CIM_HOME&quot;</span><span class="p">:</span><span class="s2">&quot;$HOME/.cim&quot;</span><span class="p">,</span><span class="nt">&quot;PATH&quot;</span><span class="p">:</span> <span class="s2">&quot;$CIM_HOME/bin:$PATH&quot;</span><span class="p">,</span> <span class="nt">&quot;LISP_IMPL&quot;</span><span class="p">:</span> <span class="s2">&quot;sbcl&quot;</span><span class="p">},</span>
-</span><span class='line'>    <span class="nt">&quot;selector&quot;</span> <span class="p">:</span> <span class="s2">&quot;source.ext&quot;</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>です。本来CIMは<code>$CIM_HOME/init.*</code>を呼ばないと動かないのですが、ショートカットする環境変数を設定することで無理矢理動かしてます。Cloud9のinitスクリプト(jsファイル)があるようなのでそこでCIMをinitしておけば無理せずとも出来そうですがあまり深く踏み込んでないです。</p>
-
-<p>尚、この設定は実行即終了のものです。実行してREPLに入りたい場合は<code>"cmd"</code>を<code>["cl","-rf", "$file", "$args"]</code>にすると出来ます。</p>
-
-<h2>動かしてみる</h2>
-
-<p>上記のrun scriptを設定、保存したらメニューバーから[File]>[New File]と進み、新しいファイルを作ります。<br/>
-一番簡単に</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='lisp'><span class='line'><span class="p">(</span><span class="nb">write-line</span> <span class="s">&quot;Hello Cloud9&quot;</span><span class="p">)</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>とでも書きましょうか。そして[>Run]してちょいと待つと実行出来る筈です。動かなかったら手動で[Run]>[Run With]>[My Runner]とかしてみましょう。ここまで来ればセットアップ完了です。</p>
-
-<h1>今後の課題というか要調査というか</h1>
-
-<h2>シンタックスハイライト</h2>
-
-<p>Lisp Meet Upでも喋りましたがハイライトが最悪です。ユーザー定義ハイライターも(少くともACEレベルでは)出来そうなのでどうにかする必要があります。</p>
-
-<h2>インデント</h2>
-
-<p>Lispのインデントはタブn個とかで済むようなものじゃなくてどのオペレータの中にいるかに依って変わります。その辺どうにかなって欲しいですね。
-もしかしたらClojureは上手くいってるかもしれないのでそこからインポートしてくれると嬉しいですね。</p>
-
-<h2>swankインターフェース</h2>
-
-<p>initスクリプトがあるって事はもしかしたらIDEもプログラマブルなのかもしれないのでswankインターフェースを作れるかもしれません。</p>
-
-<h2>CIMインターフェース</h2>
-
-<p>initスクリプトがあるって事は(ry。最終目標はメニューバーからどの処理系を使うか選択可能とかで。</p>
-
-<h1>まとめ</h1>
-
-<ul>
-<li>Cloud9を紹介した</li>
-<li>Common Lispのセットアップ方法を示した</li>
-<li>誰か諸問題解決して下さい</li>
-</ul>
-
 ]]></content>
   </entry>
   

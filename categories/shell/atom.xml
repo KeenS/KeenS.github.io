@@ -4,7 +4,7 @@
   <title><![CDATA[Category: shell | κeenのHappy Hacκing Blog]]></title>
   <link href="http://KeenS.github.io/categories/shell/atom.xml" rel="self"/>
   <link href="http://KeenS.github.io/"/>
-  <updated>2014-12-07T23:17:27+09:00</updated>
+  <updated>2014-12-08T06:40:19+09:00</updated>
   <id>http://KeenS.github.io/</id>
   <author>
     <name><![CDATA[κeen]]></name>
@@ -12,6 +12,131 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[割と処理系ポータブルなCommon Lisp実行可能ファイルを作る]]></title>
+    <link href="http://KeenS.github.io/blog/2014/12/08/ge-tochu-li-xi-potaburunacommon-lispshi-xing-ke-neng-huairuwozuo-ru/"/>
+    <updated>2014-12-08T06:17:12+09:00</updated>
+    <id>http://KeenS.github.io/blog/2014/12/08/ge-tochu-li-xi-potaburunacommon-lispshi-xing-ke-neng-huairuwozuo-ru</id>
+    <content type="html"><![CDATA[<p>κeenです。Lisp Advent Calendarはもう枠埋まっちゃったので普通にブログで。</p>
+
+<p>コマンドラインから実行可能なLispファイルをそれなりに多くの処理系で動くように作る話。</p>
+
+<!-- more -->
+
+
+<p>この話はCIMの生い立ちとも関連するんだけどシェルからLispを使いたいときは</p>
+
+<p>```</p>
+
+<h1>!/usr/bin/env sbcl &mdash;script</h1>
+
+<p>&hellip;
+```</p>
+
+<p>なんて書いてた人も多いんじゃないかと思うんだけどこれは色々問題がある。</p>
+
+<ol>
+<li>envは環境に依っては/usr/local/bin/envだったりする</li>
+<li>envは環境に依っては複数引数を取れない。"sbcl &mdash;script"という名前のファイルを捜しにいく</li>
+<li>sbclでしか動かない</li>
+</ol>
+
+
+<p>この問題の扱いは一応解決策がある</p>
+
+<p>```</p>
+
+<h1>!/bin/sh</h1>
+
+<h1>|</h1>
+
+<p>exec sbcl &mdash;script &ldquo;$0&rdquo; &mdash; &ldquo;$@&rdquo;
+|#</p>
+
+<p>&hellip;
+```</p>
+
+<p>3行目の<code>#|</code>がシェルのコメントでありLispのブロックコメントであるのがポイント。</p>
+
+<ol>
+<li>シェルは<code>#!/bin/sh</code>を見てシェルスクリプトとして実行する</li>
+<li>1,3行目はコメントなのでシェルは無視</li>
+<li>4行目でsbclにそのファイルを引数として与えてexecする。execしたあとはシェルには戻らないのでその後何が書いてあっても構わない</li>
+<li>sbclを<code>--script</code>付きで読んでるので1行目の<code>#!</code>で始まる行は無視する</li>
+<li>3~5行目はブロックコメントなのでsbclは無視</li>
+<li>それ以降がLispとして実行される</li>
+</ol>
+
+
+<p>というカラクリになっている。こういうのをピジン言語っていうんだけ？</p>
+
+<p>まあいいや。</p>
+
+<p>ところでこのブロックコメントの中にはシェルスクリプト書き放題だよね？そのシェルスクリプト内でどのLisp使うか決めたらポータブルになりそうじゃない？</p>
+
+<p>こういうのはどう？</p>
+
+<p>```lisp</p>
+
+<h1>!/bin/sh</h1>
+
+<h1>|</h1>
+
+<p>run_if_exists(){
+ command -v $1 > /dev/null 2>&amp;1 &amp;&amp; exec &ldquo;$@&rdquo;
+}
+ run_if_exists sbcl &mdash;noinform &mdash;no-sysinit &mdash;no-userinit &mdash;script &ldquo;$0&rdquo; &mdash; &ldquo;$@&rdquo;
+ run_if_exists clisp -norc &mdash;quiet &mdash;silent -on-error exit  &ldquo;$0&rdquo; &mdash; &ldquo;$@&rdquo;
+ run_if_exists ecl -norc -q -shell &ldquo;$0&rdquo; &mdash; &ldquo;$@&rdquo;
+ run_if_exists mkcl -norc -q -shell &ldquo;$0&rdquo; &mdash; &ldquo;$@&rdquo;
+ run_if_exists alisp -qq &ndash;#! &ldquo;$0&rdquo; &mdash; &ldquo;$@&rdquo;
+|#</p>
+
+<p>(write-line (lisp-implementation-type))
+(force-output)
+```</p>
+
+<p>cclとabclは1行目のシェバンを読み飛ばせなかった&amp;評価結果をエコーバックしない方法が見当らなかったからパス。CMUCLは自分の環境で動かないから検証出来てない。</p>
+
+<p>これでポータブルに実行は可能。コマンドライン引数の扱いとかはライブラリを頼ってくれ。因みにCIMでは</p>
+
+<p>```lisp
+  #+allegro  (cdr (system:command-line-arguments))
+  #+sbcl (do<em>  ((var sb-ext:</em>posix-argv* (cdr list))</p>
+
+<pre><code>            (list var var))
+           ((string= (car list) "--") (return (cdr list))))
+</code></pre>
+
+<p>  #+clisp ext:<em>args</em>
+  #+ecl (do*  ((var (si:command-args) (cdr list))</p>
+
+<pre><code>           (list var var))
+          ((string= (car list) "--") (return (cdr list))))
+</code></pre>
+
+<p>  #+abcl extensions:<em>command-line-argument-list</em>
+  #+gcl (do<em>  ((var si::</em>command-args* (cdr list))</p>
+
+<pre><code>           (list var var))
+          ((string= (car list) "--") (return (cdr list))))
+</code></pre>
+
+<p>  #+cmu ext:<em>command-line-words</em>
+  #+ccl ccl:<em>unprocessed-command-line-arguments</em>
+  #+mkcl (do*  ((var (si:command-args) (cdr list))</p>
+
+<pre><code>           (list var var))
+          ((string= (car list) "--") (return (cdr list))))
+</code></pre>
+
+<p>  #+lispworks system:<em>line-arguments-list</em>
+```</p>
+
+<p>としている。参考までに。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[.emacsの整理をした話 + EmacsとViとShellとLispを悪魔合体させたら超絶便利だった]]></title>
