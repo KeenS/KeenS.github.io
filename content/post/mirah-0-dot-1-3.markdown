@@ -1,7 +1,7 @@
 ---
 type: post
 title: "Mirah 0.1.3がリリースされました"
-date: 2014-08-07
+date: 2014-08-07T23:52:15Z
 comments: true
 categories: [Mirah, Java, Ruby]
 ---

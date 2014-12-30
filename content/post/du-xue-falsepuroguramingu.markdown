@@ -1,7 +1,7 @@
 ---
 type: post
 title: "独学のプログラミング"
-date: 2014-12-18
+date: 2014-12-18T23:51:27Z
 comments: true
 categories: [ポエム]
 ---

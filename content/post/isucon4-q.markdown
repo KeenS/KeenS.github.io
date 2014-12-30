@@ -1,7 +1,7 @@
 ---
 type: post
 title: "#ISUCON 4 予選に学生枠で参加してきました"
-date: 2014-09-30
+date: 2014-09-30T00:51:30Z
 comments: true
 categories: [ISUCON, Ruby]
 ---

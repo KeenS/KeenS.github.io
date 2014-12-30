@@ -1,7 +1,7 @@
 ---
 type: post
 title: "Rails Tutorial"
-date: 2013-09-03
+date: 2013-09-03T22:15Z
 comments: true
 sharing: true
 categories: [Git, Heroku, Ruby, Ruby on Rails, Web Development]

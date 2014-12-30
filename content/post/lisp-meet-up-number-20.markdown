@@ -1,7 +1,7 @@
 ---
 type: post
 title: "Lisp Meet Up #20でLTしてきました"
-date: 2014-09-30
+date: 2014-09-30T09:35:05Z
 comments: true
 categories: [lisp, scheme, picrin, lisp meet up]
 ---

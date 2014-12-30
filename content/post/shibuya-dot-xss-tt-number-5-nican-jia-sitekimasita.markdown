@@ -1,7 +1,7 @@
 ---
 type: post
 title: "Shibuya.XSS TT #5 に参加してきました"
-date: 2014-08-07
+date: 2014-08-07T23:12:34Z
 comments: true
 categories: [Security, JavaScript]
 ---

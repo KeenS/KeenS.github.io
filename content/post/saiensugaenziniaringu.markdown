@@ -1,7 +1,7 @@
 ---
 type: post
 title: "サイエンスかエンジニアリングか"
-date: 2014-12-18
+date: 2014-12-18T23:03:41Z
 comments: true
 categories: [ポエム]
 ---
