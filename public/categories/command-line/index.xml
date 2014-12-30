@@ -1,0 +1,1581 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+      <title>Command-Line on κeenのHappy Hacκing Blog </title>
+      <generator uri="https://hugo.spf13.com">Hugo</generator>
+    <link>http://KeenS.github.io/categories/command-line/index.xml/</link>
+    <language>en-us</language>
+    
+    
+    <updated>Mon, 08 Dec 2014 00:00:00 UTC</updated>
+    
+    <item>
+      <title>割と処理系ポータブルなCommon Lisp実行可能ファイルを作る</title>
+      <link>http://keens.github.io/blog/2014/12/08/ge-tochu-li-xi-potaburunacommon-lispshi-xing-ke-neng-huairuwozuo-ru</link>
+      <pubDate>Mon, 08 Dec 2014 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/blog/2014/12/08/ge-tochu-li-xi-potaburunacommon-lispshi-xing-ke-neng-huairuwozuo-ru</guid>
+      <description>&lt;p&gt;κeenです。Lisp Advent Calendarはもう枠埋まっちゃったので普通にブログで。&lt;/p&gt;
+
+&lt;p&gt;コマンドラインから実行可能なLispファイルをそれなりに多くの処理系で動くように作る話。&lt;/p&gt;
+
+&lt;p&gt;この話はCIMの生い立ちとも関連するんだけどシェルからLispを使いたいときは&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;#!/usr/bin/env sbcl --script
+
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;なんて書いてた人も多いんじゃないかと思うんだけどこれは色々問題がある。&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;envは環境に依っては/usr/local/bin/envだったりする&lt;/li&gt;
+&lt;li&gt;envは環境に依っては複数引数を取れない。&amp;rdquo;sbcl &amp;ndash;script&amp;rdquo;という名前のファイルを捜しにいく&lt;/li&gt;
+&lt;li&gt;sbclでしか動かない&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;この問題の扱いは一応解決策がある&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;#!/bin/sh
+
+#|
+exec sbcl --script &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
+|#
+
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;3行目の&lt;code&gt;#|&lt;/code&gt;がシェルのコメントでありLispのブロックコメントであるのがポイント。&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;シェルは&lt;code&gt;#!/bin/sh&lt;/code&gt;を見てシェルスクリプトとして実行する&lt;/li&gt;
+&lt;li&gt;1,3行目はコメントなのでシェルは無視&lt;/li&gt;
+&lt;li&gt;4行目でsbclにそのファイルを引数として与えてexecする。execしたあとはシェルには戻らないのでその後何が書いてあっても構わない&lt;/li&gt;
+&lt;li&gt;sbclを&lt;code&gt;--script&lt;/code&gt;付きで読んでるので1行目の&lt;code&gt;#!&lt;/code&gt;で始まる行は無視する&lt;/li&gt;
+&lt;li&gt;3~5行目はブロックコメントなのでsbclは無視&lt;/li&gt;
+&lt;li&gt;それ以降がLispとして実行される&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;というカラクリになっている。こういうのをピジン言語っていうんだけ？&lt;/p&gt;
+
+&lt;p&gt;まあいいや。&lt;/p&gt;
+
+&lt;p&gt;ところでこのブロックコメントの中にはシェルスクリプト書き放題だよね？そのシェルスクリプト内でどのLisp使うか決めたらポータブルになりそうじゃない？&lt;/p&gt;
+
+&lt;p&gt;こういうのはどう？&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;#!/bin/sh
+
+#|
+run_if_exists(){
+ command -v $1 &amp;gt; /dev/null 2&amp;gt;&amp;amp;1 &amp;amp;&amp;amp; exec &amp;quot;$@&amp;quot;
+}
+ run_if_exists sbcl --noinform --no-sysinit --no-userinit --script &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
+ run_if_exists clisp -norc --quiet --silent -on-error exit  &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
+ run_if_exists ecl -norc -q -shell &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
+ run_if_exists mkcl -norc -q -shell &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
+ run_if_exists alisp -qq -#! &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
+|#
+
+(write-line (lisp-implementation-type))
+(force-output)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;cclとabclは1行目のシェバンを読み飛ばせなかった&amp;amp;評価結果をエコーバックしない方法が見当らなかったからパス。CMUCLは自分の環境で動かないから検証出来てない。&lt;/p&gt;
+
+&lt;p&gt;これでポータブルに実行は可能。コマンドライン引数の扱いとかはライブラリを頼ってくれ。因みにCIMでは&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;  #+allegro  (cdr (system:command-line-arguments))
+  #+sbcl (do*  ((var sb-ext:*posix-argv* (cdr list))
+                (list var var))
+               ((string= (car list) &amp;quot;--&amp;quot;) (return (cdr list))))
+  #+clisp ext:*args*
+  #+ecl (do*  ((var (si:command-args) (cdr list))
+               (list var var))
+              ((string= (car list) &amp;quot;--&amp;quot;) (return (cdr list))))
+  #+abcl extensions:*command-line-argument-list*
+  #+gcl (do*  ((var si::*command-args* (cdr list))
+               (list var var))
+              ((string= (car list) &amp;quot;--&amp;quot;) (return (cdr list))))
+  #+cmu ext:*command-line-words*
+  #+ccl ccl:*unprocessed-command-line-arguments*
+  #+mkcl (do*  ((var (si:command-args) (cdr list))
+               (list var var))
+              ((string= (car list) &amp;quot;--&amp;quot;) (return (cdr list))))
+  #+lispworks system:*line-arguments-list*
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;としている。参考までに。&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Shell Scriptでオプションをパースするときの必勝法</title>
+      <link>http://keens.github.io/blog/2014/02/19/option-parse-for-shell</link>
+      <pubDate>Wed, 19 Feb 2014 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/blog/2014/02/19/option-parse-for-shell</guid>
+      <description>&lt;p&gt;κeenです。CIMの解説 実装編の執筆はもうちょい掛かりそうです。だいたいコードが落ち着いたら書きます。&lt;/p&gt;
+
+&lt;p&gt;今回は長いオプションと短いオプションをシェルスクリプトでパースするときの話です。&lt;/p&gt;
+
+&lt;p&gt;シェルスクリプトでは&lt;code&gt;case&lt;/code&gt;を使う方法と&lt;code&gt;getopts&lt;/code&gt;を使う方法があります。&lt;code&gt;case&lt;/code&gt;だと長いオプションと短いオプションを扱えるものの短いオプションをまとめるのに苦労し、&lt;code&gt;getopts&lt;/code&gt;だと短いオプションをまとめられるものの長いオプションを扱えません。&lt;/p&gt;
+
+&lt;p&gt;そこで解決策。&lt;code&gt;--foo ARG&lt;/code&gt; &lt;code&gt;-f ARG&lt;/code&gt; &lt;code&gt;-h&lt;/code&gt;をパースし、他のオプションも許可（無視）、&lt;code&gt;--&lt;/code&gt;でパースを止めるとします。&lt;/p&gt;
+
+&lt;figure class=&#34;code&#34;&gt;&lt;figcaption&gt;&lt;span&gt;&lt;/span&gt;&lt;/figcaption&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;3&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;4&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;5&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;6&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;7&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;8&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;9&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;10&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;11&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;12&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;13&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;14&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;15&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;16&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;17&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;18&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;sh&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;k&#34;&gt;while&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt; &lt;span class=&#34;s2&#34;&gt;&#34;$#&#34;&lt;/span&gt; -gt 0 &lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;;&lt;span class=&#34;k&#34;&gt;do&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;k&#34;&gt; &lt;/span&gt;&lt;span class=&#34;nv&#34;&gt;ARG&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;=&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;&#34;$1&#34;&lt;/span&gt;;&lt;span class=&#34;nb&#34;&gt;shift&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;nb&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;case&lt;/span&gt; &lt;span class=&#34;s2&#34;&gt;&#34;$ARG&#34;&lt;/span&gt; in
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; --foo&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt; do_something_with &lt;span class=&#34;s2&#34;&gt;&#34;$ARG&#34;&lt;/span&gt;;;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; --&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;nb&#34;&gt;break&lt;/span&gt;;;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; --*&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt; ;;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; -*&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; &lt;span class=&#34;nv&#34;&gt;OPTIND&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;=&lt;/span&gt;1
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; &lt;span class=&#34;k&#34;&gt;while &lt;/span&gt;&lt;span class=&#34;nb&#34;&gt;getopts&lt;/span&gt; :f:h OPT &lt;span class=&#34;s2&#34;&gt;&#34;$ARG&#34;&lt;/span&gt;; &lt;span class=&#34;k&#34;&gt;do&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;k&#34;&gt; case&lt;/span&gt; &lt;span class=&#34;s2&#34;&gt;&#34;$OPT&#34;&lt;/span&gt; in
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; f&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt; do_something_with &lt;span class=&#34;s2&#34;&gt;&#34;$OPTARG&#34;&lt;/span&gt;;;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; h&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt; do_something;;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; &lt;span class=&#34;k&#34;&gt;esac&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;k&#34;&gt; done&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; ;;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;  
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; &lt;span class=&#34;k&#34;&gt;esac&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;k&#34;&gt;done&lt;/span&gt;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+
+&lt;p&gt;単純に&lt;code&gt;case&lt;/code&gt;と&lt;code&gt;getopts&lt;/code&gt;を組み合わせます。ポイントは&lt;code&gt;-*)&lt;/code&gt;の節の&lt;code&gt;OPTIND=1&lt;/code&gt;と&lt;code&gt;getopts&lt;/code&gt;の第3引数でしょうか。&lt;/p&gt;
+
+&lt;p&gt;因みにこの例だと引数を消費します。引数を消費したくなければ&lt;/p&gt;
+
+&lt;figure class=&#34;code&#34;&gt;&lt;figcaption&gt;&lt;span&gt;&lt;/span&gt;&lt;/figcaption&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;sh&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;k&#34;&gt;while&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt; &lt;span class=&#34;s2&#34;&gt;&#34;$#&#34;&lt;/span&gt; -gt 0 &lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;;&lt;span class=&#34;k&#34;&gt;do&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;k&#34;&gt; &lt;/span&gt;&lt;span class=&#34;nv&#34;&gt;ARG&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;=&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;&#34;$1&#34;&lt;/span&gt;;&lt;span class=&#34;nb&#34;&gt;shift&lt;/span&gt;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+
+&lt;p&gt;を&lt;/p&gt;
+
+&lt;figure class=&#34;code&#34;&gt;&lt;figcaption&gt;&lt;span&gt;&lt;/span&gt;&lt;/figcaption&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;sh&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;k&#34;&gt;for &lt;/span&gt;ARG;do
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+
+&lt;p&gt;に書き換えれば良く、&lt;code&gt;--&lt;/code&gt;でパースを止めたくなければ&lt;code&gt;--) break;;&lt;/code&gt;の節を無くせば良く、&lt;/p&gt;
+
+&lt;p&gt;他のオプションを許したくなければ&lt;code&gt;--*);;&lt;/code&gt;の節を&lt;code&gt;--*)exit 1;;&lt;/code&gt;などにし、&lt;code&gt;getopts&lt;/code&gt;の引数文字列&lt;code&gt;:f:h&lt;/code&gt;の&lt;code&gt;:&lt;/code&gt;をとって&lt;code&gt;getopts fh ...&lt;/code&gt;とすれば良いです。&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>FreeBSDのmanページを手動インストールする</title>
+      <link>http://keens.github.io/blog/2014/02/01/freebsd-manpage</link>
+      <pubDate>Sat, 01 Feb 2014 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/blog/2014/02/01/freebsd-manpage</guid>
+      <description>&lt;p&gt;FreeBSD10をインストールするときにdocをインストールしなかったら後で困ったのでメモ。環境はUbuntu13.10上のkvmに入れたFreeBSD10です。&lt;/p&gt;
+
+&lt;p&gt;本来なら&lt;code&gt;sudo bsdconfig&lt;/code&gt;(9.xまでは&lt;code&gt;sudo sysinstall&lt;/code&gt;)でメニューを選んでいけばインストールできるのですが、&lt;code&gt;ping&lt;/code&gt;か何かがおかしくてサーバーの名前解決ができない。&lt;code&gt;ping FreeBSD.org&lt;/code&gt;や&lt;code&gt;ping 4.4.4.4&lt;/code&gt;が返ってこない。しかし&lt;code&gt;curl&lt;/code&gt;などは普通に動きます。&lt;/p&gt;
+
+&lt;p&gt;とりあえず&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ftp anonymous@ftp.jp.freebsd.org
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;でログインし、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;ftp&amp;gt; cd pub/FreeBSD/releases/i386/10.0-RELEASE
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と進んで&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;ftp&amp;gt; get doc.txz
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;します。んで&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;ftp&amp;gt; bye
+$ unxz -cd doc.txz | sudo tar xf - -C /
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;でインストール完了。&lt;/p&gt;
+
+&lt;p&gt;普通に配置するだけで良いんですね。mandbとかあるのかと思ってた。&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>CIMの解説をしてみる コマンド編</title>
+      <link>http://keens.github.io/blog/2014/01/27/cim-explanation</link>
+      <pubDate>Mon, 27 Jan 2014 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/blog/2014/01/27/cim-explanation</guid>
+      <description>
+
+&lt;p&gt;先日LTで紹介したCIMが思いの外反響を呼んでる(Githubのstarが15)ので解説でもしてみます。&lt;/p&gt;
+
+&lt;p&gt;コマンド編の次は実装編です。これでバグにエンカウントしたときの調査とか完璧ですね。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_0&#34;&gt;インストーラ&lt;/h1&gt;
+
+&lt;p&gt;READMEにあるように&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;curl https://raw.github.com/KeenS/CIM/master/scripts/cim_installer | /bin/sh
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;で&lt;code&gt;~/.cim/&lt;/code&gt;にインストールできます。&lt;s&gt;パスを変えたければ&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;CIM_HOME=/path/to/cim curl https://raw.github.com/KeenS/CIM/master/scripts/cim_installer | /bin/sh
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;でOK。Cシェル系なら&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;env CIM_HOME /path/to/cim curl https://raw.github.com/KeenS/CIM/master/scripts/cim_installer | /bin/sh
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;でしょうか。&lt;/s&gt;&lt;/p&gt;
+
+&lt;p&gt;2014-10-20更新&lt;br /&gt;
+CIM_HOMEの設定方法が間違ってました。正しくは&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;curl https://raw.github.com/KeenS/CIM/master/scripts/cim_installer | CIM_HOME=/path/to/cim /bin/sh
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;で、Cシェル系なら&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;curl https://raw.github.com/KeenS/CIM/master/scripts/cim_installer | env CIM_HOME /path/to/cim /bin/sh
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;です&lt;br /&gt;
+更新ここまで&lt;/p&gt;
+
+&lt;p&gt;ここでは&lt;code&gt;curl&lt;/code&gt;を使ってますが&lt;code&gt;wget -O -&lt;/code&gt;とか&lt;code&gt;fetch -o -&lt;/code&gt;など標準出力に吐ければなんでも良いです。&lt;/p&gt;
+
+&lt;p&gt;あ、でも&lt;code&gt;CIM_HOME&lt;/code&gt;を指定してインストールしたときにバグがある気がしてきました。今から直します。&lt;/p&gt;
+
+&lt;p&gt;CIMを使うにはシェルの起動時に初期化が必要ですが、インストーラが初期化ファイルを読みにいく処理を&lt;code&gt;.*rc&lt;/code&gt;に書き出してくれます。Bourne Shellは&lt;code&gt;.profile&lt;/code&gt;ですね。&lt;br /&gt;
+書き出すファイルは&lt;code&gt;$SHELL&lt;/code&gt;を見てます。&lt;code&gt;csh&lt;/code&gt;、&lt;code&gt;tcsh&lt;/code&gt;、&lt;code&gt;sh&lt;/code&gt;、&lt;code&gt;bash&lt;/code&gt;、&lt;code&gt;zsh&lt;/code&gt;に対応してます。&lt;/p&gt;
+
+&lt;p&gt;あと&lt;code&gt;~/.emacs.d/eshell/&lt;/code&gt;が存在したら&lt;code&gt;~/.emacs.d/eshell/profile&lt;/code&gt;にも初期化処理を書き出します。一時期パスが間違ってて&lt;code&gt;~/.emacs.d/profile&lt;/code&gt;に書き出してました。ごめんなさい。&lt;br /&gt;
+vimshell(だっけ？)でも初期化さえしてしまえば使えると思うので誰か初期化処理書いて下さい。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_1&#34;&gt;&lt;code&gt;cim&lt;/code&gt;&lt;/h1&gt;
+
+&lt;p&gt;とりあえず&lt;code&gt;help&lt;/code&gt;見ておきましょう。&lt;/p&gt;
+
+&lt;figure class=&#34;code&#34;&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;3&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;4&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;5&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;6&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;7&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;8&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;9&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;10&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;11&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;12&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;13&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;14&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;15&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;16&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;17&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;18&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;19&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;&#34;&gt;&lt;span class=&#34;line&#34;&gt;$ cim help
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;CIM -- Common Lisp Implementation Manager
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Commands currently available
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;install &amp;lt;impl[-version]&amp;gt; ;; Install the impl.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;use &amp;lt;impl[-version]&amp;gt; ;; Use specified impl as `cl&#39; command&#39;s backend.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;resume [rm] [resume..] ;; Resume suspended installation(s) or give it up.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;list &amp;lt;command&amp;gt; ;; List available target of &amp;lt;command&amp;gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;reinstall &amp;lt;impl[-version]&amp;gt; ;; Reinstall the impl.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;clean &amp;lt;impl&amp;gt;|all ;; Clean downloaded archive and src of the impl.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;distclean &amp;lt;impl&amp;gt;|all ;; Clean built dists.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;uninstall &amp;lt;impl[-version]&amp;gt; ;; Uninstall the impl.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;purge &amp;lt;impl&amp;gt;|all ;; Just clean and uninstall the impl.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;info ;; Display current state.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;get ;; Upgrade cim itself.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;version ;; Show the version
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;help &amp;lt;command&amp;gt; ;; Show help for &amp;lt;command&amp;gt;. If no commands are specified, show this help.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;If you want detailed help, type `cim help &amp;lt;command&amp;gt;&#39;.&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+## `cim install`
+&lt;figure class=&#34;code&#34;&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;3&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;4&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;5&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;6&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;7&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;8&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;9&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;10&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;11&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;12&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;13&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;14&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;15&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;16&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;17&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;18&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;19&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;20&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;21&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;&#34;&gt;&lt;span class=&#34;line&#34;&gt;$ cim help install
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Usage:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; cim install &amp;lt;impl[-version]&amp;gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; 
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Description:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Install the given lisp implementation to cim directory.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;If version is not specified, install the latest version.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;If you want to pass specific options to &#39;configure&#39; script,
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;prefix &#39;flags=&#39;.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Examples:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; # install sbcl-1.1.14
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; cim install sbcl-1.1.14
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;  
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; # install latest clisp with option.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; flags=&#39;--with-libsigsegv-prefix=/usr/local&#39; cim install clisp
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;To show available lisp implementations, type &#39;cim list install&#39;.
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+
+&lt;p&gt;インストールします。はい。&lt;code&gt;&amp;lt;impl[-version]&amp;gt;&lt;/code&gt;ってのは&lt;code&gt;sbcl&lt;/code&gt;とか&lt;code&gt;clisp-2.48&lt;/code&gt;とかですね。バージョンを指定しなかったら最新版になります。&lt;code&gt;cim list install&lt;/code&gt;でインストール可能なものを表示しますが載ってない古いバージョンとかもインストールできる筈です。多分。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;configure&lt;/code&gt;スクリプトに渡すフラグを指定したいときは&lt;code&gt;flags=&#39;flag....&#39; cim install&lt;/code&gt;とします。ヘルプにあるように&lt;code&gt;libsigsegv&lt;/code&gt;のパスを指定しないとFreeBSDでclispをインストールできなかったので用意しました。&lt;/p&gt;
+
+&lt;p&gt;Allegroはライセンス表示した方が良いのかなーとか考えてます。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_2&#34;&gt;&lt;code&gt;cim use&lt;/code&gt;&lt;/h2&gt;
+
+&lt;figure class=&#34;code&#34;&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;3&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;4&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;5&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;6&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;7&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;8&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;9&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;10&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;11&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;12&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;13&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;14&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;15&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;16&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;17&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;18&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;19&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;20&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;21&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;22&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;23&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;&#34;&gt;&lt;span class=&#34;line&#34;&gt;Usage:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; cim use &amp;lt;impl[-version]&amp;gt; [--default]
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Description:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Use &amp;lt;impl&amp;gt; as background for &#39;cl&#39; command. It also affects bare lisp command.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;If version is not given, use latest version.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;If --default is given, use the specified implementation at initial state.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Examples:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; # use the latest sbcl
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; cim use sbcl
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; sbcl --version
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; -&amp;gt; SBCL 1.1.14
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; # use old sbcl
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; cim use sbcl-1.1.10
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; sbcl --version
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; -&amp;gt; SBCL 1.1.10
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; # use ccl-1.9 and set it default
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; cim use ccl-1.9 --default
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+
+&lt;p&gt;&lt;code&gt;cl&lt;/code&gt;コマンドのバックエンドの切り替えと処理系のバージョンの両方を切り替えます。処理系の指定の仕方は&lt;code&gt;install&lt;/code&gt;に同じ。じゃなかった。&lt;code&gt;install&lt;/code&gt;に加えて&lt;code&gt;/bin:/usr/bin:/usr/local/bin&lt;/code&gt;にあるものを&lt;code&gt;xxx-system&lt;/code&gt;として指定できます。&lt;code&gt;sbcl-system&lt;/code&gt;とか。&lt;/p&gt;
+
+&lt;p&gt;例えば&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;cim use clisp-2.48
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ってやると&lt;code&gt;cl&lt;/code&gt;コマンドがバックエンドとしてclispのバージョン2.48を使うようになりますし、&lt;code&gt;clisp&lt;/code&gt;コマンドのバージョンも2.48になります。この&lt;code&gt;clisp&lt;/code&gt;の部分はリンクを貼り替えてて、一つのシェルで変更すると他のシェルにも影響が及ぶ問題があるのでそのうち直します。これ結構面倒なのでそのうちです。&lt;br /&gt;
+clisp = clisp-2.48な状態で&lt;code&gt;cim use sbcl&lt;/code&gt;するとclisp = clisp-2.48なまま&lt;code&gt;cl&lt;/code&gt;のバックエンドがsbclになります。上手く使って下さい。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;--default&lt;/code&gt;を付けると次回からのデフォルト値を指定したものにしつつ&lt;code&gt;cim use&lt;/code&gt;します。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_3&#34;&gt;&lt;code&gt;cim resume&lt;/code&gt;&lt;/h2&gt;
+
+&lt;figure class=&#34;code&#34;&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;3&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;4&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;5&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;6&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;7&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;8&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;9&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;10&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;11&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;12&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;13&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;14&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;15&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;16&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;17&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;18&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;&#34;&gt;&lt;span class=&#34;line&#34;&gt;$ cim help resume
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Usage:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; cim resume [rm] &amp;lt;impl[-version]&amp;gt; | all
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Description:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Resume interrupted installation of &amp;lt;impl&amp;gt;. If &amp;lt;version&amp;gt; is not given, the latest version is used.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;If &#39;rm&#39; is given, remove &amp;lt;impl&amp;gt; from &#39;resume&#39; list.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;If target is &#39;all&#39;, do on all the available target.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Examples:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; # resume the installation of clisp with configure flags
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; flags=&#39;--with-libsigsegv-path=/usr/local&#39; cim resume clisp
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; # remove all the available target.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; cim resume rm all
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+
+&lt;p&gt;&lt;code&gt;cim install&lt;/code&gt;がエラー終了したり&lt;code&gt;Ctrl-C&lt;/code&gt;で中断したりしたやつを再開してくれるコマンドです。&lt;code&gt;cim install sbcl&lt;/code&gt;を中断したなら&lt;code&gt;cim resume sbcl&lt;/code&gt;で再開できます。&lt;code&gt;cim resume all&lt;/code&gt;で中断された全てのインストールを再開します。終了ステータスは再開してもまたエラーで終了したやつの数になります。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;cim resume rm sbcl&lt;/code&gt;だと&lt;code&gt;cim list resume&lt;/code&gt;の結果から&lt;code&gt;sbcl&lt;/code&gt;を削除できます。&lt;code&gt;resume&lt;/code&gt;はしませんよ。&lt;code&gt;cim resume rm all&lt;/code&gt;とかも可能です。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_4&#34;&gt;&lt;code&gt;cim list&lt;/code&gt;&lt;/h2&gt;
+
+&lt;figure class=&#34;code&#34;&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;3&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;4&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;5&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;6&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;7&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;8&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;9&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;10&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;11&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;12&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;13&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;14&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;15&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;16&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;17&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;18&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;19&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;&#34;&gt;&lt;span class=&#34;line&#34;&gt;$ cim help list
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Usage:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; cim list &amp;lt;subcommand&amp;gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Description:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;List available target for subcommand.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Examples:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; # list available lisp implementation to install
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; cim list install
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; # show available target for list
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; cim list list
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; # targets for subsubcommands are also available
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; cim list resume rm
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+
+&lt;p&gt;さっきから出てきてるので分かるかと思いますが、可能なターゲットを表示します。将来的には&lt;code&gt;zsh&lt;/code&gt;の補完候補にも使うつもりです。そのときは&lt;code&gt;-b, --batch&lt;/code&gt;オプションでhuman readableかmachine readableかを分けようかなと。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_5&#34;&gt;&lt;code&gt;cim reinstall&lt;/code&gt;&lt;/h2&gt;
+
+&lt;figure class=&#34;code&#34;&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;3&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;4&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;5&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;6&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;7&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;8&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;9&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;10&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;11&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;12&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;13&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;14&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;15&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;16&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;17&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;18&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;19&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;20&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;&#34;&gt;&lt;span class=&#34;line&#34;&gt;$ cim help reinstall
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Usage:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; cim reinstall &amp;lt;impl[-version]&amp;gt; | all
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; 
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Description:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Force install already installed implementaion(s). Downloaded archives are resued if available
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;If version is not specified, install the latest version.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;If target is &#39;all&#39;, do on all the available targets.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Examples:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; # reinstall sbcl-1.1.14
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; cim reinstall sbcl-1.1.14
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;  
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; # reinstall all installed lisp impls
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; cim reinstall all
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;To show available lisp implementations, type &#39;cim list reinstall&#39;.
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+
+&lt;p&gt;&lt;code&gt;cim install&lt;/code&gt;は既にインストールされているものはインストールできないのですが、&lt;code&gt;reinstall&lt;/code&gt;を使えば可能です。ダウンロードしたアーカイブがあればそれを使います。なければダウンロードから始めます。&lt;code&gt;all&lt;/code&gt;は察しのようにインストール済のものを全て&lt;code&gt;reinstall&lt;/code&gt;します。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_6&#34;&gt;&lt;code&gt;cim clean&lt;/code&gt;&lt;/h2&gt;
+
+&lt;figure class=&#34;code&#34;&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;3&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;4&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;5&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;6&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;7&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;8&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;9&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;10&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;11&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;12&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;13&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;14&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;15&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;16&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;17&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;18&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;19&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;20&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;&#34;&gt;&lt;span class=&#34;line&#34;&gt;$ cim help clean
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Usage:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; cim clean &amp;lt;impl[-version]&amp;gt; | all
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; 
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Description:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Remove donwloaded archives and extracted sources of the given lisp implementations.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;If version is not specified, install the latest version.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;If target is &#39;all&#39;, do on all the available targets.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Examples:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; # clean sbcl-1.1.14
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; cim clean sbcl-1.1.14
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;  
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; # clean all installed lisp impls
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; cim clean all
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;To show available lisp implementations, type &#39;cim list clean&#39;.
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+
+&lt;p&gt;&lt;code&gt;cim install&lt;/code&gt;は基本的に不要なものも削除しないので、それが嫌なら&lt;code&gt;clean&lt;/code&gt;を使いましょうというスタンスです。アーカイブとソースを削除します。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_7&#34;&gt;&lt;code&gt;cim distclean&lt;/code&gt;&lt;/h2&gt;
+
+&lt;figure class=&#34;code&#34;&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;3&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;4&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;5&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;6&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;7&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;8&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;9&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;10&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;11&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;12&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;13&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;14&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;15&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;16&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;17&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;18&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;19&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;20&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;&#34;&gt;&lt;span class=&#34;line&#34;&gt;$cim help distclean
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Usage:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; cim distclean &amp;lt;impl[-version]&amp;gt; | all
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; 
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Description:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Clean built files of the given lisp implementation. It doesn&#39;t mean uninstall.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;If version is not specified, install the latest version.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;If target is &#39;all&#39;, do on all the available targets.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Examples:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; # distclean sbcl-1.1.14
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; cim distclean sbcl-1.1.14
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;  
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; # distclean all installed lisp impls
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; cim distclean all
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;To show available lisp implementations, type &#39;cim list distclean&#39;.
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+
+&lt;p&gt;&lt;code&gt;cim clean&lt;/code&gt;より控えめなコマンドです。コンパイルするときに&lt;code&gt;make&lt;/code&gt;で生成されたファイルを削除します。&lt;code&gt;make clean&lt;/code&gt;的な。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_8&#34;&gt;&lt;code&gt;cim uninstall&lt;/code&gt;&lt;/h2&gt;
+
+&lt;figure class=&#34;code&#34;&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;3&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;4&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;5&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;6&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;7&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;8&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;9&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;10&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;11&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;12&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;13&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;14&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;15&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;16&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;17&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;18&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;19&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;20&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;&#34;&gt;&lt;span class=&#34;line&#34;&gt;$ cim help uninstall
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Usage:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; cim uninstall &amp;lt;impl[-version]&amp;gt; | all
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; 
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Description:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Uninstall the given lisp implementaion(s). It does&#39;t remove donwloaded archives and extracted sources.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;If version is not specified, install the latest version.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;If target is &#39;all&#39;, do on all the available targets.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Examples:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; # uninstall sbcl-1.1.14
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; cim uninstall sbcl-1.1.14
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;  
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; # uninstall all installed lisp impls
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; cim uninstall all
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;To show available lisp implementations, type &#39;cim list uninstall&#39;.
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+
+&lt;p&gt;アンインストールします。はい。ただしダウンロードしたアーカイブとソースは削除しません。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_9&#34;&gt;&lt;code&gt;cim purge&lt;/code&gt;&lt;/h2&gt;
+
+&lt;figure class=&#34;code&#34;&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;3&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;4&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;5&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;6&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;7&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;8&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;9&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;10&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;11&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;12&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;13&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;14&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;15&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;16&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;&#34;&gt;&lt;span class=&#34;line&#34;&gt;$ cim help purge
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Usage:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; cim purge &amp;lt;impl[-version]&amp;gt; | all
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Description:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Uninstall and clean up downloaded files of the given lisp implementation.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;This command is equivalent to &#39;clean&#39; and &#39;uninstall&#39;.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Examples:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; # purge the latest sbcl
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; cim purge sbcl
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;To show available target for &#39;purge&#39;, type &#39;cim list purge&#39;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+
+&lt;p&gt;&lt;code&gt;uninstall&lt;/code&gt;のアーカイブとソースを削除する版です。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_10&#34;&gt;&lt;code&gt;cim info&lt;/code&gt;&lt;/h2&gt;
+
+&lt;figure class=&#34;code&#34;&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;3&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;4&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;5&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;6&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;7&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;8&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;9&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;10&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;11&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;12&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;13&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;&#34;&gt;&lt;span class=&#34;line&#34;&gt;$ cim help info
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Usage:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; cim info
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Description:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Display information for current cim. It includes environment variables that cim uses, what current and default lisp implementation is, what version of each implementation is used, and where system lisp is.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Example:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; # display info
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; cim info
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+
+&lt;p&gt;現在の状態を表示します。こんな感じ。&lt;/p&gt;
+
+&lt;figure class=&#34;code&#34;&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;3&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;4&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;5&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;6&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;7&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;8&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;9&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;10&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;11&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;12&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;13&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;14&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;15&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;16&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;17&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;&#34;&gt;&lt;span class=&#34;line&#34;&gt;$ cim info
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;CIM_ID = 22176
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;CIM_HOME = /home/kim/.cim
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;current lisp = sbcl-system
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;default lisp = sbcl-system
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;abcl = abcl-1.2.1
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;alisp = alisp-9.0
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;ccl = ccl-1.9
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;clisp = clisp-2.49
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;ecl = ecl-13.5.1
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;gcl = gcl-2.6.9
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;sbcl = sbcl-system
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;sbcl-system = /usr/local/bin/sbcl
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;gcl-system = /usr/bin/gcl
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+
+&lt;p&gt;&lt;code&gt;CIM_ID&lt;/code&gt;ってのは&lt;code&gt;cim&lt;/code&gt;がそれぞれのシェルの状態を管理するためのIDです。まあ、そのシェルのプロセスIDですね。逆にプロセスIDの取得と環境変数の設定さえできれば&lt;code&gt;cim&lt;/code&gt;は動かせるのでEmacsでも簡単に動きます。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_11&#34;&gt;&lt;code&gt;cim get&lt;/code&gt;&lt;/h2&gt;
+
+&lt;figure class=&#34;code&#34;&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;3&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;4&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;5&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;6&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;7&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;8&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;9&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;10&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;11&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;&#34;&gt;&lt;span class=&#34;line&#34;&gt;$ cim help get
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Usage:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; cim get
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Description:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Upgrade to the latest cim.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Examples:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; cim get
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+
+&lt;p&gt;cim自身のアップデートです。なんでこんな名前かというと&lt;code&gt;rvm&lt;/code&gt;がそうだからです。現状はgithubのKeenS/CIMのmasterからとってきます。stable版ができたらstableに変更しますね。実はブランチを指定してとってくる方法もあったりはします。&lt;code&gt;cim get --branch stable&lt;/code&gt;か &lt;code&gt;CIM_INSTALL_BRANCH=stable cim get&lt;/code&gt;です。まだブランチが無いので意味ないんですけどね。&lt;/p&gt;
+
+&lt;p&gt;この辺で気付いたかもしれませんが結構環境変数で制御できるようにデザインされてます。rubyがそんな感じだからです。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_12&#34;&gt;&lt;code&gt;cim version&lt;/code&gt;&lt;/h2&gt;
+
+&lt;figure class=&#34;code&#34;&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;3&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;4&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;5&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;6&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;7&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;8&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;9&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;10&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;11&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;12&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;&#34;&gt;&lt;span class=&#34;line&#34;&gt;$ cim help version
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Usage:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; cim version
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Description:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Show current cim&#39;s version
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Example:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; cim version
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+
+&lt;p&gt;めちゃくちゃバグがあるのにversionが1.0.0に見えるの気のせいです。きっと100点中の1点なんですよ。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_13&#34;&gt;&lt;code&gt;cim help&lt;/code&gt;&lt;/h2&gt;
+
+&lt;figure class=&#34;code&#34;&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;&#34;&gt;&lt;span class=&#34;line&#34;&gt;$ cim help help
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Help for &#39;help&#39; is not prepared, sorry.&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+
+&lt;p&gt;あー。&lt;code&gt;help&lt;/code&gt;のhelp用意してなかったー。まあ、上で使ったのが全てです。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_14&#34;&gt;&lt;code&gt;cl&lt;/code&gt;&lt;/h1&gt;
+
+&lt;figure class=&#34;code&#34;&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;3&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;4&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;5&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;6&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;7&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;8&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;9&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;10&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;11&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;12&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;13&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;14&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;15&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;16&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;17&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;18&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;19&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;&#34;&gt;&lt;span class=&#34;line&#34;&gt;$ cl -h
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Usage: cl [switchs] [--] [programfile] [argumensts]
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;-C DIR set *default-pathname-defaults* DIR.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;-d, --debug set debugging flags (push :debug into *features*)
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;-e, --eval SEXP one line of script. Several -e&#39;s are allowed. Omit [programfile]
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;-f, --load FILE load the FILE
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;-i EXT edit *argv* files in place and make backup with the extension .EXT
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;-l LIBRARY quickload the LIBRARY
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;-L LIBRARY quickload and use-package the LIBRARY
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;-r, --repl run repl
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;-q, --no-init do not load $CIM_HOME/init.lisp
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;--no-rl do not use rlwrap. This is effective only when --repl is specified
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;--no-right do not display right prompt. This is effective only when --repl is specified
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;--no-color do not use color. This is effective only when --repl is specified
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;-h, --help print this help
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;-v, --version print the version
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;If neither programfile, -e (--eval) nor -r (--repl) are specified, cl reads scripts from the standard input and then eval them.
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+
+&lt;p&gt;まあ、見たら分かりますね。ruby由来のオプションとShelly由来のオプションと私の好みのオプションがあります。&lt;code&gt;cl&lt;/code&gt;を起動する方法は&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;cl script.lisp&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;cl &amp;lt; script.lisp&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;cl -e sexp&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;cl -r&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;です。&lt;code&gt;cl script.lisp&lt;/code&gt;はシェバン(最初の行が&lt;code&gt;#!&lt;/code&gt;なもの)を無視します。&lt;/p&gt;
+
+&lt;p&gt;また、これも環境変数&lt;code&gt;LISP_IMPL&lt;/code&gt;でバックエンドを制御できます。これはShelly由来ですね。&lt;/p&gt;
+
+&lt;p&gt;もう一つ、デバッガは起動しません。スクリプトやワンライナーはエラーを吐いて終了して欲しいですし次に述べますがREPLも目的からしてデバッガは相応しくないと思うからです。因みにですが&lt;code&gt;-d&lt;/code&gt;オプションをつけてもデバッガは起動しません。理由はオプション解析のほとんどをLispに任せているので起動時のオブションである&lt;code&gt;--disable-debugger&lt;/code&gt;を制御できないからです。需要が高そうならシェルスクリプト内で解析して頑張ってみます。&lt;/p&gt;
+
+&lt;p&gt;あ、&lt;code&gt;-c, --compile FILE&lt;/code&gt;オプションつけ忘れてた。いつか入れます。&lt;code&gt;(compile-file FILE)&lt;/code&gt;で可能でしょうからすぐに入るはずです。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_15&#34;&gt;&lt;code&gt;cl -r&lt;/code&gt;&lt;/h2&gt;
+
+&lt;p&gt;一応開発向けではなくて、ちょっと試したいときや初心者が本を片手に動かすときを想定して作ってます。エラーはメッセージのみ表示。ちょっと試したいときはあんまりデバッガを必要としませんしスタックトレースもどうせ深さ1~2なのであまり必要でないからです。なにより初心者にとってデバッガは何をして良いか分かりませんし覚えても処理系毎に操作が違います。その辺を分り易い統一インターフェースを作ることも考えたのですが「それって&lt;code&gt;swank&lt;/code&gt;」って結論に至ったのでこのままです。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_16&#34;&gt;&lt;code&gt;ql&lt;/code&gt;&lt;/h1&gt;
+
+&lt;figure class=&#34;code&#34;&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;3&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;4&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;5&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;6&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;7&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;8&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;9&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;10&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;&#34;&gt;&lt;span class=&#34;line&#34;&gt;ql -- Command line interface for quicklisp
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Commands currently available
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;deps &amp;lt;system&amp;gt; ;; Install dependencies of &amp;lt;system&amp;gt;.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;help [command] ;; Show help.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;install[quickload] &amp;lt;system&amp;gt;... ;; Install given system.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;list {remote | local} ;; List available/installed systems.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;search[system-propos] &amp;lt;keyword&amp;gt; ;; Search quicklisp.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;uninstall &amp;lt;system&amp;gt; ;; Uninstall system.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;update [system] ;; Update dist info and installed systems.&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+
+&lt;p&gt;一番未完成なコマンドです。主な理由は私が&lt;code&gt;quicklisp&lt;/code&gt;の使い方を分かってないからです。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_17&#34;&gt;&lt;code&gt;ql deps&lt;/code&gt;&lt;/h2&gt;
+
+&lt;figure class=&#34;code&#34;&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;3&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;4&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;5&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;6&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;7&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;8&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;9&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;10&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;11&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;12&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;13&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;14&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;15&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;&#34;&gt;&lt;span class=&#34;line&#34;&gt;$ ql help deps
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Usage:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; ql deps [--path &amp;lt;path&amp;gt;] &amp;lt;system&amp;gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Description:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Install dependencies of given system. If path is specified, install dependencies there.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Once you run &#39;ql --path &amp;lt;path&amp;gt; deps&#39;, you don&#39;t need to specify &#39;--path&#39; because the path is written out to &#39;.quicklisp-path&#39; in current directory.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;You can run &#39;ql deps&#39; for a local system if &#39;.asd&#39; file is in current directory.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;This command is useful when you want to separate quicklisps for local project.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Example:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; ql deps --path ./quicklisp my-project
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+
+&lt;p&gt;rubyの&lt;code&gt;bundler&lt;/code&gt;を参考に作りました。&lt;code&gt;Gemfile&lt;/code&gt;に対応する&lt;code&gt;QLfile&lt;/code&gt;でも読もうかと思いましたが良く考えたら&lt;code&gt;.asd&lt;/code&gt;で十分じゃんとの思いに至ったのでカレントパスの&lt;code&gt;asd&lt;/code&gt;ファイルを読みます。&lt;br /&gt;
+が、奴は依存システムのバージョンまでは指定できなかった気がするのでやっぱり必要な気がします。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;ql deps --path ./ql myapp&lt;/code&gt;とすると依存システム(+新たな&lt;code&gt;quicklisp&lt;/code&gt;本体)を&lt;code&gt;./ql&lt;/code&gt;にインストールしてくれます。&lt;code&gt;quicklisp&lt;/code&gt;本体のインストールは不要ですがどうやったら回避できるかは今模索中です。&lt;br /&gt;
+&lt;code&gt;--path&lt;/code&gt;の位置が&lt;code&gt;cim use --default&lt;/code&gt;と違うのでご注意下さい。これは主に内部で使ってる&lt;code&gt;parse-option&lt;/code&gt;の欠陥に由来します。&lt;br /&gt;
+一度指定すると&lt;code&gt;.quicklisp-path&lt;/code&gt;にパスを書き出してくれるので次回からは必要なくなります。カレントディレクトリに複数の&lt;code&gt;asd&lt;/code&gt;ファイルがあってそれぞれでパスを使い分けたいとかはできません。&lt;br /&gt;
+あと、最大の欠陥として&lt;code&gt;./ql&lt;/code&gt;にシステムをインストールしてもそれを読み込みにいくコマンドがないので実用性ゼロです← まあ、&lt;code&gt;cl&lt;/code&gt;あたりを弄ってカレントパスに&lt;code&gt;.quicklisp-path&lt;/code&gt;があったら読みにいくようにします。その辺は&lt;code&gt;.lisp-impl&lt;/code&gt;とかも含めて考えます。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_18&#34;&gt;&lt;code&gt;ql help&lt;/code&gt;&lt;/h2&gt;
+
+&lt;figure class=&#34;code&#34;&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;&#34;&gt;&lt;span class=&#34;line&#34;&gt;$ ql help help
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Help for &#39;help&#39; is not prepared, sorry.
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+
+&lt;p&gt;こいつもhelp用意してなかった。まあ、良いや。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_19&#34;&gt;&lt;code&gt;ql install&lt;/code&gt;&lt;/h2&gt;
+
+&lt;figure class=&#34;code&#34;&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;3&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;4&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;5&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;6&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;7&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;8&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;9&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;10&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;11&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;12&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;13&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;&#34;&gt;&lt;span class=&#34;line&#34;&gt;$ ql help install
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Usage:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; ql install &amp;lt;system&amp;gt;...
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Description:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Install given system(s) to $CIM_HOME/quicklisp.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Example:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; # install clack
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; ql install clack
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+
+&lt;p&gt;なんでこいつがhelpの先頭に居ないんでしょうね。&lt;code&gt;cim&lt;/code&gt;に比べて適当ですね。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;ql quickload&lt;/code&gt;っていう別名も持ってます。&lt;code&gt;ql help&lt;/code&gt;には&lt;code&gt;quickload&lt;/code&gt;が本名で&lt;code&gt;install&lt;/code&gt;がエイリアスって書いてありましたが実装ミスりました。&lt;/p&gt;
+
+&lt;p&gt;名前の通り&lt;code&gt;ql:quickload&lt;/code&gt;します。&lt;code&gt;system&lt;/code&gt;は複数指定できます。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_20&#34;&gt;&lt;code&gt;ql list&lt;/code&gt;&lt;/h2&gt;
+
+&lt;figure class=&#34;code&#34;&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;3&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;4&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;5&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;6&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;7&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;8&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;9&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;10&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;11&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;12&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;&#34;&gt;&lt;span class=&#34;line&#34;&gt;$ ql list
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Usage:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; ql list {remote | [local]}
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Description:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;List installed systems. if &#39;remote&#39; is given, list all the available systems. &#39;ql list local&#39; is equivalent to &#39;ql list&#39;.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Example:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; ql list remote
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+
+&lt;p&gt;&lt;code&gt;cim list&lt;/code&gt;と使い方が違ってアレですね。現状&lt;code&gt;quicklisp&lt;/code&gt;に登録されているもの全てを表示する&lt;code&gt;ql list remote&lt;/code&gt;とインストールしたものだけを表示する&lt;code&gt;ql list [local]&lt;/code&gt;があります。&lt;code&gt;ql deps&lt;/code&gt;でパスを指定したやつらにも使いたかったのですが方法が分かんないのでとりあえず先送りです。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_21&#34;&gt;&lt;code&gt;ql search&lt;/code&gt;&lt;/h2&gt;
+
+&lt;figure class=&#34;code&#34;&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;3&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;4&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;5&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;6&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;7&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;8&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;9&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;10&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;11&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;12&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;&#34;&gt;&lt;span class=&#34;line&#34;&gt;$ ql help search
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Usage:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; ql search &amp;lt;keyword&amp;gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Description:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Search quicklisp for &amp;lt;keyword&amp;gt;.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Example:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; ql search http
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+
+&lt;p&gt;別名&lt;code&gt;system-apropos&lt;/code&gt;。別名と本名が&lt;code&gt;ql help&lt;/code&gt;と違うのも単に&lt;code&gt;ql:system-apropos&lt;/code&gt;を呼ぶのも&lt;code&gt;ql install&lt;/code&gt;と同じです。出力結果をもうちょっと制御したいなと思ってます。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_22&#34;&gt;&lt;code&gt;ql uninstall&lt;/code&gt;&lt;/h2&gt;
+
+&lt;figure class=&#34;code&#34;&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;3&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;4&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;5&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;6&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;7&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;8&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;9&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;10&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;11&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;12&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;&#34;&gt;&lt;span class=&#34;line&#34;&gt;$ ql help uninstall
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Usage:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; ql uninstall &amp;lt;system&amp;gt;...
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Description:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Uninstall given system(s).
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Example:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; ql uninstall caveman clack
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+
+&lt;p&gt;&lt;code&gt;ql:uninstall&lt;/code&gt;に同じ。以上。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_23&#34;&gt;&lt;code&gt;ql update&lt;/code&gt;&lt;/h2&gt;
+
+&lt;figure class=&#34;code&#34;&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;3&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;4&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;5&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;6&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;7&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;8&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;9&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;10&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;11&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;12&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;&#34;&gt;&lt;span class=&#34;line&#34;&gt;$ ql help update
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Usage:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; ql update [client]
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Description:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Update installed systems. If target &#39;client&#39; is given, update quicklisp itself.
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;Example:
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; ql update client
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+
+&lt;p&gt;&lt;code&gt;ql:update-all-dists&lt;/code&gt;か&lt;code&gt;ql:update-client&lt;/code&gt;かを選べます。最初はsystem毎にアップデートしたかったのですが無理っぽいので止めました。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_24&#34;&gt;おわりに&lt;/h1&gt;
+
+&lt;p&gt;とりあえずCIMの機能はこれで全部です。あ、開発用に&lt;code&gt;cim reset&lt;/code&gt;とかありますけど使わないで下さい。とういうか使うなよ。絶対使うなよ。&lt;/p&gt;
+
+&lt;p&gt;これら使ってみてバグがあったらgithubのissueに投げるなりtwitterで報告するなりして下さい。&lt;/p&gt;
+
+&lt;p&gt;ところでCIMは私はちむと読んでます。しー・あい・えむと読む人も居るようです。何でも良いです。プロジェクトとしてのちむとコマンドとしてのちむを区別するためにコマンドは小文字で&lt;code&gt;cim&lt;/code&gt;、そして&lt;code&gt;cim&lt;/code&gt;、&lt;code&gt;cl&lt;/code&gt;、&lt;code&gt;ql&lt;/code&gt;を含んだプロジェクトは大文字でCIMと書くことにします。今考えました。&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Mpd 小ネタ</title>
+      <link>http://keens.github.io/blog/2014/01/21/mpd-something</link>
+      <pubDate>Tue, 21 Jan 2014 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/blog/2014/01/21/mpd-something</guid>
+      <description>&lt;p&gt;mpdのちょっとした便利な使い方。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;at&lt;/code&gt;がRSPiにインストールされてる前提で、RSPi上で&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ at 7:00
+at&amp;gt; mpc toggle
+^D
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;とすればRSPiを目覚ましや時報として使えます。停止にはsshログインして&lt;code&gt;mpc toggle&lt;/code&gt;する必要があるのでそこまでする頃には起きてる筈。&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Rsync小ネタ</title>
+      <link>http://keens.github.io/blog/2013/11/30/something-about-rsync</link>
+      <pubDate>Sat, 30 Nov 2013 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/blog/2013/11/30/something-about-rsync</guid>
+      <description>&lt;p&gt;&lt;a href=&#34;/blog/2013/11/13/what-recent/&#34;&gt;mpdを導入したとき&lt;/a&gt;にrsyncでパーミッションの問題が発生したと言ってましたが解決策がありました。&lt;/p&gt;
+
+&lt;p&gt;まず基本。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;rsync&lt;/code&gt;でバックアップをとるときは&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;rsync -avz dir/ me@remote:backup
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;です。&lt;code&gt;dir&lt;/code&gt;のあとの&lt;code&gt;/&lt;/code&gt;は重要です。&lt;code&gt;dir&lt;/code&gt;自体か&lt;code&gt;dir&lt;/code&gt;の中身かを左右します。&lt;code&gt;zsh&lt;/code&gt;はそこんとこイマイチ理解してないようで悲しいです。因みに&lt;code&gt;-a&lt;/code&gt;は&lt;code&gt;-rltogpD&lt;/code&gt;の略です。でも今回みたいにパーミッションを含めたくないときは&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;rsync -rltogD -vz dir/ me@remote:backup
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と&lt;code&gt;-p&lt;/code&gt;を抜くかと思いきや、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;rsync -avz --no-p dir/ me@remote:backup
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;なる記法があるそうです。便利ですね。&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>ここ１ヶ月くらいの近況</title>
+      <link>http://keens.github.io/blog/2013/11/13/what-recent</link>
+      <pubDate>Wed, 13 Nov 2013 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/blog/2013/11/13/what-recent</guid>
+      <description>
+
+&lt;p&gt;#isucon 参戦記がフォロワーの多い@tagomorisさんとか@nitro_idiotさんとかにツイートされて普段の数十倍のアクセスが来てテンション上がったので近況書きますね。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_0&#34;&gt;isuconの勉強&lt;/h2&gt;
+
+&lt;p&gt;件の記事でも書いてますけどMySQLとNginXとCapistranoの勉強しました。SQLって書けると案外楽しいですね。あとN+1問題を学んだり、&lt;code&gt;IF EXISTS TRRIGER&lt;/code&gt;的な文がなくて殺そうかと思ったり。&lt;/p&gt;
+
+&lt;p&gt;NginXはキャッシュとかですね。キャッシュキーに&lt;code&gt;$cookie_isucon_session&lt;/code&gt;とか入れてログインしてるユーザーが来ても対応できたので良かったです（小並感&lt;/p&gt;
+
+&lt;p&gt;Capistranoはどうせだからと3.0を使ったのですが調べても2.x時代の情報ばっかり引っ掛かって苦労しました。その代わり、isucon本戦では複数サーバーへのデプロイ機能を存分に使わせて頂きました。ほぼログインしなくても問題ないですね。&lt;/p&gt;
+
+&lt;p&gt;例えば&lt;/p&gt;
+
+&lt;figure class=&#34;code&#34;&gt;&lt;figcaption&gt;&lt;span&gt;&lt;/span&gt;&lt;/figcaption&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;3&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;4&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;5&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;6&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;7&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;8&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;9&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;10&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;11&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;12&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;13&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;14&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;15&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;16&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;17&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;18&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;19&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;20&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;21&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;22&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;23&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;24&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;25&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;26&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;ruby&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;n&#34;&gt;set&lt;/span&gt; &lt;span class=&#34;ss&#34;&gt;:application&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;s1&#34;&gt;&#39;my app&#39;&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;n&#34;&gt;set&lt;/span&gt; &lt;span class=&#34;ss&#34;&gt;:repo_url&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;s1&#34;&gt;&#39;git@bitbucket.org:me/myrepo.git&#39;&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;n&#34;&gt;set&lt;/span&gt; &lt;span class=&#34;ss&#34;&gt;:deploy_to&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;s1&#34;&gt;&#39;/home/me/app&#39;&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;n&#34;&gt;set&lt;/span&gt; &lt;span class=&#34;ss&#34;&gt;:scm&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;ss&#34;&gt;:git&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;n&#34;&gt;set&lt;/span&gt; &lt;span class=&#34;ss&#34;&gt;:deploy_via&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;ss&#34;&gt;:remote_cache&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;n&#34;&gt;namespace&lt;/span&gt; &lt;span class=&#34;ss&#34;&gt;:nginx&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;do&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; &lt;span class=&#34;n&#34;&gt;task&lt;/span&gt; &lt;span class=&#34;ss&#34;&gt;:reload&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;do&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; &lt;span class=&#34;n&#34;&gt;on&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;roles&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;ss&#34;&gt;:web&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;do&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; &lt;span class=&#34;n&#34;&gt;execute&lt;/span&gt; &lt;span class=&#34;ss&#34;&gt;:sudo&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;s1&#34;&gt;&#39;service nginx reload&#39;&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; &lt;span class=&#34;k&#34;&gt;end&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; &lt;span class=&#34;k&#34;&gt;end&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; &lt;span class=&#34;n&#34;&gt;task&lt;/span&gt; &lt;span class=&#34;ss&#34;&gt;:restart&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;do&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; &lt;span class=&#34;n&#34;&gt;on&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;roles&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;ss&#34;&gt;:web&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;do&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; &lt;span class=&#34;n&#34;&gt;execute&lt;/span&gt; &lt;span class=&#34;ss&#34;&gt;:sudo&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;s1&#34;&gt;&#39;service nginx restart&#39;&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; &lt;span class=&#34;k&#34;&gt;end&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; &lt;span class=&#34;k&#34;&gt;end&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; &lt;span class=&#34;n&#34;&gt;task&lt;/span&gt; &lt;span class=&#34;ss&#34;&gt;:start&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;do&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; &lt;span class=&#34;n&#34;&gt;on&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;roles&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;ss&#34;&gt;:web&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;do&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; &lt;span class=&#34;n&#34;&gt;execute&lt;/span&gt; &lt;span class=&#34;ss&#34;&gt;:sudo&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;s1&#34;&gt;&#39;service nginx start&#39;&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; &lt;span class=&#34;k&#34;&gt;end&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; &lt;span class=&#34;k&#34;&gt;end&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;k&#34;&gt;end&lt;/span&gt;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+
+&lt;p&gt;こんな感じです。で、もう一つ&lt;/p&gt;
+
+&lt;figure class=&#34;code&#34;&gt;&lt;figcaption&gt;&lt;span&gt;&lt;/span&gt;&lt;/figcaption&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;3&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;4&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;5&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;6&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;7&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;8&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;9&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;ruby&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;n&#34;&gt;set&lt;/span&gt; &lt;span class=&#34;ss&#34;&gt;:stage&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;ss&#34;&gt;:production&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;n&#34;&gt;server&lt;/span&gt; &lt;span class=&#34;s1&#34;&gt;&#39;123.4.5.67&#39;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;ss&#34;&gt;user&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;:&lt;/span&gt; &lt;span class=&#34;s1&#34;&gt;&#39;me&#39;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;ss&#34;&gt;roles&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;:&lt;/span&gt; &lt;span class=&#34;s1&#34;&gt;&#39;web&#39;&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;n&#34;&gt;server&lt;/span&gt; &lt;span class=&#34;s1&#34;&gt;&#39;123.4.5.68&#39;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;ss&#34;&gt;user&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;:&lt;/span&gt; &lt;span class=&#34;s1&#34;&gt;&#39;me&#39;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;ss&#34;&gt;roles&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;:&lt;/span&gt; &lt;span class=&#34;s1&#34;&gt;&#39;web&#39;&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;n&#34;&gt;server&lt;/span&gt; &lt;span class=&#34;s1&#34;&gt;&#39;123.4.5.69&#39;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;ss&#34;&gt;user&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;:&lt;/span&gt; &lt;span class=&#34;s1&#34;&gt;&#39;me&#39;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;ss&#34;&gt;roles&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;:&lt;/span&gt; &lt;span class=&#34;s1&#34;&gt;&#39;web&#39;&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;n&#34;&gt;set&lt;/span&gt; &lt;span class=&#34;ss&#34;&gt;:ssh_options&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; &lt;span class=&#34;ss&#34;&gt;keys&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;:&lt;/span&gt; &lt;span class=&#34;sx&#34;&gt;%w(~/.ssh/id_rsa)&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; &lt;span class=&#34;n&#34;&gt;forward_agent&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;:&lt;/span&gt; &lt;span class=&#34;kp&#34;&gt;true&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; &lt;span class=&#34;n&#34;&gt;auth_methods&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;:&lt;/span&gt; &lt;span class=&#34;sx&#34;&gt;%w(publickey)&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;p&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+
+&lt;p&gt;を書いておけばこの3台のサーバーに一斉にデプロイしてくれます。(上の例だとnginxですが、まあいいでしょう。)&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_1&#34;&gt;Shibuya.lisp&lt;/h2&gt;
+
+&lt;p&gt;Lisp Meet Up #10で発表してきました。内容は&lt;code&gt;fluentd&lt;/code&gt;をCommon Lispから使う話。&lt;br /&gt;
+スライド&lt;/p&gt;
+
+&lt;iframe src=&#34;http://www.slideshare.net/slideshow/embed_code/27444839&#34; width=&#34;427&#34; height=&#34;356&#34; frameborder=&#34;0&#34; marginwidth=&#34;0&#34; marginheight=&#34;0&#34; scrolling=&#34;no&#34; style=&#34;border:1px solid #CCC;border-width:1px 1px 0;margin-bottom:5px&#34; allowfullscreen&gt; &lt;/iframe&gt;
+
+&lt;p&gt;&lt;strong&gt;&lt;a href=&#34;https://www.slideshare.net/blackenedgold/common-lisp-27444839&#34; title=&#34;Common Lisp でビッグデータを作ろう&#34;&gt;Common Lisp でビッグデータを作ろう&lt;/a&gt;&lt;/strong&gt; from &lt;strong&gt;&lt;a href=&#34;http://www.slideshare.net/blackenedgold&#34;&gt;blackenedgold&lt;/a&gt;&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;Ustreamは見つかりませんでした。てへペロ&lt;/p&gt;
+
+&lt;p&gt;恐らく、&lt;code&gt;Log4CL&lt;/code&gt;はやりたいことと目的が違いますね。全く別のロギングフレームワークを作るのが良さげな気がします。isuconの懇親会で開発者の@tagomorisさんにアドバイスも頂きましたし作るかもしれません。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_2&#34;&gt;mpd&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;/blog/2013/09/29/mplayer/&#34;&gt;以前、mplayer2が正常に動作しないとかぼやいて&lt;/a&gt;ましたが、結局あきらめました。で、代わりに &lt;a href=&#34;http://www.musicpd.org/&#34;&gt;Music Player Daemon(MPD)&lt;/a&gt;なるものを見付けて、しかもRaspberry Piで動き、iPod/Androidから操作できるとのことで、導入しました。&lt;/p&gt;
+
+&lt;p&gt;MPDはまさしくRaspberry Piのような機器向で、音楽を鳴らすサーバーと操作するクライアントが完全に分かれてます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ sudo apg-get install mpd mpc
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;とかでRSPiに入れた気がします。クライアントはAndroidは&lt;code&gt;MPDroid&lt;/code&gt;、iPodは&lt;code&gt;MPoD&lt;/code&gt;っていうアプリです。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;scp&lt;/code&gt;で手元の曲をRSPiコピーし、iPodから繋ぐも曲が見えない。色々試した結果、&lt;code&gt;scp&lt;/code&gt;でコピーしたときにパーミッションの問題が出てたようなのでそこを解決したらちゃんと動きました。&lt;/p&gt;
+
+&lt;p&gt;動画(iPod)&lt;/p&gt;
+
+&lt;iframe width=&#34;560&#34; height=&#34;315&#34; src=&#34;//www.youtube.com/embed/x5CWtXbCkqo&#34; frameborder=&#34;0&#34; allowfullscreen&gt;&lt;/iframe&gt;
+
+&lt;p&gt;黒ばっかで見づらくて申し訳ありません。iPodからではなくスピーカから音が出てるのが分かりますかね？思ったより音が入ってないので分りづらいですね（汗&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_3&#34;&gt;CIM&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/fukamachi/shelly/&#34;&gt;Shelly&lt;/a&gt;を使って &lt;a href=&#34;https://gist.github.com/KeenS/7059301&#34;&gt;Common Lispスクリプトをexecutableにしよう&lt;/a&gt;ってのをやってましたが少しshellyが求めているのと違うようだったので「シェルスクリプトでshelly的な物を実装しよう！ついでにrvmみたいにバージョン管理できたら嬉しいな！！」って思い付きで &lt;a href=&#34;https://github.com/KeenS/CIM&#34;&gt;Common Lisp Implementation Manager(CIM)&lt;/a&gt;を作り始めました。まだCLISP, ECL, GCLのインストールぐらいしかできてません。&lt;/p&gt;
+
+&lt;p&gt;初めてシェルスクリプトを書き、初めてBourne Shellを触り(普段はzsh)、早くも挫折しそうです。今めっちゃシェルスクリプトの勉強してます。目的はImplementationの管理じゃなくて統一インターフェースの&lt;code&gt;cl&lt;/code&gt;コマンドなのにそこが全然進んでないですね。&lt;code&gt;ql&lt;/code&gt;に至っては1行も書いてない。まあ、&lt;code&gt;cl&lt;/code&gt;を使って書くつもりなので&lt;code&gt;cl&lt;/code&gt;が出来ないことにはどうしようもないんですが。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;syset&lt;/code&gt;とかネーミングセンスが無かったり(発音しずらい。シセット…サイセットって読もうかな)ダウンロードしたアーカイブのチェックサムとか全く見てなかったり色々ツッコみたくなりますが温かい目で見て下さい。気に入ったらpull-reqとかして下さい。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_4&#34;&gt;Octomacs&lt;/h2&gt;
+
+&lt;p&gt;Octomacsに一回pull-req送ってからコミッタ気取りのκeenですが、&lt;code&gt;octomacs-preview&lt;/code&gt;と&lt;code&gt;octomacs-deploy&lt;/code&gt;を実装しました。&lt;code&gt;C-u&lt;/code&gt;をつけると&lt;code&gt;generate&lt;/code&gt;が付いてきます。テストをしてない（できない？）+サーバーを殺す(&lt;code&gt;octomacs-preview-quit&lt;/code&gt;とかの名前かなあ。現状は&lt;code&gt;*octomacs preview*&lt;/code&gt;バッファを&lt;code&gt;kill-buffer&lt;/code&gt;すればいい)コマンドを実装してないのでpull-reqは投げてませんが使ってみたい方は &lt;a href=&#34;https://github.com/KeenS/octomacs&#34;&gt;こちら&lt;/a&gt;をどうぞ。まあ、今からpushするんですがね。ちゃんとこの記事も&lt;code&gt;octomacs-new-post&lt;/code&gt;から始まり、&lt;code&gt;octomacs-preview&lt;/code&gt;で確認しつつ&lt;code&gt;octomacs-deploy&lt;/code&gt;でデプロイしました。あとは過去の記事を編集する&lt;code&gt;octomacs-edit&lt;/code&gt;を実装すれば完璧ですね。&lt;/p&gt;
+
+&lt;p&gt;こんなかんじです。&lt;code&gt;CIM&lt;/code&gt;がんばります。&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Shellyを使ってCommon LispファイルをExecutableにする</title>
+      <link>http://keens.github.io/blog/2013/09/26/shelly-script</link>
+      <pubDate>Thu, 26 Sep 2013 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/blog/2013/09/26/shelly-script</guid>
+      <description>&lt;p&gt;コマンドラインからCommon Lispの関数を実行できる &lt;a href=&#34;https://github.com/fukamachi/shelly&#34;&gt;Shelly&lt;/a&gt;を使ってCommon Lispファイルを実行形式にしてみました。Shellyは&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ shly + 1 2
+3
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;みたいに関数を実行できます。&lt;/p&gt;
+
+&lt;p&gt;モチベーションとしては、 &lt;a href=&#34;http://blog.8arrow.org/entry/20120521/1337596483&#34;&gt;Shellyの作者深町さん&lt;/a&gt;がTwitterで「Shellyでloadを使うとスクリプトみたいに実行できる」と発言していたのがきっかけで、Shebangを無視できればUNIX系ではExecutableにできるのでは？と思いついてやってみました。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;read&lt;/code&gt;して&lt;code&gt;eval&lt;/code&gt;して…とか考えてましたが、&lt;code&gt;load&lt;/code&gt;に&lt;code&gt;stream&lt;/code&gt;を渡せるようなので案外簡単にできました。&lt;/p&gt;
+
+&lt;p&gt;&lt;script src=&#34;https://gist.github.com/KeenS/6688683.js?file=script.lisp&#34;&gt;&lt;/script&gt;&lt;noscript&gt;&lt;pre&gt;&lt;code&gt;(in-package :shelly)
+(export (defvar &lt;em&gt;argv&lt;/em&gt; nil))
+(in-package :cl-user)&lt;/p&gt;
+
+&lt;p&gt;(defun script (file argv)
+  &amp;ldquo;Execute a file as script ignoring shebang&amp;rdquo;
+  (setf shelly:&lt;em&gt;argv&lt;/em&gt; argv)
+  (let* ((in (open file :if-does-not-exist :error))
+     (first-char (read-char in))
+     (second-char (read-char in)))
+    (cond
+      ((and (char= first-char ##) (char= second-char #!))
+       (read-line in))
+      (t (unread-char second-char in)
+     (unread-char first-char in)))
+    (load in)
+    (values)))
+&lt;/code&gt;&lt;/pre&gt;&lt;/noscript&gt;&lt;/p&gt;
+
+&lt;p&gt;コマンドライン引数を受け取るために&lt;code&gt;*argv*&lt;/code&gt;という変数を用意してます。&lt;/p&gt;
+
+&lt;p&gt;こんなことを&lt;code&gt;~/.shelly/Shellyfile&lt;/code&gt;に書いておき、Lispの初期化ファイルに&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;#+shelly
+(load &amp;quot;~/.shelly/Shellyfile&amp;quot;)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と書いてます。この&lt;code&gt;~/.shelly/Shellyfile&lt;/code&gt;にはShelly向けの関数を溜め込んでいく予定です。&lt;/p&gt;
+
+&lt;p&gt;あとは&lt;/p&gt;
+
+&lt;figure class=&#34;code&#34;&gt;&lt;figcaption&gt;&lt;span&gt;&lt;/span&gt;&lt;/figcaption&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;3&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;4&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;5&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;common-lisp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;err&#34;&gt;#&lt;/span&gt;&lt;span class=&#34;nv&#34;&gt;!shly&lt;/span&gt; &lt;span class=&#34;nv&#34;&gt;script&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;nb&#34;&gt;defun&lt;/span&gt; &lt;span class=&#34;nv&#34;&gt;hello&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;()&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; &lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;nb&#34;&gt;format&lt;/span&gt; &lt;span class=&#34;no&#34;&gt;t&lt;/span&gt; &lt;span class=&#34;s&#34;&gt;&#34;Hello ~a~%&#34;&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;nb&#34;&gt;first&lt;/span&gt; &lt;span class=&#34;nv&#34;&gt;shelly:*argv*&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)))&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;nv&#34;&gt;hello&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+
+&lt;p&gt;を&lt;code&gt;foo.lisp&lt;/code&gt;に書き込めば&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ chmod u+x foo.lisp
+$./foo.lisp κeen
+Hello κeen
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と実行できます。勿論、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$shly script foo.lisp κeen
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;としても同じです。一部の処理系ではこのようなことが出来ますが、コマンドライン引数の渡し方とかも処理系依存なのでポータブルに書くなら一つ試してみてはいかがでしょうか。&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>PDFユーティリティ</title>
+      <link>http://keens.github.io/blog/2013/09/03/pdftk</link>
+      <pubDate>Tue, 03 Sep 2013 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/blog/2013/09/03/pdftk</guid>
+      <description>&lt;p&gt;小ネタ。コマンドラインからPDFを編集した話の備忘録。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://www.seeds-std.co.jp/seedsblog/181.html&#34;&gt;こちら&lt;/a&gt;に紹介されてるように、pdftkというツールである程度のことはできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$sudo apt-get install pdftk
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;でインストール可能。&lt;br /&gt;
+今回は&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$for pdf in *.pdf
+&amp;gt;&amp;gt;do
+&amp;gt;&amp;gt; pdftk $pdf cat 1-endR output `basename $pdf .pdf`_rot.pdf
+&amp;gt;&amp;gt;done
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;で全てのPDFの全てのページを右周りに回転し、名前に_rotを付けて保存した。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;pdftk *.pdf cat output all.pdf
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;とかで結合なんかもできて便利。&lt;/p&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>

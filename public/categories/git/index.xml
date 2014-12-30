@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+      <title>Git on κeenのHappy Hacκing Blog </title>
+      <generator uri="https://hugo.spf13.com">Hugo</generator>
+    <link>http://KeenS.github.io/categories/git/index.xml/</link>
+    <language>en-us</language>
+    
+    
+    <updated>Wed, 18 Sep 2013 00:00:00 UTC</updated>
+    
+    <item>
+      <title>Gitあれこれ</title>
+      <link>http://keens.github.io/blog/2013/09/18/some-git-matters</link>
+      <pubDate>Wed, 18 Sep 2013 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/blog/2013/09/18/some-git-matters</guid>
+      <description>
+
+&lt;p&gt;githubで共同作業してたらいろいろ困ったことがあったのでそのときのメモ。はじめてやって困ったことなので経験ある人には常識なのかもしれません。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_0&#34;&gt;マスターリポジトリに追従する&lt;/h2&gt;
+
+&lt;p&gt;マスターをフォークして自分のレポジトリで作業、終ったらマスターにpull-reqという流れで作業してました。するとマスターが変更されたときに自分のリポジトリに反映させる必要があります。そのときは &lt;a href=&#34;http://qiita.com/xtetsuji/items/555a1ef19ed21ee42873&#34;&gt;http://qiita.com/xtetsuji/items/555a1ef19ed21ee42873&lt;/a&gt;を参考に、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ git remote add upstream git@github.com:g000001/google-common-lisp-style-guide-ja.git
+$ git fetch upstream
+$ git merge upstream/master
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;でできました。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_1&#34;&gt;Pull-Reqを正しく送る&lt;/h2&gt;
+
+&lt;p&gt;まず、masterでpull-req送るととりこまれるまで自分のマスターへのコミットが反映され続けるんですね。それで一回失敗。&lt;/p&gt;
+
+&lt;p&gt;じゃあ、ということでブランチを切ることに。するとまた問題が。まあ、自分がアホっていったらアホなんですけど&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;_A_ _B_ _C_
+*_/ ___\A&#39;/___ \B&#39;/___\C&#39;_HEAD
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;みたいなブランチの作り方してしまいました。&lt;code&gt;A&lt;/code&gt;,&lt;code&gt;B&lt;/code&gt;,&lt;code&gt;C&lt;/code&gt;それぞれでpull-req送ったんですけど当然&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;A : A
+B : B-A&#39;
+C : C-B&#39;-A&#39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;みたいなヒストリのまま送られるわけです。&lt;code&gt;A&lt;/code&gt;,&lt;code&gt;B&lt;/code&gt;,&lt;code&gt;C&lt;/code&gt;は同じファイルの違う箇所への変更なのでヒストリを&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;_C_
+      /_B_
+     /_A_ 
+*_/ ______ HEAD
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;のようにしたいわけです。&lt;code&gt;magit.el&lt;/code&gt;さんにお助け願おうかと思いましたが、そもそも出来るか分らないのでTwitterで投げてみたところ、@mod_poppo氏に助けていただきました。&lt;code&gt;git reset&lt;/code&gt;と&lt;code&gt;git cherry-pick&lt;/code&gt;でできます。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;A&lt;/code&gt;のブランチは問題ないので&lt;code&gt;B&lt;/code&gt;でやると、まず私は&lt;code&gt;magit.el&lt;/code&gt;で必要な&lt;code&gt;B&lt;/code&gt;のコミットを調べておいて&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ git reset --hard *
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;で&lt;code&gt;*&lt;/code&gt;に&lt;code&gt;HEAD&lt;/code&gt;を戻して&lt;code&gt;A&lt;/code&gt;, &lt;code&gt;B&lt;/code&gt;で加えた変更を全て破棄。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ git cherry-pick B-commits
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;で&lt;code&gt;B&lt;/code&gt;での変更のみ適用&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ git push -f origin branch
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;で自分のリポジトリに反映(=pull-reqにも反映)&lt;br /&gt;
+としました。&lt;code&gt;*&lt;/code&gt;と&lt;code&gt;B-commits&lt;/code&gt;はそれぞれリビジョンIDを調べて下さいね。&lt;/p&gt;
+
+&lt;p&gt;私の説明じゃ分りづらいと思うので &lt;a href=&#34;http://d.hatena.ne.jp/murank/20110327/1301224770&#34;&gt;http://d.hatena.ne.jp/murank/20110327/1301224770&lt;/a&gt; にあるすばらしい図を参考にして下さい。&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Rails Tutorial</title>
+      <link>http://keens.github.io/blog/2013/09/03/rails-tutorial</link>
+      <pubDate>Tue, 03 Sep 2013 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/blog/2013/09/03/rails-tutorial</guid>
+      <description>&lt;p&gt;夜中にコーヒー飲むと眠れなくなりますね。昨晩もコーヒー飲んだら朝まで眠れず、寝たのが朝8時半、起きたのが16時でした。明日提出のレポート終ってないのに…&lt;/p&gt;
+
+&lt;p&gt;さて、かなり良いRuby on Railsのチュートリアルを見付けたので紹介します。&lt;br /&gt;
+ &lt;a href=&#34;http://railstutorial.jp&#34;&gt;Ruby on Rails チュートリアル：実例を使ってRailsを学ぼう&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;これはただのrailsの紹介ではなくてgitだとかherokuだとかを使ってかなり実践的にアプリケーションを作ていくものです。1, 2章で軽くrailsを動かしてみたあと、3章以降でテスト駆動開発でアプリケーションを構築していきます。&lt;/p&gt;
+
+&lt;p&gt;このテスト駆動開発の環境がすばらしいのなんのって、最初動かしたとき思わずニヤリとしました。しかも何故か(何も設定してないのに)Emacsのモードバーの色がテストの結果に応じて変わるという。&lt;br /&gt;
+マウス操作もキーストロークも無くコードの正しさを教えてくれるのは非常に快適でした。&lt;/p&gt;
+
+&lt;p&gt;文体も訳本にありがちな片言の日本語ではなく読み易いですし、Ruby自体の解説もあり、「Scaffoldを使えば簡単にできるんだぜ~」じゃなくてちゃんとMVCの関係とかを解説して身に付いた上で「今後はScaffoldでより手軽に作れるよ」なのでRailsに限らずWeb開発のチュートリアルとして秀逸でした。&lt;/p&gt;
+
+&lt;p&gt;私もまだ5章までしか進めてないのですが是非一度試してみて下さい&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Githubの変更を追う</title>
+      <link>http://keens.github.io/blog/2013/09/02/rss-of-github</link>
+      <pubDate>Mon, 02 Sep 2013 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/blog/2013/09/02/rss-of-github</guid>
+      <description>&lt;p&gt;こんばんは。κeenです。普段、Github上で最新のソースを追ってるプロジェクトはこまめにgit pullすることで更新を確認してたのですが、別の方法があることに気づきました。&lt;/p&gt;
+
+&lt;p&gt;単純にWatchという便利な機能もあるのですが、RSSでソースを追うこともできるようです。RSSのアイコンが見当らなかったのでないものと思ってましたがちゃんとあるんですね。&lt;/p&gt;
+
+&lt;p&gt;RSSのAPIはgithub.com/ORG/PROJECT/commits/BRANCH.atomになります。&lt;br /&gt;
+たとえばMirahのmasterブランチの最新のコミットを受け取りたかったら、&lt;br /&gt;
+ &lt;a href=&#34;https://github.com/mirah/mirah/commits/master.atom%20%20&#34;&gt;https://github.com/mirah/mirah/commits/master.atom&lt;/a&gt;になります。試してませんがcommitsのところをissuとかにすればissuを追えるのかもしれません。&lt;/p&gt;
+
+&lt;p&gt;watchとの違いは、watchはwikiの変更やissuなど全てを追うところと、通知がメール and/or github上での通知なところですね。&lt;/p&gt;
+
+&lt;p&gt;メールじゃなくてgithubの通知でもなくてRSSで受け取りたい方は試してみてはいかがでしょうか。&lt;/p&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>
