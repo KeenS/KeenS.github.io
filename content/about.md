@@ -1,6 +1,6 @@
 ---
 type: page
-title: "About Me"
+title: "About"
 date: 2014-06-12
 comments: true
 sharing: true
@@ -8,7 +8,7 @@ footer: true
 nopaging: true
 menu: "main"
 ---
-## About Me
+## Me
 
 - 東大数学科の4年生。
 - 合気道、剣道、弓道やってる。
