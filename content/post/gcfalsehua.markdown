@@ -1,7 +1,7 @@
 ---
 type: post
 title: "GCの話"
-date: 2014-10-26
+date: 2014-10-26T19:13:45Z
 comments: true
 categories: [GC]
 ---

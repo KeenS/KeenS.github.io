@@ -1,7 +1,7 @@
 ---
 type: post
 title: "#関数型なんたら で喋ってきた"
-date: 2014-10-26
+date: 2014-10-26T17:14:10Z
 comments: true
 categories: [Lisp, Scheme, picrin, Scala]
 ---
