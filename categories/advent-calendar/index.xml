@@ -1,0 +1,1280 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+      <title>Advent-Calendar on κeenのHappy Hacκing Blog </title>
+      <generator uri="https://hugo.spf13.com">Hugo</generator>
+    <link>http://KeenS.github.io/categories/advent-calendar/index.xml/</link>
+    <language>en-us</language>
+    
+    
+    <updated>Wed, 10 Dec 2014 00:00:00 UTC</updated>
+    
+    <item>
+      <title>mllexを使ってみる。あるいはlexユーザーに対するmllexの解説</title>
+      <link>http://keens.github.io/blog/2014/12/10/mllexwoshi-tutemiru</link>
+      <pubDate>Wed, 10 Dec 2014 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/blog/2014/12/10/mllexwoshi-tutemiru</guid>
+      <description>
+
+&lt;p&gt;このエントリーは&lt;a href=&#34;http://qiita.com/advent-calendar/2014/ml&#34;&gt;ML Advent Calendar 10日目&lt;/a&gt;の記事です。&lt;br /&gt;
+前 &lt;a href=&#34;http://h-sakurai.hatenablog.com/entry/2014/12/09/144655&#34;&gt;OCamlで作ったgoma言語 - h_sakurai&amp;rsquo;s diary&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;ふと思い立ってPrologのコンパイラかインタプリタかを作ってみようとして、その第一段でlexerに着手しました。&lt;/p&gt;
+
+&lt;p&gt;ちょ、SML分かる人はmllexくらい常識的に知ってるなんて言わないで下さい。私は初めて触りました。&lt;/p&gt;
+
+&lt;p&gt;ちょっと変則的なんですが、smlsharpの配布物にあるドキュメントを読みながらmlton付属のmllexを使い、sml/nj上で動作を確認しました。SMLの処理系管理ガバガバですね。&lt;/p&gt;
+
+&lt;p&gt;まあ、初めて使ってみたとは言ってもほぼC版のlexのCを書く部分をそのままSMLで書けば良いだけなので簡単ですね。&lt;/p&gt;
+
+&lt;p&gt;因みにPrologの文法は以下のようなもの。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-prolog&#34;&gt;%reverse a list into X
+reverse([], []).
+
+reverse([Hd|Tl], X):-
+    reverse(Tl, Y),
+    append(Y, [Hd], X).
+
+reverse(List, X):-
+    reverse(List, []).
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;だいたいの部分は見れば分かるかと思うのですが、小文字で始まるのがリテラル（文字列？識別子？）で大文字から始まるのが変数です。&lt;/p&gt;
+
+&lt;p&gt;で、これをイメージしながらlexファイルを書いていきます。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_0&#34;&gt;Lexファイル&lt;/h1&gt;
+
+&lt;p&gt;全体はこのようになっています。lexと同じですね。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;SMLの補助コード部分
+
+%%
+
+補助ルールの記述
+
+%%
+
+解析ルールの記述
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;SMLの補助コードの部分は典型的には&lt;code&gt;datatype&lt;/code&gt;を書きます。あとはどうも&lt;code&gt;error : string -&amp;gt; unit&lt;/code&gt;と &lt;code&gt;eof : unit -&amp;gt; &#39;a&lt;/code&gt;が必要みたいですね（マニュアルちゃんと読んでない）。&lt;code&gt;&#39;a&lt;/code&gt;というのは他の解析ルールと同じ型です。&lt;/p&gt;
+
+&lt;p&gt;補助ルールはlexとだいたい同じです。生成した関数やらデータ型を収めるstructureの指定とかもします。&lt;/p&gt;
+
+&lt;p&gt;解析ルールもだいたいlexと同じです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;pattern =&amp;gt; (SMLのコード);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;のような形をしてます。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_1&#34;&gt;実際のコード&lt;/h1&gt;
+
+&lt;p&gt;結構適当です。あ、カットのこと忘れてた。ほら、適当だった。&lt;/p&gt;
+
+&lt;p&gt;このコードをprolog.lexとして保存します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;datatype lexresult =
+         Comment of string
+       | LeftParen
+       | RightParen
+       | LeftBracket
+       | RightBracket
+       | Comma
+       | Dot
+       | Bar
+       | Medaka
+       | UnderScore
+       | String of string
+       | Number of int
+       | Variable of string
+       | EOF
+
+val linenum = ref 1
+val error = fn x =&amp;gt; print (x ^ &amp;quot;\n&amp;quot;)
+val eof = fn () =&amp;gt; EOF
+%%
+%structure PrologLex                      
+
+alphanum = [A-Za-z0-9];
+alpha    = [A-Za-z];
+digit    = [0-9];
+ws       = [\ \t\n];
+
+%%
+
+{ws}+            =&amp;gt; (lex());
+%(.*)\n          =&amp;gt; (Comment yytext);
+&amp;quot;(&amp;quot;              =&amp;gt; (LeftParen);
+&amp;quot;)&amp;quot;              =&amp;gt; (RightParen);
+&amp;quot;[&amp;quot;              =&amp;gt; (LeftBracket);
+&amp;quot;]&amp;quot;              =&amp;gt; (RightBracket);
+&amp;quot;,&amp;quot;              =&amp;gt; (Comma);
+&amp;quot;.&amp;quot;              =&amp;gt; (Dot);
+&amp;quot;|&amp;quot;              =&amp;gt; (Bar);
+&amp;quot;:-&amp;quot;             =&amp;gt; (Medaka);
+&amp;quot;_&amp;quot;              =&amp;gt; (UnderScore);
+[a-z]{alphanum}* =&amp;gt; (String yytext);
+{digit}+         =&amp;gt; (Number (foldl (fn(a, r)=&amp;gt; (ord(a)-ord(#&amp;quot;0&amp;quot;)) + 10*r) 0 (explode yytext)));
+[A-Z]{alphanum}* =&amp;gt; (Variable yytext);
+    
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;toc_2&#34;&gt;実際に使ってみる。&lt;/h1&gt;
+
+&lt;pre&gt;&lt;code&gt;$ mllex prolog.lex
+
+Number of states = 19
+Number of distinct rows = 8
+Approx. memory size of trans. table = 1032 bytes
+$ rlwrap sml
+Standard ML of New Jersey v110.77 [built: Thu Sep  4 12:32:33 2014]
+- use &amp;quot;prolog.lex.sml&amp;quot;;
+[opening prolog.lex.sml]
+[autoloading]
+[library $SMLNJ-BASIS/basis.cm is stable]
+[autoloading done]
+structure PrologLex :
+  sig
+    structure UserDeclarations : &amp;lt;sig&amp;gt;
+    exception LexError
+    structure Internal : &amp;lt;sig&amp;gt;
+    structure YYPosInt : &amp;lt;sig&amp;gt;
+    val makeLexer : (int -&amp;gt; string) -&amp;gt; unit -&amp;gt; Internal.result
+  end
+val it = () : unit
+- val lexer = PrologLex.makeLexer (fn i =&amp;gt; TextIO.inputN(TextIO.openIn &amp;quot;reverse.pl&amp;quot;, i));
+val lexer = fn : unit -&amp;gt; PrologLex.Internal.result
+- lexer();
+val it = Comment &amp;quot;%reverse a list into X\n&amp;quot; : PrologLex.Internal.result
+- lexer();
+val it = String &amp;quot;reverse&amp;quot; : PrologLex.Internal.result
+- lexer();
+val it = LeftParen : PrologLex.Internal.result
+- lexer();
+val it = LeftBracket : PrologLex.Internal.result
+- lexer();
+val it = RightBracket : PrologLex.Internal.result
+- 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;コメントの扱い失敗してますね。この辺はどうしようもないのかなあ&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_3&#34;&gt;困ったところ&lt;/h1&gt;
+
+&lt;p&gt;ドキュメントが古いSML/NJのものらしく、SMLのコードをそのまま書いても動かなかった。&lt;code&gt;revfold&lt;/code&gt;とか&lt;code&gt;inputc&lt;/code&gt;とか。&lt;/p&gt;
+
+&lt;p&gt;次回はmlyaccでも触ってみますか。&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>H2Oにpicrinを溶かす</title>
+      <link>http://keens.github.io/blog/2014/12/07/h2onipicrinworong-kasu</link>
+      <pubDate>Sun, 07 Dec 2014 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/blog/2014/12/07/h2onipicrinworong-kasu</guid>
+      <description>
+
+&lt;p&gt;このエントリーは&lt;br /&gt;
+&lt;a href=&#34;http://qiita.com/advent-calendar/2014/lisp&#34;&gt;Lisp Advent Calendar&lt;/a&gt; 7日目&lt;br /&gt;
+兼&lt;br /&gt;
+&lt;a href=&#34;http://qiita.com/advent-calendar/2014/h2o&#34;&gt;H2O Advent Calendar&lt;/a&gt; 7日目&lt;br /&gt;
+の記事です。&lt;/p&gt;
+
+&lt;p&gt;κeenです。タイトルの通りです。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_0&#34;&gt;H2Oとは&lt;/h1&gt;
+
+&lt;p&gt;水。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_1&#34;&gt;picrinとは&lt;/h1&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://ja.wikipedia.org/wiki/%E3%83%94%E3%82%AF%E3%83%AA%E3%83%B3%E9%85%B8&#34;&gt;Wikipedia&lt;/a&gt;にあるように、フェノールのトリニトロ化合物で、水溶性があります。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_2&#34;&gt;ではなくて&lt;/h1&gt;
+
+&lt;p&gt;H2OはHTTP1, HTTP2, WebsocketをサポートするNginXより速いHTTPサーバです。&lt;a href=&#34;https://github.com/h2o/h2o&#34;&gt;Github&lt;/a&gt;で開発されています。開発者は@kazuhoさん。&lt;/p&gt;
+
+&lt;p&gt;picrinは「速い、軽い、高機能」を目指して作られているScheme処理系です。&lt;a href=&#34;https://github.com/picrin-scheme/picrin&#34;&gt;Github&lt;/a&gt;で開発されています。開発者は@wasabizさん。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_3&#34;&gt;混ぜる&lt;/h1&gt;
+
+&lt;p&gt;picrinのように組込み向けで開発されている処理系は&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;picrinからH2Oを使えるようにする&lt;/li&gt;
+&lt;li&gt;H2Oにpicrinを埋め込む&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;と、2種類考えられますが、今回は後者です。H2Oにpicrinを溶かしてる感じしますね。&lt;/p&gt;
+
+&lt;p&gt;まあ、Apatch HTTPDやNginX宜しくmod_picrinを作れば済むでしょう。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_4&#34;&gt;絶望&lt;/h1&gt;
+
+&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p&gt;&lt;a href=&#34;https://twitter.com/blackenedgold&#34;&gt;@blackenedgold&lt;/a&gt; モジュラーにできるようにはしてるけど、まだsoをロードする仕組みはないです。というか、APIがまだunstableだし&lt;/p&gt;&amp;mdash; Kazuho Oku (@kazuho) &lt;a href=&#34;https://twitter.com/kazuho/status/540692011003559936&#34;&gt;2014, 12月 5&lt;/a&gt;&lt;/blockquote&gt;
+&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
+
+&lt;p&gt;つらい&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_5&#34;&gt;solシステムの導入&lt;/h1&gt;
+
+&lt;p&gt;mod_xxxにしようと思ったんですけど水だし溶液ってことでsol_xxxにします。&lt;/p&gt;
+
+&lt;p&gt;H2Oにこんな感じのパッチ当てて&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-diff&#34;&gt;diff --git a/src/main.c b/src/main.c
+index 7fc4680..57804a6 100644
+--- a/src/main.c
++++ b/src/main.c
+@@ -30,6 +30,7 @@
+ #include &amp;lt;signal.h&amp;gt;
+ #include &amp;lt;stdio.h&amp;gt;
+ #include &amp;lt;unistd.h&amp;gt;
++#include &amp;lt;dlfcn.h&amp;gt;
+ #include &amp;lt;sys/stat.h&amp;gt;
+ #include &amp;lt;sys/socket.h&amp;gt;
+ #include &amp;lt;sys/types.h&amp;gt;
+@@ -76,6 +77,8 @@ struct config_t {
+     } state;
+ };
+ 
++typedef int(*sol_init_fn)(h2o_configurator_command_t *, h2o_configurator_context_t *, const char *, yoml_t *);
++
+ static unsigned long openssl_thread_id_callback(void)
+ {
+     return (unsigned long)pthread_self();
+@@ -381,6 +384,43 @@ static int on_config_num_threads(h2o_configurator_command_t *cmd, h2o_configurat
+     return h2o_config_scanf(cmd, config_file, config_node, &amp;quot;%u&amp;quot;, &amp;amp;conf-&amp;gt;num_threads);
+ }
+ 
++static int on_config_use(h2o_configurator_command_t *cmd, h2o_configurator_context_t *ctx, const char *config_file, yoml_t *config_node)
++{
++  /* struct config_t *conf = H2O_STRUCT_FROM_MEMBER(struct config_t, global_config, ctx-&amp;gt;globalconf); */
++  char *sol_name;
++  sol_init_fn init_fn;
++  void *handle;
++
++  /* fetch solution name */
++  switch (config_node-&amp;gt;type) {
++  case YOML_TYPE_SCALAR:
++    sol_name = config_node-&amp;gt;data.scalar;
++    break;
++  default:
++    h2o_config_print_error(cmd, config_file, config_node, &amp;quot;value must be a string or a mapping (with keys: `port` and optionally `host`)&amp;quot;);
++    return -1;
++  }
++
++  char dl_name[strlen(&amp;quot;sol_.so&amp;quot;) + strlen(sol_name) + 1];
++  char init_fn_name[strlen(&amp;quot;init_sol_&amp;quot;) + strlen(sol_name) + 1];
++
++  sprintf(dl_name, &amp;quot;./sol_%s.so&amp;quot;, sol_name);
++  sprintf(init_fn_name, &amp;quot;init_sol_%s&amp;quot;, sol_name);
++  handle = dlopen(dl_name, RTLD_LAZY);
++  if (! handle){
++    h2o_config_print_error(cmd, config_file, config_node, &amp;quot;cannot load the solution&amp;quot;);
++    return -1;
++  }
++
++  init_fn = dlsym(handle, init_fn_name);
++  if(dlerror()){
++    h2o_config_print_error(cmd, config_file, config_node, &amp;quot;cannot find the initialize function&amp;quot;);
++    return -1;
++  }
++  return (*init_fn)(cmd, ctx, config_file, config_node);
++
++}
++
+ static void usage_print_directives(h2o_globalconf_t *conf)
+ {
+     h2o_linklist_t *node;
+@@ -606,6 +646,10 @@ int main(int argc, char **argv)
+             c, &amp;quot;num-threads&amp;quot;, H2O_CONFIGURATOR_FLAG_GLOBAL,
+             on_config_num_threads,
+             &amp;quot;number of worker threads (default: 1)&amp;quot;);
++        h2o_config_define_command(
++            c, &amp;quot;use&amp;quot;, H2O_CONFIGURATOR_FLAG_GLOBAL,
++            on_config_use,
++            &amp;quot;use the solution&amp;quot;);
+     }
+ 
+     h2o_access_log_register_configurator(&amp;amp;config.global_config);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;こんな感じのソリューション用意して&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-C&#34;&gt;#include &amp;lt;stdio.h&amp;gt;
+#include &amp;lt;pthread.h&amp;gt;
+#include &amp;quot;picrin.h&amp;quot;
+#include &amp;quot;picrin/pair.h&amp;quot;
+#include &amp;quot;picrin/string.h&amp;quot;
+#include &amp;quot;picrin/error.h&amp;quot;
+#include &amp;quot;h2o.h&amp;quot;
+
+pic_state *pic;
+struct pic_lib *PICRIN_BASE;
+
+
+void pic_init_contrib(pic_state *);
+void pic_load_piclib(pic_state *);
+
+static pic_value
+pic_features(pic_state *pic)
+{
+  pic_get_args(pic, &amp;quot;&amp;quot;);
+
+  return pic-&amp;gt;features;
+}
+
+static pic_value
+pic_libraries(pic_state *pic)
+{
+  pic_value libs = pic_nil_value(), lib;
+
+  pic_get_args(pic, &amp;quot;&amp;quot;);
+
+  pic_for_each (lib, pic-&amp;gt;libs) {
+    libs = pic_cons(pic, pic_car(pic, lib), libs);
+  }
+
+  return libs;
+}
+
+void
+pic_init_picrin(pic_state *pic)
+{
+  const char *scheme =
+    &amp;quot;(import (scheme base)&amp;quot;
+    &amp;quot;        (scheme write))&amp;quot;
+    &amp;quot;(define-syntax call-with-output-to-string&amp;quot;
+    &amp;quot;  (syntax-rules ()&amp;quot;
+    &amp;quot;    ((_ proc)&amp;quot;
+    &amp;quot;     (let ((s (open-output-string)))&amp;quot;
+    &amp;quot;       (proc s)&amp;quot;
+    &amp;quot;       (get-output-string s)))))&amp;quot;
+    &amp;quot;(define (-&amp;gt;string e)&amp;quot;
+    &amp;quot;  (call-with-output-to-string&amp;quot;
+    &amp;quot;   (lambda (s)&amp;quot;
+    &amp;quot;     (display e s))))&amp;quot;;
+
+
+  pic_add_feature(pic, &amp;quot;r7rs&amp;quot;);
+
+  pic_deflibrary (pic, &amp;quot;(picrin library)&amp;quot;) {
+    pic_defun(pic, &amp;quot;libraries&amp;quot;, pic_libraries);
+  }
+
+  pic_deflibrary (pic, &amp;quot;(scheme base)&amp;quot;) {
+    pic_defun(pic, &amp;quot;features&amp;quot;, pic_features);
+
+    pic_init_contrib(pic);
+    pic_load_piclib(pic);
+  }
+  pic_deflibrary (pic, &amp;quot;(picrin base)&amp;quot;) {
+    pic_load_cstr(pic, scheme);
+  }
+}
+
+const char *
+pic_eval_cstr_into_cstr(pic_state *pic, const char *input)
+{
+  pic_value v;
+
+
+  v = pic_read_cstr(pic, input);
+  v = pic_eval(pic, v, PICRIN_BASE);
+  v = pic_funcall(pic, PICRIN_BASE, &amp;quot;-&amp;gt;string&amp;quot;, pic_list1(pic, v));
+  return pic_str_cstr(pic_str_ptr(v));
+}
+
+
+
+int
+on_picrin(h2o_configurator_command_t *cmd, h2o_configurator_context_t *ctx, const char *config_file, yoml_t *config_node)
+{
+  const char *sexp;
+  
+  switch (config_node-&amp;gt;type) {
+  case YOML_TYPE_SCALAR:
+    sexp = config_node-&amp;gt;data.scalar;
+    break;
+  default:
+    h2o_config_print_error(cmd, config_file, config_node, &amp;quot;value must be a string&amp;quot;);
+    return -1;
+  }
+
+  pic_try{
+    puts(pic_eval_cstr_into_cstr(pic, sexp));
+  }
+  pic_catch{
+    pic_print_backtrace(pic);
+    return -1;
+  }
+  return 0;
+
+}
+
+
+int
+init_sol_picrin(h2o_configurator_command_t *cmd, h2o_configurator_context_t *ctx, const char *config_file, yoml_t *config_node)
+{
+
+
+  h2o_configurator_t *c = cmd-&amp;gt;configurator;
+
+  pic = pic_open(0, NULL, NULL);
+
+  pic_init_picrin(pic);
+
+  PICRIN_BASE = pic_find_library(pic, pic_read_cstr(pic, &amp;quot;(picrin base)&amp;quot;));
+
+  h2o_config_define_command(
+      c, &amp;quot;picrin&amp;quot;, H2O_CONFIGURATOR_FLAG_GLOBAL | H2O_CONFIGURATOR_FLAG_EXPECT_SCALAR,
+      on_picrin,
+      &amp;quot;run picrin&amp;quot;);
+
+
+  return 0;
+
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;んでコンフィグは&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-yaml&#34;&gt;# to find out the configuration commands, run: h2o --help
+
+use: picrin
+listen:
+  port:
+listen:
+  port: 8081
+  ssl:
+    certificate-file: examples/h2o/server.crt
+    key-file: examples/h2o/server.key
+picrin: &amp;quot;(string-append \&amp;quot;Hello, \&amp;quot; \&amp;quot;World\&amp;quot;)&amp;quot;
+hosts:
+  default:
+    paths:
+      /:
+        file.dir: examples/doc_root
+    access-log: /dev/stdout
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そして魔法のコマンドを叩いて&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cp ~/compile/picrin/src/{init_contrib.c,load_piclib.c} ./
+$ gcc -c sol_picrin.c -std=c99   -o sol_picrin.o -I ~/compile/picrin/extlib/benz/include -I ~/compile/h2o/include -I ~/compile/h2o/deps/picohttpparser -I ~/compile/h2o/deps/yoml -DH2O_USE_LIBUV=0 -fPIC
+$ gcc sol_picrin.o load_piclib.o init_contrib.o -L ~/compile/picrin/build/lib/ -l picrin -fPIC -shared -o sol_picrin.so
+$ cp sol_picrin.so ~/compile/h2o
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;実行すると&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cd ~/compile/h2o
+$ ./h2o --conf example/h2o/h2o.conf
+Hello, Wold
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ヤッタ！&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_6&#34;&gt;標準出力かよ&lt;/h1&gt;
+
+&lt;p&gt;ううっ。ごめんなさい。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_7&#34;&gt;で、HTTPレスポンス版は？&lt;/h1&gt;
+
+&lt;p&gt;ごめんなさい、まだです。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;file.c&lt;/code&gt;をベースにして&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-yaml&#34;&gt;    paths:
+      /:
+        picrin.exp: &amp;quot;(string-append \&amp;quot;Hello, \&amp;quot; \&amp;quot;World\&amp;quot;)&amp;quot;
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;とかしたかったんですけど間に合いませんでした。&lt;/p&gt;
+
+&lt;p&gt;ソリューションなりモジュールなりのシステムが出来たらまたトライします&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>claspがアップデートされたよ</title>
+      <link>http://keens.github.io/blog/2014/12/06/claspgaatupudetosaretayo</link>
+      <pubDate>Sat, 06 Dec 2014 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/blog/2014/12/06/claspgaatupudetosaretayo</guid>
+      <description>
+
+&lt;p&gt;このエントリーは&lt;a href=&#34;http://qiita.com/advent-calendar/2014/lisp&#34;&gt;Lisp Advent Calendar 2014&lt;/a&gt;6日目の記事です。&lt;br /&gt;
+前: nobkzさんで &lt;a href=&#34;http://qiita.com/nobkz/items/2be2b6806237d8ea6e21&#34;&gt;lfe - (lisp (flavored (erlang)))について基本その1 - Qiita&lt;/a&gt;&lt;br /&gt;
+後: 私で &lt;a href=&#34;/blog/2014/12/07/h2onipicrinworong-kasu/&#34;&gt;H2Oにpicrinを溶かす | κeenのHappy Hacκing Blog&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;κeenです。アドベントカレンダーめっちゃ書いてますね。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_0&#34;&gt;Clasp!&lt;/h1&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/drmeister/clasp&#34;&gt;clasp&lt;/a&gt;のmasterに色々マージされました。リリースノートには、&lt;/p&gt;
+
+&lt;p&gt;&lt;quote&gt;&lt;pre&gt;
+Clasp version 0.11
+* Added ASDF support.
+This is still alpha. Compile the ASDF module using (core:compile-asdf).
+After that you can load the module using (load &amp;ldquo;sys:kernel;asdf;build;asdf.bundle&amp;rdquo;).
+It takes between 15-30 seconds to load (this is why I&amp;rsquo;m integrating Cleavir).
+* Added the :CLASP &lt;em&gt;feature&lt;/em&gt; and removed the :ECL &lt;em&gt;feature&lt;/em&gt;.
+Clasp will continue to mimic the underlying ECL functionality so that
+Common Lisp code that supports ECL can be made to support Clasp by converting
+#+ecl to #+(or ecl clasp) and #-ecl to #-(or ecl clasp)
+* Added code to generate object files directly from Clasp.
+The LLVM bitcode compiler &amp;ldquo;llc&amp;rdquo; no longer needs to be in the PATH
+for Clasp to generate object files from Common Lisp source.
+The &amp;ldquo;ld&amp;rdquo; linker does need to be accessible.
+&lt;/pre&gt;&lt;/quote&gt;&lt;/p&gt;
+
+&lt;p&gt;とあります。ASDFが使える！リリースノートには書いてませんがslimeサポートもmasterにコミットされてます。あとコミット読んだら最適化もされてるような…。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;/slide/clasp.html&#34;&gt;以前&lt;/a&gt;二十数秒掛かっていた&lt;code&gt;(fib 29)&lt;/code&gt;ですが、今回はなんと&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ /usr/local/clasp/bin/clasp_boehm_o
+Starting Clasp 0.11 ... loading image... it takes a few seconds
+Top level.
+&amp;gt; (load &amp;quot;fib.lisp&amp;quot;)
+1346269
+real time : 34.294 secs
+run time  : 38.844 secs
+T
+&amp;gt; (compile-file &amp;quot;fib.lisp&amp;quot;)
+
+#P&amp;quot;/home/kim/Lisp/fib.bc&amp;quot;
+NIL
+NIL
+&amp;gt; (load &amp;quot;fib.bc&amp;quot;)
+1346269
+real time : 21.355 secs
+run time  : 25.785 secs
+T
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;うわぁ。遅くなってる。&lt;/p&gt;
+
+&lt;p&gt;因みに.bcファイルはLLVMの中間ファイルなのでClaspとは独立に&lt;code&gt;opt -f -O3 fib.bc &amp;gt; fib.opt.bc&lt;/code&gt;で最適化出来ます。それをやると&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ opt -f -O3 fib.bc &amp;gt; fib.opt.bc
+$ /usr/local/clasp/bin/clasp_boehm_o
+Starting Clasp 0.11 ... loading image... it takes a few seconds
+Top level.
+&amp;gt; (load &amp;quot;fib.opt.bc&amp;quot;)
+1346269
+real time : 34.981 secs
+run time  : 37.986 secs
+T
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;あれ？遅くなった。&lt;/p&gt;
+
+&lt;p&gt;mpsはまだコンパイル中だから待ってね&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_1&#34;&gt;ASDFを使ってみる&lt;/h1&gt;
+
+&lt;pre&gt;&lt;code&gt;$ /usr/local/clasp/bin/clasp_boehm_o
+Starting Clasp 0.11 ... loading image... it takes a few seconds
+Top level.
+&amp;gt; (time (core:compile-asdf))
+zsh: segmentation fault (core dumped)  /usr/local/clasp/bin/clasp_boehm_o
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;はい。解散。因みに50分くらいは動いてた。&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>mirahについて</title>
+      <link>http://keens.github.io/blog/2014/12/04/mirahnituite</link>
+      <pubDate>Thu, 04 Dec 2014 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/blog/2014/12/04/mirahnituite</guid>
+      <description>
+
+&lt;p&gt;このエントリーは&lt;a href=&#34;http://qiita.com/advent-calendar/2014/minor-language&#34;&gt;マイナー言語 Advent Calendar 2014 - Qiita&lt;/a&gt;4日目の記事です。&lt;br /&gt;
+前: ksmakotoさんで&lt;a href=&#34;http://ksmakoto.hatenadiary.com/entry/2014/12/03/002435&#34;&gt;マクロ、拙作のテキストマクロ言語m55について主に - ksmakotoのhatenadiary&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;κeenです。進捗ダメです。マイナー言語Advent Calendarが空いてるようだったのでMirahの話を捩じ込みますね。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_0&#34;&gt;Mirahとは？&lt;/h1&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://keens.github.io/blog/2014/08/07/mirah-0-dot-1-3/&#34;&gt;以前の記事&lt;/a&gt;を参照していただければだいたい分かるかと思いますが、「Ruby風の文法で書けるJava」です。JRubyのようにRubyをJavaで実装したのでもなくGroovyのようにJVM上で動く別の言語でもなく、あくまでJavaそのものです。&lt;/p&gt;
+
+&lt;p&gt;JRubyとの違いは理解頂けるかと思いますが、Groovyとの違いを説明するとしたら一番はランタイムですかね。Groovyはコンパイル後のソースもGroovyを必要としますがMirahはコンパイルされたら普通のJavaで書いたのと同じ.classファイルになります。&lt;/p&gt;
+
+&lt;p&gt;かといってくるくる括弧(&lt;code&gt;{}&lt;/code&gt;)を&lt;code&gt;end&lt;/code&gt;で書けるだけかというとそうでもなく、多くのシンタックスシュガーがマクロとして実装されています。&lt;/p&gt;
+
+&lt;p&gt;例えば&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;10.times do |i|
+  puts i
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;はJavaの&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-java&#34;&gt;for(int i = 0; i &amp;lt; 10; i++)
+    System.out.println(i);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と同じバイトコードを生成します。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_1&#34;&gt;v0.1.4リリースおめでとうございます。&lt;/h1&gt;
+
+&lt;p&gt;2014-11-14にv0.1.4がリリースされました。ラムダ式について少し進展があったようです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;(lambda Runnable do
+ 1000.times { puts &amp;quot;Hello&amp;quot;}
+end).run
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;とか書けます。が、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;(lambda Runnable do
+ 1000.times { puts &amp;quot;Hello&amp;quot;}
+end).start
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;とは書けませんでした。やりたいのはこっちなのにね。ちょっと突っついてみます。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/mirah/mirah&#34;&gt;ここ&lt;/a&gt;からそれっぽい情報入手出来ます。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/shannah/mirah-nbm&#34;&gt;ここ&lt;/a&gt;からNetBeansのプラグインを入手出来ます。&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>VOPで遊ぶ</title>
+      <link>http://keens.github.io/blog/2014/12/02/vopdeyou-bu</link>
+      <pubDate>Tue, 02 Dec 2014 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/blog/2014/12/02/vopdeyou-bu</guid>
+      <description>
+
+&lt;p&gt;(:meta&lt;br /&gt;
+ ((:this &amp;ldquo;&lt;a href=&#34;http://qiita.com/advent-calendar/2014/lisp&#34;&gt;Lisp Advent Calendar 2014&lt;/a&gt;の3日目の記事&amp;rdquo;)&lt;br /&gt;
+  (:prev (:author &amp;ldquo;tk_riple&amp;rdquo; :title &lt;a href=&#34;http://compassoftime.blogspot.jp/2014/12/r7rs.html&#34;&gt;&amp;ldquo;時の羅針盤＠blog: R7RSポータブルライブラリを書く際の落とし穴&amp;rdquo;&lt;/a&gt;))&lt;br /&gt;
+  (:next (:author &amp;ldquo;nobkz&amp;rdquo; :tite &amp;ldquo;&lt;a href=&#34;http://qiita.com/nobkz/items/68ee2adbc13caf3eec6f&#34;&gt;Shenの基礎その1 基本的な型 - Qiita&lt;/a&gt;&amp;rdquo;))))&lt;/p&gt;
+
+&lt;p&gt;κeenです。さっきまでVOPで遊んでたので当初の予定を変更してVOPの話をします。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_0&#34;&gt;VOPとは何か&lt;/h1&gt;
+
+&lt;p&gt;SBCLやCMU CLで使われているネイティブコードを吐くための機構、要はインラインアセンブラです。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_1&#34;&gt;VOPとはどんなものか&lt;/h1&gt;
+
+&lt;p&gt;とりあえずコードをば。x86-64用です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(in-package :cl-user)
+(defpackage vop-sample
+  (:use :cl :sb-ext :sb-c))
+(in-package :vop-sample)
+
+(defknown add (fixnum fixnum)          ; addのftypeを宣言
+    fixnum
+    (movable                            ; 副作用がない
+     flushable                          ; デッドコードとして除去してよい
+     foldable                           ; 定数畳み込みをしてよい
+     always-translatable)               ; 必ずアセンブラコードになる
+  :overwrite-fndb-silently t)           ; 関数上書きのエラーを出さない
+
+
+(in-package &amp;quot;SB-VM&amp;quot;)
+(define-vop (vop-sample::add)          ; VOP名
+  (:translate vop-sample::add)         ; 関数名
+  (:policy :fast-safe)                  ; declare optimize的な
+  (:args (x :scs (signed-reg))          ; 引数宣言。後述
+         (y :scs (signed-reg)))
+  (:arg-types fixnum fixnum)            ; 引数の型宣言
+  (:results (r :scs (signed-reg)))      ; 返り値宣言。後述
+  (:result-types fixnum)                ; 返り値の型宣言
+  (:generator 4                         ; 翻訳するときのコスト
+              (move r x)                ; 返り値レジスタにxを移動
+              (inst add r y)))          ; 返り値レジスタにyを足し込む
+(in-package :vop-sample)
+
+(defun add (x y)                        ; 安全なバージョンでラップする
+  (add x y))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ちょっとおまじないが多いですね。&lt;/p&gt;
+
+&lt;p&gt;すこし解説すると引数は基本レジスタ渡しで、レジスタが足りなければスタックも使います。で、レジスタやスタックの値には型があります。それがストレージクラス(sc)です。この場合、x、y、rは&lt;code&gt;signed-reg&lt;/code&gt;と宣言されてますね。符号付きレジスタです。&lt;code&gt;:scs&lt;/code&gt;の最後のsは複数形のsです。今回は1つしか指定してませんが複数指定することも可能なのです。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;move&lt;/code&gt;というのはアセンブラ命令ではなく、マクロかなんかです（適当）。VOPなのかな？どのストレージクラスからどのストレージクラスに移動するかを認知して適切な命令を吐きます。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;inst&lt;/code&gt;が付いてるのがアセンブラですね。&lt;/p&gt;
+
+&lt;p&gt;このコード、xとrが等しいときに最適化出来るのですがそれはまあおいといて、こいつをディスアセンブルしてみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;VOP-SAMPLE&amp;gt; (disassemble #&#39;add)
+; disassembly for ADD
+; Size: 43 bytes. Origin: #x1005C26416
+; 16:       488BD3           MOV RDX, RBX                     ; no-arg-parsing entry point
+; 19:       48D1FA           SAR RDX, 1
+; 1C:       488BF9           MOV RDI, RCX
+; 1F:       48D1FF           SAR RDI, 1
+; 22:       4801FA           ADD RDX, RDI
+; 25:       48D1E2           SHL RDX, 1
+; 28:       488BE5           MOV RSP, RBP
+; 2B:       F8               CLC
+; 2C:       5D               POP RBP
+; 2D:       C3               RET
+; 2E:       CC0A             BREAK 10                         ; error trap
+; 30:       02               BYTE #X02
+; 31:       19               BYTE #X19                        ; INVALID-ARG-COUNT-ERROR
+; 32:       9A               BYTE #X9A                        ; RCX
+; 33:       CC0A             BREAK 10                         ; error trap
+; 35:       04               BYTE #X04
+; 36:       08               BYTE #X08                        ; OBJECT-NOT-FIXNUM-ERROR
+; 37:       FE1B01           BYTE #XFE, #X1B, #X01            ; RDX
+; 3A:       CC0A             BREAK 10                         ; error trap
+; 3C:       04               BYTE #X04
+; 3D:       08               BYTE #X08                        ; OBJECT-NOT-FIXNUM-ERROR
+; 3E:       FE9B03           BYTE #XFE, #X9B, #X03            ; RDI
+NIL
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;主要な部分はここです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;; 19:       48D1FA           SAR RDX, 1
+; 1C:       488BF9           MOV RDI, RCX
+; 1F:       48D1FF           SAR RDI, 1
+; 22:       4801FA           ADD RDX, RDI
+; 25:       48D1E2           SHL RDX, 1
+; 28:       488BE5           MOV RSP, RBP
+; 2B:       F8               CLC
+; 2C:       5D               POP RBP
+; 2D:       C3               RET
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;ADD&lt;/code&gt;の他に無駄な命令がいくつかありますね。&lt;/p&gt;
+
+&lt;p&gt;SBCLはintの下位1bitをGCのときのタグとして使ってるのでアセンブラに渡す前に算術右シフト(&lt;code&gt;SAR&lt;/code&gt;)して渡してます。
+そして返るときはまた左シフト(&lt;code&gt;SHL&lt;/code&gt;)してます。&lt;/p&gt;
+
+&lt;p&gt;その後の&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;; 28:       488BE5           MOV RSP, RBP
+; 2B:       F8               CLC
+; 2C:       5D               POP RBP
+; 2D:       C3               RET
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;は関数から返るときのイディオム(スタックポインタを復元してフラグをクリアして呼び出し元に戻る)です。&lt;/p&gt;
+
+&lt;p&gt;余談ですがLispマシンなどのタグマシンは下位ビットにあるタグを無視して計算出来るのでシフトが不要になります。なので速いんですね。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_2&#34;&gt;シフトをなくす&lt;/h1&gt;
+
+&lt;p&gt;さっきは&lt;code&gt;signed-reg&lt;/code&gt;を指定しました。つまり「（アセンブラの）intをくれ」と要求した訳です。
+intの下位1bitは0なので足し算する分には別にシフトされなくても問題ありませんよね。シフトを殺しましょう。&lt;/p&gt;
+
+&lt;p&gt;さっきのコードの下にこれを足します。&lt;code&gt;add&lt;/code&gt;は再定義しないと反映されないようでした。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(in-package &amp;quot;SB-VM&amp;quot;)
+(define-vop (vop-sample::add/v2)        ; vop名は異なる
+  (:translate vop-sample::add)          ; 関数名は同じ
+  (:policy :fast-safe)
+  (:args (x :scs (any-reg))             ; any-regになってる
+         (y :scs (any-reg)))            ; any-regになってる
+  (:arg-types fixnum fixnum)
+  (:results (r :scs (any-reg)))         ; any-regになってる
+  (:result-types fixnum)
+  (:generator 3                         ; コストをさっきより低くすると優先して使ってくれる
+              (move r x)
+              (inst add r y)))
+
+(in-package :vop-sample)
+
+(defun add (x y)
+  (add x y))
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;んで、ディスアセンブルしてみると&lt;/p&gt;
+
+&lt;p&gt;VOP-SAMPLE&amp;gt; (disassemble #&amp;lsquo;add)&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;; disassembly for ADD
+; Size: 31 bytes. Origin: #x1004C2AB83
+; 83:       488BD1           MOV RDX, RCX                     ; no-arg-parsing entry point
+; 86:       4801FA           ADD RDX, RDI
+; 89:       488BE5           MOV RSP, RBP
+; 8C:       F8               CLC
+; 8D:       5D               POP RBP
+; 8E:       C3               RET
+; 8F:       CC0A             BREAK 10                         ; error trap
+; 91:       02               BYTE #X02
+; 92:       19               BYTE #X19                        ; INVALID-ARG-COUNT-ERROR
+; 93:       9A               BYTE #X9A                        ; RCX
+; 94:       CC0A             BREAK 10                         ; error trap
+; 96:       04               BYTE #X04
+; 97:       08               BYTE #X08                        ; OBJECT-NOT-FIXNUM-ERROR
+; 98:       FE1B01           BYTE #XFE, #X1B, #X01            ; RDX
+; 9B:       CC0A             BREAK 10                         ; error trap
+; 9D:       04               BYTE #X04
+; 9E:       08               BYTE #X08                        ; OBJECT-NOT-FIXNUM-ERROR
+; 9F:       FE9B03           BYTE #XFE, #X9B, #X03            ; RDI
+NIL
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;はい。見事にSARとSHLが消えましたね。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_3&#34;&gt;もう少し複雑な型を扱う&lt;/h1&gt;
+
+&lt;p&gt;アセンブラですし&lt;code&gt;(simple-array (unsigned-byte 8) (*))&lt;/code&gt;(以下octets)を扱いたいですよね。とりあえず難しいことは考えずにoctetsの0番目の要素にアクセスしてみましょう。とはいっても&lt;code&gt;simple-array&lt;/code&gt;は長さや要素の型の情報も持っていることが予想されるので少しデータを読み飛ばさないといけませんね。&lt;/p&gt;
+
+&lt;p&gt;その辺の計算が分からなかったのでsbclのソースからそれっぽいものを参考にしました。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(defknown access-simple-array-0 ((simple-array (unsigned-byte 8) (*)))
+    (unsigned-byte 8)
+    (movable flushable always-translatable)
+  :overwrite-fndb-silently t)
+(in-package &amp;quot;SB-VM&amp;quot;)
+(define-vop (vop-sample::access-simple-array-0)
+  (:translate vop-sample::access-simple-array-0)
+  (:policy :fast-safe)
+  (:args (x :scs (descriptor-reg)))
+  (:arg-types *)
+  (:results (r :scs (unsigned-reg)))
+  (:result-types unsigned-num)
+  (:generator 4
+              (inst movzx r 
+               (make-ea :byte :base x
+                        :disp (- (* vector-data-offset n-word-bytes)
+                               other-pointer-lowtag)))))
+
+(in-package :vop-sample)
+(defvar *octets* (make-array 4
+                             :element-type &#39;(unsigned-byte 8)
+                             :initial-contents &#39;(10 11 12 13)))
+
+(defun access-simple-array-0 (x)
+  (access-simple-array-0 x))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;こんな感じになります。境界チェックとかはやってませんが許して下さい。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;descriptor-reg&lt;/code&gt;というのがポインタが入ってるレジスタっぽいです。&lt;code&gt;movzx&lt;/code&gt;は8bitの値を64bitのレジスタに符号拡張しながらロードする命令です。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;make-ea&lt;/code&gt;というのがアドレッシングですね。&lt;code&gt;x&lt;/code&gt;レジスタを起点として&lt;code&gt;(- (* vector-data-offset n-word-bytes) other-pointer-lowtag)&lt;/code&gt;バイト(？ワード？)先のメモリ1byteを指します。&lt;/p&gt;
+
+&lt;p&gt;ディスアセンブルしてみましょう。みなさんもう慣れてきたと思うので主要部だけ抜き出します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;; 65:       0FB65101         MOVZX EDX, BYTE PTR [RCX+1]      ; no-arg-parsing entry point
+; 69:       48D1E2           SHL RDX, 1
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;短いですね。この&lt;code&gt;BYTE PTR [RCX+1]&lt;/code&gt;が&lt;code&gt;make-ea&lt;/code&gt;した値に対応します。&lt;code&gt;RCX&lt;/code&gt;は&lt;code&gt;x&lt;/code&gt;で&lt;code&gt;(- (* vector-data-offset n-word-bytes) other-pointer-lowtag)&lt;/code&gt;の結果が1に現れてるんでしょう。補足しておくと、&lt;code&gt;EDX&lt;/code&gt;と&lt;code&gt;RDX&lt;/code&gt;は同じ場所を指します。32bitとして扱うときはE、64bitとして扱うときはRで指します。&lt;/p&gt;
+
+&lt;p&gt;さて、私はx86のアドレッシングモードなんて全然知らないのですがコードを見る限りもうちょっと複雑なアドレッシングが出来るようです。&lt;/p&gt;
+
+&lt;p&gt;配列のn番目にアクセスするコードが良い例のようです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(defknown access-simple-array-n ((simple-array (unsigned-byte 8) (*)) (unsigned-byte 64))
+    (unsigned-byte 8)
+    (movable flushable always-translatable)
+  :overwrite-fndb-silently t)
+(in-package &amp;quot;SB-VM&amp;quot;)
+(define-vop (vop-sample::access-simple-array-n)
+  (:translate vop-sample::access-simple-array-n)
+  (:policy :fast-safe)
+  (:args (x :scs (descriptor-reg))
+         (i :scs (unsigned-reg)))
+  (:arg-types * unsigned-num)
+  (:results (r :scs (unsigned-reg)))
+  (:result-types unsigned-num)
+  (:generator 4
+              (inst movzx r 
+               (make-ea :byte :base x
+                        :scale 1
+                        :index i
+                        :disp (- (* vector-data-offset n-word-bytes)
+                               other-pointer-lowtag)))))
+
+(in-package :vop-sample)
+(defun access-simple-array-n (x i)
+  (access-simple-array-n x i))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;新たに引数&lt;code&gt;i&lt;/code&gt;をとるようになったのと&lt;code&gt;make-ea&lt;/code&gt;の引数に&lt;code&gt;:scale 1 :index i&lt;/code&gt;が加わってます。&lt;/p&gt;
+
+&lt;p&gt;ディスアセンブルしてみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;; 98:       0FB6543901       MOVZX EDX, BYTE PTR [RCX+RDI+1]  ; no-arg-parsing entry point
+; 9D:       48D1E2           SHL RDX, 1
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;アドレッシングに&lt;code&gt;+RDI&lt;/code&gt;が加わりましたね。どうして&lt;code&gt;i&lt;/code&gt;(&lt;code&gt;RDI&lt;/code&gt;)を&lt;code&gt;RAS&lt;/code&gt;しなくていいのか気になりますがまあ、とりあえず正常に動いてるようです。&lt;/p&gt;
+
+&lt;p&gt;おわかりかと思いますがアドレッシングが&lt;code&gt;x&lt;/code&gt;をベースにして今までの定数オフセット+新たにレジスタで指定したオフセットになってます。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;make-ea&lt;/code&gt;に渡した&lt;code&gt;:index&lt;/code&gt;は何か分かるとしても&lt;code&gt;:scale&lt;/code&gt;が気になりますよね。&lt;code&gt;scale&lt;/code&gt;を2にしてディスアセンブルしてみます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;; 58:       0FB6547901       MOVZX EDX, BYTE PTR [RCX+RDI*2+1]  ; no-arg-parsing entry point
+; 5D:       48D1E2           SHL RDX, 1
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;はい。インデックスを定数倍するようですね。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_4&#34;&gt;SSEにチャレンジ&lt;/h1&gt;
+
+&lt;p&gt;インテルアーキテクチャにあるSSEとはStreaming SIMD Extensionsの略です。じゃあSIMDは何かというとSimple Instruction Mulitple Dataの略で、1命令で複数のデータを処理出来ます。&lt;/p&gt;
+
+&lt;p&gt;この「複数のデータ」というのは64bit2つや32bit4つなどを128bitにまとめて渡します。128bitの値なんてどうやって作るんだよって感じですがsbcl-1.1.8から入った&lt;code&gt;sb-ext:%make-simd-pack-*&lt;/code&gt;が存在します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;VOP-SAMPLE&amp;gt; (%make-simd-pack-ub32 1 2 3 4)
+#&amp;lt;SIMD-PACK  01 00 00 00  02 00 00 00  03 00 00 00  04 00 00 00&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;こんな感じです。x86_64がリトルエンディアンだったのを思い出させる表記ですね。ub32の他にub64、single、doubleが存在します。&lt;/p&gt;
+
+&lt;p&gt;ストレージクラスも&lt;code&gt;*-sse-reg&lt;/code&gt;というものがあるのでこれを使いましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(defknown simd-add ((simd-pack (unsigned-byte 64)) (simd-pack (unsigned-byte 64)))
+    (simd-pack (unsigned-byte 32))
+    (movable flushable always-translatable)
+  :overwrite-fndb-silently t)
+(in-package &amp;quot;SB-VM&amp;quot;)
+(define-vop (vop-sample::simd-add)
+  (:translate vop-sample::simd-add)
+  (:policy :fast-safe)
+  (:args (x :scs (int-sse-reg))
+         (y :scs (int-sse-reg)))
+  (:arg-types simd-pack-int simd-pack-int)
+  (:results (r :scs (int-sse-reg)))
+  (:result-types simd-pack-int)
+  (:generator 4
+              (move r x)
+              (inst padddw r y)))
+
+(in-package :vop-sample)
+(defun simd-add (x y)
+  (simd-add x y))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;はい。こんな感じですね。&lt;code&gt;paddw&lt;/code&gt;はparallel add wordですかね。これをディスアセンブルすると思ったより大きな命令になったので全部貼っときますね。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;VOP-SAMPLE&amp;gt; (disassemble #&#39;simd-add)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;; disassembly for SIMD-ADD
+; Size: 108 bytes. Origin: #x1006D64A21
+; 21:       660F6FC2         MOVDQA XMM0, XMM2                ; no-arg-parsing entry point
+; 25:       660FFDC1         PADDW XMM0, XMM1
+; 29:       49896C2440       MOV [R12+64], RBP                ; thread.pseudo-atomic-bits
+; 2E:       4D8B5C2418       MOV R11, [R12+24]                ; thread.alloc-region
+; 33:       498D5320         LEA RDX, [R11+32]
+; 37:       493B542420       CMP RDX, [R12+32]
+; 3C:       7740             JNBE L2
+; 3E:       4989542418       MOV [R12+24], RDX                ; thread.alloc-region
+; 43:       498D530F         LEA RDX, [R11+15]
+; 47: L0:   48C742F165030000 MOV QWORD PTR [RDX-15], 869
+; 4F:       48C742F900000000 MOV QWORD PTR [RDX-7], 0
+; 57:       660F7F4201       MOVDQA [RDX+1], XMM0
+; 5C:       49316C2440       XOR [R12+64], RBP                ; thread.pseudo-atomic-bits
+; 61:       7402             JEQ L1
+; 63:       cc09             break 9                          ; pending interrupt trap
+; 65: l1:   488be5           mov rsp, rbp
+; 68:       f8               clc
+; 69:       5d               pop rbp
+; 6a:       c3               ret
+; 6b:       cc0a             break 10                         ; error trap
+; 6d:       02               byte #x02
+; 6e:       19               byte #x19                        ; invalid-arg-count-error
+; 6f:       9a               byte #x9a                        ; rcx
+; 70:       cc0a             break 10                         ; error trap
+; 72:       04               byte #x04
+; 73:       32               byte #x32                        ; object-not-simd-pack-error
+; 74:       fe1b01           byte #xfe, #x1b, #x01            ; rdx
+; 77:       cc0a             break 10                         ; error trap
+; 79:       04               byte #x04
+; 7a:       32               byte #x32                        ; object-not-simd-pack-error
+; 7b:       fe9b03           byte #xfe, #x9b, #x03            ; rdi
+; 7e: l2:   6a20             push 32
+; 80:       bac0854200       mov edx, 4359616                 ; alloc_tramp
+; 85:       ffd2             call rdx
+; 87:       5a               pop rdx
+; 88:       80ca0f           or dl, 15
+; 8b:       ebba             jmp l0
+nil
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;なにやってるのやら。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_5&#34;&gt;出来なかったこと&lt;/h1&gt;
+
+&lt;p&gt;&lt;code&gt;PCMPESTRI&lt;/code&gt;を使ってみたかったのですが扱いがトリッキーなので断念しました。具体的に言うと操作する値を格納するレジスタがEAXとECX固定なようなのです。
+&lt;code&gt;:temporary&lt;/code&gt;節で内部で使うレジスタも要求出来るようなのですが名指しでもらえるんですかね。&lt;/p&gt;
+
+&lt;p&gt;SSEの使い方とsimple-arrayから要素の配列を取り出す方法までは示したので誰かやって下さい。&lt;/p&gt;
+
+&lt;p&gt;参考資料いっぱい置いときますね。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://www.pvk.ca/Blog/2014/08/16/how-to-define-new-intrinsics-in-sbcl/&#34;&gt;How to Define New Intrinsics in SBCL - Paul Khuong mostly on Lisp&lt;/a&gt;
+: VOPの使い方。最初の方に出てきたaddの最適化のやつとかも出てくる。(en)&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://pvk.ca/Blog/Lisp/hacking_SSE_intrinsics-part_1.html&#34;&gt;Hacking SSE Intrinsics in SBCL (part 1) - Paul Khuong mostly on Lisp&lt;/a&gt;
+: SBCLのsimd-packの具体的解説(en)&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://www.pvk.ca/Blog/2013/06/05/fresh-in-sbcl-1-dot-1-8-sse-intrinsics/&#34;&gt;Fresh in SBCL 1.1.8: SSE Intrinsics! - Paul Khuong mostly on Lisp&lt;/a&gt;
+: SBCLでVOPとSSEを使ってマンデルブロ集合を計算する(en)&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://software.intel.com/en-us/node/514244&#34;&gt;Packed Compare Intrinsics&lt;/a&gt;
+: IntelのPCMPESTRIとかのマニュアル(en)&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://msdn.microsoft.com/en-us/library/bb531465.aspx&#34;&gt;_mm_cmpestri&lt;/a&gt;
+: MicrosoftのPCMPESTRIのマニュアル。こっちの方が分かりやすい(en)&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://homepage1.nifty.com/herumi/prog/intel-opt.html&#34;&gt;Intel optimization&lt;/a&gt;
+: PCMPISTRIを使った&lt;code&gt;strlen&lt;/code&gt;の実装例(ja)&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://blog.kazuhooku.com/2014/12/improving-parser-performance-using-sse.html&#34;&gt;Kazuho&amp;rsquo;s Weblog: Improving Parser Performance using SSE Instructions (in case of PicoHTTPParser)&lt;/a&gt;
+: PCMPESTRIを使ってHTTPパーサーを高速化した話。これをやりたかった。(en)&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_6&#34;&gt;おわりに&lt;/h1&gt;
+
+&lt;p&gt;おつかれ様でした。たまには低レベルなことをやっても良いんじゃないでしょうか。&lt;/p&gt;
+
+&lt;p&gt;明日はnobkzさんで、Shenについてです。&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>ClackのHandlerの書き方</title>
+      <link>http://keens.github.io/blog/2013/12/06/lisp-advent-calendar-7</link>
+      <pubDate>Fri, 06 Dec 2013 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/blog/2013/12/06/lisp-advent-calendar-7</guid>
+      <description>
+
+&lt;p&gt;(この記事は &lt;a href=&#34;http://qiita.com/advent-calendar/2013/lisp&#34;&gt;Lisp Advent Calendar&lt;/a&gt; 7日目のためのエントリです。&lt;br /&gt;
+ ( &lt;a href=&#34;http://meymao.hatenablog.com/entry/2013/12/06/140029&#34;&gt;6日目&lt;/a&gt; meymaoさんより「Lisperがクリスマスに贈るべきプレゼント三選」)&lt;br /&gt;
+ ( &lt;a href=&#34;http://www.principia-m.com/ts/0081/index-jp.html&#34;&gt;8日目&lt;/a&gt; athos0220さんよりマクロとクロージャで作る並行プログラミング言語))&lt;/p&gt;
+
+&lt;p&gt;ClackのHandlerの書き方についてちゃちゃっと解説します。&lt;/p&gt;
+
+&lt;p&gt;さっくりゆるふわな感じで行くので &lt;a href=&#34;http://clacklisp.org/&#34;&gt;clack公式&lt;/a&gt;だとか &lt;a href=&#34;http://clacklisp.org/tutorial/ja/&#34;&gt;チュートリアル&lt;/a&gt;だとかも参考にして下さい。とは言ってもCommon Lispな方なら知ってるでしょう。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_0&#34;&gt;Clackって？&lt;/h2&gt;
+
+&lt;p&gt;PerlのPlackやRubyのRackと同じくCommon Lispの統一HTTPサーバーインターフェースです。開発時はHunchentootで、本番はFastCGIでみたいなことが簡単にできます。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_1&#34;&gt;Handlerって？&lt;/h2&gt;
+
+&lt;p&gt;HunchentootやFastCGIといったバックエンドとClackとの間でリクエストやレスポンスの受け渡しを担当します。さっくり言うとHandlerを書けばClackで使えるサーバーが増える訳です。今(2013-12現在)のところ、Hunchentoot、FastCGI、Apache + mod_lisp2があるようです。&lt;/p&gt;
+
+&lt;p&gt;じゃあ、実際に軽量サーバーの &lt;a href=&#34;https://github.com/gigamonkey/toot&#34;&gt;toot&lt;/a&gt;のハンドラを書きながら解説しますね&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_2&#34;&gt;準備&lt;/h2&gt;
+
+&lt;p&gt;&lt;code&gt;git clone git@github.com:fukamachi/clack.git&lt;/code&gt;してclackのソースコードを持ってきます。他のHanderがそうしてるようなので&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;clack/clack-handler-toot.asd&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;clack/src/core/handler/toot.lisp&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;を作ります。&lt;code&gt;core&lt;/code&gt;じゃなくて&lt;code&gt;contrib&lt;/code&gt;だろとかそもそも自分のリポジトリに作れよとかは自由にやって下さい。&lt;code&gt;clack/clack-handler-toot.asd&lt;/code&gt;は適当に似た名前のやつをコピーすれば良いんじゃないですかね？（適当&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_3&#34;&gt;書き方&lt;/h2&gt;
+
+&lt;p&gt;いたって簡単で、&lt;code&gt;run (app &amp;amp;key debug (port 5000)) -&amp;gt; acceptor&lt;/code&gt;と&lt;code&gt;stop (acceptor) -&amp;gt; 多分決まってない&lt;/code&gt;を実装すれば良いです。&lt;/p&gt;
+
+&lt;p&gt;とはいっても&lt;code&gt;stop&lt;/code&gt;は1行で終わりますが&lt;code&gt;run&lt;/code&gt;は大きく分けて&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;. サーバーを立ち上げる&lt;/li&gt;
+&lt;li&gt;. サーバーから渡されたリクエスト(多くの場合&lt;code&gt;request&lt;/code&gt;オブジェクト)をplistにして&lt;code&gt;app&lt;/code&gt;に渡す&lt;/li&gt;
+&lt;li&gt;. &lt;code&gt;app&lt;/code&gt;のlist形式の返値を適切な形(多くの場合&lt;code&gt;response&lt;/code&gt;オブジェクト)にしてサーバーに返す&lt;/li&gt;
+&lt;li&gt;. エラーハンドリング&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;の4つの作業があります。一つ一つ説明していきますね。&lt;/p&gt;
+
+&lt;h3 id=&#34;toc_4&#34;&gt;1 サーバーを立ち上げる&lt;/h3&gt;
+
+&lt;p&gt;tootの場合は&lt;code&gt;toot:start-server (&amp;amp;key handler port)&lt;/code&gt;を使いました。スレッド立てるのはclackがやってくれます。はい。&lt;/p&gt;
+
+&lt;h3 id=&#34;toc_5&#34;&gt;2 サーバー渡されたリクエスト(多くの場合&lt;code&gt;request&lt;/code&gt;オブジェクト)をplistにして&lt;code&gt;app&lt;/code&gt;に渡す&lt;/h3&gt;
+
+&lt;p&gt;tootの場合、&lt;code&gt;key&lt;/code&gt;の&lt;code&gt;handler&lt;/code&gt;が&lt;code&gt;requesut&lt;/code&gt;オブジェクトを受け取って&lt;code&gt;response&lt;/code&gt;オブジェクトを返せば良いので&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;(lambda (req)
+    .....
+    (call app (handle-request req))
+    .....
+)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;って感じで&lt;code&gt;handle-request&lt;/code&gt;に実装を書きます。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;handle-request&lt;/code&gt;の内部は&lt;code&gt;req&lt;/code&gt;を &lt;a href=&#34;http://clacklisp.org/tutorial/ja/04-the-environment.html&#34;&gt;clack公式のチュートリアル&lt;/a&gt;に載っているプロパティに一つ一つ変換していきます。このプロパティとバックエンドのオブジェクトのスロット名と実際のHTTPヘッダの名前が必ずしも一致しないのが泣き所です。さらに、大抵のサーバーの場合リクエストオブジェクトのスロットの詳細まではドキュメントに載ってないのでソースを参照しながら書くことになります。また、そもそも対応する値が無くて、他の情報を切り貼りして作らないといけなかったり、どうしようもなくて空にしないといけないこともあります。&lt;/p&gt;
+
+&lt;p&gt;tootハンドラは&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;(defun handle-request (req)
+  &amp;quot;Convert Request from server into a plist
+before pass to Clack application.&amp;quot;
+  (let ((content-length (and (request-header :content-length req)
+                             (parse-integer (request-header :content-length req) :junk-allowed t)))
+    (port-and-host (get-port-and-host req)))
+    (append
+     (list
+      :request-method (request-method req)
+      :script-name &amp;quot;&amp;quot;
+      :path-info (url-decode (request-path req))
+      :server-name (car port-and-host)
+      :server-port (cdr port-and-host)
+      :server-protocol (server-protocol req)
+      :request-uri (request-uri req)
+      :url-scheme :HTTP;(request-scheme req)
+      :remote-addr (remote-addr req)
+      :remote-port (remote-port req)
+      :query-string (request-query req)
+      :content-length content-length
+      :content-type (request-header :content-type req)
+      :raw-body (let ((stream (toot::request-body-stream req)))
+                  ;(when content-length
+                    ;(setf (flex:flexi-stream-bound stream) content-length))
+                  stream)
+      :clack.uploads nil
+      :clack.handler :toot)
+
+
+     (loop for (k . v) in (toot::request-headers req)
+           unless (find k &#39;(:request-method :script-name :path-info :server-name :server-port :server-protocol :request-uri :remote-addr :remote-port :query-string :content-length :content-type :accept :connection))
+             append (list (intern (format nil &amp;quot;HTTP-~:@(~A~)&amp;quot; k) :keyword)
+                          v)))))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;こんな感じに実装されてます。tootからインポートしたものの他、一部ヘルパー関数も使ってますが挙動はまあ、名前から察して下さい。&lt;/p&gt;
+
+&lt;h3 id=&#34;toc_6&#34;&gt;3 &lt;code&gt;app&lt;/code&gt;の返値のplistを適切な形(多くの場合&lt;code&gt;response&lt;/code&gt;オブジェクト)にしてサーバーに返す&lt;/h3&gt;
+
+&lt;p&gt;&lt;code&gt;app&lt;/code&gt;を&lt;code&gt;call&lt;/code&gt;してやると&lt;code&gt;(status headers body)&lt;/code&gt;という形式のlistが返ってきます。&lt;code&gt;status&lt;/code&gt;は数値、&lt;code&gt;headers&lt;/code&gt;はplist、&lt;code&gt;body&lt;/code&gt;はパスネーム又は文字列のリストです。&lt;/p&gt;
+
+&lt;p&gt;さっきはこんな感じで呼んだのでした。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;(lambda (req)
+    .....
+    (call app (handle-request req))
+    .....
+)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;もうお分かりかと思いますが&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;(lambda (req)
+    (handle-response
+        (call app (handle-request req)))
+)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;として、実装は&lt;code&gt;handle-response&lt;/code&gt;に書きます。…が、tootは&lt;code&gt;response&lt;/code&gt;オブジェクトではなく&lt;code&gt;request&lt;/code&gt;オブジェクトに変更を加えたものを返すようなので&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;(lambda (req)
+    (handle-response
+        req
+        (call app (handle-request req)))
+)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;として、&lt;code&gt;app&lt;/code&gt;の返値を元に&lt;code&gt;req&lt;/code&gt;を書き換えます。こちらもあまりドキュメントが無いので頑張ってソース読むしかないです。因みに&lt;code&gt;body&lt;/code&gt;はパスネームならそのファイルの内容を、文字列のリストならそれぞれを改行(&lt;code&gt;&amp;lt;br&amp;gt;&lt;/code&gt;ではなく&lt;code&gt;\n&lt;/code&gt;)で連結したものを返す必要があります。&lt;/p&gt;
+
+&lt;p&gt;tootハンドラの実装載せときますね。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;(defun handle-response (req res)
+  (destructuring-bind (status headers body) res
+    (etypecase body
+      (pathname
+       (multiple-value-call #&#39;serve-file
+     (values req body (parse-charset (getf headers :content-type)))))
+      (list
+       ;; XXX: almost same as Clack.Handler.Hunchentoot&#39;s one.
+       (setf (status-code req) status)
+       (loop for (k v) on headers by #&#39;cddr
+             with hash = (make-hash-table :test #&#39;eq)
+             if (gethash k hash)
+               do (setf (gethash k hash)
+                        (format nil &amp;quot;~:[~;~:*~A, ~]~A&amp;quot; (gethash k hash) v))
+             else if (eq k :content-type)
+               do (multiple-value-bind (v charset)
+                      (parse-charset v)
+                    (setf (gethash k hash) v)
+                    (setf (toot::response-charset req) charset))
+             else do (setf (gethash k hash) v)
+             finally
+          (loop for k being the hash-keys in hash
+                using (hash-value v)
+                do (setf (response-header k req) v)))
+       (toot::send-response req (with-output-to-string (s)
+      (format s &amp;quot;~{~A~^~%~}&amp;quot; body)))))))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;(destructuring-bind (status headers body) res
+  (etypecase body
+    (pathname ...)
+    (list ...)))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;がテンプレートですね。&lt;code&gt;pathname&lt;/code&gt;のときはtootに丸投げして&lt;code&gt;list&lt;/code&gt;のときは&lt;code&gt;headers&lt;/code&gt;とかを真面目に処理してます。&lt;/p&gt;
+
+&lt;h3 id=&#34;toc_7&#34;&gt;4 エラーハンドリング&lt;/h3&gt;
+
+&lt;p&gt;早い話が500 internal server errorです。普通、Lispはエラーが起きるとデバッガに落ちますがサーバーは走り続ける必要がるのであらゆるエラーを無視する必要があります。が、しかしデバッグするとき(&lt;code&gt;run&lt;/code&gt;のキーワード引数に&lt;code&gt;debug&lt;/code&gt;がありましたね)はデバッガに落ちると嬉しいです。なので例のラムダを少し変更します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;(lambda (req)
+              (handle-response
+               req
+               (if debug (call app (handle-request req))
+           (aif (handler-case (call app (handle-request req))
+              (condition () nil))
+            it
+            &#39;(500 nil nil)))))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これで完成です。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_8&#34;&gt;テスト&lt;/h2&gt;
+
+&lt;p&gt;Clackにはテストが付いてます。テストケース自体は&lt;code&gt;clack/src/core/test/suite.lisp&lt;/code&gt;に書かれてます。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;clack/t/core/handler/hunchentoot.lisp&lt;/code&gt;を参考に&lt;code&gt;clack/t/core/handler/toot.lisp&lt;/code&gt;を作り、&lt;code&gt;clack/clack-test.asd&lt;/code&gt;の&lt;code&gt;hunchentoot&lt;/code&gt;を&lt;code&gt;toot&lt;/code&gt;に書き換えたら準備完了です。&lt;code&gt;(ql:quickload :clack-test)&lt;/code&gt;しましょう。テストが走ります。そして恐らくエラーが出て止まるでしょう。変な値を返すとサーバーじゃなくてテストの方がエラーで死ぬんですね。&lt;/p&gt;
+
+&lt;p&gt;そしたら&lt;code&gt;clack/src/core/test/suite.lisp&lt;/code&gt;を開いて期待された値がなんだったかを調べてサーバーを修正します。で、また&lt;code&gt;(ql:quickload :clack-test)&lt;/code&gt;の繰り返し。でも一回&lt;code&gt;quickload&lt;/code&gt;しちゃうと読み直してくれないので私は一々&lt;code&gt;M-x slime-restart-inferior-lisp&lt;/code&gt;してました。なんか違う気がする。これだけじゃなくてテスト全般。溢れるバッドノウハウ感。&lt;/p&gt;
+
+&lt;p&gt;とりあえずバックエンドにバグがあるとかのどうしようもない場合を除いてテストに全部合格すれば完成です&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_9&#34;&gt;完成したら&lt;/h2&gt;
+
+&lt;p&gt;どうしたらいいんでしょうね。分かんないです。clackにpull-req送るんでしょうか。あるいはquicklispに登録?私はとりあえず &lt;a href=&#34;https://github.com/KeenS/clack&#34;&gt;ブランチに置いてます&lt;/a&gt;が恐らく誰も使ってないですし知らないと思います。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_10&#34;&gt;で、何作ればいい？&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/fukamachi/clack/issues?state=open&#34;&gt;clackのissue&lt;/a&gt;にまだ作られてないものがリストされてます。「自分では需要はないけどなんか作ってみたい」といった奇特な方はそこから試すと良いんじゃないでしょうか。GAEとかmongrel2とか需要ありそうな気がします。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_11&#34;&gt;まとめ&lt;/h2&gt;
+
+&lt;p&gt;誰得&lt;/p&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>
