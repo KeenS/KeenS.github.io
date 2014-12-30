@@ -1,0 +1,2109 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+      <title>Common-Lisp on κeenのHappy Hacκing Blog </title>
+      <generator uri="https://hugo.spf13.com">Hugo</generator>
+    <link>http://KeenS.github.io/categories/common-lisp/index.xml/</link>
+    <language>en-us</language>
+    
+    
+    <updated>Sun, 14 Dec 2014 00:00:00 UTC</updated>
+    
+    <item>
+      <title>実用Common Lispを読んだ</title>
+      <link>http://keens.github.io/blog/2014/12/14/shi-yong-common-lispwodu-nda</link>
+      <pubDate>Sun, 14 Dec 2014 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/blog/2014/12/14/shi-yong-common-lispwodu-nda</guid>
+      <description>&lt;p&gt;以前&lt;a href=&#34;/blog/2014/10/20/lisp-ja/&#34;&gt;Common Lispの勉強の手引の記事&lt;/a&gt;を書いたときに実用Common Lispの名を挙げたが読んだことはなかった。&lt;/p&gt;
+
+&lt;p&gt;一応名前を挙げた責任として読んでみた。&lt;/p&gt;
+
+&lt;p&gt;読んだとは言ってもソースはざっくりしか見てないし、演習には目もくれてないので「一通り目を通した」程度。
+買った本は逃げないのだし一回で理解する必要はない。最初に一通り内容を掴んで主張を理解してから、あとで気になった時につぶさに読むのが私の読み方。&lt;/p&gt;
+
+&lt;p&gt;最初の感想を言うと、古い。Common Lispもcltl2とANSI両方に配慮されて書かれているし、紹介されているAIの事例も1970~1980年代のもの。
+古典といった感じ。ただし、その時代はCommon LispとAIの最盛期なのでこの本を読めばCommon LispがAIで名を馳せた理由が良く分かる。&lt;/p&gt;
+
+&lt;p&gt;Common Lispの内容は初級程度。まえがきにもあるようにプログラマとしては中級だがLispは初心者レベルの人向に書かれている。基本的なところを押えたらあとはどんどん進んでいく。
+プログラミングの経験があればそれでも問題ない筈。心配ならWeb上にいくらでもあるチュートリアルをこなせば良い。&lt;/p&gt;
+
+&lt;p&gt;ライブラリなどに関しては本の中で完結しているので良く言えば1から10まで教えてくれる。悪く言えば最近のCommon Lispの動向は全く分からない。その意味では実践入門ではなく学習図書。陳腐化はしない。&lt;/p&gt;
+
+&lt;p&gt;AIについては、やはり古い。今では手法が確立されてAIの分野とは扱われないものも含まれている。ただし、これは意図したものなのかもしれない。
+古いものというのは単純だ。最初に2部で単純なものを通して「肩馴らし」をしてから3部で手駒を増やして4部で踏み込んだ内容に入る。&lt;/p&gt;
+
+&lt;p&gt;また、AIの分野としては扱われていなものも含む、ということはこの本が情報科学の広い範囲をカバーする、ということでもある。900ベージは伊達じゃない。量もあればバラエティもある。&lt;/p&gt;
+
+&lt;p&gt;現実にある様々な難解な問題をCommon Lispという強力な道具で快刀乱麻解決していく。ソフトウェア開発手法を学びながらCommon Lispの強力さを思い知るための一冊。&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>割と処理系ポータブルなCommon Lisp実行可能ファイルを作る</title>
+      <link>http://keens.github.io/blog/2014/12/08/ge-tochu-li-xi-potaburunacommon-lispshi-xing-ke-neng-huairuwozuo-ru</link>
+      <pubDate>Mon, 08 Dec 2014 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/blog/2014/12/08/ge-tochu-li-xi-potaburunacommon-lispshi-xing-ke-neng-huairuwozuo-ru</guid>
+      <description>&lt;p&gt;κeenです。Lisp Advent Calendarはもう枠埋まっちゃったので普通にブログで。&lt;/p&gt;
+
+&lt;p&gt;コマンドラインから実行可能なLispファイルをそれなりに多くの処理系で動くように作る話。&lt;/p&gt;
+
+&lt;p&gt;この話はCIMの生い立ちとも関連するんだけどシェルからLispを使いたいときは&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;#!/usr/bin/env sbcl --script
+
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;なんて書いてた人も多いんじゃないかと思うんだけどこれは色々問題がある。&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;envは環境に依っては/usr/local/bin/envだったりする&lt;/li&gt;
+&lt;li&gt;envは環境に依っては複数引数を取れない。&amp;rdquo;sbcl &amp;ndash;script&amp;rdquo;という名前のファイルを捜しにいく&lt;/li&gt;
+&lt;li&gt;sbclでしか動かない&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;この問題の扱いは一応解決策がある&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;#!/bin/sh
+
+#|
+exec sbcl --script &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
+|#
+
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;3行目の&lt;code&gt;#|&lt;/code&gt;がシェルのコメントでありLispのブロックコメントであるのがポイント。&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;シェルは&lt;code&gt;#!/bin/sh&lt;/code&gt;を見てシェルスクリプトとして実行する&lt;/li&gt;
+&lt;li&gt;1,3行目はコメントなのでシェルは無視&lt;/li&gt;
+&lt;li&gt;4行目でsbclにそのファイルを引数として与えてexecする。execしたあとはシェルには戻らないのでその後何が書いてあっても構わない&lt;/li&gt;
+&lt;li&gt;sbclを&lt;code&gt;--script&lt;/code&gt;付きで読んでるので1行目の&lt;code&gt;#!&lt;/code&gt;で始まる行は無視する&lt;/li&gt;
+&lt;li&gt;3~5行目はブロックコメントなのでsbclは無視&lt;/li&gt;
+&lt;li&gt;それ以降がLispとして実行される&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;というカラクリになっている。こういうのをピジン言語っていうんだけ？&lt;/p&gt;
+
+&lt;p&gt;まあいいや。&lt;/p&gt;
+
+&lt;p&gt;ところでこのブロックコメントの中にはシェルスクリプト書き放題だよね？そのシェルスクリプト内でどのLisp使うか決めたらポータブルになりそうじゃない？&lt;/p&gt;
+
+&lt;p&gt;こういうのはどう？&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;#!/bin/sh
+
+#|
+run_if_exists(){
+ command -v $1 &amp;gt; /dev/null 2&amp;gt;&amp;amp;1 &amp;amp;&amp;amp; exec &amp;quot;$@&amp;quot;
+}
+ run_if_exists sbcl --noinform --no-sysinit --no-userinit --script &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
+ run_if_exists clisp -norc --quiet --silent -on-error exit  &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
+ run_if_exists ecl -norc -q -shell &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
+ run_if_exists mkcl -norc -q -shell &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
+ run_if_exists alisp -qq -#! &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
+|#
+
+(write-line (lisp-implementation-type))
+(force-output)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;cclとabclは1行目のシェバンを読み飛ばせなかった&amp;amp;評価結果をエコーバックしない方法が見当らなかったからパス。CMUCLは自分の環境で動かないから検証出来てない。&lt;/p&gt;
+
+&lt;p&gt;これでポータブルに実行は可能。コマンドライン引数の扱いとかはライブラリを頼ってくれ。因みにCIMでは&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;  #+allegro  (cdr (system:command-line-arguments))
+  #+sbcl (do*  ((var sb-ext:*posix-argv* (cdr list))
+                (list var var))
+               ((string= (car list) &amp;quot;--&amp;quot;) (return (cdr list))))
+  #+clisp ext:*args*
+  #+ecl (do*  ((var (si:command-args) (cdr list))
+               (list var var))
+              ((string= (car list) &amp;quot;--&amp;quot;) (return (cdr list))))
+  #+abcl extensions:*command-line-argument-list*
+  #+gcl (do*  ((var si::*command-args* (cdr list))
+               (list var var))
+              ((string= (car list) &amp;quot;--&amp;quot;) (return (cdr list))))
+  #+cmu ext:*command-line-words*
+  #+ccl ccl:*unprocessed-command-line-arguments*
+  #+mkcl (do*  ((var (si:command-args) (cdr list))
+               (list var var))
+              ((string= (car list) &amp;quot;--&amp;quot;) (return (cdr list))))
+  #+lispworks system:*line-arguments-list*
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;としている。参考までに。&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>claspがアップデートされたよ</title>
+      <link>http://keens.github.io/blog/2014/12/06/claspgaatupudetosaretayo</link>
+      <pubDate>Sat, 06 Dec 2014 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/blog/2014/12/06/claspgaatupudetosaretayo</guid>
+      <description>
+
+&lt;p&gt;このエントリーは&lt;a href=&#34;http://qiita.com/advent-calendar/2014/lisp&#34;&gt;Lisp Advent Calendar 2014&lt;/a&gt;6日目の記事です。&lt;br /&gt;
+前: nobkzさんで &lt;a href=&#34;http://qiita.com/nobkz/items/2be2b6806237d8ea6e21&#34;&gt;lfe - (lisp (flavored (erlang)))について基本その1 - Qiita&lt;/a&gt;&lt;br /&gt;
+後: 私で &lt;a href=&#34;/blog/2014/12/07/h2onipicrinworong-kasu/&#34;&gt;H2Oにpicrinを溶かす | κeenのHappy Hacκing Blog&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;κeenです。アドベントカレンダーめっちゃ書いてますね。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_0&#34;&gt;Clasp!&lt;/h1&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/drmeister/clasp&#34;&gt;clasp&lt;/a&gt;のmasterに色々マージされました。リリースノートには、&lt;/p&gt;
+
+&lt;p&gt;&lt;quote&gt;&lt;pre&gt;
+Clasp version 0.11
+* Added ASDF support.
+This is still alpha. Compile the ASDF module using (core:compile-asdf).
+After that you can load the module using (load &amp;ldquo;sys:kernel;asdf;build;asdf.bundle&amp;rdquo;).
+It takes between 15-30 seconds to load (this is why I&amp;rsquo;m integrating Cleavir).
+* Added the :CLASP &lt;em&gt;feature&lt;/em&gt; and removed the :ECL &lt;em&gt;feature&lt;/em&gt;.
+Clasp will continue to mimic the underlying ECL functionality so that
+Common Lisp code that supports ECL can be made to support Clasp by converting
+#+ecl to #+(or ecl clasp) and #-ecl to #-(or ecl clasp)
+* Added code to generate object files directly from Clasp.
+The LLVM bitcode compiler &amp;ldquo;llc&amp;rdquo; no longer needs to be in the PATH
+for Clasp to generate object files from Common Lisp source.
+The &amp;ldquo;ld&amp;rdquo; linker does need to be accessible.
+&lt;/pre&gt;&lt;/quote&gt;&lt;/p&gt;
+
+&lt;p&gt;とあります。ASDFが使える！リリースノートには書いてませんがslimeサポートもmasterにコミットされてます。あとコミット読んだら最適化もされてるような…。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;/slide/clasp.html&#34;&gt;以前&lt;/a&gt;二十数秒掛かっていた&lt;code&gt;(fib 29)&lt;/code&gt;ですが、今回はなんと&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ /usr/local/clasp/bin/clasp_boehm_o
+Starting Clasp 0.11 ... loading image... it takes a few seconds
+Top level.
+&amp;gt; (load &amp;quot;fib.lisp&amp;quot;)
+1346269
+real time : 34.294 secs
+run time  : 38.844 secs
+T
+&amp;gt; (compile-file &amp;quot;fib.lisp&amp;quot;)
+
+#P&amp;quot;/home/kim/Lisp/fib.bc&amp;quot;
+NIL
+NIL
+&amp;gt; (load &amp;quot;fib.bc&amp;quot;)
+1346269
+real time : 21.355 secs
+run time  : 25.785 secs
+T
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;うわぁ。遅くなってる。&lt;/p&gt;
+
+&lt;p&gt;因みに.bcファイルはLLVMの中間ファイルなのでClaspとは独立に&lt;code&gt;opt -f -O3 fib.bc &amp;gt; fib.opt.bc&lt;/code&gt;で最適化出来ます。それをやると&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ opt -f -O3 fib.bc &amp;gt; fib.opt.bc
+$ /usr/local/clasp/bin/clasp_boehm_o
+Starting Clasp 0.11 ... loading image... it takes a few seconds
+Top level.
+&amp;gt; (load &amp;quot;fib.opt.bc&amp;quot;)
+1346269
+real time : 34.981 secs
+run time  : 37.986 secs
+T
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;あれ？遅くなった。&lt;/p&gt;
+
+&lt;p&gt;mpsはまだコンパイル中だから待ってね&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_1&#34;&gt;ASDFを使ってみる&lt;/h1&gt;
+
+&lt;pre&gt;&lt;code&gt;$ /usr/local/clasp/bin/clasp_boehm_o
+Starting Clasp 0.11 ... loading image... it takes a few seconds
+Top level.
+&amp;gt; (time (core:compile-asdf))
+zsh: segmentation fault (core dumped)  /usr/local/clasp/bin/clasp_boehm_o
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;はい。解散。因みに50分くらいは動いてた。&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>VOPで遊ぶ</title>
+      <link>http://keens.github.io/blog/2014/12/02/vopdeyou-bu</link>
+      <pubDate>Tue, 02 Dec 2014 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/blog/2014/12/02/vopdeyou-bu</guid>
+      <description>
+
+&lt;p&gt;(:meta&lt;br /&gt;
+ ((:this &amp;ldquo;&lt;a href=&#34;http://qiita.com/advent-calendar/2014/lisp&#34;&gt;Lisp Advent Calendar 2014&lt;/a&gt;の3日目の記事&amp;rdquo;)&lt;br /&gt;
+  (:prev (:author &amp;ldquo;tk_riple&amp;rdquo; :title &lt;a href=&#34;http://compassoftime.blogspot.jp/2014/12/r7rs.html&#34;&gt;&amp;ldquo;時の羅針盤＠blog: R7RSポータブルライブラリを書く際の落とし穴&amp;rdquo;&lt;/a&gt;))&lt;br /&gt;
+  (:next (:author &amp;ldquo;nobkz&amp;rdquo; :tite &amp;ldquo;&lt;a href=&#34;http://qiita.com/nobkz/items/68ee2adbc13caf3eec6f&#34;&gt;Shenの基礎その1 基本的な型 - Qiita&lt;/a&gt;&amp;rdquo;))))&lt;/p&gt;
+
+&lt;p&gt;κeenです。さっきまでVOPで遊んでたので当初の予定を変更してVOPの話をします。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_0&#34;&gt;VOPとは何か&lt;/h1&gt;
+
+&lt;p&gt;SBCLやCMU CLで使われているネイティブコードを吐くための機構、要はインラインアセンブラです。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_1&#34;&gt;VOPとはどんなものか&lt;/h1&gt;
+
+&lt;p&gt;とりあえずコードをば。x86-64用です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(in-package :cl-user)
+(defpackage vop-sample
+  (:use :cl :sb-ext :sb-c))
+(in-package :vop-sample)
+
+(defknown add (fixnum fixnum)          ; addのftypeを宣言
+    fixnum
+    (movable                            ; 副作用がない
+     flushable                          ; デッドコードとして除去してよい
+     foldable                           ; 定数畳み込みをしてよい
+     always-translatable)               ; 必ずアセンブラコードになる
+  :overwrite-fndb-silently t)           ; 関数上書きのエラーを出さない
+
+
+(in-package &amp;quot;SB-VM&amp;quot;)
+(define-vop (vop-sample::add)          ; VOP名
+  (:translate vop-sample::add)         ; 関数名
+  (:policy :fast-safe)                  ; declare optimize的な
+  (:args (x :scs (signed-reg))          ; 引数宣言。後述
+         (y :scs (signed-reg)))
+  (:arg-types fixnum fixnum)            ; 引数の型宣言
+  (:results (r :scs (signed-reg)))      ; 返り値宣言。後述
+  (:result-types fixnum)                ; 返り値の型宣言
+  (:generator 4                         ; 翻訳するときのコスト
+              (move r x)                ; 返り値レジスタにxを移動
+              (inst add r y)))          ; 返り値レジスタにyを足し込む
+(in-package :vop-sample)
+
+(defun add (x y)                        ; 安全なバージョンでラップする
+  (add x y))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ちょっとおまじないが多いですね。&lt;/p&gt;
+
+&lt;p&gt;すこし解説すると引数は基本レジスタ渡しで、レジスタが足りなければスタックも使います。で、レジスタやスタックの値には型があります。それがストレージクラス(sc)です。この場合、x、y、rは&lt;code&gt;signed-reg&lt;/code&gt;と宣言されてますね。符号付きレジスタです。&lt;code&gt;:scs&lt;/code&gt;の最後のsは複数形のsです。今回は1つしか指定してませんが複数指定することも可能なのです。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;move&lt;/code&gt;というのはアセンブラ命令ではなく、マクロかなんかです（適当）。VOPなのかな？どのストレージクラスからどのストレージクラスに移動するかを認知して適切な命令を吐きます。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;inst&lt;/code&gt;が付いてるのがアセンブラですね。&lt;/p&gt;
+
+&lt;p&gt;このコード、xとrが等しいときに最適化出来るのですがそれはまあおいといて、こいつをディスアセンブルしてみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;VOP-SAMPLE&amp;gt; (disassemble #&#39;add)
+; disassembly for ADD
+; Size: 43 bytes. Origin: #x1005C26416
+; 16:       488BD3           MOV RDX, RBX                     ; no-arg-parsing entry point
+; 19:       48D1FA           SAR RDX, 1
+; 1C:       488BF9           MOV RDI, RCX
+; 1F:       48D1FF           SAR RDI, 1
+; 22:       4801FA           ADD RDX, RDI
+; 25:       48D1E2           SHL RDX, 1
+; 28:       488BE5           MOV RSP, RBP
+; 2B:       F8               CLC
+; 2C:       5D               POP RBP
+; 2D:       C3               RET
+; 2E:       CC0A             BREAK 10                         ; error trap
+; 30:       02               BYTE #X02
+; 31:       19               BYTE #X19                        ; INVALID-ARG-COUNT-ERROR
+; 32:       9A               BYTE #X9A                        ; RCX
+; 33:       CC0A             BREAK 10                         ; error trap
+; 35:       04               BYTE #X04
+; 36:       08               BYTE #X08                        ; OBJECT-NOT-FIXNUM-ERROR
+; 37:       FE1B01           BYTE #XFE, #X1B, #X01            ; RDX
+; 3A:       CC0A             BREAK 10                         ; error trap
+; 3C:       04               BYTE #X04
+; 3D:       08               BYTE #X08                        ; OBJECT-NOT-FIXNUM-ERROR
+; 3E:       FE9B03           BYTE #XFE, #X9B, #X03            ; RDI
+NIL
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;主要な部分はここです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;; 19:       48D1FA           SAR RDX, 1
+; 1C:       488BF9           MOV RDI, RCX
+; 1F:       48D1FF           SAR RDI, 1
+; 22:       4801FA           ADD RDX, RDI
+; 25:       48D1E2           SHL RDX, 1
+; 28:       488BE5           MOV RSP, RBP
+; 2B:       F8               CLC
+; 2C:       5D               POP RBP
+; 2D:       C3               RET
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;ADD&lt;/code&gt;の他に無駄な命令がいくつかありますね。&lt;/p&gt;
+
+&lt;p&gt;SBCLはintの下位1bitをGCのときのタグとして使ってるのでアセンブラに渡す前に算術右シフト(&lt;code&gt;SAR&lt;/code&gt;)して渡してます。
+そして返るときはまた左シフト(&lt;code&gt;SHL&lt;/code&gt;)してます。&lt;/p&gt;
+
+&lt;p&gt;その後の&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;; 28:       488BE5           MOV RSP, RBP
+; 2B:       F8               CLC
+; 2C:       5D               POP RBP
+; 2D:       C3               RET
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;は関数から返るときのイディオム(スタックポインタを復元してフラグをクリアして呼び出し元に戻る)です。&lt;/p&gt;
+
+&lt;p&gt;余談ですがLispマシンなどのタグマシンは下位ビットにあるタグを無視して計算出来るのでシフトが不要になります。なので速いんですね。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_2&#34;&gt;シフトをなくす&lt;/h1&gt;
+
+&lt;p&gt;さっきは&lt;code&gt;signed-reg&lt;/code&gt;を指定しました。つまり「（アセンブラの）intをくれ」と要求した訳です。
+intの下位1bitは0なので足し算する分には別にシフトされなくても問題ありませんよね。シフトを殺しましょう。&lt;/p&gt;
+
+&lt;p&gt;さっきのコードの下にこれを足します。&lt;code&gt;add&lt;/code&gt;は再定義しないと反映されないようでした。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(in-package &amp;quot;SB-VM&amp;quot;)
+(define-vop (vop-sample::add/v2)        ; vop名は異なる
+  (:translate vop-sample::add)          ; 関数名は同じ
+  (:policy :fast-safe)
+  (:args (x :scs (any-reg))             ; any-regになってる
+         (y :scs (any-reg)))            ; any-regになってる
+  (:arg-types fixnum fixnum)
+  (:results (r :scs (any-reg)))         ; any-regになってる
+  (:result-types fixnum)
+  (:generator 3                         ; コストをさっきより低くすると優先して使ってくれる
+              (move r x)
+              (inst add r y)))
+
+(in-package :vop-sample)
+
+(defun add (x y)
+  (add x y))
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;んで、ディスアセンブルしてみると&lt;/p&gt;
+
+&lt;p&gt;VOP-SAMPLE&amp;gt; (disassemble #&amp;lsquo;add)&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;; disassembly for ADD
+; Size: 31 bytes. Origin: #x1004C2AB83
+; 83:       488BD1           MOV RDX, RCX                     ; no-arg-parsing entry point
+; 86:       4801FA           ADD RDX, RDI
+; 89:       488BE5           MOV RSP, RBP
+; 8C:       F8               CLC
+; 8D:       5D               POP RBP
+; 8E:       C3               RET
+; 8F:       CC0A             BREAK 10                         ; error trap
+; 91:       02               BYTE #X02
+; 92:       19               BYTE #X19                        ; INVALID-ARG-COUNT-ERROR
+; 93:       9A               BYTE #X9A                        ; RCX
+; 94:       CC0A             BREAK 10                         ; error trap
+; 96:       04               BYTE #X04
+; 97:       08               BYTE #X08                        ; OBJECT-NOT-FIXNUM-ERROR
+; 98:       FE1B01           BYTE #XFE, #X1B, #X01            ; RDX
+; 9B:       CC0A             BREAK 10                         ; error trap
+; 9D:       04               BYTE #X04
+; 9E:       08               BYTE #X08                        ; OBJECT-NOT-FIXNUM-ERROR
+; 9F:       FE9B03           BYTE #XFE, #X9B, #X03            ; RDI
+NIL
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;はい。見事にSARとSHLが消えましたね。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_3&#34;&gt;もう少し複雑な型を扱う&lt;/h1&gt;
+
+&lt;p&gt;アセンブラですし&lt;code&gt;(simple-array (unsigned-byte 8) (*))&lt;/code&gt;(以下octets)を扱いたいですよね。とりあえず難しいことは考えずにoctetsの0番目の要素にアクセスしてみましょう。とはいっても&lt;code&gt;simple-array&lt;/code&gt;は長さや要素の型の情報も持っていることが予想されるので少しデータを読み飛ばさないといけませんね。&lt;/p&gt;
+
+&lt;p&gt;その辺の計算が分からなかったのでsbclのソースからそれっぽいものを参考にしました。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(defknown access-simple-array-0 ((simple-array (unsigned-byte 8) (*)))
+    (unsigned-byte 8)
+    (movable flushable always-translatable)
+  :overwrite-fndb-silently t)
+(in-package &amp;quot;SB-VM&amp;quot;)
+(define-vop (vop-sample::access-simple-array-0)
+  (:translate vop-sample::access-simple-array-0)
+  (:policy :fast-safe)
+  (:args (x :scs (descriptor-reg)))
+  (:arg-types *)
+  (:results (r :scs (unsigned-reg)))
+  (:result-types unsigned-num)
+  (:generator 4
+              (inst movzx r 
+               (make-ea :byte :base x
+                        :disp (- (* vector-data-offset n-word-bytes)
+                               other-pointer-lowtag)))))
+
+(in-package :vop-sample)
+(defvar *octets* (make-array 4
+                             :element-type &#39;(unsigned-byte 8)
+                             :initial-contents &#39;(10 11 12 13)))
+
+(defun access-simple-array-0 (x)
+  (access-simple-array-0 x))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;こんな感じになります。境界チェックとかはやってませんが許して下さい。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;descriptor-reg&lt;/code&gt;というのがポインタが入ってるレジスタっぽいです。&lt;code&gt;movzx&lt;/code&gt;は8bitの値を64bitのレジスタに符号拡張しながらロードする命令です。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;make-ea&lt;/code&gt;というのがアドレッシングですね。&lt;code&gt;x&lt;/code&gt;レジスタを起点として&lt;code&gt;(- (* vector-data-offset n-word-bytes) other-pointer-lowtag)&lt;/code&gt;バイト(？ワード？)先のメモリ1byteを指します。&lt;/p&gt;
+
+&lt;p&gt;ディスアセンブルしてみましょう。みなさんもう慣れてきたと思うので主要部だけ抜き出します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;; 65:       0FB65101         MOVZX EDX, BYTE PTR [RCX+1]      ; no-arg-parsing entry point
+; 69:       48D1E2           SHL RDX, 1
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;短いですね。この&lt;code&gt;BYTE PTR [RCX+1]&lt;/code&gt;が&lt;code&gt;make-ea&lt;/code&gt;した値に対応します。&lt;code&gt;RCX&lt;/code&gt;は&lt;code&gt;x&lt;/code&gt;で&lt;code&gt;(- (* vector-data-offset n-word-bytes) other-pointer-lowtag)&lt;/code&gt;の結果が1に現れてるんでしょう。補足しておくと、&lt;code&gt;EDX&lt;/code&gt;と&lt;code&gt;RDX&lt;/code&gt;は同じ場所を指します。32bitとして扱うときはE、64bitとして扱うときはRで指します。&lt;/p&gt;
+
+&lt;p&gt;さて、私はx86のアドレッシングモードなんて全然知らないのですがコードを見る限りもうちょっと複雑なアドレッシングが出来るようです。&lt;/p&gt;
+
+&lt;p&gt;配列のn番目にアクセスするコードが良い例のようです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(defknown access-simple-array-n ((simple-array (unsigned-byte 8) (*)) (unsigned-byte 64))
+    (unsigned-byte 8)
+    (movable flushable always-translatable)
+  :overwrite-fndb-silently t)
+(in-package &amp;quot;SB-VM&amp;quot;)
+(define-vop (vop-sample::access-simple-array-n)
+  (:translate vop-sample::access-simple-array-n)
+  (:policy :fast-safe)
+  (:args (x :scs (descriptor-reg))
+         (i :scs (unsigned-reg)))
+  (:arg-types * unsigned-num)
+  (:results (r :scs (unsigned-reg)))
+  (:result-types unsigned-num)
+  (:generator 4
+              (inst movzx r 
+               (make-ea :byte :base x
+                        :scale 1
+                        :index i
+                        :disp (- (* vector-data-offset n-word-bytes)
+                               other-pointer-lowtag)))))
+
+(in-package :vop-sample)
+(defun access-simple-array-n (x i)
+  (access-simple-array-n x i))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;新たに引数&lt;code&gt;i&lt;/code&gt;をとるようになったのと&lt;code&gt;make-ea&lt;/code&gt;の引数に&lt;code&gt;:scale 1 :index i&lt;/code&gt;が加わってます。&lt;/p&gt;
+
+&lt;p&gt;ディスアセンブルしてみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;; 98:       0FB6543901       MOVZX EDX, BYTE PTR [RCX+RDI+1]  ; no-arg-parsing entry point
+; 9D:       48D1E2           SHL RDX, 1
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;アドレッシングに&lt;code&gt;+RDI&lt;/code&gt;が加わりましたね。どうして&lt;code&gt;i&lt;/code&gt;(&lt;code&gt;RDI&lt;/code&gt;)を&lt;code&gt;RAS&lt;/code&gt;しなくていいのか気になりますがまあ、とりあえず正常に動いてるようです。&lt;/p&gt;
+
+&lt;p&gt;おわかりかと思いますがアドレッシングが&lt;code&gt;x&lt;/code&gt;をベースにして今までの定数オフセット+新たにレジスタで指定したオフセットになってます。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;make-ea&lt;/code&gt;に渡した&lt;code&gt;:index&lt;/code&gt;は何か分かるとしても&lt;code&gt;:scale&lt;/code&gt;が気になりますよね。&lt;code&gt;scale&lt;/code&gt;を2にしてディスアセンブルしてみます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;; 58:       0FB6547901       MOVZX EDX, BYTE PTR [RCX+RDI*2+1]  ; no-arg-parsing entry point
+; 5D:       48D1E2           SHL RDX, 1
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;はい。インデックスを定数倍するようですね。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_4&#34;&gt;SSEにチャレンジ&lt;/h1&gt;
+
+&lt;p&gt;インテルアーキテクチャにあるSSEとはStreaming SIMD Extensionsの略です。じゃあSIMDは何かというとSimple Instruction Mulitple Dataの略で、1命令で複数のデータを処理出来ます。&lt;/p&gt;
+
+&lt;p&gt;この「複数のデータ」というのは64bit2つや32bit4つなどを128bitにまとめて渡します。128bitの値なんてどうやって作るんだよって感じですがsbcl-1.1.8から入った&lt;code&gt;sb-ext:%make-simd-pack-*&lt;/code&gt;が存在します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;VOP-SAMPLE&amp;gt; (%make-simd-pack-ub32 1 2 3 4)
+#&amp;lt;SIMD-PACK  01 00 00 00  02 00 00 00  03 00 00 00  04 00 00 00&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;こんな感じです。x86_64がリトルエンディアンだったのを思い出させる表記ですね。ub32の他にub64、single、doubleが存在します。&lt;/p&gt;
+
+&lt;p&gt;ストレージクラスも&lt;code&gt;*-sse-reg&lt;/code&gt;というものがあるのでこれを使いましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(defknown simd-add ((simd-pack (unsigned-byte 64)) (simd-pack (unsigned-byte 64)))
+    (simd-pack (unsigned-byte 32))
+    (movable flushable always-translatable)
+  :overwrite-fndb-silently t)
+(in-package &amp;quot;SB-VM&amp;quot;)
+(define-vop (vop-sample::simd-add)
+  (:translate vop-sample::simd-add)
+  (:policy :fast-safe)
+  (:args (x :scs (int-sse-reg))
+         (y :scs (int-sse-reg)))
+  (:arg-types simd-pack-int simd-pack-int)
+  (:results (r :scs (int-sse-reg)))
+  (:result-types simd-pack-int)
+  (:generator 4
+              (move r x)
+              (inst padddw r y)))
+
+(in-package :vop-sample)
+(defun simd-add (x y)
+  (simd-add x y))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;はい。こんな感じですね。&lt;code&gt;paddw&lt;/code&gt;はparallel add wordですかね。これをディスアセンブルすると思ったより大きな命令になったので全部貼っときますね。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;VOP-SAMPLE&amp;gt; (disassemble #&#39;simd-add)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;; disassembly for SIMD-ADD
+; Size: 108 bytes. Origin: #x1006D64A21
+; 21:       660F6FC2         MOVDQA XMM0, XMM2                ; no-arg-parsing entry point
+; 25:       660FFDC1         PADDW XMM0, XMM1
+; 29:       49896C2440       MOV [R12+64], RBP                ; thread.pseudo-atomic-bits
+; 2E:       4D8B5C2418       MOV R11, [R12+24]                ; thread.alloc-region
+; 33:       498D5320         LEA RDX, [R11+32]
+; 37:       493B542420       CMP RDX, [R12+32]
+; 3C:       7740             JNBE L2
+; 3E:       4989542418       MOV [R12+24], RDX                ; thread.alloc-region
+; 43:       498D530F         LEA RDX, [R11+15]
+; 47: L0:   48C742F165030000 MOV QWORD PTR [RDX-15], 869
+; 4F:       48C742F900000000 MOV QWORD PTR [RDX-7], 0
+; 57:       660F7F4201       MOVDQA [RDX+1], XMM0
+; 5C:       49316C2440       XOR [R12+64], RBP                ; thread.pseudo-atomic-bits
+; 61:       7402             JEQ L1
+; 63:       cc09             break 9                          ; pending interrupt trap
+; 65: l1:   488be5           mov rsp, rbp
+; 68:       f8               clc
+; 69:       5d               pop rbp
+; 6a:       c3               ret
+; 6b:       cc0a             break 10                         ; error trap
+; 6d:       02               byte #x02
+; 6e:       19               byte #x19                        ; invalid-arg-count-error
+; 6f:       9a               byte #x9a                        ; rcx
+; 70:       cc0a             break 10                         ; error trap
+; 72:       04               byte #x04
+; 73:       32               byte #x32                        ; object-not-simd-pack-error
+; 74:       fe1b01           byte #xfe, #x1b, #x01            ; rdx
+; 77:       cc0a             break 10                         ; error trap
+; 79:       04               byte #x04
+; 7a:       32               byte #x32                        ; object-not-simd-pack-error
+; 7b:       fe9b03           byte #xfe, #x9b, #x03            ; rdi
+; 7e: l2:   6a20             push 32
+; 80:       bac0854200       mov edx, 4359616                 ; alloc_tramp
+; 85:       ffd2             call rdx
+; 87:       5a               pop rdx
+; 88:       80ca0f           or dl, 15
+; 8b:       ebba             jmp l0
+nil
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;なにやってるのやら。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_5&#34;&gt;出来なかったこと&lt;/h1&gt;
+
+&lt;p&gt;&lt;code&gt;PCMPESTRI&lt;/code&gt;を使ってみたかったのですが扱いがトリッキーなので断念しました。具体的に言うと操作する値を格納するレジスタがEAXとECX固定なようなのです。
+&lt;code&gt;:temporary&lt;/code&gt;節で内部で使うレジスタも要求出来るようなのですが名指しでもらえるんですかね。&lt;/p&gt;
+
+&lt;p&gt;SSEの使い方とsimple-arrayから要素の配列を取り出す方法までは示したので誰かやって下さい。&lt;/p&gt;
+
+&lt;p&gt;参考資料いっぱい置いときますね。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://www.pvk.ca/Blog/2014/08/16/how-to-define-new-intrinsics-in-sbcl/&#34;&gt;How to Define New Intrinsics in SBCL - Paul Khuong mostly on Lisp&lt;/a&gt;
+: VOPの使い方。最初の方に出てきたaddの最適化のやつとかも出てくる。(en)&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://pvk.ca/Blog/Lisp/hacking_SSE_intrinsics-part_1.html&#34;&gt;Hacking SSE Intrinsics in SBCL (part 1) - Paul Khuong mostly on Lisp&lt;/a&gt;
+: SBCLのsimd-packの具体的解説(en)&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://www.pvk.ca/Blog/2013/06/05/fresh-in-sbcl-1-dot-1-8-sse-intrinsics/&#34;&gt;Fresh in SBCL 1.1.8: SSE Intrinsics! - Paul Khuong mostly on Lisp&lt;/a&gt;
+: SBCLでVOPとSSEを使ってマンデルブロ集合を計算する(en)&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://software.intel.com/en-us/node/514244&#34;&gt;Packed Compare Intrinsics&lt;/a&gt;
+: IntelのPCMPESTRIとかのマニュアル(en)&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://msdn.microsoft.com/en-us/library/bb531465.aspx&#34;&gt;_mm_cmpestri&lt;/a&gt;
+: MicrosoftのPCMPESTRIのマニュアル。こっちの方が分かりやすい(en)&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://homepage1.nifty.com/herumi/prog/intel-opt.html&#34;&gt;Intel optimization&lt;/a&gt;
+: PCMPISTRIを使った&lt;code&gt;strlen&lt;/code&gt;の実装例(ja)&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://blog.kazuhooku.com/2014/12/improving-parser-performance-using-sse.html&#34;&gt;Kazuho&amp;rsquo;s Weblog: Improving Parser Performance using SSE Instructions (in case of PicoHTTPParser)&lt;/a&gt;
+: PCMPESTRIを使ってHTTPパーサーを高速化した話。これをやりたかった。(en)&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_6&#34;&gt;おわりに&lt;/h1&gt;
+
+&lt;p&gt;おつかれ様でした。たまには低レベルなことをやっても良いんじゃないでしょうか。&lt;/p&gt;
+
+&lt;p&gt;明日はnobkzさんで、Shenについてです。&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>require, ASDF, quicklispを正しく使う</title>
+      <link>http://keens.github.io/blog/2014/11/30/quicklisp</link>
+      <pubDate>Sun, 30 Nov 2014 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/blog/2014/11/30/quicklisp</guid>
+      <description>
+
+&lt;p&gt;κeenです。最近のCommon Lispのパッケージ管理は&lt;code&gt;ql:quickload&lt;/code&gt;しか知らないという方も多いのではないでしょうか。しかしそれだけでは機能が足りないこともあります。Common Lispには様々な管理システムがあるので整理しましょう。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_0&#34;&gt;&lt;code&gt;provide&lt;/code&gt;, &lt;code&gt;require&lt;/code&gt;&lt;/h1&gt;
+
+&lt;p&gt;同じファイルを読み込まないための原始的なシステムです。Common Lispの標準の機能です。&lt;code&gt;(require &#39;foo)&lt;/code&gt;がファイルをロードし、ロードされたファイル内で&lt;code&gt;(provide &#39;foo)&lt;/code&gt;しておくと2回目以降の&lt;code&gt;(require &#39;foo&#39;)&lt;/code&gt;はファイルを読まずにすぐさま返ります。&lt;/p&gt;
+
+&lt;p&gt;ここで問題なのが&lt;code&gt;require&lt;/code&gt;がどこのファイルを捜しにいくかは処理系依存なところですね。なので生の&lt;code&gt;require&lt;/code&gt;は使えないと思っておいた方が良いでしょう。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_1&#34;&gt;ASDF 3&lt;/h1&gt;
+
+&lt;p&gt;Another System Definition Facility。過去にはAnotherじゃないSystem Definition Facilityもあった模様。最新版は3系です。結構APIが変っているので必ず3の情報を捜しましょう。&lt;/p&gt;
+
+&lt;p&gt;この「System」というのが聞き慣れませんが、ASDFの&lt;code&gt;defsystem&lt;/code&gt;で&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;systemに含まれるファイルの定義&lt;/li&gt;
+&lt;li&gt;依存systemの記述&lt;/li&gt;
+&lt;li&gt;その他作者、ライセンス、バージョンなどの記述&lt;/li&gt;
+&lt;li&gt;systemのコンパイルやロード、テストなどの操作&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;が可能です。ASDFはCにとってのmake + ldを標榜しています。Makefile的なものは(systemname).asdになります。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;require&lt;/code&gt;との統合もされており、ASDFを適切に設定することで&lt;code&gt;defsystem&lt;/code&gt;されたsystemを&lt;code&gt;require&lt;/code&gt;でロードすることが出来ます。このときASDFは処理系に依存せずにASDFのパスに従って.asdファイルを捜しにいきます。&lt;/p&gt;
+
+&lt;p&gt;また、ほとんどの処理系はASDFを標準添付していて、大抵&lt;code&gt;(require &#39;asdf)&lt;/code&gt;すれば使えるようになっています。&lt;/p&gt;
+
+&lt;p&gt;尚、コンパイル後のファイルは処理系、バージョン毎に互換性がないので本来なら適切に管理する必要がありますが、ASDFが適切に~/.cache/common-lisp以下に管理してくれます。優秀ですね。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_2&#34;&gt;quicklisp&lt;/h1&gt;
+
+&lt;p&gt;lispプロジェクトのインストーラと微妙にパッケージマネージャ的な役割をします。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://beta.quicklisp.org/quicklisp.lisp&#34;&gt;http://beta.quicklisp.org/quicklisp.lisp&lt;/a&gt; をダウンロードしてきてそのファイルを読み込んで&lt;code&gt;(quicklisp-quickstart:install)&lt;/code&gt;すれば~/quicklisp/以下にquicklispがインストールされ、ロードされます。処理系を再起動したあとまたquicklispをロードするには~/quicklisp/setup.lispを&lt;code&gt;load&lt;/code&gt;します。が、毎回それをやるのが面倒な人は&lt;code&gt;(ql:add-to-init-file)&lt;/code&gt;しておけば処理系の初期化ファイルに~/quicklisp/setup.lispを読み込む処理が書き加えられます。&lt;/p&gt;
+
+&lt;p&gt;さて、このquicklispを扱う上で3つの概念を覚えておくと良いです。&lt;/p&gt;
+
+&lt;p&gt;dist
+:    releaseの配布元。普通は&amp;rsquo;quicklisp&amp;rsquo;のみだがほかのdistを使うことも可能。自前のやつとか。新たなdistを追加したり削除したり出来る。gitのremoteをイメージすればよい。&lt;/p&gt;
+
+&lt;p&gt;release
+:    quicklispがダウンロードしてくる単位。ライブラリの作者が登録するときの単位。複数のsystemをもつこともある。&lt;/p&gt;
+
+&lt;p&gt;system
+:    ASDFのsystem。ユーザーが使うときの単位。&lt;/p&gt;
+
+&lt;p&gt;さて、quicklispを使うときは通常使いたいシステムを&lt;code&gt;ql:quickload&lt;/code&gt;すればそのシステムと依存システムの含まれているリリースをダウンロード、展開、ロードまでしてくれます。&lt;/p&gt;
+
+&lt;p&gt;開発中はREPLを立ち上げているので「あ、このライブライリ使おう」と思ったら&lt;code&gt;ql:quickload&lt;/code&gt;するだけで即座に使えるようになりますね。&lt;/p&gt;
+
+&lt;p&gt;quicklispのリリースは毎月下旬にアップデートされていて、毎月ちゃんと全てのライブラリが対応処理系で動くことがテストされています。なのでメンテナが居なくなったライブラリはドロップします。代わりにquicklispの作者がテスト出来ないライブラリは登録させてもらえなかったりします（cl-cudaとか）&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_3&#34;&gt;quicklispの問題&lt;/h1&gt;
+
+&lt;p&gt;既にCommon Lispのライブラリマネージャとしてデファクトスタンダード的位置を築きつつあるquicklispですが、私は結構不満があります。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;~/quicklisp/setup.lispを読み込むとquicklispの全てを読み込んでしまう: これには過去全てのバージョンのdistとreleaseとsystemのデータベース、HTTPクライアント、圧縮ファイルの解凍ライブラリなども含まれており、処理系の起動が非常に遅くなる&lt;/li&gt;
+&lt;li&gt;特にデータベースはファイルに書かれていても高速に読める形式なのに初期化時に毎回全ての内容をLispのハッシュに変換するという愚行をする。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;(ql:add-to-init-file)&lt;/code&gt;が推奨されているが、前述の通り処理系の起動が遅くなってしまう。特に、（インストーラではなく、インストール済みの）ライブラリマネージャとして使いたくてもインストーラの機能までロードしてしまう。結構メモリを食うしアプリケーションには要らない。&lt;/li&gt;
+&lt;li&gt;処理系に依っては初期化ファイルはlispファイルをスクリプトとして使うときは読み込まれないこともあるのでスクリプトには使えない。まあ、前述の通り使いたくもない。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;のでライブラリマネージャにはASDFが向いてるのですが、&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;quicklispでインストールしたシステムはquicklispを一旦ロードするかASDFの設定をいじるかしなければASDFからは使えない&lt;/li&gt;
+&lt;li&gt;quicklispはシステムのダウンロード/インストールだけすれば良いものをロードまでする&lt;/li&gt;
+&lt;li&gt;要はASDFを隠す&lt;/li&gt;
+&lt;li&gt;じゃASDFのラッパーかというとロードしかせず、コンパイルやテストなどはしない&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;など様々な問題があります。&lt;/p&gt;
+
+&lt;p&gt;一応quicklispの弁護をしておくと、Common Lispは他のスクリプト言語とはちょっと使い方が違って、&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;初期化ファイルは大抵オレオレライブラリで埋め尽くされていてそもそも起動には時間がかかる&lt;/li&gt;
+&lt;li&gt;Emacsのように一度REPLを立ち上げたら滅多に落とさない&lt;/li&gt;
+&lt;li&gt;アプリケーションも基本的にはREPLの中で使う&lt;/li&gt;
+&lt;li&gt;起動時間を気にするなら初期化ファイルを全てロードした、コアファイルをダンプしておいて使う&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;といった使い方をされることが多いのです。そのような人からしてみたら細々処理されるよりも起動時間とメモリは気にしないから速いやつをくれ、となるのです。&lt;/p&gt;
+
+&lt;p&gt;じゃあそれなりにCommon Lispを使う私が何故そうしないかというと&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;立ち上げっぱなしというのが性に合わない。立ち上がっているものを見るとすぐに落としたくなる。EmacsのヘビーユーザーだがEmacsもすぐ落とす。&lt;/li&gt;
+&lt;li&gt;コマンドラインアプリケーションを作りたいため、起動時間が命になる。&lt;/li&gt;
+&lt;li&gt;私はSBCLの開発版を使っていて、コアファイルはすぐに無効になるためコアダンプはしない（意味がない）&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;といった理由があります。これは初心者にも共通する部分があるんじゃないでしょうか。REPLを立ち上げっぱなしにはしないし「コアダンプ？なにそれ？エラー出してんじゃん」状態でしょう。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_4&#34;&gt;ASDFを正しく使う&lt;/h1&gt;
+
+&lt;p&gt;ということでquicklispをあまり使わない方法を紹介します。&lt;/p&gt;
+
+&lt;p&gt;前述の通り、quicklispでインストールしたシステムはquicklispを一旦ロードするかasdfの設定をいじるかしなければasdfからは使えません。具体的に言うと、&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;ASDFのデフォルトパスは~/common-lisp以下&lt;/li&gt;
+&lt;li&gt;quicklispのシステムのインストールパスは~/quicklisp/dists/(dist name)/software/以下&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;なので~/quicklisp/dists/以下にパスを通します。少し無駄なディレクトリもパスに含まれてしまうので気にする人はそれぞれのdistについて~/quicklisp/dists/(dist name)/software/にパスを通しましょう。&lt;/p&gt;
+
+&lt;p&gt;因みに拙作の&lt;a href=&#34;https://github.com/KeenS/CIM&#34;&gt;CIM&lt;/a&gt;は~/.cim/quicklisp以下にquicklispをインストールするのでCIM使いの方は~/.cim/quicklisp/dists/ですね。~/quicklispの方が混乱少ないかなあ。&lt;/p&gt;
+
+&lt;p&gt;さて、ASDFの設定は&lt;a href=&#34;http://common-lisp.net/project/asdf/asdf.html#Configuring-ASDF-to-find-your-systems&#34;&gt;公式マニュアル&lt;/a&gt;を参照すれば良いのですが一応実際のものを書いておくと&lt;/p&gt;
+
+&lt;p&gt;~/.config/common-lisp/source-registry.conf に&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(:source-registry
+  (:tree &amp;quot;~/quicklisp/dists/&amp;quot;)
+  (:tree (:home &amp;quot;Lisp/&amp;quot;))
+  :INHERIT-CONFIGURATION)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;を書けばOKです。2つめのLisp/は私がCommon Lispファイルを置いているディレクトリですね。この書き方だとquicklispより自分のLispライブラリを優先して読みにいきます。開発版を使いたいときとかむしろ開発をするときとかに必須です。この設定をミスるといくら開発してもロードされてるのはリリース版で、機能が動かないとかの地獄を見ます。&lt;/p&gt;
+
+&lt;p&gt;ここまでくれば&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(require &#39;asdf)
+(require &#39;hoge)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;とすればquicklispでインストールしたライブラリをロード出来ます。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_5&#34;&gt;require以外のASDFの使い方&lt;/h2&gt;
+
+&lt;p&gt;バージョンに依って使い方が異なるのですが、3系だと&lt;code&gt;(asdf:xxx-system &#39;hoge)&lt;/code&gt;などとします。具体的には&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;(asdf:load-system &#39;hoge)&lt;/code&gt; ( = &lt;code&gt;(require &#39;hoge)&lt;/code&gt;)&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;(asdf:test-system &#39;hoge)&lt;/code&gt; (テストがあるときのみ)&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;(asdf:compile-system &#39;hoge)&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;を覚えておけば良いでしょう。他にもいくつか操作があるようですが私は使ったことがないです。&lt;code&gt;asdf:locate-system&lt;/code&gt;は名前的に便利そうではあるんですけどね。&lt;/p&gt;
+
+&lt;p&gt;開発するときはまず.asdファイルを書いておいて(あるいはcl-projectから生成して)、&lt;code&gt;(require &#39;hoge)&lt;/code&gt;で始めて書いていき、ある程度進んだらテストを書いてテストの項目を.asdファイルに書き足して&lt;code&gt;(asdf:test-system &#39;hoge)&lt;/code&gt;、それなりに動くようになったら&lt;code&gt;(asdf:compile-system &#39;hoge)&lt;/code&gt;してコンパイルの様子を見たりコンパイル後のベンチマークを取ったりします。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_6&#34;&gt;quickloadを成仏させる&lt;/h2&gt;
+
+&lt;p&gt;これでロードの処理はASDFで全てカバー出来るようになりました。じゃあquickloadのロード機能は邪魔ですね。quicklispをインストーラとしてのみ使いましょう。&lt;/p&gt;
+
+&lt;p&gt;まず処理系の初期化ファイル(sbclなら~/.sbclrc)から&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;;;; The following lines added by ql:add-to-init-file:
+#-quicklisp
+(let ((quicklisp-init (merge-pathnames &amp;quot;~quicklisp/setup.lisp&amp;quot;
+                                       (user-homedir-pathname))))
+  (when (probe-file quicklisp-init)
+    (load quicklisp-init :verbose nil)))
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;を削除します。quicklispを使いたいときだけ&lt;code&gt;(load &amp;quot;~/quicklisp/setup.lisp&amp;quot;)&lt;/code&gt;します。そして欲しいシステムをインストールするには&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(ql::recursively-install &amp;quot;foo&amp;quot;)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;します。quickloadに比べて爆速です。ここにきて名前が文字列な上にexportされてないシンポル参照してますね。気持ち悪いという方は大人しくquickloadしましょう。&lt;/p&gt;
+
+&lt;p&gt;拙作のCIMにはこれをコマンドラインから行なう&lt;code&gt;ql install&lt;/code&gt;なるコマンドが存在します。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_7&#34;&gt;最後に&lt;/h1&gt;
+
+&lt;p&gt;quicklispが嫌いなのは私の好みですがASDFを正しく使えて損はないと思うので知らなかった方々は是非試してみて下さい。&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>lisp meet up #22でLTしてきた</title>
+      <link>http://keens.github.io/blog/2014/11/28/lisp-meet-up-number-22deltsitekita</link>
+      <pubDate>Fri, 28 Nov 2014 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/blog/2014/11/28/lisp-meet-up-number-22deltsitekita</guid>
+      <description>
+
+&lt;p&gt;κeenです。先日 Lisp Meet Up #22 でLTしてきたので報告です。&lt;/p&gt;
+
+&lt;p&gt;LTは事前に登録されたのが2件、私が当日17時くらいに登録したの1件で、参加は20人募集の内20人応募、20人参加と最近中々の人気を見せてます。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_0&#34;&gt;Common Lispで高速なHTTPパーサーを書く(仮)&lt;/h1&gt;
+
+&lt;p&gt;LT1件目は深町さんより、「Common Lispで高速なHTTPパーサーを書く(仮)」。fast-httpを作ったときの話。&lt;/p&gt;
+
+&lt;p&gt;&lt;iframe src=&#34;//www.slideshare.net/slideshow/embed_code/42153462&#34; width=&#34;425&#34; height=&#34;355&#34; frameborder=&#34;0&#34; marginwidth=&#34;0&#34; marginheight=&#34;0&#34; scrolling=&#34;no&#34; style=&#34;border:1px solid #CCC; border-width:1px; margin-bottom:5px; max-width: 100%;&#34; allowfullscreen&gt; &lt;/iframe&gt; &lt;div style=&#34;margin-bottom:5px&#34;&gt; &lt;strong&gt; &lt;a href=&#34;//www.slideshare.net/fukamachi/writing-a-fast-http-parser&#34; title=&#34;Writing a fast HTTP parser&#34; target=&#34;_blank&#34;&gt;Writing a fast HTTP parser&lt;/a&gt; &lt;/strong&gt; from &lt;strong&gt;&lt;a href=&#34;//www.slideshare.net/fukamachi&#34; target=&#34;_blank&#34;&gt;fukamachi&lt;/a&gt;&lt;/strong&gt; &lt;/div&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://docs.google.com/file/d/0B_H0_8eqWuVARnhncWZpRFdUOWM/preview&#34;&gt;動画&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://blog.8arrow.org/entries/2014/10/23&#34;&gt;深町さんのブログ&lt;/a&gt;に書かれていることの他、fast-httpが高速になるまでの経緯や実装方針などの話もありました。&lt;/p&gt;
+
+&lt;p&gt;最初ベースにしたnode.jsのHTTPパーサ、http-parseは状態を持っていて、1文字読む毎に状態を保存していた。次にベースにしたpicohttpparseは状態を持たず、HTTPリクエストが全部届く前にパースを始めてしまった場合はあきらめて最初からパースするようにしていた。fast-httpは1行パースする毎に状態を保存するようにした。など。&lt;/p&gt;
+
+&lt;p&gt;もう一つ、http-parseは&lt;code&gt;while&lt;/code&gt;ループの中に巨大な&lt;code&gt;case&lt;/code&gt;文があって、現在の状態で&lt;code&gt;case&lt;/code&gt;でディスパッチし、その節の中で読んだ文字に依って現在の状態を変え、またループで先頭に戻って状態に依ってディスパッチするという手法だったそうです。Common Lispの場合は&lt;code&gt;case&lt;/code&gt;が全て&lt;code&gt;(cond ((eql ..) ....) ...)&lt;/code&gt;に展開されて遅い&lt;sup class=&#34;footnote-ref&#34; id=&#34;fnref:1&#34;&gt;&lt;a rel=&#34;footnote&#34; href=&#34;#fn:1&#34;&gt;1&lt;/a&gt;&lt;/sup&gt;ので&lt;code&gt;while&lt;/code&gt;と&lt;code&gt;case&lt;/code&gt;じゃなくて&lt;code&gt;tagbody&lt;/code&gt;と&lt;code&gt;goto&lt;/code&gt;で実装したそうです。&lt;/p&gt;
+
+&lt;p&gt;この手法は一般にDirect(Navive) ThreadingだとかThreaded Codeだとか呼ばれています。主にバイトコードインタプリタを実装する時にバイトコードに依るディスパッチの部分で使われるようです。Rubyの解説が丁寧だったようなので参考資料として置いておきます。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://magazine.rubyist.net/?0008-YarvManiacs&#34;&gt;Rubyist Magazine - YARV Maniacs 【第 3 回】 命令ディスパッチの高速化&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;会場からはアーキテクチャ依存の最適化はしないのかとの質問がありました。SBCLにはインラインアセンブラであるVOPなるものが存在するのでSIMD命令使えば、とかいう怖い話ですね。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_1&#34;&gt;symbol tree diff&lt;/h1&gt;
+
+&lt;p&gt;LT2件目はchikuさんより「symbol tree diff」。chikuさんが以前から取り組んでいるプログラムのdiffを構文レベルでとる話の進捗。&lt;/p&gt;
+
+&lt;p&gt;&lt;iframe src=&#34;//www.slideshare.net/slideshow/embed_code/42160384&#34; width=&#34;425&#34; height=&#34;355&#34; frameborder=&#34;0&#34; marginwidth=&#34;0&#34; marginheight=&#34;0&#34; scrolling=&#34;no&#34; style=&#34;border:1px solid #CCC; border-width:1px; margin-bottom:5px; max-width: 100%;&#34; allowfullscreen&gt; &lt;/iframe&gt; &lt;div style=&#34;margin-bottom:5px&#34;&gt; &lt;strong&gt; &lt;a href=&#34;//www.slideshare.net/samugari/symbol-treediff&#34; title=&#34;Symbol tree-diff&#34; target=&#34;_blank&#34;&gt;Symbol tree-diff&lt;/a&gt; &lt;/strong&gt; from &lt;strong&gt;&lt;a href=&#34;//www.slideshare.net/samugari&#34; target=&#34;_blank&#34;&gt;samugari&lt;/a&gt;&lt;/strong&gt; &lt;/div&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://docs.google.com/file/d/0B_H0_8eqWuVARUoxVGtiMlFrRVU/preview&#34;&gt;動画&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;diff自体はとれるようになったようですが見せ方に問題があり、見易い形式を模索中のようです。会場に見易い形式は何か投げ掛けましたが良い案を見付けるのは難しいようです。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_2&#34;&gt;Semantic S式&lt;/h1&gt;
+
+&lt;p&gt;私から「Semantic S式」。括弧が多い方が嬉しいこともあるよねーというゆるい話。
+&lt;a href=&#34;http://keens.github.io/slide/semantic-sshi.html&#34;&gt;Semantic S式 | κeenのHappy Hacκing Blog&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://docs.google.com/file/d/0B_H0_8eqWuVAQms2QkZDcnZfVlU/preview&#34;&gt;動画&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;会場からは半分同意、半分ツッコみたいとの反応が。plistをリテラルから&lt;code&gt;getf&lt;/code&gt;するやついないだろ、とか。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_3&#34;&gt;懇親会&lt;/h1&gt;
+
+&lt;p&gt;私の発表で21時あたりだったのでそのまま解散して懇親会。隣にLand of Lispを読んでLispに興味持ってLispの授業をとってる方がいたのでどの本が入門に良いかなど。&lt;/p&gt;
+
+&lt;p&gt;VOPの話の続きもしました。どうしても資料がないのがネックだよねー、と。私の知っているのは&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://www.pvk.ca/Blog/2014/08/16/how-to-define-new-intrinsics-in-sbcl/&#34;&gt;How to Define New Intrinsics in SBCL - Paul Khuong mostly on Lisp&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;や&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://pvk.ca/Blog/Lisp/hacking_SSE_intrinsics-part_1.html&#34;&gt;Hacking SSE Intrinsics in SBCL (part 1) - Paul Khuong mostly on Lisp&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;かな。日本語のやってみた系だとg1さんの&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://g000001.cddddr.org/2011-12-08&#34;&gt;#:g1: SBCLでVOPを使ってみよう&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;あたり。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_4&#34;&gt;その他&lt;/h1&gt;
+
+&lt;p&gt;テンプレートエンジンを作ってるって以前深町さんに話してたら「まだ出来ないんですか？」とさんざん煽られました。はい。頑張ります。&lt;/p&gt;
+&lt;div class=&#34;footnotes&#34;&gt;
+
+&lt;hr /&gt;
+
+&lt;ol&gt;
+&lt;li id=&#34;fn:1&#34;&gt;&lt;code&gt;cond&lt;/code&gt;は先頭から順番に比較する仕様です。&lt;code&gt;case&lt;/code&gt;は&lt;code&gt;cond&lt;/code&gt;に展開されることが仕様で定められていた筈。
+ &lt;a class=&#34;footnote-return&#34; href=&#34;#fnref:1&#34;&gt;&lt;sup&gt;[return]&lt;/sup&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/div&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>claspを少し触ってみた</title>
+      <link>http://keens.github.io/slide/clasp/</link>
+      <pubDate>Tue, 28 Oct 2014 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/slide/clasp/</guid>
+      <description>&lt;section data-markdown
+    data-separator=&#34;\n\n&#34;
+    data-vertical=&#34;\n\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+&lt;script type=&#34;text/template&#34;&gt;
+
+# claspを少し触ってみた
+----------------------
+Lisp Meet Up presented by Shibuya.lisp #21  
+2014-10-29  
+κeen(@blackenedgold)
+
+# About Me
+---------
+![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:relative;right 0;&#34; --&gt;
+
+ + κeen
+ + 東大数学科の4年生
+ + ソーシャルアカウントは上のアイコン達から。
+ + Lisp, Ruby, OCaml, Shell Scriptあたりを書きます
+
+
+# clasp
+-------
+
+* Github: [drmeister/clasp](https://github.com/drmeister/clasp)
+* 2014-09-18に0.1リリース(現在0.11プレビューが出ている)
+* 今は0.11プレビューが出ている
+* ANSI Common Lisp準拠を目指す(現在80 ~90%)
+* ECLからのフォーク
+* LLVMベースのJIT([MCJIT](http://llvm.org/docs/MCJITDesignAndImplementation.html))搭載
+* C++とLispで書かれている
+* C++との連携を意識
+
+Note:
+C++との連携の部分を強調。今回は0.11プレビューでの話
+
+
+# メモリ管理
+------------------
+
+* Memory Pool Systemと Boehm GCから選べる
+* ビルドするときにどっちかを選ぶ
+
+
+# メモリ管理
+------------------
+## [Boehm GC](http://www.hboehm.info/gc/)
+
+* Mark &amp;amp; Sweepのライブラリ
+* 枯れた有名なライブラリ
+* Lisp有名どころではGaucheが使う
+* RedHat系だとこれを使ってないとrpmリジェクトされやすいらしい(?)
+
+Note:
+他にはMozilla, W3M, GNU GCJ, GNU Obj-Cなどなど
+
+# メモリ管理
+------------------
+## [Memory Pool System](http://www.ravenbrook.com/project/mps/)
+
+* 複数のGCアルゴリズムを組み合わせて使えるらしい
+* since 1994
+* あまり分からないです&amp;gt;&amp;lt;
+
+
+# 依存ライブラリ
+----------------------
+
+* LLVM **3.6**
+* LLVM/clang **3.5** compiler
+* Boost build v2
+* boost libraries ver 1.55
+* Boehm 7.2
+* gmp-6.0.0
+* expat-2.0.1
+* zlib-1.2.8
+* readline-6.2
+
+
+&lt;span style=&#34;font-size:600%&#34;&gt;無理&lt;/span&gt;
+
+
+# externals-clasp
+--------------------------
+
+* Github: [drmeister/externals-clasp](https://github.com/drmeister/externals-clasp)
+* 依存ライブラリを揃えるのが難しいとの声から作られた
+* 依存ライブラリを全てビルド&lt;!-- .element: class=&#34;fragment grow&#34; --&gt;
+
+
+&lt;span style=&#34;font-size:300%&#34;&gt;＼LLVMをビルド／&lt;/span&gt;
+
+
+&lt;span style=&#34;font-size:300%&#34;&gt;＼Boostをビルド／&lt;/span&gt;
+
+&lt;span style=&#34;font-size:200%&#34;&gt;ビルド時間はお察しです&lt;/span&gt;
+
+# 本体のビルド
+------------------
+Twitter実況をどうぞ↓↓
+
+# 本体のビルド
+------------------
+&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p&gt;clangがメモリ6GB以上食い続けてて怖い。何やってんの。&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/526417151486205952&#34;&gt;2014, 10月 26&lt;/a&gt;&lt;/blockquote&gt;
+
+# 本体のビルド
+------------------
+&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p&gt;clangの起動時間1時間超えてますよ…&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/526418636735401984&#34;&gt;2014, 10月 26&lt;/a&gt;&lt;/blockquote&gt;
+
+# 本体のビルド
+------------------
+&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p&gt;HDDプチプチ言ってるし今にも壊れそう&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/526420001587068929&#34;&gt;2014, 10月 26&lt;/a&gt;&lt;/blockquote&gt;
+
+# 本体のビルド
+------------------
+&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p&gt;&lt;a href=&#34;https://twitter.com/nobkz&#34;&gt;@nobkz&lt;/a&gt; claspのコンパイル中です。&amp;#10;clangなのにIOネックという謎の状態です。&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/526420473232367616&#34;&gt;2014, 10月 26&lt;/a&gt;&lt;/blockquote&gt;
+
+# 本体のビルド
+------------------
+&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p&gt;clangの消費メモリ7GB超えた&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/526423982992420864&#34;&gt;2014, 10月 26&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;span style=&#34;font-size:300%&#34;&gt;ビルドは自己責任で&lt;/span&gt;
+
+# 使ってみる
+------------
+## 起動オプション
+
+```
+/usr/local/clasp/bin/clasp_mps_o --help
+clasp options
+-I/--ignore-image    - Don&#39;t load the boot image/start with init.lsp
+-i/--image file      - Use the file as the boot image
+-N/--non-interactive - Suppress all repls
+-v/--version         - Print version
+-s/--verbose         - Print more info while booting
+-f/--feature feature - Add the feature to *features*
+-e/--eval {form}     - Evaluate a form
+-l/--load {file}     - LOAD the file
+-r/--norc            - Don&#39;t load the ~/.clasprc file
+-n/--noinit          - Don&#39;t load the init.lsp (very minimal environment)
+-s/--seed #          - Seed the random number generator
+-- {ARGS}*           - Trailing are added to core:*command-line-arguments*
+```
+
+# 使ってみる
+------------
+## ASDF
+
+* &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;1&#34; --&gt;動かない
+  + &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;2&#34; --&gt;ASDFの処理系依存の部分(`#+`)の問題
+  + &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;2&#34; --&gt;ECLと見做されるけどECLのコードは動かない
+
+# 使ってみる
+------------
+## cl-ppcre
+
+* [手動ロードスクリプト](https://gist.github.com/KeenS/4e25cb6e424ebe4e7a4a)
+* &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;1&#34; --&gt;動かない
+  + &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;2&#34; --&gt;`schar`がない
+  + &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;2&#34; --&gt;ANSI Common Lispにあるのに…
+
+# 使ってみる
+------------
+## C++との連携
+
+* &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;1&#34; --&gt;ドキュメントがない
+* &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;2&#34; --&gt;サンプルコードもない
+* &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;3&#34; --&gt;遂行不能
+
+# 使ってみる
+------------
+## LLVMの呼び出し
+* [clasp/src/llvmo/demo.lisp](https://github.com/drmeister/clasp/blob/master/src/llvmo/demo.lsp)
+* &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;1&#34; --&gt;動かない
+
+# 使ってみる
+------------
+&lt;style type=&#34;text/css&#34;&gt;
+.graph{
+  background:#aaa;
+  border-radius:5px;
+  white-space: nowrap;
+  text-align: left;
+}
+td {
+  white-space: nowrap;
+}
+&lt;/style&gt;
+
+処理系              |  `(time (fib 29))`
+--------------------|-----------------------------------------------------------------
+clasp-0.1(boehm)    | &lt;div class=&#34;graph fragment&#34; style=&#34;width:calc(264.3px * 3);&#34; data-fragment-index=&#34;1&#34;&gt;26.43s&lt;/div&gt;
+clasp-0.1(mps)      | &lt;div class=&#34;graph fragment&#34; style=&#34;width:calc(172.8px * 3);&#34; data-fragment-index=&#34;1&#34;&gt;17.28s&lt;/div&gt;
+clasp-0.11(boehm)   | &lt;div class=&#34;graph fragment&#34; style=&#34;width:calc(213.2px * 3);&#34; data-fragment-index=&#34;2&#34;&gt;21.32s&lt;/div&gt;
+clasp-0.11(mps)     | &lt;div class=&#34;graph fragment&#34; style=&#34;width:calc(187.9px * 3);&#34; data-fragment-index=&#34;2&#34;&gt;18.79s&lt;/div&gt;
+ECL-13.5.1          | &lt;div class=&#34;graph&#34; style=&#34;width:calc( 16.0px * 3);&#34;&gt;1.603s&lt;/div&gt;
+ECL-13.5.1(compile) | &lt;div class=&#34;graph&#34; style=&#34;width:calc(  1.9px * 3);&#34;&gt;0.192s&lt;/div&gt;
+ABCL-1.3.1          | &lt;div class=&#34;graph&#34; style=&#34;width:calc( 32.9px * 3);&#34;&gt;3.292s&lt;/div&gt;
+ABCL-1.3.1(compile) | &lt;div class=&#34;graph&#34; style=&#34;width:calc(  2.4px * 3);&#34;&gt;0.241s&lt;/div&gt;
+
+
+# 使ってみる
+------------
+
+処理系              |  `(time (fib 29))`
+--------------------|-----------------------------------------------------------------
+CLISP-2.49          | &lt;div class=&#34;graph&#34; style=&#34;width:calc( 38.4px * 3);&#34;&gt;3.847s&lt;/div&gt;
+CLISP-2.49(compile) | &lt;div class=&#34;graph&#34; style=&#34;width:calc(  7.1px * 3);&#34;&gt;0.7146s&lt;/div&gt;
+ccl-1.10            | &lt;div class=&#34;graph&#34; style=&#34;width:calc(  0.4px * 3);&#34;&gt;0.04033s&lt;/div&gt;
+sbcl-1.2.5          | &lt;div class=&#34;graph&#34; style=&#34;width:calc(  0.6px * 3);&#34;&gt;0.06469s&lt;/div&gt;
+alisp-9.0           | &lt;div class=&#34;graph&#34; style=&#34;width:calc(  230px * 3);&#34;&gt;23.09s&lt;/div&gt;
+alisp-9.0(compile)  | &lt;div class=&#34;graph&#34; style=&#34;width:calc(  0.6px * 3);&#34;&gt;0.06194s&lt;/div&gt;
+
+&lt;span style=&#34;font-size:200%&#34;&gt;LLVM/JITなのになぜ遅い？&lt;/span&gt;
+
+# LLVM/JITで遅い？
+-------------------------
+
+* LLVMって速いんじゃ？
+* JIT搭載した○○が速いって聞いたよ
+  + JVM
+  + lua-jit
+  + Rubinius
+  + pypy
+
+
+# 言葉の罠: LLVM
+--------------------
+
+* 遅いコードはどんなに頑張っても遅い
+* ECLのバックエンドにClang(=LLVM)を使ってもSBCLに勝てないのと同じ
+
+
+# 言葉の罠: JIT搭載
+--------------------
+
+* JIT(実行時コンパイル)の意味は広い
+* 実行時にネイティブコードを吐けばJITと言える
+* claspは実行直前にコンパイルするだけ
+* 多くの速いJIT処理系はTracing JITを使う
+  + またの名を適応的コンパイル
+  + 実行時の情報に基いて実行中に最適化する
+  + `(declare ...)` を自動生成してる的な
+
+
+# Tracing JITへの道
+--------------------
+
+* LLVMのJITは実行直前にコンパイルするだけ
+  + &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;1&#34; --&gt;Tracing JITのバックエンドには使える
+* 実行時最適化には最適化用のコードが必要
+  + &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;2&#34; --&gt;Common Lispでは`(declare ...)`用のコードを使い回せる
+* &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;3&#34; --&gt;案外近い
+
+
+# 結論
+------
+
+* &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;1&#34; --&gt;遅い
+* &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;2&#34; --&gt;時期尚早
+* &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;3&#34; --&gt;今後機能や速度改善があれば使えるようになるかも
+
+
+&lt;span style=&#34;font-size:600%&#34;&gt;以上&lt;/span&gt;  
+何か質問あればどうぞ
+&lt;/script&gt;
+&lt;/section&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Common Lispの勉強をするには、あるいは情報を得るには</title>
+      <link>http://keens.github.io/blog/2014/10/20/lisp-ja</link>
+      <pubDate>Mon, 20 Oct 2014 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/blog/2014/10/20/lisp-ja</guid>
+      <description>
+
+&lt;p&gt;&lt;a href=&#34;http://blog.8arrow.org/entry/2014/09/05/062028&#34;&gt;深町さんのブログ&lt;/a&gt;で日本語でCommon Lispの質問をする方法が載ってましたが質問じゃなくて単に情報を得たい、勉強をしたいという場合が書かれてなかったので勝手に補遺。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_0&#34;&gt;処理系選び&lt;/h1&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://cl.cddddr.org/index.cgi?%BD%E8%CD%FD%B7%CF%3A%C1%AA%A4%D3%CA%FD%A4%CE%CC%DC%B0%C2&#34;&gt;処理系:選び方の目安 - Common LISP users jp&lt;/a&gt;や
+&lt;a href=&#34;https://sites.google.com/site/shidoinfo/Home/programing-lang/%E9%96%A2%E6%95%B0%E5%9E%8B%E3%83%97%E3%83%AD%E3%82%B0%E3%83%A9%E3%83%9F%E3%83%B3%E3%82%B0%E8%A8%80%E8%AA%9E/lisp/common-lisp/common-lisp-%E5%87%A6%E7%90%86%E7%B3%BB&#34;&gt;Common Lisp 処理系 - 紫藤のWiki&lt;/a&gt;が参考になるかと思います。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_1&#34;&gt;開発環境構築&lt;/h1&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://modern-cl.blogspot.jp/&#34;&gt;Modern Common Lisp&lt;/a&gt;あたりですかね。著者がちょっと古くなってきたので更新するって言ってました。&lt;/p&gt;
+
+&lt;p&gt;処理系のインストールなら*nix環境で使える拙作の&lt;a href=&#34;https://github.com/KeenS/CIM&#34;&gt;CIM&lt;/a&gt;もあります。解説は&lt;a href=&#34;/blog/2014/01/27/cim-explanation/&#34;&gt;こちら&lt;/a&gt;。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_2&#34;&gt;入門&lt;/h1&gt;
+
+&lt;h2 id=&#34;toc_3&#34;&gt;Web&lt;/h2&gt;
+
+&lt;p&gt;私の一番のおすすめはM.HiroiさんのWebページです。一応Common Lispではなくxyzzyですがここで紹介されている内容であればCommon Lispにも共通します。&lt;br /&gt;
+&lt;a href=&#34;http://www.geocities.jp/m_hiroi/xyzzy_lisp.html&#34;&gt;M.Hiroi&amp;rsquo;s Home Page / xyzzy Lisp Programming&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_4&#34;&gt;書籍&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.amazon.co.jp/%E5%AE%9F%E8%B7%B5Common-Lisp-Peter-Seibel/dp/4274067211&#34;&gt;実践Common Lisp&lt;/a&gt;は入門から実践までいけて素晴らしいです。内容の密度が濃いです。心無しか手にとってみると少し重いです。
+loopやformatなど複雑な部分はしっかりベージを割いてるので入門が終わってもリファレンスとして役立ちます。私も今でも参照してます。&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.amazon.co.jp/Land-Lisp-M-D-Conrad-Barski/dp/4873115876&#34;&gt;Land of Lisp&lt;/a&gt;は挿絵が多く、少し学んでは実際に使ってみるのルーチンなので勉強のモチベーションを保ちやすいです。
+内容は実践Common Lispに比べると細かな注釈が少ないかな？といったところ。さらっと読めて良いですね。&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.amazon.co.jp/gp/product/4798118907/ref=pd_lpo_sbs_dp_ss_2?pf_rd_p=466449256&amp;amp;pf_rd_s=lpo-top-stripe&amp;amp;pf_rd_t=201&amp;amp;pf_rd_i=4873115876&amp;amp;pf_rd_m=AN1VRQENFRJN5&amp;amp;pf_rd_r=1YA4XCHT36XJD6ZEF9KC&#34;&gt;実用Common Lisp&lt;/a&gt;(通称PAIP本)はぶ厚くて高い本。AI系の内容らしい。私は読んだことが無いのですが、数理システムが入門書として使ってるそうです。
+2014-12-14 追記 &lt;a href=&#34;/blog/2014/12/14/shi-yong-common-lispwodu-nda/&#34;&gt;読みました&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h1 id=&#34;toc_5&#34;&gt;何か作る&lt;/h1&gt;
+
+&lt;h2 id=&#34;toc_6&#34;&gt;Web&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.usamimi.info/~ide/programe/stg_doc/stg-commonlisp.pdf&#34;&gt;Common LispでSTGを作りますが何か&lt;/a&gt;は有名なPDF。STG(シューティングゲーム)を作る内容。多少古い(SDLが1.2系だとか)ものの、練習には十分です。&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://blog.8arrow.org/entry/2013/09/10/110632&#34;&gt;Common LispでWebAppの開発に必要なN個のこと - 八発白中&lt;/a&gt;はWeb Appを作るにあたって必要なライブラリを紹介している。紹介しているだけで作り方は書いてないのでどうにか頑張って下さい。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;あんまり情報無いですね…Lisperのみなさんもっとアウトプットしましょう。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_7&#34;&gt;リファレンス&lt;/h1&gt;
+
+&lt;h2 id=&#34;toc_8&#34;&gt;Web&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.lispworks.com/documentation/HyperSpec/Front/&#34;&gt;Common Lisp Hyper Spec&lt;/a&gt;はCommon Lispの機能をサンプルと共に網羅的に、詳細に紹介しています。英語です。
+主に&lt;a href=&#34;http://www.lispworks.com/documentation/HyperSpec/Front/Contents.htm&#34;&gt;コンテンツ&lt;/a&gt;からドリルダウンで調べていくと良いです。時間があればじっくり眺めても良いかも。
+Common Lispをやる上では必ず必要になるので、英語ですが必ず友達になっておきましょう。&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://tips.cddddr.org/common-lisp/&#34;&gt;逆引きCommon Lisp&lt;/a&gt;は名前の通りやりたいことからCommon Lispの機能を調べられます。サンプルもあります。残念ながら網羅的ではないのですが凡その需要は満たせると思います。&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://quickdocs.org/&#34;&gt;Quickdocs&lt;/a&gt;はライブラリのドキュメントサイト(英語)。ライブラリを捜す時にも良いと思います。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;toc_9&#34;&gt;書籍&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.amazon.co.jp/COMMON-LISP-%E7%AC%AC2%E7%89%88-Guy-L-Steele/dp/4320025881/ref=cm_lmf_tit_10&#34;&gt;COMMON LISP 第2版&lt;/a&gt;は通称cltl2と呼ばれるCommon Lispの原典の和訳です。一応紹介しました。今のCommon LispはANSI Common Lispになってるので少し違います。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h1 id=&#34;toc_10&#34;&gt;ポータルサイト&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://cl.cddddr.org/index.cgi&#34;&gt;Common LISP users jp&lt;/a&gt;は日本語で様々な情報が得られます。&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.reddit.com/r/lisp_ja/&#34;&gt;redditの/r/lisp_ja&lt;/a&gt;にはLispに関連するWebページの情報が日々投稿されています。&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.cliki.net/&#34;&gt;CLiki&lt;/a&gt;はCommon Lispの総合Wiki(英語)。非常に有用な情報が溜まってます。&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://common-lisp.net/&#34;&gt;Common-Lisp.net&lt;/a&gt;はCommon Lispのコミュニティ支援サイト(英語)。多くのプロジェクトをホストしていて、そのWebページなんかもあります。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h1 id=&#34;toc_11&#34;&gt;ソースコードを読む&lt;/h1&gt;
+
+&lt;p&gt;κeenの適当チョイスです。他にお勧めがあれば教えて下さい。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/keithj/alexandria&#34;&gt;alexandria&lt;/a&gt;は有名なユーティリティパッケージ。小さな関数やマクロで構成されてるのでイディオム集みたいな感じで読めると思います。&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/7max/log4cl&#34;&gt;log4cl&lt;/a&gt;はログライブラリ。ドキュメント(英語)をしっかり書いてるので読み易いです。&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/edicl/hunchentoot&#34;&gt;Hunchentoot&lt;/a&gt;はWebサーバ。ドキュメント(英語)を過剰に書いてるので読める筈。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h1 id=&#34;toc_12&#34;&gt;ステップアップ&lt;/h1&gt;
+
+&lt;h2 id=&#34;toc_13&#34;&gt;Web&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.asahi-net.or.jp/~kc7k-nd/onlispjhtml/&#34;&gt;On Lisp&lt;/a&gt;は主にマクロについて書かれたCommon Lispプログラミングの指南書。書籍もありますが、Web版もあります。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;toc_14&#34;&gt;書籍&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.amazon.co.jp/LET-OVER-LAMBDA-Edition-1-0/dp/4434133632&#34;&gt;Let Over Lambda&lt;/a&gt;(通称LOL)は過激とか狂気とか宗教とか言われるエッセイ。高速化の話とかクロージャの危ない使い方とかが書かれてます。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h1 id=&#34;toc_15&#34;&gt;Lisperとコミュニケーションをとる&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://shibuya.lisp-users.org/&#34;&gt;Shibuya.lisp&lt;/a&gt;は渋谷を中心に半径2万kmを対象としたLispコミュニティ。毎月下旬の平日夜にLisp Meet Upをやってるのでひょこっとやってくると良いと思います。内容はCommon Lisp, Scheme, Clojureで回してるのでCommon Lisp回は3ヶ月に1回ですが毎回Common Lisperは来てるので別のLispの回でも構わず参加すると良いと思います。
+#lispmeetup の情報は&lt;a href=&#34;https://atnd.org/users/51173&#34;&gt;ここ&lt;/a&gt;から入手するのが良いかな？あとは&lt;a href=&#34;https://twitter.com/shibuya_lisp&#34;&gt;Twitterアカウント&lt;/a&gt;もあります。Ustream配信もしてます。&lt;/li&gt;
+&lt;li&gt;IRCの#lisp-ja@irc.freenode.orgと#common-lisp-ja@irc.freenode.orgにコミュニティがあります。常に誰かがいる訳ではないのですがちょくちょく見てる人はいるので発言してみると反応があるかもしれません。今もこの投稿に対して反応があってCIMとredditの項目を追加しました。&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Shibuya.lisp Tech Talk #8を運営&amp;LTしてきました</title>
+      <link>http://keens.github.io/blog/2014/09/16/lisp-tech-talk-8</link>
+      <pubDate>Tue, 16 Sep 2014 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/blog/2014/09/16/lisp-tech-talk-8</guid>
+      <description>
+
+&lt;p&gt;κeenです。レポートに追われ試験があり合宿に行きで2週間以上空きましたが8/30にShibuya.lisp TT #8の運営をしつつLT枠での参加もしてきたので報告です。何かそこそこ大きなイベントの運営をされる方の参考になれば。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_0&#34;&gt;キックオフミーティング&lt;/h1&gt;
+
+&lt;p&gt;キックオフミーティングが6月にありました。集まったのは5人。potix2(@potix2)さん、chikuさん、深町(@nitro_idiot)さんかにたん(@kazh98)、私。Shibuya.lispの運営はもうちょい居る筈なんですけど引く手数多のLisper達はきっと忙しいんでしょうね。&lt;/p&gt;
+
+&lt;p&gt;Shibuya.lisp TTを開催するかを含めて話し合いました。開催されるとなれば3年振りです。&lt;/p&gt;
+
+&lt;p&gt;一番の懸案事項はTTをする人がいるかでした。招待講演のアテを話し合ったりTT枠とLT枠のバランスを話し合ったりして開催可能だろうと判断しました。その場で予想参加人数、タイムテーブルや役割分担、TT枠やLT枠が応募多寡になったときの対応、懇親会をどうするかなどを話し合いました。&lt;/p&gt;
+
+&lt;p&gt;やっぱりその時点では会場が決まってないので不確定要素が多く、「会場次第」が多かったかと思います。そのときの予想や要求を元に会場の条件を絞った訳ですが。&lt;/p&gt;
+
+&lt;p&gt;必要と判断された役職は、&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;懇親会&lt;/li&gt;
+&lt;li&gt;司会&lt;/li&gt;
+&lt;li&gt;誘導&lt;/li&gt;
+&lt;li&gt;照明&lt;/li&gt;
+&lt;li&gt;マイク&lt;/li&gt;
+&lt;li&gt;受付&lt;/li&gt;
+&lt;li&gt;会計&lt;/li&gt;
+&lt;li&gt;広報&lt;/li&gt;
+&lt;li&gt;動画&lt;/li&gt;
+&lt;li&gt;タイムキーパ&lt;/li&gt;
+&lt;li&gt;コーヒーのケータリングとかお茶とかお菓子の準備&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;でした。5人だとどうしても人数が足りないので運営手伝いも募集することになりました。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_1&#34;&gt;会場決定&lt;/h1&gt;
+
+&lt;p&gt;mixi様より(鈴木さん経由で)会場を提供頂きました。スクリーン2枚、飲食OK、懇親会もその場でOK、ハンディカムの貸し出しありの至れり尽せりです。鈴木さんありがとう御座います。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_2&#34;&gt;広報&lt;/h1&gt;
+
+&lt;p&gt;広報担当のかにたんがTwitterやMeet Upで宣伝したりchikuさんがTokyo.cljに参加して宣伝したりで広報活動を行なってきました。結果、60人の枠がほぼ埋まる(キャンセル含めれば超過)程度の人数が集りました。かにたんありがとう。&lt;/p&gt;
+
+&lt;p&gt;懸案事項だったTTの発表者は早々に埋まり、むしろ応募多寡だろうと予想されたLT枠が半分しか埋まらなくて焦りました。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_3&#34;&gt;ビデオ&lt;/h1&gt;
+
+&lt;p&gt;映像に詳しいTOYOZUMIさんに相談したところ、発表者の映像出力をキャプチャする手段があるとのことなので&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;特殊機器による映像出力のキャプチャ&lt;/li&gt;
+&lt;li&gt;ハンディカムによる発表者の録画&lt;/li&gt;
+&lt;li&gt;WebカメラによるUstream配信&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;の3つを行ない、3.はリアルタイムに、1.、2.を合成したものを録画映像として配信することになりました。一応私がビデオ担当でしたが一人では無理なのでchikuさんやかにたんと一緒に予行演習を行ないました。&lt;/p&gt;
+
+&lt;p&gt;扱いの分からぬ機器に悪戦苦闘し、一応動かすことは出来たものの不安が残るので、上手く動いたシナリオと動かなかったシナリオを用意しました。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_4&#34;&gt;その他&lt;/h1&gt;
+
+&lt;p&gt;懇親会の手配やら会計やらがどうだったかは分かりません。何も気にすることが無い程スムーズに進んでたんでしょう。potix2さんと深町さんありがとうございます。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_5&#34;&gt;当日&lt;/h1&gt;
+
+&lt;h2 id=&#34;toc_6&#34;&gt;準備&lt;/h2&gt;
+
+&lt;p&gt;chikuさんと一緒に渋谷駅に集合し、ケータリングのコーヒーを持って会場入り。そのまま鈴木さんにお世話になりつつ会場設営。当初は私は会場設営はほどほどに、ビデオ関係の準備をしてる筈でしたが人が少ないのでそのまま設営をやってました。&lt;/p&gt;
+
+&lt;p&gt;さらにThunderboltケーブルが不足ということでビックカメラまでダッシュ。雪駄+合宿で痛めた足で走るんじゃなかった。結局Thunderboltを買ってきても機器を上手く扱うことが出来ず、失敗した方のシナリオでオペレーションしてました。&lt;/p&gt;
+
+&lt;p&gt;映像配信に関しては私のLinuxではUstream配信出来ないだとかWebカメラがスライドから遠くて見えないだとかがありましたが、全体は滞りなく進行。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_7&#34;&gt;Talk&lt;/h2&gt;
+
+&lt;p&gt;TalkはLT枠は飛び入りが4人あり、結局良い感じに埋まりました。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;特別講演
+
+&lt;ol&gt;
+&lt;li&gt;笹川様 : 好きい夢の話 (&lt;a href=&#34;https://drive.google.com/file/d/0B_H0_8eqWuVAY25lWGdiTGE5RmM/edit?usp=sharing&#34;&gt;ビデオ&lt;/a&gt;)&lt;/li&gt;
+&lt;/ol&gt;&lt;/li&gt;
+&lt;li&gt;TT
+
+&lt;ol&gt;
+&lt;li&gt;athosさん : genuine-hilighterの話 (&lt;a href=&#34;https://drive.google.com/file/d/0B_H0_8eqWuVAZmJPaWpTMHZRUmc/edit?usp=sharing&#34;&gt;ビデオ&lt;/a&gt;)&lt;/li&gt;
+&lt;li&gt;深町さん : cl21の話 (&lt;a href=&#34;https://drive.google.com/file/d/0B_H0_8eqWuVAcV91QXRzSC1JVXc/edit?usp=sharing&#34;&gt;ビデオ&lt;/a&gt;)&lt;/li&gt;
+&lt;li&gt;豊住さん : 自作画像処理ライブラリの話 (&lt;a href=&#34;https://drive.google.com/file/d/0B_H0_8eqWuVATE5nZ0Z4V3Zwdms/edit?usp=sharing&#34;&gt;ビデオ&lt;/a&gt;)&lt;/li&gt;
+&lt;li&gt;横田さん : 型宣言と最適化の話 (&lt;a href=&#34;https://drive.google.com/file/d/0B_H0_8eqWuVAYzhqZ2J5T0VKTXc/edit?usp=sharing&#34;&gt;ビデオ&lt;/a&gt;)&lt;/li&gt;
+&lt;/ol&gt;&lt;/li&gt;
+&lt;li&gt;LT (&lt;a href=&#34;https://drive.google.com/file/d/0B_H0_8eqWuVAaGNLTGpTWWh0ZFU/edit?usp=sharing&#34;&gt;ビデオ 1~4&lt;/a&gt;、&lt;a href=&#34;https://drive.google.com/file/d/0B_H0_8eqWuVAR21Pc2M4bmdpdlU/edit?usp=sharing&#34;&gt;ビデオ 4~9&lt;/a&gt;)
+
+&lt;ol&gt;
+&lt;li&gt;のぶかずさん : Shenの話&lt;/li&gt;
+&lt;li&gt;κeen : moclの話&lt;/li&gt;
+&lt;li&gt;かにたん : 床下LispとLisp Meet Upの話&lt;/li&gt;
+&lt;li&gt;すてぃべあさん : EROSの話&lt;/li&gt;
+&lt;li&gt;ねこはるさん : Clojureの型推論器の話&lt;/li&gt;
+&lt;li&gt;Takagiさん: cl-cudaの話&lt;/li&gt;
+&lt;li&gt;あんちべさん : Incanterの話&lt;/li&gt;
+&lt;li&gt;TAKUFUKUSHIMAさん : Omの話&lt;/li&gt;
+&lt;li&gt;zick_minohさん : 42の言語でLisp処理系を書いた話&lt;/li&gt;
+&lt;/ol&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;と様々な内容に分かれて行われました。私の発表スライドは&lt;a href=&#34;/slide/shibuya-dot-lisp-tt-number-8.html&#34;&gt;ここ&lt;/a&gt;にあります。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_8&#34;&gt;懇親会&lt;/h2&gt;
+
+&lt;p&gt;箸が足りない、ケータリングのボットを返却し忘れるなどとトラブルはあったものの概ね問題なく進みました。出されたのはアルコール、ソフトドリンク、寿司、ピザです。&lt;/p&gt;
+
+&lt;p&gt;だいたい言語毎に島が出来てたようです。私は撮影したビデオを取り込みつつ色々な島に入っていきました。Common Lisperでcl21コミッタでScheme実装者でClojureワナビーなのでどこにも入れて良いですね。ただ、前日スライドの微調整などであまり寝てなかったのでちょいちょい居眠りしてました。&lt;/p&gt;
+
+&lt;p&gt;片付けが終って外に出るとみなさんが待ってて下さったのでぞろぞろ帰りました。TOYOZUMIさんが2次会にカラオケに行こうと皆さん誘ってました。私は行こうかと思ったのですがカラオケはジェネレーションギャップがあるとつらいので大人しく帰りました。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_9&#34;&gt;後日&lt;/h1&gt;
+
+&lt;p&gt;返し忘れたケータリングのポットは後日chikuさんが返してくれました。&lt;/p&gt;
+
+&lt;p&gt;録画した動画はちょいと梃摺りました。まず、長い動画なので動画サイズが4GBのところで切れてます。なのでその2つを結合し、さらにあまりにサイズが大きいので画質を落とす作業が必要でした。&lt;/p&gt;
+
+&lt;p&gt;変換はavconv(ffmpegのフォーク。Ubuntuだとこれしか入らない)で行なったのですが、MPEG4をダイレクトには結合出来ないらしことに気付くまで何度も失敗しました(1つの動画の変換に4時間とか掛かるんですよ？しかもその間CPUは100%に張り付いてるのでPC使えない)。レポートやら試験やらの合間に行なったのでそれだけで数日使いました。最終的にはmpegtsなるフォーマットに変換してcatで結合すれば良いことが分かり、
+    (MP4 + MP4) -&amp;gt; (mpegts + mpegts) -&amp;gt; mpegts -&amp;gt; MP4 -&amp;gt; MP4(low quality)
+の手順を踏んで最終動画を得ました。それでも1トークあたり1GBくらいのサイズがあります。もうちょい画質落としても良かったのかな。&lt;/p&gt;
+
+&lt;p&gt;で、今アップロード中ですが私のポンコツWiMAXルータは高負荷に耐えられず1動画数時間掛かってます。その間全くネットが使えません。はぁ。&lt;/p&gt;
+
+&lt;p&gt;実は今回の運営は私も含めTech Talk初参加の人がそれなりに居たのですがなんとか乗り切れましたね。講演をして下さった笹川様、会場を提供して下さったmixi様と鈴木さん、運営の手伝いをして下さった方々、ありがとう御座いました。そして運営のみなさん、発表者のみなさんお疲れ様でした。&lt;/p&gt;
+
+&lt;p&gt;次回もTT開催出来ると良いですね。&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Introduction to CIM</title>
+      <link>http://keens.github.io/slide/introduction-to-cim/</link>
+      <pubDate>Sat, 30 Aug 2014 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/slide/introduction-to-cim/</guid>
+      <description>&lt;section data-markdown
+    data-separator=&#34;\n\n&#34;
+    data-vertical=&#34;\n\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+&lt;script type=&#34;text/template&#34;&gt;
+
+# Introduction to CIM
+&lt;hr /&gt;
+
+κeen(@blackenedgold)  
+
+## 突然ですが
+Common Lispのスクリプトファイルの実行方法知ってますか？
+
+sbcl
+
+    sbcl --script $file
+
+ecl
+
+    ecl -shell $file
+
+ccl
+
+    ccl -e $file -e &#39;(quit)&#39;
+
+...
+
+&lt;strong&gt;シバン可搬性のあるスクリプトが書けない&lt;/strong&gt;
+
+## そこで、こんなの書きました
+&lt;hr /&gt;
+
+```sh
+case &#34;$LISP_IMPL&#34; in
+    sbcl*)
+        sbcl --script $1
+        ;;
+    clisp*)
+        clisp -on-error exit -i $1
+        ;;
+    ecl*)
+        ecl -shell $1
+        ;;
+    ccl*)
+...
+```
+
+## でも問題がある
+&lt;hr /&gt;
+
+* どの処理系をバックエンドに使うか
+* 処理系のパスをどう捜すか
+* そもそもどうやって使ってもらうか
+
+## κeenの答え
+&lt;hr /&gt;
+
+&gt; 処理系の管理までやってしまおう。
+&gt; そうしたら一緒に使ってもらえる。
+
+＿人人人人人人＿  
+＞　CIMの誕生　＜  
+￣Y^Y^Y^Y^Y￣
+
+## CIMとは
+&lt;hr /&gt;
+
+* Common Lisp Implementation Manager
+* ちむ
+* Rubyのrvmを強く意識
+* Common Lisp処理系のインストール、切り替え、コマンドラインインターフェースなど。
+* `cim`、 `cl`、 `ql`コマンドから成る
+* B Shell スクリプト製(マルチプラットフォーム対応のため)
+* 2013/10くらいからぼちぼち開発
+
+## `cim`コマンドについて
+&lt;hr /&gt;
+
+インストール
+
+    cim install sbcl
+
+バックエンドの切り替え
+
+    cim use sbcl
+
+現在情報
+
+    cim info
+
+CIMのアップデート
+
+    cim get
+
+など。
+
+## `cl`コマンドについて
+&lt;hr /&gt;
+
+* 最初に紹介したシェルスクリプトベース
+* コマンドラインからCommon Lispを使うことを重視
+* シバン対応も。
+* REPLは独自実装(デバッガを黙らせるのが主な目的)
+* オプションはrubyを意識
+
+## 少しシバンの話
+&lt;hr \&gt;
+
+### だめな例
+
+```lisp
+#!cl
+(write-line &#34;ok&#34;)
+```
+
+```lisp
+#!/home/kim/.cim/bin/cl
+(write-line &#34;ok&#34;)
+```
+
+```lisp
+#!/usr/bin/env cl -q
+(write-line &#34;ok&#34;)
+```
+
+### 推奨される例
+
+```lisp
+#!/bin/sh
+#|
+exec cl --  &#34;$0&#34; &#34;$@&#34;
+|#
+(write-line &#34;ok&#34;)
+```
+
+
+## `ql`コマンドについて
+&lt;hr /&gt;
+
+* quicklispのコマンドラインインターフェース
+* まだ未熟
+* rubyのgem的な。
+* 最近`ql install`を高速化
+
+## その他の話
+&lt;hr /&gt;
+
+### 対応処理系
+* 処理系はabcl, alisp, ccl, clisp, ecl, sbcl対応
+* 基本ビルドする
+* gclはANSIじゃないのでドロップ
+* lispworks他商用ははインストール出来ないのでドロップ
+* mkcl対応する？
+* CMU CLはつらい…
+
+### 実装
+* B Shell スクリプトで書いたの失敗だった?
+* つらい
+* 開発速度に影響
+* テスト（=品質）にも影響
+* sbclがじゃじゃ馬でつらい
+
+### 方針
+* コマンドラインユーティリティである
+* 基本POSIX以外に依存しない
+* 極力環境に影響しない(rvmがひどいのを嫌って)
+* clコマンドはあくまで薄いラッパ
+* asdfも使わない
+
+## [半年前](http://www.slideshare.net/blackenedgold/cim-common-lisp-implementation-manager?ref=http://keens.github.io/blog/2014/01/24/lisp-meet-up-number-13/)から何が変わったか
+&lt;hr /&gt;
+
+* バグ潰し
+* その他細かな改善
+  + ダンプされたコアを読み込む機能
+  + SIGINTをハンドル
+  + ビルド時のログ制御
+* ぼちぼちテスト書き始めた
+
+## 将来の話
+&lt;hr /&gt;
+
+* テストと品質の安定化
+* バイナリ配布の処理系は大人しくバイナリ使う？
+* 最適なビルドオプション
+* コアダンプ機能
+* Lispスクリプト(実行可能ファイル)インストーラ
+* cl21との連携（バイナリ生成）
+* もうちょっとquicklispとの連携
+* ユーザー拡張
+
+## 関連リソース
+&lt;hr /&gt;
+
+* [The problem with Lisp ](http://pupeno.com/2007/08/26/the-problem-with-lisp/) : Lispはコマンドが作れないから流行らないという分析
+* [CIMの解説をしてみる コマンド編 | κeenのHappy Hacκing Blog](http://keens.github.io/blog/2014/01/27/cim-explanation/) : CIMの解説記事
+* [shelly](https://github.com/fukamachi/shelly) : CIMを使うCLのコマンドラインインターフェース
+* [lsp](https://github.com/snmsts/lsp) : CIMのC実装
+* [qlot](https://github.com/fukamachi/qlot) : `ql`よりリッチなquicklispラッパ
+
+&lt;span style=&#34;font-size:600%&#34;&gt;以上&lt;/span&gt;  
+何か質問あればどうぞ
+&lt;/script&gt;
+&lt;/section&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>授業で半年間moclを使ってみた</title>
+      <link>http://keens.github.io/slide/shibuya-dot-lisp-tt-number-8/</link>
+      <pubDate>Thu, 28 Aug 2014 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/slide/shibuya-dot-lisp-tt-number-8/</guid>
+      <description>&lt;section data-markdown
+    data-separator=&#34;\n\n&#34;
+    data-vertical=&#34;\n\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+&lt;script type=&#34;text/template&#34;&gt;
+
+
+# 授業で半年間moclを使ってみた
+&lt;hr /&gt;
+
+Shibuya.lisp TT #8  
+&lt;br&gt;
+κeen(@blackenedgold)  
+
+## 自己紹介
+&lt;hr /&gt;
+
+ + κeen
+ + 東大数学科の4年生
+ + ソーシャルアカウントは上のアイコン達から。
+ + Lisp, Ruby, OCaml, Shell Scriptあたりを書きます
+
+ 一年前
+
+## [計算数学II](http://ks.ms.u-tokyo.ac.jp/)
+![計算数学IIのホームページ](/images/shibuya_lisp_TT8/calculation_math.png)
+
+自分でテーマを決めて半年間取り組む
+
+チーム[人造エイリアン](https://sites.google.com/site/2013ks2/home)
+![チーム人造エイリアン](/images/shibuya_lisp_TT8/android_alien.png)
+
+## Common Lisp でAndroid?
+
+## [mocl](https://wukix.com/mocl)
+![mocl home](/images/shibuya_lisp_TT8/mocl.png)
+
+## What is mocl
+&lt;hr /&gt;
+
+* iOS, Androidで動くCommon Lisp処理系
+* LLVMをバックエンドに使う
+* Networking, Unicode, CLOS, and More. Run Countless CL Libraries.
+
+## 買ってもらった(・ω・)v
+![mocl home](/images/shibuya_lisp_TT8/mocl_ut.png)
+
+## 注意
+&lt;hr /&gt;
+
+私が触ったのは1つ前のバージョンです。
+
+一部5月のアップデートで改善されています。
+
+## How it Works
+&lt;hr \&gt;
+
+&lt;embed src=&#34;/images/shibuya_lisp_TT8/mocl_flowchart.svg&#34; type=&#34;image/svg+xml&#34; height=&#34;500px&#34; /&gt;
+
+## コードサンプル
+&lt;hr \&gt;
+
+授業で私が作ったオセロのAIのコード
+
+```java
+public BoardCanvas(Context context,int width, int height,int color ){
+    ...
+    CL.cl_init();
+    CL.init_game(3 - color);
+    ...
+}
+   
+void nextHand(){
+    String[] coord = CL.next().split(&#34; &#34;);
+    CL.jput(Integer.parseInt(coord[0]), Integer.parseInt(coord[1]) , color);
+    ...
+}
+```
+
+```lisp
+(declaim (call-in next))
+(defun next ()
+  (let ((dummy (make-board))
+        (max most-negative-fixnum)
+	    (x) (y) (score))
+    ...
+    ))
+(declaim (call-in init-game))
+(defun init-game (color)
+  (setf *board* (make-board))
+  (setf *ai* color))
+(declaim (call-in jput))
+(defun jput (x y color)
+  (put *board* x y color))
+```
+
+
+## ライブラリについて
+&lt;hr /&gt;
+
+* ASDFが使える
+* `MOCL_HOME/systems/`以下に配置
+* quicklispでインストールしたやつは`MOCL_HOME/systems/`にひたすら`ln -s`
+* 大抵のライブラリは動かない
+
+例えば`cl-annot`を使って
+
+```lisp
+(declaim (call-in jput))
+(defun jput (x y color)
+  (put *board* x y color))
+```
+を
+
+```lisp
+@call-in
+(defun jput (x y color)
+  (put *board* x y color))
+```
+としたい
+
+私のときはCFFIを始め、ironclad、cl-annotなど、  
+使おうとしたライブラリは全て動かなかった
+
+現在の状態は不明
+
+## 作業フロー(Android)
+&lt;hr /&gt;
+
+&lt;ol&gt;
+&lt;li&gt;CLのコードを書いてSBCLで動かす&lt;/li&gt;
+&lt;li&gt;ある程度動いたらmoclでAndroid用のコードを生成&lt;/li&gt;
+&lt;li&gt;原因不明のエラーが出るので1に戻る&lt;/li&gt;
+&lt;li&gt;コンパイルが通れば生成されたCをコンパイル&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;ol start=&#34;5&#34;&gt;
+&lt;li&gt;JavaからCLを呼び出すコードを書く&lt;/li&gt;
+&lt;li&gt;アプリをコンパイル&lt;/li&gt;
+&lt;li&gt;実機/エミュレータに転送&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;ol start=&#34;8&#34;&gt;
+&lt;li&gt;動かす&lt;/li&gt;
+&lt;li&gt;動かない&lt;/li&gt;
+&lt;li&gt;ひたすらlogcat眺める&lt;/li&gt;
+&lt;li&gt;1に戻る&lt;/li&gt;
+&lt;/ol&gt;
+
+### ここがつらい
+&lt;hr /&gt;
+
+* 作業が煩雑
+* 例外のスタックトレースがJNIのせいで追いづらい
+* logを出すには`rt:format`という関数のみ使える(ログレベルを設定出来ない)
+
+※ 今はREPLが端末で動くので環境は良くなっています。
+
+## 制限など
+&lt;hr /&gt;
+
+* Java/Obj-CからCLを呼ぶことしか出来ない
+  + プラットフォームのライブラリも呼べない
+* やりとり出来るのは文字列、数値、真偽値のみ
+  + 裏でタスクを回すworker的な役割or純粋関数的な役割のみ
+
+※ 今はCLからObj-Cを呼ぶことが出来ます。
+
+## 成果物
+&lt;hr /&gt;
+
+* [コード(抜粋)](https://gist.github.com/KeenS/15e7bb35519818c88c13)
+* [最終発表スライド](http://www.slideshare.net/blackenedgold/ss-30373688)
+* [デモ動画](http://www.slideshare.net/blackenedgold/ss-30373688)
+
+## おまけ
+
+## 5月のアップデート内容
+&lt;hr /&gt;
+
+* OS Xアプリケーション対応
+* 端末内でREPLが動く
+* FFI強化
+* Lisp内Obj-C構文
+* iOSとOS XでのネイティブSSL対応
+* ARM64サポート
+* ドキュメントの改善
+* 多くのバグフィクス
+
+&lt;span style=&#34;font-size:600%&#34;&gt;以上&lt;/span&gt;  
+何か質問あればどうぞ
+&lt;/script&gt;
+&lt;/section&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Common LispでSIGINTを捉える</title>
+      <link>http://keens.github.io/blog/2014/08/27/sigint-in-common-lisp</link>
+      <pubDate>Wed, 27 Aug 2014 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/blog/2014/08/27/sigint-in-common-lisp</guid>
+      <description>&lt;p&gt;κeenです。もうすぐShibuya.lisp TT #8 ですね。今回はCIMのREPLの改善をしてたらSIGINTを補足しようとして詰まったので共有します。&lt;/p&gt;
+
+&lt;p&gt;結論を書いちゃうと&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(defvar *interrupt-condition*
+  ;; It seems abcl does not raise any conditions
+  #+allegro &#39;excl:interrupt-signal
+  #+ccl &#39;ccl:interrupt-signal-condition
+  #+clisp &#39;system::simple-interrupt-condition
+  #+ecl &#39;ext:interactive-interrupt
+  #+sbcl &#39;sb-sys:interactive-interrupt
+  #-(or allegro ccl clisp ecl sbcl) &#39;no-conditon-known)
+  
+(defmacro with-handle-interrupt (&amp;amp;body body)
+  `(handler-case
+       #-ccl(progn
+              ,@body)
+       #+ccl (let ((ccl:*break-hook* (lambda (condition hook)
+                                       (declare (ignore hook))
+                                       (error condition))))
+               ,@body)
+       (#.*interrupt-condition* (c)
+         (handle-interrupt c))))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;こんな感じです。ABCLがコンディションを投げずに即終了してる(?)っぽいのでABCLに対しては無力です。もしかしたらJava側で捉えないといけないのかもしれません。
+因みにどうやってそれぞれのコンディション名を調べたかというと、&lt;code&gt;(handler-case (loop) (condition (c) (print c)))&lt;/code&gt;を各処理系のREPLで実行して&lt;code&gt;^C&lt;/code&gt;しました。
+Allegro CLは&lt;code&gt;interrupt-signal&lt;/code&gt;がconditionのサブクラスでなかった(&lt;code&gt;serious-condition&lt;/code&gt;だった)のでちょいと困りましたね。結局マニュアル読みました。&lt;/p&gt;
+
+&lt;p&gt;CIMのコードなので上記以外の処理系には対応してないです。&lt;/p&gt;
+
+&lt;p&gt;今回詰まったのはCCLですね。&lt;code&gt;ccl:interrupt-signal-condition&lt;/code&gt;は定義してあるもののユーザーより先に処理系が処理するので無意味でした。なので&lt;code&gt;ccl:*break-hook*&lt;/code&gt;を使って処理系が捉えるより早くコンディションを発生させました。&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Cloud9の紹介とLispのセットアップ</title>
+      <link>http://keens.github.io/blog/2014/08/02/introduction-to-cloud9</link>
+      <pubDate>Sat, 02 Aug 2014 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/blog/2014/08/02/introduction-to-cloud9</guid>
+      <description>
+
+&lt;p&gt;κeenです。先日のLisp Meet Upで紹介した&lt;a href=&#34;https://c9.io&#34;&gt;Cloud9&lt;/a&gt;の詳解でも書きます。まあ、そんなに詳しくないんですけどね。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_0&#34;&gt;Cloud9について&lt;/h1&gt;
+
+&lt;p&gt;先日のスライドを見てない方はまず見て下さい。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;/slide/cloud-9.html&#34;&gt;Cloud 9の紹介 | κeenのHappy Hacκing Blog&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;公式の詳解ムービー(en)もあります。まあ、一般的なIDEの機能は一通り揃ってるようです。git連携とかも。
+&lt;a href=&#34;https://www.youtube.com/user/c9ide/videos?flow=grid&amp;amp;view=1&#34;&gt;CloudNine Ide - YouTube&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;スライドでバックエンドは一人一つDockerが与えられるって書きましたが自分のVMをバックエンドにも出来るようです。&lt;/p&gt;
+
+&lt;p&gt;省略しましたが他のユーザーとの連携機能も多数あって、チャットだとかワークスペースの共有だとかソーシャルコーディング関連も多数機能があります。全社導入の折には役立つ機能なんじゃないでしょうか。&lt;/p&gt;
+
+&lt;p&gt;ローカルファイルをアップロードしたり逆にローカルにダウンロードとかも出来るようです。&lt;/p&gt;
+
+&lt;p&gt;尚、IDE本体は&lt;a href=&#34;https://github.com/ajaxorg/ace&#34;&gt;ACEという名前でオープンソースで開発されてる&lt;/a&gt;のでプラグインとかのドキュメントはそっちもあたると良いようです。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_1&#34;&gt;Cloud9事始め&lt;/h1&gt;
+
+&lt;p&gt;スクショとかは適当にスライドを参照して下さい(手抜き)&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_2&#34;&gt;アカウントを作る&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://c9.io&#34;&gt;c9.io&lt;/a&gt;にアクセスしてGithubかBitbucketのアカウントでログイン出来ます(以後、Githubでログインしたものとします。Bitbucketの方は適宜読み替えて下さい)。Cloud9で書いたコードをHerokuやらなんやらに直接上げるつもりなら普通にCloud9アカウント作っても良いと思いますが、多くの場合どちらかとの連携を使うと思うので素直にGithubでログインしましょう。&lt;/p&gt;
+
+&lt;p&gt;ログインしたらダッシュボードに飛ばされます。demo-projectと自分のGithubのプロジェクトがサイドバーにある筈です。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_3&#34;&gt;細かな設定&lt;/h2&gt;
+
+&lt;p&gt;demo-projectでも開きましょうか。demo-projectを選択してstart editingです。&lt;/p&gt;
+
+&lt;p&gt;IDEというかEditorの設定が出てくる筈です(多分)。キーバインディングとかタブ幅とか設定しましょう。そして、&lt;code&gt;C-h&lt;/code&gt;で&lt;code&gt;backward-delete-char&lt;/code&gt;出来ないと死んでしまう方のための設定はこちらです。Preferencesのkeybindingsのedit your keymap fileからkeymap fileに飛んで、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-json&#34;&gt;[
+    {&amp;quot;command&amp;quot;: &amp;quot;backspace&amp;quot;, &amp;quot;keys&amp;quot;:[&amp;quot;Ctrl-H&amp;quot;, &amp;quot;Backspace&amp;quot;]},
+    {&amp;quot;command&amp;quot;: &amp;quot;replace&amp;quot;, &amp;quot;keys&amp;quot;:[&amp;quot;Alt-Shift-5&amp;quot;]}
+]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と編集、保存しましょう。どうも、キーにコマンドを割り当てるのではなく、コマンドにキーを割り当ててる(?)っぽいのでCtrl-Hを持ってる&lt;code&gt;replace&lt;/code&gt;を別のキーにしないと動かないようでした。尚、これはファイルをいじらなくてもsearch keybindingsのところから目的のコマンドを捜して、keystrokeのところをクリックして、割り当てたいキーストロークをすれば割り当て出来るようです。その際、自分のkeymap fileも対応して書き変わります。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_4&#34;&gt;Common Lispのセットアップ&lt;/h2&gt;
+
+&lt;p&gt;処理系のインストールはいくつか方法があります。&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;&lt;code&gt;apt-get&lt;/code&gt;で入れる&lt;/li&gt;
+&lt;li&gt;バイナリを落してくる&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/KeenS/CIM&#34;&gt;CIM&lt;/a&gt;を使う&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;のいずれかの方法で処理系を入れて下さい。&lt;code&gt;apt-get&lt;/code&gt;で入れる場合はかなり古いバージョンが入ります。CIMで入れる場合は&lt;code&gt;sudo apt-get install time&lt;/code&gt;しておかないとSBCLのビルドが出来ませんでした。他の処理系は確認してないです。どの処理系でも良いんですがとりあえずSBCLを入れたってことで話進めますね。私がそれしか確認してないので。&lt;/p&gt;
+
+&lt;p&gt;また、便利のためrlwrapを入れましょう。&lt;code&gt;sudo apt-get install rlwrap&lt;/code&gt;です。&lt;/p&gt;
+
+&lt;p&gt;そこまでいったらrun scriptを作りましょう。上のメニューバーから[Run]&amp;gt;[Run With]&amp;gt;[New Runner]と進みます。で、run scriptの内容はどの方法で処理系を入れたかに依るのですが、&lt;/p&gt;
+
+&lt;p&gt;1の場合&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-json&#34;&gt;{
+    &amp;quot;cmd&amp;quot; : [&amp;quot;sudo&amp;quot;, &amp;quot;rlwrap&amp;quot;, &amp;quot;sbcl&amp;quot;, &amp;quot;--load&amp;quot;, &amp;quot;$file&amp;quot;, &amp;quot;$args&amp;quot;],
+    &amp;quot;info&amp;quot; : &amp;quot;Started SBCL :: $project_path$file_name&amp;quot;,
+    &amp;quot;env&amp;quot; : {},
+    &amp;quot;selector&amp;quot; : &amp;quot;source.ext&amp;quot;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;だそうです(&lt;a href=&#34;http://cjelupton.wordpress.com/2014/07/24/hacking-lisp-in-the-cloud-pt-3/&#34;&gt;引用元&lt;/a&gt;)。&lt;code&gt;sudo&lt;/code&gt;がついてるのはWEBアプリの場合0.0.0.0で待つためにroot権限が必要だからかな？&lt;/p&gt;
+
+&lt;p&gt;これは実行した後でREPLに入ってデバッガとか扱う感じの設定ですね。&lt;br /&gt;
+単に実行したいだけののきは&lt;code&gt;--load&lt;/code&gt;の部分を&lt;code&gt;--script&lt;/code&gt;に変えれば良さそうです(未確認)&lt;br /&gt;
+2の場合も同じ設定でいけそうな気がします。PATHぐらい必要かな?(未確認)&lt;/p&gt;
+
+&lt;p&gt;3の場合&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-json&#34;&gt;{
+    &amp;quot;cmd&amp;quot; : [&amp;quot;sudo&amp;quot;, &amp;quot;cl&amp;quot;, &amp;quot;$file&amp;quot;, &amp;quot;$args&amp;quot;],
+    &amp;quot;info&amp;quot; : &amp;quot;Started cl :: $project_path$file_name&amp;quot;,
+    &amp;quot;env&amp;quot; : {&amp;quot;CIM_HOME&amp;quot;:&amp;quot;$HOME/.cim&amp;quot;,&amp;quot;PATH&amp;quot;: &amp;quot;$CIM_HOME/bin:$PATH&amp;quot;, &amp;quot;LISP_IMPL&amp;quot;: &amp;quot;sbcl&amp;quot;},
+    &amp;quot;selector&amp;quot; : &amp;quot;source.ext&amp;quot;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;です。本来CIMは&lt;code&gt;$CIM_HOME/init.*&lt;/code&gt;を呼ばないと動かないのですが、ショートカットする環境変数を設定することで無理矢理動かしてます。Cloud9のinitスクリプト(jsファイル)があるようなのでそこでCIMをinitしておけば無理せずとも出来そうですがあまり深く踏み込んでないです。&lt;/p&gt;
+
+&lt;p&gt;尚、この設定は実行即終了のものです。実行してREPLに入りたい場合は&lt;code&gt;&amp;quot;cmd&amp;quot;&lt;/code&gt;を&lt;code&gt;[&amp;quot;cl&amp;quot;,&amp;quot;-rf&amp;quot;, &amp;quot;$file&amp;quot;, &amp;quot;$args&amp;quot;]&lt;/code&gt;にすると出来ます。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_5&#34;&gt;動かしてみる&lt;/h2&gt;
+
+&lt;p&gt;上記のrun scriptを設定、保存したらメニューバーから[File]&amp;gt;[New File]と進み、新しいファイルを作ります。&lt;br /&gt;
+一番簡単に&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(write-line &amp;quot;Hello Cloud9&amp;quot;)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;とでも書きましょうか。そして[&amp;gt;Run]してちょいと待つと実行出来る筈です。動かなかったら手動で[Run]&amp;gt;[Run With]&amp;gt;[My Runner]とかしてみましょう。ここまで来ればセットアップ完了です。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_6&#34;&gt;今後の課題というか要調査というか&lt;/h1&gt;
+
+&lt;h2 id=&#34;toc_7&#34;&gt;シンタックスハイライト&lt;/h2&gt;
+
+&lt;p&gt;Lisp Meet Upでも喋りましたがハイライトが最悪です。ユーザー定義ハイライターも(少くともACEレベルでは)出来そうなのでどうにかする必要があります。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_8&#34;&gt;インデント&lt;/h2&gt;
+
+&lt;p&gt;Lispのインデントはタブn個とかで済むようなものじゃなくてどのオペレータの中にいるかに依って変わります。その辺どうにかなって欲しいですね。
+もしかしたらClojureは上手くいってるかもしれないのでそこからインポートしてくれると嬉しいですね。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_9&#34;&gt;swankインターフェース&lt;/h2&gt;
+
+&lt;p&gt;initスクリプトがあるって事はもしかしたらIDEもプログラマブルなのかもしれないのでswankインターフェースを作れるかもしれません。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_10&#34;&gt;CIMインターフェース&lt;/h2&gt;
+
+&lt;p&gt;initスクリプトがあるって事は(ry。最終目標はメニューバーからどの処理系を使うか選択可能とかで。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_11&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Cloud9を紹介した&lt;/li&gt;
+&lt;li&gt;Common Lispのセットアップ方法を示した&lt;/li&gt;
+&lt;li&gt;誰か諸問題解決して下さい&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Lisp Meet Up #19でLTしてきました</title>
+      <link>http://keens.github.io/blog/2014/07/30/lisp-meet-up-number-19</link>
+      <pubDate>Wed, 30 Jul 2014 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/blog/2014/07/30/lisp-meet-up-number-19</guid>
+      <description>&lt;p&gt;κeenです毎月恒例の&lt;a href=&#34;https://atnd.org/events/53246&#34;&gt;Lisp Meet Up presented by Shibuya.lisp&lt;/a&gt;でLTしてきたのでレポートです。&lt;/p&gt;
+
+&lt;p&gt;今回は募集20に対して参加登録20、参加18、LT4本と集りの良い会でした。&lt;/p&gt;
+
+&lt;p&gt;自己紹介ではほぼCLの人ばっかりでした。珍しいところ（？）では数理システムの方が居たり会場を提供して下さってるサイバーエージェントの方が覗きにきてたり。&lt;/p&gt;
+
+&lt;p&gt;LT1本目はTOYOZUMIさんから連作の一つのCommon Lisp最適化発展。画像のエッジ検出をするときの関数の最適化の話でした。カーネルを渡すだけで最適なコードを生成するそうです。コーナーケースのif式をループの外に追い出してたりと半分成程、あとはよく分かんない話してるなーって。&lt;br /&gt;
+最終的には&lt;code&gt;eval&lt;/code&gt;を使ってるらしく、本当に速度出るの？って気になりましたが本人もやってみたところ速くなってビックリだったそうです。&lt;/p&gt;
+
+&lt;p&gt;スライドはこちら。&lt;/p&gt;
+
+&lt;p&gt;&lt;iframe src=&#34;//www.slideshare.net/slideshow/embed_code/37456264&#34; width=&#34;427&#34; height=&#34;356&#34; frameborder=&#34;0&#34; marginwidth=&#34;0&#34; marginheight=&#34;0&#34; scrolling=&#34;no&#34; style=&#34;border:1px solid #CCC; border-width:1px 1px 0; margin-bottom:5px; max-width: 100%;&#34; allowfullscreen&gt; &lt;/iframe&gt; &lt;div style=&#34;margin-bottom:5px&#34;&gt; &lt;strong&gt; &lt;a href=&#34;https://www.slideshare.net/toyozumiKouichi/common-lisp-37456264&#34; title=&#34;Common lisp最適化発展&#34; target=&#34;_blank&#34;&gt;Common lisp最適化発展&lt;/a&gt; &lt;/strong&gt; from &lt;strong&gt;&lt;a href=&#34;http://www.slideshare.net/toyozumiKouichi&#34; target=&#34;_blank&#34;&gt;Toyozumi Kouichi&lt;/a&gt;&lt;/strong&gt; &lt;/div&gt;&lt;/p&gt;
+
+&lt;p&gt;動画は今回から私が担当なので処理が終ったらリンク張ります。&lt;/p&gt;
+
+&lt;p&gt;次はTakagiさんよりcl-cudaについて。話聞く前は「どうせC APIをCFFIで叩いただけだろ(ホジ」って思ってましたがさすがにGPGPUはそんなに簡単じゃなかったようです。
+cl-cudaはLispのAPIを叩いたらCUDA向けのCコードを吐いてCUDA専用のコンパイラ通してモジュールとして動的に読み込んで、ってやってくれるそうです。すごい。
+完成度も、CUDAを研究に使ってたchikuさんによると普通使う分にはほぼ困らなくて、あとは構造体のサポートがあれば良いかも程度だそうです。すごい。&lt;/p&gt;
+
+&lt;p&gt;スライドはまだ見付けてないです。&lt;/p&gt;
+
+&lt;p&gt;3番目は私から、WebブラウザベースのIDE、&lt;a href=&#34;https://c9.io/&#34;&gt;Cloud9&lt;/a&gt;の紹介とLispの対応状況について。
+スライドはこのブログに載せてますが、こちら&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;/slide/cloud-9.html&#34;&gt;Cloud 9の紹介 | κeenのHappy Hacκing Blog&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;もうちょっと説明が欲しそうな雰囲気だったので別記事立てますね。@potix2さんが社内チャットに流したところなり反応が良かったようなので普通にIDEとして優れてるんじゃないでしょうか。&lt;/p&gt;
+
+&lt;p&gt;最後はかにたん(@kazh98)から床下からLispが出てきた話。うん。本当に床下からLispが出てきた話でした。かにたんの研究室すごいですね。みなさんの家の床下にもLispがあるかもしれませんよm9っ。&lt;/p&gt;
+
+&lt;p&gt;最後の最後にかにたんの研究室から出てきたLispについてTOYOZUMIさんがモニタをスクリーンに映しつつみんなで色々議論。なんかWEBのマニュアルがポルトガル語で書かれてたのでポルトガル語喋れる人捜したけど居なかったり。次回、床下Lispを動かしてみようってなりました。&lt;/p&gt;
+
+&lt;p&gt;そこでもう閉場の時間だったので懇親会へ。11名が参加。&lt;/p&gt;
+
+&lt;p&gt;私とかにたんとpotix2さんがschemeの実装の話してたり@mhkojiさんがhunchentootがありえないくらい遅いって話してたり色々でしたね。
+CIMの話も出てました。実用上Windowsサポートは外せないってことで@snmstsさんがCでCIMを書き直してるだとか@nitro_idiotさんがshellyでCIMを使うにあたってCIM側でコアのマネジメントして欲しいって言ってただとか。&lt;/p&gt;
+
+&lt;p&gt;C CIMは面白そうですね。ビルドしなきゃいけないから手軽さの問題が…とかlibcurlに依存するとLinuxが…とか言ってたら「ディストリのパッケージシステムに乗せてしまえば問題無い」と一刀両断。その発想はなかった。むしろパッケージシステムに入った方が手軽。&lt;/p&gt;
+
+&lt;p&gt;今からCloud9の記事とCIMのコアマネジメント頑張りますね。&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Lisp Meet Up #16 でLTしてきました。</title>
+      <link>http://keens.github.io/blog/2014/04/25/lisp-meet-up-number-16</link>
+      <pubDate>Fri, 25 Apr 2014 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/blog/2014/04/25/lisp-meet-up-number-16</guid>
+      <description>&lt;p&gt;κeenです。年度末/年度始めで色々あり、しばらく更新できてませんでしたが &lt;a href=&#34;http://atnd.org/events/49370&#34;&gt;Lisp Meet Up Presented by Shibuya.lisp #16&lt;/a&gt;に参加してきたのでレポートです。&lt;/p&gt;
+
+&lt;p&gt;最近はLisp Meet Upも盛況で毎回ほぼ満席ですね。今回も満席でした。というか立ち見出てました。&lt;/p&gt;
+
+&lt;p&gt;自己紹介では初参加の方が多くてCLerが多い印象でした。昔研究とかでCL使ってて久し振りに、とか。私個人的にはTwitterでフォローしてる方々とお会い出来て楽しかったです。&lt;/p&gt;
+
+&lt;p&gt;LTは私とTOYOZUMIさんが告知してました。しかしTOYOZUMIさんは当日体調が悪くて欠席したので私と飛び入りのchikuさんで計2件のLTがありました。TOYOZUMIさんは何回かに分けて発表するうちの1回だったので次回LTしていただけるかと思います。&lt;/p&gt;
+
+&lt;p&gt;私のやつは↓です。時間ギリギリで作ったのであんまりいじめないで下さい。因みにまだソースはgithubに上げてないです（後述）&lt;/p&gt;
+
+&lt;iframe src=&#34;http://www.slideshare.net/slideshow/embed_code/33794330&#34; width=&#34;427&#34; height=&#34;356&#34; frameborder=&#34;0&#34; marginwidth=&#34;0&#34; marginheight=&#34;0&#34; scrolling=&#34;no&#34; style=&#34;border:1px solid #CCC; border-width:1px 1px 0; margin-bottom:5px; max-width: 100%;&#34; allowfullscreen&gt; &lt;/iframe&gt;
+
+&lt;p&gt;&lt;strong&gt;&lt;a href=&#34;https://www.slideshare.net/blackenedgold/lisp-meetup16&#34; title=&#34;CL21で色々なデータ構造を実装してみようとした&#34;&gt;CL21で色々なデータ構造を実装してみようとした&lt;/a&gt;&lt;/strong&gt; from &lt;strong&gt;&lt;a href=&#34;http://www.slideshare.net/blackenedgold&#34;&gt;blackenedgold&lt;/a&gt;&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;会場からはCL21作者のにとりさんから「abstract-sequenceは最低限実装しなきゃいけないメソッドは少ない」との指摘がありましたがqueueとして機能するために色々頑張ったのです。&lt;/p&gt;
+
+&lt;p&gt;abstract-setとかは欲しいですねとの声もありました。issueに上げておきますかな&lt;/p&gt;
+
+&lt;p&gt;また、chikuさんからheapの実装について色々と指摘があり、 &lt;a href=&#34;http://www.amazon.co.jp/%E3%82%A2%E3%83%AB%E3%82%B4%E3%83%AA%E3%82%BA%E3%83%A0%E3%82%A4%E3%83%B3%E3%83%88%E3%83%AD%E3%83%80%E3%82%AF%E3%82%B7%E3%83%A7%E3%83%B3-%E7%AC%AC3%E7%89%88-%E7%B7%8F%E5%90%88%E7%89%88-%E4%B8%96%E7%95%8C%E6%A8%99%E6%BA%96MIT%E6%95%99%E7%A7%91%E6%9B%B8-%E3%82%B3%E3%83%AB%E3%83%A1%E3%83%B3/dp/476490408X&#34;&gt;Introduction to Algorithms&lt;/a&gt;という本を紹介されました。とりあえず大学の図書館から借りてきたのでそれを読んだらcl21-data-collectionsに手を加えてgithubに上げます。&lt;/p&gt;
+
+&lt;p&gt;次はchikuさんから &lt;a href=&#34;https://github.com/chiku-samugari/chiku.util&#34;&gt;chiku-utils&lt;/a&gt;というオレオレライブラリの紹介がありました。スライドは見付け次第貼りますね。結構便利そうな関数やマクロがあったので一度見てみると良いかもしれません。&lt;/p&gt;
+
+&lt;p&gt;その後は休憩からのぐだぐだ時間でした。chikuさんの発表の中で出てきた&lt;code&gt;keymin&lt;/code&gt;という関数について会場から一般的には&lt;code&gt;argmin&lt;/code&gt;と言うとの指摘があり、その場でかにたんが&lt;code&gt;argmin&lt;/code&gt;の定義の数式を書いたことから私とかにたんとラジカルこうじさんでマスハラをしあってました。というか主にかにたんがマスハラしてました。Lispの話はあまりしませんでしたね… あとは私がゼミで &lt;a href=&#34;http://www.amazon.co.jp/gp/product/0124077269/ref=oh_details_o00_s00_i00?ie=UTF8&amp;amp;psc=1&#34;&gt;パタヘネ&lt;/a&gt;を読んでることからパタヘネってC言語の入門書だよねとかの会話とか。StumpWMについてもちょっと話したかな？&lt;/p&gt;
+
+&lt;p&gt;そうだ。次回のScheme回は &lt;a href=&#34;https://bitbucket.org/ktakashi/sagittarius-scheme/overview&#34;&gt;Sagittarius&lt;/a&gt;の作者のKeiさんが次回LTする気満々とのことで話題に上がってました。それに &lt;a href=&#34;https://github.com/wasabiz/picrin&#34;&gt;picrin&lt;/a&gt;の作者のわざびず君も来るかもとかですしTOYOZUMIさんの連作もありますし次回は長くなるか2回に分けるかになるかもしれません。&lt;/p&gt;
+
+&lt;p&gt;その後の懇親会は9人が参加でしたがアルコールを飲む方はあまりいませんでしたね。飲んでたのは3~4人かな?多くの方が普通にお酒に弱いだとかバイクで来てるだとか次の日仕事があるとかですね。もう普通に食事でも良いのでは。私のいたテーブルでの会話は佐野さんがLispの本をめっちゃ持ってるだとかでしたね。実践Common Lispを訳者ということを割り引いても多いくらい持ってるそうです。CLtL2とかもめっちゃ持ってるそうです。謎ですね。&lt;/p&gt;
+
+&lt;p&gt;今回のまとめ&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;かにたんをホワイトボードに近付けてはいけない&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;最後になりますがイベント管理や会場手配など運営の方々ありがとう御座いまいした。&lt;/p&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>

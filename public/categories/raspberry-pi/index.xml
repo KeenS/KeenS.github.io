@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+      <title>Raspberry-Pi on κeenのHappy Hacκing Blog </title>
+      <generator uri="https://hugo.spf13.com">Hugo</generator>
+    <link>http://KeenS.github.io/categories/raspberry-pi/index.xml/</link>
+    <language>en-us</language>
+    
+    
+    <updated>Tue, 21 Jan 2014 00:00:00 UTC</updated>
+    
+    <item>
+      <title>Mpd 小ネタ</title>
+      <link>http://keens.github.io/blog/2014/01/21/mpd-something</link>
+      <pubDate>Tue, 21 Jan 2014 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/blog/2014/01/21/mpd-something</guid>
+      <description>&lt;p&gt;mpdのちょっとした便利な使い方。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;at&lt;/code&gt;がRSPiにインストールされてる前提で、RSPi上で&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ at 7:00
+at&amp;gt; mpc toggle
+^D
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;とすればRSPiを目覚ましや時報として使えます。停止にはsshログインして&lt;code&gt;mpc toggle&lt;/code&gt;する必要があるのでそこまでする頃には起きてる筈。&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>RSPiでMongoDBを動かし、Twitter Post Alertを作った話</title>
+      <link>http://keens.github.io/blog/2014/01/19/rspi-plus-mongodb-plus-twitter</link>
+      <pubDate>Sun, 19 Jan 2014 00:00:00 UTC</pubDate>
+      
+      <guid>http://keens.github.io/blog/2014/01/19/rspi-plus-mongodb-plus-twitter</guid>
+      <description>
+
+&lt;p&gt;κeenです。ここのところ寒い日が続いてますね。寒いと家に扃(ひきこも)ってTweet数が急上昇します。 すると一日に何postしてるか気になるのでカウンタを作りました。&lt;br /&gt;
+そのときの苦労話です。&lt;/p&gt;
+
+&lt;p&gt;ただ、どうせ記録取るなら色々やりたいのでRspberry Piで一日のpost数、fav数、そしてメンヘラなことにフォロー/フォロワー全員のidを毎日記録することにしました。これで誰にリムられたかブロられたか一目瞭然ですね。&lt;/p&gt;
+
+&lt;p&gt;ここで一つ問題が。post, fav数は良いのですがフォロー/フォロワーのid一覧は毎日変わるのでmysqlで管理するのはちょっと面倒かなと。なのでMongoDBで管理することにしたいんですが、raspbianの&lt;code&gt;apt&lt;/code&gt;にないんですよね。仕方ないので手動ビルドで対応しました。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_0&#34;&gt;MongoDBのビルド&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://c-mobberley.com/wordpress/index.php/2013/10/14/raspberry-pi-mongodb-installation-the-working-guide/&#34;&gt;ここ&lt;/a&gt;を参考に&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;cd ~/compile
+sudo apt-get install build-essential libboost-filesystem-dev libboost-program-options-dev libboost-system-dev libboost-thread-dev scons libboost-all-dev python-pymongo git
+git clone https://github.com/skrabban/mongo-nonx86
+cd mongo-nonx86
+sudo scons
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;としました。が、&lt;code&gt;scons&lt;/code&gt;に一晩かかるとのことなので放置してたら何故かraspberry piが落ちてる…&lt;br /&gt;
+気をとりなおして再起動。もう一度&lt;code&gt;sudo scons&lt;/code&gt;すると今度はエラー終了。&lt;code&gt;sig 9 killed&lt;/code&gt;…いや、私なにもしてないですよ?ダメ元で今度は&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;sudo scons install
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;したら完走。良ク分カラン。狂想曲感が出てますね。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_1&#34;&gt;MongoDBのインストール&lt;/h2&gt;
+
+&lt;p&gt;さっきのでインストール終わったと思うでしょ？違うんですよ。&lt;code&gt;init.d&lt;/code&gt;だとか&lt;code&gt;mongodb.conf&lt;/code&gt;だとかは配置されてないんですよ。&lt;code&gt;debian/&lt;/code&gt;以下に色々入ってるので&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;cd debian
+sudo cp mongodb.conf /etc/mongodb.conf
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;までは良いのですが、&lt;code&gt;init.d&lt;/code&gt;と&lt;code&gt;mongodb.upstart&lt;/code&gt;の&lt;code&gt;mongod&lt;/code&gt;のパスが&lt;code&gt;/usr/bin/mongod&lt;/code&gt;でハードコードされてるんですよ。上の&lt;code&gt;sudo scons install&lt;/code&gt;だと&lt;code&gt;/usr/local/bin/mongod&lt;/code&gt;です。さらに起動オプションに&lt;code&gt;--dbpadh /var/lib/mongodb&lt;/code&gt;と&lt;code&gt;--logpath /var/log/mongodb/mongodb.log&lt;/code&gt;が指定されていて、&lt;code&gt;mongodb.conf&lt;/code&gt;で上書きしているにも係らずそこまでのパスが存在しないとエラー吐いて起動してくれないので修正。&lt;br /&gt;
+&lt;code&gt;mongodb.upstart&lt;/code&gt;は直ぐ分かるので良いとして、&lt;code&gt;init.d&lt;/code&gt;は&lt;/p&gt;
+
+&lt;figure class=&#34;code&#34;&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;3&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;4&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;5&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;6&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;7&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;8&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;9&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;10&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;&#34;&gt;&lt;span class=&#34;line&#34;&gt;48d47
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&amp;lt; 
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;50c49
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&amp;lt; DAEMON=/usr/bin/mongod
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;---
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&amp;gt; DAEMON=/usr/local/bin/mongod
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;100c99
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&amp;lt; DAEMON_OPTS=&#34;$DAEMON_OPTS --config $CONF&#34;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;---
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&amp;gt; DAEMON_OPTS=&#34;run --config $CONF&#34;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+
+&lt;p&gt;な感じの修正です。なんか空行が一つ減ってますが気にしない。&lt;br /&gt;
+ここまでしたらようやく&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;chmod +x init.d mongodb.upstart
+sudo cp init.d /etc/init.d/mongodb
+sudo cp mongodb.upstart /etc/init/mongodb
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;で完了です。&lt;code&gt;man&lt;/code&gt;とかもあるのですが配置の仕方が分からないので放置←&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;sudo service mongodb start
+mongo
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;で接続確認できます。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_2&#34;&gt;Twitterのpostを集約する&lt;/h2&gt;
+
+&lt;p&gt;ビックリするくらい簡単。twitterのAPI keyを持ってる前提ですが。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;sudo gem install twitter mongo
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;で必要なgemをインストールし、&lt;code&gt;~/.twitter.rb&lt;/code&gt;に&lt;/p&gt;
+
+&lt;figure class=&#34;code&#34;&gt;&lt;figcaption&gt;&lt;span&gt;&lt;/span&gt;&lt;/figcaption&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;3&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;4&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;5&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;6&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;ruby&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;vg&#34;&gt;$client&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;ss&#34;&gt;Twitter&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;:&lt;/span&gt;&lt;span class=&#34;ss&#34;&gt;:REST&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;::&lt;/span&gt;&lt;span class=&#34;no&#34;&gt;Client&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;new&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;do&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;|&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;conf&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;|&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; &lt;span class=&#34;n&#34;&gt;conf&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;consumer_key&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;s2&#34;&gt;&#34;yours&#34;&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; &lt;span class=&#34;n&#34;&gt;conf&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;consumer_secret&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;s2&#34;&gt;&#34;yours&#34;&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; &lt;span class=&#34;n&#34;&gt;conf&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;access_token&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;s2&#34;&gt;&#34;yours&#34;&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; &lt;span class=&#34;n&#34;&gt;conf&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;access_token_secret&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;s2&#34;&gt;&#34;yours&#34;&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;k&#34;&gt;end&lt;/span&gt;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+
+&lt;p&gt;と保存しておきます。昔と形式が変わりましたね。この形式になってからスレッドセーフになり、Twitter Stream APIにも対応してるようです。いつか扱ってみたい&lt;/p&gt;
+
+&lt;p&gt;集計ですが&lt;/p&gt;
+
+&lt;figure class=&#34;code&#34;&gt;&lt;figcaption&gt;&lt;span&gt;&lt;/span&gt;&lt;/figcaption&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
+&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;3&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;4&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;5&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;6&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;7&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;8&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;9&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;10&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;11&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;12&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;13&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;14&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;15&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;16&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;17&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;18&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;19&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;20&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;21&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;22&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;23&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;24&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;25&lt;/span&gt;
+&lt;span class=&#34;line-number&#34;&gt;26&lt;/span&gt;
+&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;ruby&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;c1&#34;&gt;#! /usr/local/bin/ruby&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# coding: utf-8&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;nb&#34;&gt;require&lt;/span&gt; &lt;span class=&#34;s1&#34;&gt;&#39;twitter&#39;&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;nb&#34;&gt;require&lt;/span&gt; &lt;span class=&#34;s1&#34;&gt;&#39;mongo&#39;&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;nb&#34;&gt;require&lt;/span&gt; &lt;span class=&#34;s1&#34;&gt;&#39;time&#39;&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;nb&#34;&gt;load&lt;/span&gt; &lt;span class=&#34;s2&#34;&gt;&#34;~/.twitter.rb&#34;&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;n&#34;&gt;doc&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;{&lt;/span&gt; &lt;span class=&#34;s2&#34;&gt;&#34;tweets&#34;&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&amp;gt;&lt;/span&gt; &lt;span class=&#34;vg&#34;&gt;$client&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;user&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;tweets_count&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; &lt;span class=&#34;s2&#34;&gt;&#34;favs&#34;&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&amp;gt;&lt;/span&gt; &lt;span class=&#34;vg&#34;&gt;$client&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;user&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;favorites_count&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; &lt;span class=&#34;s2&#34;&gt;&#34;followers&#34;&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&amp;gt;&lt;/span&gt; &lt;span class=&#34;vg&#34;&gt;$client&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;friend_ids&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;to_a&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; &lt;span class=&#34;s2&#34;&gt;&#34;friends&#34;&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&amp;gt;&lt;/span&gt; &lt;span class=&#34;vg&#34;&gt;$client&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;follower_ids&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;to_a&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt; &lt;span class=&#34;s2&#34;&gt;&#34;timestamp&#34;&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&amp;gt;&lt;/span&gt; &lt;span class=&#34;no&#34;&gt;Time&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;now&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;strftime&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;&#34;%Y%m%d%H%M%S&#34;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)}&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;n&#34;&gt;col&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;ss&#34;&gt;Mongo&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;:&lt;/span&gt;&lt;span class=&#34;ss&#34;&gt;:Connection&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;new&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;db&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;&#34;twitter&#34;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;collection&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;&#34;tweets&#34;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;n&#34;&gt;last&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;col&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;find&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;sort&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;&#34;timestamp&#34;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt;&lt;span class=&#34;ss&#34;&gt;:desc&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;first&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;n&#34;&gt;tweets_sub&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;doc&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;&#34;tweets&#34;&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;-&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;last&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;&#34;tweets&#34;&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;n&#34;&gt;favs_sub&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;doc&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;&#34;favs&#34;&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;-&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;last&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;&#34;favs&#34;&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;n&#34;&gt;followers_sub&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;doc&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;&#34;followers&#34;&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;].&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;length&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;-&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;last&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;&#34;followers&#34;&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;].&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;length&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;n&#34;&gt;friends_sub&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;doc&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;&#34;friends&#34;&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;].&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;length&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;-&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;last&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;&#34;friends&#34;&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;].&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;length&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;n&#34;&gt;col&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;insert&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;doc&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;n&#34;&gt;message&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;s2&#34;&gt;&#34;前回計測(&lt;/span&gt;&lt;span class=&#34;si&#34;&gt;#{&lt;/span&gt;&lt;span class=&#34;no&#34;&gt;Time&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;parse&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;last&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;&#34;timestamp&#34;&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;strftime&lt;/span&gt; &lt;span class=&#34;s2&#34;&gt;&#34;%Y-%m-%d %H:%M:%S&#34;&lt;/span&gt;&lt;span class=&#34;si&#34;&gt;}&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;)以降&lt;/span&gt;&lt;span class=&#34;se&#34;&gt;\n&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;&#34;&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;n&#34;&gt;message&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;+=&lt;/span&gt; &lt;span class=&#34;s2&#34;&gt;&#34;&lt;/span&gt;&lt;span class=&#34;si&#34;&gt;#{&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;tweets_sub&lt;/span&gt;&lt;span class=&#34;si&#34;&gt;}&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;回ツイートし&lt;/span&gt;&lt;span class=&#34;se&#34;&gt;\n&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;&#34;&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;n&#34;&gt;message&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;+=&lt;/span&gt; &lt;span class=&#34;s2&#34;&gt;&#34;&lt;/span&gt;&lt;span class=&#34;si&#34;&gt;#{&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;favs_sub&lt;/span&gt;&lt;span class=&#34;si&#34;&gt;}&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;回favり&lt;/span&gt;&lt;span class=&#34;se&#34;&gt;\n&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;&#34;&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;n&#34;&gt;message&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;+=&lt;/span&gt; &lt;span class=&#34;s2&#34;&gt;&#34;友達は&lt;/span&gt;&lt;span class=&#34;si&#34;&gt;#{&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;friends_sub&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;abs&lt;/span&gt;&lt;span class=&#34;si&#34;&gt;}&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;人&lt;/span&gt;&lt;span class=&#34;si&#34;&gt;#{&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;friends_sub&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;&amp;gt;=&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;?&lt;/span&gt; &lt;span class=&#34;s2&#34;&gt;&#34;増え&#34;&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;:&lt;/span&gt; &lt;span class=&#34;s2&#34;&gt;&#34;減り&#34;&lt;/span&gt;&lt;span class=&#34;si&#34;&gt;}&lt;/span&gt;&lt;span class=&#34;se&#34;&gt;\n&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;&#34;&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;n&#34;&gt;message&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;+=&lt;/span&gt; &lt;span class=&#34;s2&#34;&gt;&#34;フォロワーは&lt;/span&gt;&lt;span class=&#34;si&#34;&gt;#{&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;followers_sub&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;abs&lt;/span&gt;&lt;span class=&#34;si&#34;&gt;}&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;人&lt;/span&gt;&lt;span class=&#34;si&#34;&gt;#{&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;followers_sub&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;&amp;gt;=&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;?&lt;/span&gt; &lt;span class=&#34;s2&#34;&gt;&#34;増え&#34;&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;:&lt;/span&gt; &lt;span class=&#34;s2&#34;&gt;&#34;減り&#34;&lt;/span&gt;&lt;span class=&#34;si&#34;&gt;}&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;ました&#34;&lt;/span&gt;
+&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;vg&#34;&gt;$client&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;update&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;message&lt;/span&gt;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
+
+&lt;p&gt;で全部です。Rubyのハッシュ+配列がそのままinsert/selectできるのでぜんぜんMongoDBを意識しなくて良いですね。&lt;/p&gt;
+
+&lt;p&gt;ところで&lt;code&gt;datetime&lt;/code&gt;型が無さげだったので&lt;code&gt;timestamp&lt;/code&gt;をソートキー兼idにするために&lt;code&gt;YYYYMMDDHHMMSS&lt;/code&gt;形式の文字列で格納してます(整数は8bitまでっぽかったです)。他に良い方法があると思うのですが思いつきませんでした。&lt;/p&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>
