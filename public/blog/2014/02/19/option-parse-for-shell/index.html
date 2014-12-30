@@ -1,0 +1,281 @@
+
+<!DOCTYPE HTML>
+<html>
+<head>
+	<script data-cfasync="false" type="text/javascript" src="//use.typekit.net/axj3cfp.js"></script>
+	<script data-cfasync="false" type="text/javascript">try{Typekit.load();}catch(e){}</script>
+	<meta charset="utf-8">
+	<title>Shell Scriptでオプションをパースするときの必勝法  | κeenのHappy Hacκing Blog</title>
+
+<meta name="author" content="κeen"> 
+
+<meta name="description" content="κeenです。CIMの解説 実装編の執筆はもうちょい掛かりそうです。だいたいコードが落ち着いたら書きます。 今回は長いオプションと短いオプションをシェルスクリプトでパースするときの話です。 シェルスクリプトではcaseを使う方法とgetoptsを使う方法があります。 &hellip;"> <meta name="keywords" content="">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+	<link href="/atom.xml" rel="alternate" title="κeenのHappy Hacκing Blog" type="application/atom+xml">
+	<link rel="canonical" href="">
+	<link href="/favicon.png" rel="shortcut icon">
+	<link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+	<link href="/stylesheets/font-awesome.min.css" rel="stylesheet" type="text/css">
+	<!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+	<script type="text/javascript" src="/javascripts/jquery.fancybox.pack.js"></script>
+
+<script language="Javascript" type="text/javascript">
+$(document).ready(
+  function() {
+    (function($) {
+      $(".fancybox[data-content-id]").each(function() {
+        this.href = $(this).data('content-id');
+      });
+      $(".fancybox").fancybox({
+        beforeLoad: function() {
+          var el, 
+              id = $(this.element).data('title-id');
+
+          if (id) {
+            el = $('#' + id);
+
+            if (el.length) {
+              this.title = el.html();
+            }
+          }
+          if ($(this).data('content')) {
+            this.content = $(this).data('content');
+          }
+        },
+        helpers: {
+          title: {
+            type: 'inside'
+          }
+        }
+      });
+    })(jQuery);
+  }
+);
+</script>
+
+	<script type="text/x-mathjax-config">
+ MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
+</script>
+<script type="text/javascript"
+ src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML">
+</script>
+<meta http-equiv="X-UA-Compatible" CONTENT="IE=EmulateIE7" />
+
+</head>
+
+
+
+<body>
+	<header id="header" class="inner"><nav id="sub-nav"><div class="social">
+<a class="home" href="/" title="Home">Home</a>
+
+
+
+<a class="twitter" href="http://twitter.com/blackenedgold" title="Twitter">Twitter</a>
+
+
+<a class="cookpad" href="http://cookpad.com/kitchen/3303629" title="COOKPAD">COOKPAD</a>
+
+
+<a class="github" href="https://github.com/KeenS" title="GitHub">GitHub</a>
+
+
+
+
+
+
+
+
+<a class="qiita" href="https://qiita.com/blackenedgold" title="Qiita">Qiita</a>
+
+
+<a class="rss" href="/atom.xml" title="RSS">RSS</a>
+
+
+<a class="slideshare" href="http://www.slideshare.net/blackenedgold" title="SlideShare">SlideShare</a>
+
+</div>
+</nav><br>
+<h1><a href="/">κeenのHappy Hacκing Blog</a></h1>
+<h4>Lispエイリアンの狂想曲</h4>
+<nav id="main-nav"><ul>
+	<li><a href="/">Blog</a></li>
+	<li><a href="/about">About</a></li>
+	<li><a href="/slide">Slides</a></li>
+</ul>
+</nav>
+<nav id="mobile-nav">
+	<div class="alignleft menu">
+		<a class="button">Menu</a>
+		<div class="container"><ul>
+	<li><a href="/">Blog</a></li>
+	<li><a href="/about">About</a></li>
+	<li><a href="/slide">Slides</a></li>
+</ul>
+</div>
+	</div>
+	<div class="alignright search">
+		<a class="button"></a>
+		<div class="container">
+			<form action="http://google.com/search" method="get">
+				<input type="text" name="q" results="0">
+				<input type="hidden" name="q" value="site:KeenS.github.io">
+			</form>
+		</div>
+	</div>
+</nav>
+
+
+</header>
+
+	<div id="content" class="inner"><article class="post">
+	<h2 class="title">Shell Scriptでオプションをパースするときの必勝法</h2>
+	<div class="entry-content"><p>κeenです。CIMの解説 実装編の執筆はもうちょい掛かりそうです。だいたいコードが落ち着いたら書きます。</p>
+
+<p>今回は長いオプションと短いオプションをシェルスクリプトでパースするときの話です。</p>
+
+<!-- more -->
+
+
+<p>シェルスクリプトでは<code>case</code>を使う方法と<code>getopts</code>を使う方法があります。<code>case</code>だと長いオプションと短いオプションを扱えるものの短いオプションをまとめるのに苦労し、<code>getopts</code>だと短いオプションをまとめられるものの長いオプションを扱えません。</p>
+
+<p>そこで解決策。<code>--foo ARG</code> <code>-f ARG</code> <code>-h</code>をパースし、他のオプションも許可（無視）、<code>--</code>でパースを止めるとします。</p>
+
+<figure class="code"><figcaption><span></span></figcaption><div class="highlight"><table><tr>
+<td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+<span class="line-number">10</span>
+<span class="line-number">11</span>
+<span class="line-number">12</span>
+<span class="line-number">13</span>
+<span class="line-number">14</span>
+<span class="line-number">15</span>
+<span class="line-number">16</span>
+<span class="line-number">17</span>
+<span class="line-number">18</span>
+</pre></td>
+<td class="code"><pre><code class="sh"><span class="line"><span class="k">while</span> <span class="o">[</span> <span class="s2">"$#"</span> -gt 0 <span class="o">]</span>;<span class="k">do</span>
+</span><span class="line"><span class="k"> </span><span class="nv">ARG</span><span class="o">=</span><span class="s2">"$1"</span>;<span class="nb">shift</span>
+</span><span class="line"><span class="nb"> </span><span class="k">case</span> <span class="s2">"$ARG"</span> in
+</span><span class="line"> --foo<span class="o">)</span> do_something_with <span class="s2">"$ARG"</span>;;
+</span><span class="line"> --<span class="o">)</span> <span class="nb">break</span>;;
+</span><span class="line"> --*<span class="o">)</span> ;;
+</span><span class="line"> -*<span class="o">)</span>
+</span><span class="line"> <span class="nv">OPTIND</span><span class="o">=</span>1
+</span><span class="line"> <span class="k">while </span><span class="nb">getopts</span> :f:h OPT <span class="s2">"$ARG"</span>; <span class="k">do</span>
+</span><span class="line"><span class="k"> case</span> <span class="s2">"$OPT"</span> in
+</span><span class="line"> f<span class="o">)</span> do_something_with <span class="s2">"$OPTARG"</span>;;
+</span><span class="line"> h<span class="o">)</span> do_something;;
+</span><span class="line"> <span class="k">esac</span>
+</span><span class="line"><span class="k"> done</span>
+</span><span class="line"> ;;
+</span><span class="line">  
+</span><span class="line"> <span class="k">esac</span>
+</span><span class="line"><span class="k">done</span>
+</span></code></pre></td>
+</tr></table></div></figure>
+
+
+<p>単純に<code>case</code>と<code>getopts</code>を組み合わせます。ポイントは<code>-*)</code>の節の<code>OPTIND=1</code>と<code>getopts</code>の第3引数でしょうか。</p>
+
+<p>因みにこの例だと引数を消費します。引数を消費したくなければ</p>
+
+<figure class="code"><figcaption><span></span></figcaption><div class="highlight"><table><tr>
+<td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+</pre></td>
+<td class="code"><pre><code class="sh"><span class="line"><span class="k">while</span> <span class="o">[</span> <span class="s2">"$#"</span> -gt 0 <span class="o">]</span>;<span class="k">do</span>
+</span><span class="line"><span class="k"> </span><span class="nv">ARG</span><span class="o">=</span><span class="s2">"$1"</span>;<span class="nb">shift</span>
+</span></code></pre></td>
+</tr></table></div></figure>
+
+
+<p>を</p>
+
+<figure class="code"><figcaption><span></span></figcaption><div class="highlight"><table><tr>
+<td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+</pre></td>
+<td class="code"><pre><code class="sh"><span class="line"><span class="k">for </span>ARG;do
+</span></code></pre></td>
+</tr></table></div></figure>
+
+
+<p>に書き換えれば良く、<code>--</code>でパースを止めたくなければ<code>--) break;;</code>の節を無くせば良く、</p>
+
+<p>他のオプションを許したくなければ<code>--*);;</code>の節を<code>--*)exit 1;;</code>などにし、<code>getopts</code>の引数文字列<code>:f:h</code>の<code>:</code>をとって<code>getopts fh ...</code>とすれば良いです。</p>
+</div>
+
+
+<div class="meta">
+	<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+
+<time datetime="2014-02-19T04:13:00+09:00" pubdate data-updated="true">2014 02/19</time></div>
+	
+
+<div class="tags">
+
+	<a class='category' href='/categories/command-line/'>command line</a>, <a class='category' href='/categories/shell-script/'>shell script</a>
+
+</div>
+
+
+	
+</div>
+</article>
+
+</div>
+	<footer id="footer" class="inner">Copyright &copy; 2014
+
+    κeen
+
+<br>
+Powered by Octopress.
+</footer>
+	<script src="/javascripts/slash.js"></script>
+<script src="/javascripts/jquery.fancybox.pack.js"></script>
+<script type="text/javascript">
+(function($){
+	$('.fancybox').fancybox();
+})(jQuery);
+</script> <!-- Delete or comment this line to disable Fancybox -->
+
+
+
+
+	<script type="text/javascript">
+		var _gaq = _gaq || [];
+		_gaq.push(['_setAccount', 'UA-43779888-1']);
+		_gaq.push(['_trackPageview']);
+
+		(function() {
+			var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+			ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+			var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+		})();
+	</script>
+
+
+
+</body>
+</html>

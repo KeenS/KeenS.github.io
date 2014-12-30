@@ -1,0 +1,557 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: gc | κeenのHappy Hacκing Blog]]></title>
+  <link href="http://KeenS.github.io/categories/gc/atom.xml" rel="self"/>
+  <link href="http://KeenS.github.io/"/>
+  <updated>2014-12-19T15:28:27+09:00</updated>
+  <id>http://KeenS.github.io/</id>
+  <author>
+    <name><![CDATA[κeen]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[GCの話]]></title>
+    <link href="http://KeenS.github.io/blog/2014/10/26/gcfalsehua/"/>
+    <updated>2014-10-26T19:13:45+09:00</updated>
+    <id>http://KeenS.github.io/blog/2014/10/26/gcfalsehua</id>
+    <content type="html"><![CDATA[<p>#関数型なんたら でGCの話を聴いて、<a href="http://www.pllab.riec.tohoku.ac.jp/papers/icfp2011UenoOhoriOtomoAuthorVersion.pdf">SML#のGCの論文</a>を読んで色々感じたのでエントリー。</p>
+
+<!-- more -->
+
+
+<h1>Snapshot GC</h1>
+
+<p>まず、湯浅先生のSnapshot GC (<a href="http://seesaawiki.jp/w/author_nari/d/GC/extend/%A5%B9%A5%CA%A5%C3%A5%D7%A5%B7%A5%E7%A5%C3%A5%C8%B7%BFGC">解説</a>)。並列、並行、インクリメンタルにGCが出来る。恐らく一番性能が出るとのこと。解説ではmark &amp; sweepだけど私が聴いたのはCopyingだった。</p>
+
+<p>勿論並行にするにはライトバリアが必要なんだけどその辺にまつわる話。並行じゃなくても世代別GCでもライトバリアが必要になるからその辺も頭に入れて聴いてほしい。Copyingはアロケーションが鬼のように速いのが特徴。<code>malloc</code>の感覚でメモリ確保が重いとか思ってると感覚が狂う。なので新たなオブジェクトを作るコストは非常に低い。そこにオブジェクトの変更にはライトバリアが付くとなると、大きくないオブジェクトの場合 <strong>オブジェクトを変更するより新たに作った方がコストが低くなる</strong> 。一応言っておくと、Copying GCの負荷は <em>生きている</em> オブジェクトの数に比例するのでゴミオブジェクトを大量に作ったところでそんなにGCの負荷は高くならない。勿論、GCの頻度は上がってしまうが。それも世代別GCなら軽いGCが走るだけなので回数が増えてもそんなに負荷にはならない。</p>
+
+<p>つまるところ <strong>関数型スタイルでプログラムを書いた方がパフォーマンスが上がる</strong> ことがある。素晴しい。逆にこのような理由から関数型言語ではCopying GCを使うことが多い。</p>
+
+<p>ただ、全ての場合で速くなる訳ではない。Copying GCはオブジェクトを移動するため、オブジェクトのアドレスが変わる。普通の参照ならGCのアルゴリズムが書き換えてくれるのだがそうはいかないのがハッシュ。ハッシュは多くの場合オブジェクトのアドレスをハッシュ値に使うため、GCが走ったらハッシュ値の再計算が必要になる。しかもハッシュの操作には破壊的なものが多いため、ライトバリアの影響も受ける。その場合、 <strong>ハッシュマップよりもツリーマップの方がパフォーマンスが出る</strong> ことがある。勿論、アルゴリズムのオーダが違うので要素数がケタ違いに大きくなるとハッシュに軍配が上がるが、通常そこまで要素を入れない。ようやく関数型言語でツリーマップが使われる理由が分かった。</p>
+
+<h1>Bitmap GC</h1>
+
+<p>関数型言語と相性の良いCopying GCだけど問題もある。Stop the Worldの話は世代別化やらそれこそSnopsht GCでどうにでもなるからそれはいい。Copying GCに本質的な問題。オブジェクトのアドレスの問題。GCが走ると現在のポインタが無効になる。処理系内部だけならまだ開発者が頑張れば良いんだけどC拡張を許すとそうもいかない。普通のポインタの問題だけじゃなくて構造体にポインタがあったら、とかそもそも外部ライブラリの内部のポインタをとか考えてるとどこかで割り切る必要がある。</p>
+
+<p>そのためユーザにC拡張を気持ち良く使わせようと思うとCopying GCではつらい。Mark &amp; Sweepが現実的な選択肢になる。が、そうすると今度はパフォーマンスに問題が出る。特にフラグメント化の問題は関数型スタイルが天敵である。じゃあ、Mark &amp; Sweepの性能を改善しようというのがBitmap GC。</p>
+
+<p>概要はMark &amp; Sweepがオブジェクトにマークを付けるのに対してオブジェクトとマークを別にしてマークだけbit列で管理すると局所性が上がって良いよねというもの。詳しくは最初に上げた論文を参照して欲しいが一応解説。</p>
+
+<p>局所性が上がるとはいっても単にキャッシュが効くとかではない。ビット列になることでCPU命令で操作出来るようになって$O(n)$が$O(n/32)$になったりする。そして何より、Mark &amp; SweepじゃなくてSweep &amp; Markになる。Sweepはビット列を0で埋める論理削除。ほぼ一瞬。なので実質Markのコストしかかからない。</p>
+
+<h2>構成</h2>
+
+<p>勿論、ただのbit列でオブジェクトの生死を管理するにはヒープをサイズ毎に用意する必要がある。8bitのオブジェクト用のサブヒープ、16bitのオブジェクト用のサブヒープ…という風に。そしてそれぞれのヒープ毎にビットマップをつける。ただそれだと無限に大きいサイズのヒープが必要になるのでどこかで切ってそれ以降は普通のMark &amp; Sweepで管理するらしい。因みにSML#では4096bitが上限。32bit専用アーキテクチャなので64bitだと少し違うのかもしれない。以下、32bitアーキテクチャを仮定する。64bitでも適切に読み替えれば問題ない。</p>
+
+<p>サブヒープはセグメント列とアロケーションポインタからなる。アロケーションポインタは次にアロケートすべき場所を差す(セグメント、ブロック、bitmap tree(後述)の情報)。</p>
+
+<p>セグメントはオブジェクト数、ブロック列、ビットマップ、作業領域を持つ。ブロックというのが実際のオブジェクトが入る場所。8bitのサブヒープなら8bitのオブジェクトが入る。1セグメントに含まれるブロックの数は事前に決められている。要はコンパイル時なり起動時なりのパラメータになる。勿論、サブヒープ毎にブロック数をいじることになる。</p>
+
+<p>ビットマップはただのビット列ではない。ただのintの列にするといくらCPU命令を使っても次の空いている場所を捜すのに$O(n/32)$かかってしまう。そこでbitmap treeで管理する。bitmap treeは親ビット列のi番目のビットが1のとき、i番目の子ビット列がfullである。ここでfullとは末端なら対応するブロックが使われている、それ以外なら子ビット列が全て1であるということである。これで次の空いているブロックを$Ω(log_{32} n)$で見付けることが出来る。同じワード内にあって適切なCPU命令があれば$O(1)$で済む。</p>
+
+<p>アロケーションは先に出てきたアロケーションポインタの先が使われているか判断して、空いてれば先にデータを書き込んでアロケーションポインタをインクリメントするこのとき、特にbitmap treeは変更しない。空いてなければ空きブロックを捜す。空いてなければ次のセグメントに移って繰り返す同じ操作を行なう。最後のセグメントならセグメントプールに新しいセグメントを要求する。それももらえなければGCが走る。この辺はホットスポットらしいので色々テクニックが詰まっている。詳しくは論文を参照して欲しい。</p>
+
+<p>GCは先に述べたように全てのサブヒープの全てのセグメントのbitmap treeを0で埋めることから始まる。そしてこれでSweep完了。</p>
+
+<p>Markはまずrootノードについて、対応するbitmap treeを1にして、セグメントのオブジェクト数をインクリメントし、作業領域のトレーススタックに積む。あとはトレーススタックの中身の参照先をを順に同様に処理していけば良い。既にMarkされているオブジェクトは単に無視する。空になったセグメントはセグメントプールに返して、fullなセグメント(オブジェクト数=1セグメント毎のブロック数 なセグメント)はセグメント列の先頭に持ってくればアロケート時に無駄に探索されることはない。そしてアロケーションポインタを最初の空きブロックを差すようにすれば良い。</p>
+
+<p>オブジェクトをサイズ毎に管理することでSweepを論理削除で済ませているところが良い。</p>
+
+<h2>世代別化</h2>
+
+<p>論文には世代別化の話もある。ライトバリアが必要なのは一緒だけど世代の管理が面白かった。安直には世代毎にサブヒープを分ける方法が思い付くが、それだとオブジェクトの移動が発生する。論文では世代毎にbitmap treeを持っている。ある世代のbitmap treeはその世代とそれより古い世代全ての生きているオブジェクトのbitmapになっている。</p>
+
+<p>ある世代をsweepしたければ一つ古い世代のbitmap treeで上書きすれば良い。</p>
+
+<p>ある世代のMarkは生存回数をインクリメントし、その世代のbitmap treeにMarkする。生存回数が閾値を越えたら上の世代にもMarkする。</p>
+
+<p>全て完了したら若い世代達にも反映する(どう反映するかは論文には載ってない。差分をとって…とかかな？)。面白いのはある世代狙い撃ちでGC走らせられる点。あるいはいくつかの世代でも可能だろう。多くのアルゴリズムはある世代"以下"な気がする。これによって、マイナーGCでダメならミドルGCして、それでもダメならメジャーGCしてってなってたのが若年、中年、高年で別々に可能になる。まあ、ライトバリアの数がものすごいことになるからやらないだろうけど。なんでかっていうと若い世代から古い世代への参照もトレースする必要が出てくるから。論文に詳しく載ってないのはそんなに多くの世代を作っても現実的でないからだろう。勿論、ある世代以下を全てsweepも出来るので普通はそうする筈。</p>
+
+<h2>リメンバーセットとライトバリア</h2>
+
+<p>さて、さっきからライトバリアの話は出てたのに具体的になんなのかが出てこなかった。</p>
+
+<p>世代別GCでは、マイナーGCが動くときに旧世代から新世代への参照があればその新世代のオブジェクトは生きているのでマークしなければならない。その「参照されている」ことを覚えておくのがリメンバーセット。GCされた後どうなるかは資料が見付からなかったけど旧世代に移ったものやGCされたものを取り除くんじゃないかな。</p>
+
+<p>ライトバリアは調べたところ、多義的である。オブジェクトの参照を変更するときにごにょごにょするもの全般をライトバリアと呼んでいるようだ。Snapshot GC(並行GC)の場合はマーク中に変更された参照の先のオブジェクトもマークしていくことのようだし、RGenGC(インクリメンタル GC)はマーク中に変更された参照の元オブジェクトをグレーにすることのようだし、世代別GCではさらに色々意味がある。</p>
+
+<p>世代別GCでのライトバリアは、全ての参照を変更する操作にフックして動く。そしてリメンバーセットを更新する。そこまでは皆共通している。そこからは、</p>
+
+<ul>
+<li>旧世代オブジェクトから新たに参照された新世代オブジェクトをリメンバーセットに加える</li>
+<li>変更されたオブジェクトをリメンバーセットに加える</li>
+<li>変更されたオブジェクトを、旧世代オブジェクトならリメンバーセットに加える</li>
+</ul>
+
+
+<p>などのバリエーションがある。それ以外にもありそう。尚、どれも正確ではない。つまり本来なら死んでいるオブジェクトも生き残る可能性がある。</p>
+
+<p>正確にやろうと思えばリメンバー"マップ"を用意し、[新世代オブジェクト]&ndash;>[旧世代からの参照数]を保持し、参照カウントを行なえばいけると思う。</p>
+
+<p>そこまでやらないのは性能に問題があるからかな。あとそもそも世代別GC自体正確にはオブジェクトを回収しないから正確にやってもあまり意味がないのもある。</p>
+
+<h2>Sticky Mark世代別化</h2>
+
+<p>Sticky Mark世代別GCというのは世代別GCを世代2つ、生存回数の閾値1とするときの簡単な実装方法。本当に簡単で、前回のMarkを残しておけば良い。それが旧世代の目印になる。あとはライトバリアとリメンバーセットを用意するだけ。元々Markのときに既にMarkされているオブジェクトはスルーされるのでアルゴリズムはほぼ変更が要らない。普通のMark &amp; Sweepでも出来るし、Bitmap GCでもアロケーションのときにbitmap treeをいじってないのでbitmap treeを0にする処理をしなければ良い。</p>
+
+<p>さらに、リメンバーセットに関しても簡単になる。全てのオブジェクトが旧世代になるのだからリメンバーセットはクリアするだけで良い。あるいはGC毎に消えてしまうデータに格納してしまっても良い。SML#ではトレーススタックに積むことでリメンバーセットとしているようだった。何も考えなくてもGCのときにルートノードとして扱われる。重複判定に関しては読み解けなかった。</p>
+
+<p>以下、書いてあるところの引用。最初の this factというのはリメンバーセットについて簡単になるということ。Tworkというのが作業領域。</p>
+
+<blockquote><p>Taking advantage of this fact, we allocate a re-
+membered set in the collector’s trace stack. As mentioned before,
+our trace stack is implemented as a linked list using <code>Twork</code> work
+areas. This is done by assigning a unique pointer slot in <code>Twork</code> to
+each object. This implementation allows us to determine whether
+a given object is already in the list or not by checking whether
+the pointer is non-null. This automatically eliminates duplication
+in the remembered set. A write barrier can then be incorporated
+in the generational collector as follows. A write barrier code takes
+a young object that is to be referred from the old generation due
+to mutation, and marks it and pushes it to the trace stack. Minor
+collector simply traces objects using the trace stack whose initial
+contents is the remembered set</p></blockquote>
+
+<p>誰か分かる人教えて下さい。</p>
+
+<h2>複数mutater対応</h2>
+
+<p>要はアプリケーションでスレッドを使ったときの話。1スレッドにつき1セグメント割り当てて新たなセグメントを確保するときだけロックとればアロケーション速いよねって言ってる。GCはStop the Worldしないようにするとか言ってるけど出来るのかな。</p>
+
+<h2>パフォーマンス</h2>
+
+<p>Bitmap GC、sticky bit世代別Bitmap GC、シンプルなCopying GC、2世代、5世代の世代別Copying GCでの比較が載ってる。Copying GCは2世代が最もパフォーマンスが良く、世代別Bitmap GCもそんなに負けてない。少くともシンプルなCopying GCには勝ってる。アロケーションは及びもつかないものの、世代別Bitmap GCはGCのStop the Worldは圧倒的に短いみたい。</p>
+
+<h1>picrinの話</h1>
+
+<p>picrinのGCは超シンプルなMark &amp; Sweep。んで、picrinのボトルネック。どうにかしたい。先述の理由からMark &amp; Sweepなのは維持なんだけどどう拡張しようねという話。</p>
+
+<p>ライトバリアさえ実装してしまえばSticky Markで簡単に世代別化出来る。もうちょっと言うとライトバリアだけのデバッグが出来る。そしてまともな世代別化につながる。でもライトバリア->Bitmap化だとライトバリアも書き換える必要が出てきてあまり宜しくない。</p>
+
+<p>Bitmap化すれば速くなるっぽい。が、メモリ管理を大幅に書き換える必要がある。特にサイズ別に管理するところ。でもそこからさらにSticky Markとかでさらに拡張可能。</p>
+
+<p>うーん。個人的にはBitmap化してみたいんだけど完全に独自メモリ管理になっちゃうからなー。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Picrinのチューニングの話、もといGCの話]]></title>
+    <link href="http://KeenS.github.io/slide/picrin-gc.html"/>
+    <updated>2014-09-29T14:37:00+09:00</updated>
+    <id>http://KeenS.github.io/slide/picrin-gc.markdown</id>
+    <content type="html"><![CDATA[<h1>Picrinのチューニングの話、もといGCの話</h1>
+
+<hr />
+
+<p>Lisp Meet Up presented by Shibuya.lisp #20<br/>
+2014-09-29<br/>
+κeen(@blackenedgold)</p>
+
+<h1>自己紹介</h1>
+
+<hr />
+
+<ul>
+<li>κeen</li>
+<li>東大数学科の4年生</li>
+<li>ソーシャルアカウントは上のアイコン達から。</li>
+<li>Lisp, Ruby, OCaml, Shell Scriptあたりを書きます</li>
+<li><a href="https://github.com/picrin-scheme/picrin">picrin</a>のコミッタです</li>
+</ul>
+
+
+<h1>picrin</h1>
+
+<hr />
+
+<p><img src="/images/picrin/picrin-logo-fin01-02.png" alt="picrin" /></p>
+
+<h1>picrin</h1>
+
+<hr />
+
+<ul>
+<li>R7RS compatibility</li>
+<li>bytecode interpreter (based on stack VM)</li>
+<li>internal representation by nan-boxing</li>
+<li>conservative call/cc implementation (users can freely interleave native stack with VM stack)</li>
+<li>exact GC (simple mark and sweep, partially reference count is used as well)</li>
+<li>string representation by rope data structure</li>
+</ul>
+
+
+<h1>picrin</h1>
+
+<hr />
+
+<ul>
+<li>R7RS compatibility</li>
+<li><strong>bytecode interpreter (based on stack VM)</strong></li>
+<li>internal representation by nan-boxing</li>
+<li>conservative call/cc implementation (users can freely interleave native stack with VM stack)</li>
+<li><strong>exact GC (simple mark and sweep, partially reference count is used as well)</strong></li>
+<li><strong>string representation by rope data structure</strong></li>
+</ul>
+
+
+<h1>picrin開発者の不満</h1>
+
+<hr />
+
+<ul>
+<li>picrinの起動が遅い<!-- .element: class="fragment" data-fragment-index="1" -->
+
+<ul>
+<li>2秒くらいかかる <!-- .element: class="fragment" data-fragment-index="1" --></li>
+</ul>
+</li>
+<li>picrinのテストが遅い<!-- .element: class="fragment" data-fragment-index="2" -->
+
+<ul>
+<li>16秒くらいかかる <!-- .element: class="fragment" data-fragment-index="2" --></li>
+</ul>
+</li>
+</ul>
+
+
+<h1>少しGCの話</h1>
+
+<hr />
+
+<p>GC(ごみ集め)とは</p>
+
+<ul>
+<li>使われていないオブジェクトを自動的に解法する
+
+<ul>
+<li>メモリ管理に煩わせられないで済む</li>
+<li>メモリーリークを防ぐ。</li>
+</ul>
+</li>
+<li>「使われていないオブジェクト」を判定するのはいくつかアルゴリズムがある</li>
+</ul>
+
+
+<h1>GCのアルゴリズム</h1>
+
+<hr />
+
+<h2>主なGCのアルゴリズム</h2>
+
+<ul>
+<li>マーク&amp;スイープ</li>
+<li>参照カウント</li>
+<li>Copying GC</li>
+</ul>
+
+
+<h1>GCのアルゴリズム</h1>
+
+<hr />
+
+<h2>マーク&amp;スイープ</h2>
+
+<ol>
+<li>あらかじめ全てのオブジェクトはどこかで一元管理する<!-- .element: class="fragment" data-fragment-index="1" --></li>
+<li>一元管理元(ヒープ(ページ))でメモリが足りなくなったらGCを開始<!-- .element: class="fragment" data-fragment-index="2" --></li>
+<li>スタックに載っているオブジェクト、変数に格納されているオブジェクトにマークする<!-- .element: class="fragment" data-fragment-index="3" --></li>
+<li>そこから辿れるオブジェクトも再帰的にマークする<!-- .element: class="fragment" data-fragment-index="4" --></li>
+<li>ヒープからマークされていないオブジェクトを開放する<!-- .element: class="fragment" data-fragment-index="5" --></li>
+<li>それでもメモリが足りなければ一ヒープのページを増やす<!-- .element: class="fragment" data-fragment-index="6" --></li>
+<li>増やせなければメモリを使い果したのでabort<!-- .element: class="fragment" data-fragment-index="7" --></li>
+</ol>
+
+
+<h1>GCのアルゴリズム</h1>
+
+<hr />
+
+<h2>マーク&amp;スイープの特徴</h2>
+
+<ul>
+<li>そこそこ速い</li>
+<li>正確に集められる</li>
+<li>GC以外ではメモリ管理を考えなくて良い(≒プラグインは書き易い)</li>
+<li>長生きのオブジェクトは何度もマークされる(=>世代別GC)</li>
+<li>負荷は1点に集中する</li>
+<li>メモリの断片化が起きる(=オブジェクトのアロケートが遅くなる)</li>
+</ul>
+
+
+<h1>GCのアルゴリズム</h1>
+
+<hr />
+
+<h2>参照カウント</h2>
+
+<ol>
+<li>オブジェクトに他から参照されている数(参照カウント)を記憶させる<!-- .element: class="fragment" data-fragment-index="1" --></li>
+<li>オブジェクトの参照を変えるときはその都度参照カウントを変える<!-- .element: class="fragment" data-fragment-index="2" --></li>
+<li>参照カウントが0になったら開放する<!-- .element: class="fragment" data-fragment-index="3" --></li>
+</ol>
+
+
+<h1>GCのアルゴリズム</h1>
+
+<hr />
+
+<h2>参照カウントの特徴</h2>
+
+<ul>
+<li>負荷は分散する</li>
+<li>GCの実装は楽</li>
+<li>少し遅い(必ずfreeする必要がある)</li>
+<li>正確でない(循環参照に弱い)(cf. 大相撲の星の回しあい)</li>
+<li>プラグインは面倒</li>
+</ul>
+
+
+<h1>GCのアルゴリズム</h1>
+
+<hr />
+
+<h2>Copying GC</h2>
+
+<ol>
+<li>オブジェクトプールを2つ用意する(1, 2)とする<!-- .element: class="fragment" data-fragment-index="1" --></li>
+<li>オブジェクトを確保するときは必ず1に確保する<!-- .element: class="fragment" data-fragment-index="2" --></li>
+<li>1のメモリが足りなくなったらgcを開始<!-- .element: class="fragment" data-fragment-index="3" --></li>
+<li>1の生きているオブジェクトを再帰的に2に移動する<!-- .element: class="fragment" data-fragment-index="4" --></li>
+<li>1に残っているものは全てゴミとして良い<!-- .element: class="fragment" data-fragment-index="5" --></li>
+<li>1、2のラベルを付け換える<!-- .element: class="fragment" data-fragment-index="6" --></li>
+</ol>
+
+
+<h1>GCのアルゴリズム</h1>
+
+<hr />
+
+<h2>Copying GCの特徴</h2>
+
+<ul>
+<li>正確</li>
+<li>メモリの断片化が起きない(Windowsのデフラグ)(=アロケートが速くなる)</li>
+<li>負荷は1点に集中する</li>
+<li>遅い(オブジェクトの移動が必要)</li>
+<li>メモリ食う(オブジェクトプール2つ分)</li>
+<li>ポインタも変わるため、ハッシュの再計算などが必要</li>
+</ul>
+
+
+<h1>GCのアルゴリズム</h1>
+
+<hr />
+
+<h2>GCの主な属性</h2>
+
+<ul>
+<li>世代別
+
+<ul>
+<li>新しいオブジェクトだけGCの対象にする<!-- .element: class="fragment" data-fragment-index="1" --></li>
+</ul>
+</li>
+<li>正確
+
+<ul>
+<li>ゴミは必ず回収する<!-- .element: class="fragment" data-fragment-index="2" --></li>
+</ul>
+</li>
+<li>インクリメンタル
+
+<ul>
+<li>一度にやらずに少しづつGCを進める<!-- .element: class="fragment" data-fragment-index="3" --></li>
+</ul>
+</li>
+</ul>
+
+
+<h1>picrinのGC</h1>
+
+<hr />
+
+<p><img src="/images/picrin/picrin-logo-fin01-02.png" alt="picrin" /></p>
+
+<h1>picrinのGC</h1>
+
+<hr />
+
+<ul>
+<li>基本は普通の正確なマーク&amp;スイープ
+
+<ul>
+<li>Copying GCはlightweightでない</li>
+</ul>
+</li>
+<li>ropeには参照カウント
+
+<ul>
+<li>ropeには循環参照が起きない</li>
+</ul>
+</li>
+</ul>
+
+
+<h1>picrinのGC</h1>
+
+<hr />
+
+<ul>
+<li>基本はマーク&amp;スイープ</li>
+</ul>
+
+
+<blockquote><ol>
+<li>スタックに載っているオブジェクト、変数に格納されているオブジェクトにマークする</li>
+</ol>
+</blockquote>
+
+<ul>
+<li>schemeの変数はそのまま</li>
+<li>Cの変数は読めないのでアリーナという場所を用意してC内ではそこに一時保管してもらう
+
+<ul>
+<li>スコープはFILOなのでスタックを用いればヒープより速くアロケート出来る</li>
+</ul>
+</li>
+</ul>
+
+
+<h1>picrinのチューニング</h1>
+
+<h2>プロファイルをとってみる</h2>
+
+<hr />
+
+<p><code>
+ % cumulative self self total
+time seconds seconds calls s/call s/call name
+37.14 0.78 0.78 13136494 0.00 0.00 XROPE_DECREF
+23.81 1.28 0.50 1544 0.00 0.00 gc_sweep_phase
+15.72 1.61 0.33 59344814 0.00 0.00 gc_mark_object
+10.00 1.82 0.21 1544 0.00 0.00 gc_mark_phase
+6.67 1.96 0.14 1544 0.00 0.00 gc_mark_trie
+2.38 2.01 0.05 6523 0.00 0.00 pic_apply
+</code></p>
+
+<p><span style="font-size:200%">ほとんどGCですね。<br/>
+本当にありがとう御座いました。</span></p>
+
+<h1>解決案</h1>
+
+<hr />
+
+<ul>
+<li>GCのアルゴリズムを変える</li>
+<li>オブジェクトをアロケートしないようにする</li>
+<li>パラメーターをいじる</li>
+</ul>
+
+
+<h1>解決案</h1>
+
+<hr />
+
+<ul>
+<li>GCのアルゴリズムを変える</li>
+<li>オブジェクトをアロケートしないようにする</li>
+<li><strong>パラメーターをいじる</strong></li>
+</ul>
+
+
+<h1>GCに関連するパラメータ</h1>
+
+<hr />
+
+<p>元々tinyに設計されている
+```C
+/<em> アリーナのサイズ </em>/</p>
+
+<h1>define PIC_ARENA_SIZE 1000</h1>
+
+<p>/<em> ヒープページのサイズ </em>/</p>
+
+<h1>define PIC_HEAP_PAGE_SIZE 10000</h1>
+
+<p>/<em> シンボルプール(ハッシュ)のサイズ </em>/</p>
+
+<h1>define PIC_SYM_POOL_SIZE 128</h1>
+
+<p>```</p>
+
+<h1>GCに関連するパラメータ</h1>
+
+<hr />
+
+<p>チューニング後
+```C
+/<em> アリーナのサイズ </em>/</p>
+
+<h1>define PIC_ARENA_SIZE 8 * 1024</h1>
+
+<p>/<em> ヒープページのサイズ </em>/</p>
+
+<h1>define PIC_HEAP_PAGE_SIZE 2 * 1024 * 1024</h1>
+
+<p>/<em> シンボルプール(ハッシュ)のサイズ </em>/</p>
+
+<h1>define PIC_SYM_POOL_SIZE 2048</h1>
+
+<p>```</p>
+
+<h1>結果</h1>
+
+<hr />
+
+<ul>
+<li><p>昔</p>
+
+<blockquote><p>テストに16秒</p></blockquote></li>
+<li><p>変更後</p>
+
+<blockquote><p>time make test-r7rs<br/>
+make test-r7rs  <strong>1.68s</strong> user 0.23s system 98% cpu 1.931 total
+<!-- .element: class="fragment" data-fragment-index="1" --></p></blockquote></li>
+</ul>
+
+
+<h1>今後</h1>
+
+<hr />
+
+<ul>
+<li>GCのアルゴリズムを変える</li>
+<li>世代別GCにしたいよねー</li>
+<li>そもそもマーク&amp;スイープの実装が適当すぎるだとか。協議中。</li>
+<li>組み込み目指すならインクリメンタル性必要では？</li>
+<li>オブジェクトをアロケートしないようにする
+
+<ul>
+<li>バイトコンパイルするときにもめちゃくちゃアロケートしてる。その辺どうにかする。</li>
+<li><a href="https://github.com/picrin-scheme/picrin/pull/207">Fast Reader</a></li>
+</ul>
+</li>
+</ul>
+
+
+<h1>まとめ</h1>
+
+<hr />
+
+<ul>
+<li>基本的なGCの解説をした</li>
+<li>picrinのGCの戦略を話した</li>
+<li>GCチューニング大事</li>
+</ul>
+
+
+<p><span style="font-size:600%">以上</span><br/>
+何か質問あればどうぞ</p>
+]]></content>
+  </entry>
+  
+</feed>

@@ -1,0 +1,531 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: scheme | κeenのHappy Hacκing Blog]]></title>
+  <link href="http://KeenS.github.io/categories/scheme/atom.xml" rel="self"/>
+  <link href="http://KeenS.github.io/"/>
+  <updated>2014-12-19T15:28:27+09:00</updated>
+  <id>http://KeenS.github.io/</id>
+  <author>
+    <name><![CDATA[κeen]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[H2Oにpicrinを溶かす]]></title>
+    <link href="http://KeenS.github.io/blog/2014/12/07/h2onipicrinworong-kasu/"/>
+    <updated>2014-12-07T22:37:00+09:00</updated>
+    <id>http://KeenS.github.io/blog/2014/12/07/h2onipicrinworong-kasu</id>
+    <content type="html"><![CDATA[<p>このエントリーは<br/>
+<a href="http://qiita.com/advent-calendar/2014/lisp">Lisp Advent Calendar</a> 7日目<br/>
+兼<br/>
+<a href="http://qiita.com/advent-calendar/2014/h2o">H2O Advent Calendar</a> 7日目<br/>
+の記事です。</p>
+
+<p>κeenです。タイトルの通りです。</p>
+
+<!-- more -->
+
+
+<h1>H2Oとは</h1>
+
+<p>水。</p>
+
+<h1>picrinとは</h1>
+
+<p><a href="http://ja.wikipedia.org/wiki/%E3%83%94%E3%82%AF%E3%83%AA%E3%83%B3%E9%85%B8">Wikipedia</a>にあるように、フェノールのトリニトロ化合物で、水溶性があります。</p>
+
+<h1>ではなくて</h1>
+
+<p>H2OはHTTP1, HTTP2, WebsocketをサポートするNginXより速いHTTPサーバです。<a href="https://github.com/h2o/h2o">Github</a>で開発されています。開発者は@kazuhoさん。</p>
+
+<p>picrinは「速い、軽い、高機能」を目指して作られているScheme処理系です。<a href="https://github.com/picrin-scheme/picrin">Github</a>で開発されています。開発者は@wasabizさん。</p>
+
+<h1>混ぜる</h1>
+
+<p>picrinのように組込み向けで開発されている処理系は</p>
+
+<ul>
+<li>picrinからH2Oを使えるようにする</li>
+<li>H2Oにpicrinを埋め込む</li>
+</ul>
+
+
+<p>と、2種類考えられますが、今回は後者です。H2Oにpicrinを溶かしてる感じしますね。</p>
+
+<p>まあ、Apatch HTTPDやNginX宜しくmod_picrinを作れば済むでしょう。</p>
+
+<h1>絶望</h1>
+
+<blockquote class="twitter-tweet" lang="ja"><p><a href="https://twitter.com/blackenedgold">@blackenedgold</a> モジュラーにできるようにはしてるけど、まだsoをロードする仕組みはないです。というか、APIがまだunstableだし</p>&mdash; Kazuho Oku (@kazuho) <a href="https://twitter.com/kazuho/status/540692011003559936">2014, 12月 5</a></blockquote>
+
+
+<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+
+<p>つらい</p>
+
+<h1>solシステムの導入</h1>
+
+<p>mod_xxxにしようと思ったんですけど水だし溶液ってことでsol_xxxにします。</p>
+
+<p>H2Oにこんな感じのパッチ当てて</p>
+
+<p>```
+diff &mdash;git a/src/main.c b/src/main.c
+index 7fc4680..57804a6 100644
+&mdash;&ndash; a/src/main.c
++++ b/src/main.c
+@@ -30,6 +30,7 @@
+ #include &lt;signal.h>
+ #include &lt;stdio.h>
+ #include &lt;unistd.h>
++#include &lt;dlfcn.h>
+ #include &lt;sys/stat.h>
+ #include &lt;sys/socket.h>
+ #include &lt;sys/types.h>
+@@ -76,6 +77,8 @@ struct config_t {</p>
+
+<pre><code> } state;
+</code></pre>
+
+<p> };</p>
+
+<p>+typedef int(<em>sol_init_fn)(h2o_configurator_command_t </em>, h2o_configurator_context_t <em>, const char </em>, yoml_t *);
++
+ static unsigned long openssl_thread_id_callback(void)
+ {</p>
+
+<pre><code> return (unsigned long)pthread_self();
+</code></pre>
+
+<p>@@ -381,6 +384,43 @@ static int on_config_num_threads(h2o_configurator_command_t *cmd, h2o_configurat</p>
+
+<pre><code> return h2o_config_scanf(cmd, config_file, config_node, "%u", &amp;conf-&gt;num_threads);
+</code></pre>
+
+<p> }</p>
+
+<p>+static int on_config_use(h2o_configurator_command_t <em>cmd, h2o_configurator_context_t </em>ctx, const char <em>config_file, yoml_t </em>config_node)
++{
++  /<em> struct config_t </em>conf = H2O_STRUCT_FROM_MEMBER(struct config_t, global_config, ctx->globalconf); <em>/
++  char </em>sol_name;
++  sol_init_fn init_fn;
++  void <em>handle;
++
++  /</em> fetch solution name <em>/
++  switch (config_node->type) {
++  case YOML_TYPE_SCALAR:
++    sol_name = config_node->data.scalar;
++    break;
++  default:
++    h2o_config_print_error(cmd, config_file, config_node, &ldquo;value must be a string or a mapping (with keys: <code>port</code> and optionally <code>host</code>)&rdquo;);
++    return -1;
++  }
++
++  char dl_name[strlen(&ldquo;sol<em>.so&rdquo;) + strlen(sol_name) + 1];
++  char init_fn_name[strlen(&ldquo;init_sol</em>&rdquo;) + strlen(sol_name) + 1];
++
++  sprintf(dl_name, &ldquo;./sol<em>%s.so&rdquo;, sol_name);
++  sprintf(init_fn_name, &ldquo;init_sol</em>%s&rdquo;, sol_name);
++  handle = dlopen(dl_name, RTLD_LAZY);
++  if (! handle){
++    h2o_config_print_error(cmd, config_file, config_node, &ldquo;cannot load the solution&rdquo;);
++    return -1;
++  }
++
++  init_fn = dlsym(handle, init_fn_name);
++  if(dlerror()){
++    h2o_config_print_error(cmd, config_file, config_node, &ldquo;cannot find the initialize function&rdquo;);
++    return -1;
++  }
++  return (</em>init_fn)(cmd, ctx, config_file, config_node);
++
++}
++
+ static void usage_print_directives(h2o_globalconf_t *conf)
+ {</p>
+
+<pre><code> h2o_linklist_t *node;
+</code></pre>
+
+<p>@@ -606,6 +646,10 @@ int main(int argc, char **argv)</p>
+
+<pre><code>         c, "num-threads", H2O_CONFIGURATOR_FLAG_GLOBAL,
+         on_config_num_threads,
+         "number of worker threads (default: 1)");
+</code></pre>
+
+<ul>
+<li><pre><code> h2o_config_define_command(
+</code></pre></li>
+<li><pre><code>     c, "use", H2O_CONFIGURATOR_FLAG_GLOBAL,
+</code></pre></li>
+<li><pre><code>     on_config_use,
+</code></pre></li>
+<li><pre><code>     "use the solution");
+</code></pre>
+
+<p> }</p>
+
+<p> h2o_access_log_register_configurator(&amp;config.global_config);
+```</p></li>
+</ul>
+
+
+<p>こんな感じのソリューション用意して</p>
+
+<p>```C</p>
+
+<h1>include &lt;stdio.h></h1>
+
+<h1>include &lt;pthread.h></h1>
+
+<h1>include &ldquo;picrin.h&rdquo;</h1>
+
+<h1>include &ldquo;picrin/pair.h&rdquo;</h1>
+
+<h1>include &ldquo;picrin/string.h&rdquo;</h1>
+
+<h1>include &ldquo;picrin/error.h&rdquo;</h1>
+
+<h1>include &ldquo;h2o.h&rdquo;</h1>
+
+<p>pic_state <em>pic;
+struct pic_lib </em>PICRIN_BASE;</p>
+
+<p>void pic_init_contrib(pic_state <em>);
+void pic_load_piclib(pic_state </em>);</p>
+
+<p>static pic_value
+pic_features(pic_state *pic)
+{
+  pic_get_args(pic, &ldquo;&rdquo;);</p>
+
+<p>  return pic->features;
+}</p>
+
+<p>static pic_value
+pic_libraries(pic_state *pic)
+{
+  pic_value libs = pic_nil_value(), lib;</p>
+
+<p>  pic_get_args(pic, &ldquo;&rdquo;);</p>
+
+<p>  pic_for_each (lib, pic->libs) {</p>
+
+<pre><code>libs = pic_cons(pic, pic_car(pic, lib), libs);
+</code></pre>
+
+<p>  }</p>
+
+<p>  return libs;
+}</p>
+
+<p>void
+pic_init_picrin(pic_state <em>pic)
+{
+  const char </em>scheme =</p>
+
+<pre><code>"(import (scheme base)"
+"        (scheme write))"
+"(define-syntax call-with-output-to-string"
+"  (syntax-rules ()"
+"    ((_ proc)"
+"     (let ((s (open-output-string)))"
+"       (proc s)"
+"       (get-output-string s)))))"
+"(define (-&gt;string e)"
+"  (call-with-output-to-string"
+"   (lambda (s)"
+"     (display e s))))";
+</code></pre>
+
+<p>  pic_add_feature(pic, &ldquo;r7rs&rdquo;);</p>
+
+<p>  pic_deflibrary (pic, &ldquo;(picrin library)&rdquo;) {</p>
+
+<pre><code>pic_defun(pic, "libraries", pic_libraries);
+</code></pre>
+
+<p>  }</p>
+
+<p>  pic_deflibrary (pic, &ldquo;(scheme base)&rdquo;) {</p>
+
+<pre><code>pic_defun(pic, "features", pic_features);
+
+pic_init_contrib(pic);
+pic_load_piclib(pic);
+</code></pre>
+
+<p>  }
+  pic_deflibrary (pic, &ldquo;(picrin base)&rdquo;) {</p>
+
+<pre><code>pic_load_cstr(pic, scheme);
+</code></pre>
+
+<p>  }
+}</p>
+
+<p>const char *
+pic_eval_cstr_into_cstr(pic_state <em>pic, const char </em>input)
+{
+  pic_value v;</p>
+
+<p>  v = pic_read_cstr(pic, input);
+  v = pic_eval(pic, v, PICRIN_BASE);
+  v = pic_funcall(pic, PICRIN_BASE, &ldquo;&ndash;>string&rdquo;, pic_list1(pic, v));
+  return pic_str_cstr(pic_str_ptr(v));
+}</p>
+
+<p>int
+on_picrin(h2o_configurator_command_t <em>cmd, h2o_configurator_context_t </em>ctx, const char <em>config_file, yoml_t </em>config_node)
+{
+  const char *sexp;</p>
+
+<p>  switch (config_node->type) {
+  case YOML_TYPE_SCALAR:</p>
+
+<pre><code>sexp = config_node-&gt;data.scalar;
+break;
+</code></pre>
+
+<p>  default:</p>
+
+<pre><code>h2o_config_print_error(cmd, config_file, config_node, "value must be a string");
+return -1;
+</code></pre>
+
+<p>  }</p>
+
+<p>  pic_try{</p>
+
+<pre><code>puts(pic_eval_cstr_into_cstr(pic, sexp));
+</code></pre>
+
+<p>  }
+  pic_catch{</p>
+
+<pre><code>pic_print_backtrace(pic);
+return -1;
+</code></pre>
+
+<p>  }
+  return 0;</p>
+
+<p>}</p>
+
+<p>int
+init_sol_picrin(h2o_configurator_command_t <em>cmd, h2o_configurator_context_t </em>ctx, const char <em>config_file, yoml_t </em>config_node)
+{</p>
+
+<p>  h2o_configurator_t *c = cmd->configurator;</p>
+
+<p>  pic = pic_open(0, NULL, NULL);</p>
+
+<p>  pic_init_picrin(pic);</p>
+
+<p>  PICRIN_BASE = pic_find_library(pic, pic_read_cstr(pic, &ldquo;(picrin base)&rdquo;));</p>
+
+<p>  h2o_config_define_command(</p>
+
+<pre><code>  c, "picrin", H2O_CONFIGURATOR_FLAG_GLOBAL | H2O_CONFIGURATOR_FLAG_EXPECT_SCALAR,
+  on_picrin,
+  "run picrin");
+</code></pre>
+
+<p>  return 0;</p>
+
+<p>}
+```</p>
+
+<p>んでコンフィグは</p>
+
+<p>```</p>
+
+<h1>to find out the configuration commands, run: h2o &mdash;help</h1>
+
+<p>use: picrin
+listen:
+  port:
+listen:
+  port: 8081
+  ssl:</p>
+
+<pre><code>certificate-file: examples/h2o/server.crt
+key-file: examples/h2o/server.key
+</code></pre>
+
+<p>picrin: &ldquo;(string-append \"Hello, \&rdquo; \&ldquo;World\&rdquo;)&ldquo;
+hosts:
+  default:</p>
+
+<pre><code>paths:
+  /:
+    file.dir: examples/doc_root
+access-log: /dev/stdout
+</code></pre>
+
+<p>```</p>
+
+<p>そして魔法のコマンドを叩いて</p>
+
+<p><code>
+$ cp ~/compile/picrin/src/{init_contrib.c,load_piclib.c} ./
+$ gcc -c sol_picrin.c -std=c99   -o sol_picrin.o -I ~/compile/picrin/extlib/benz/include -I ~/compile/h2o/include -I ~/compile/h2o/deps/picohttpparser -I ~/compile/h2o/deps/yoml -DH2O_USE_LIBUV=0 -fPIC
+$ gcc sol_picrin.o load_piclib.o init_contrib.o -L ~/compile/picrin/build/lib/ -l picrin -fPIC -shared -o sol_picrin.so
+$ cp sol_picrin.so ~/compile/h2o
+</code></p>
+
+<p>実行すると</p>
+
+<p><code>
+$ cd ~/compile/h2o
+$ ./h2o --conf example/h2o/h2o.conf
+Hello, Wold
+</code></p>
+
+<p>ヤッタ！</p>
+
+<h1>標準出力かよ</h1>
+
+<p>ううっ。ごめんなさい。</p>
+
+<h1>で、HTTPレスポンス版は？</h1>
+
+<p>ごめんなさい、まだです。</p>
+
+<p><code>file.c</code>をベースにして</p>
+
+<p>```yaml</p>
+
+<pre><code>paths:
+  /:
+    picrin.exp: "(string-append \"Hello, \" \"World\")"
+</code></pre>
+
+<p>```</p>
+
+<p>とかしたかったんですけど間に合いませんでした。</p>
+
+<p>ソリューションなりモジュールなりのシステムが出来たらまたトライします</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[#関数型なんたら で喋ってきた]]></title>
+    <link href="http://KeenS.github.io/blog/2014/10/26/number-guan-shu-xing-nantara-nican-jia-sitekita/"/>
+    <updated>2014-10-26T17:14:10+09:00</updated>
+    <id>http://KeenS.github.io/blog/2014/10/26/number-guan-shu-xing-nantara-nican-jia-sitekita</id>
+    <content type="html"><![CDATA[<p>κeenです。昨日<a href="http://connpass.com/event/8634/">函数型なんたらの集い</a>に参加してきたので報告/感想です。</p>
+
+<!-- more -->
+
+
+<p>会場提供はドワンゴということでトークはニコ生に流された模様。ちらっと覗いてみたらLinuxでも見れましたね。いつのまにかFlashのバグ直ってたんですね。
+とはいえ私自身のトーク中のコメントが見れなかったのであまり意味はないのですが…</p>
+
+<p>プレミアム会員は放送後7日は生放送の内容を見れるそうですね。見れる方々は<a href="http://live.nicovideo.jp/gate/lv196879029">コチラ</a>からどうぞ。次回からはタイムシフト予約しておこう。</p>
+
+<h1>話した内容</h1>
+
+<p><a href="http://keens.github.io/slide/c6h6-plus-hno3.html">C6H6+HNO3</a>というタイトルで、picrinのbenzとnitrosについて。本当はnitrosの依存関係解決器sulfuricを完成させてそれについて話し、nitroを書こう!って言う予定だったんですが着手が遅れて完成しないまま発表になりました。</p>
+
+<p>普段関数型言語のヒトは型やらモナドで殴ってる印象があったのでマクロで殴ろうと思ったのですがマクロの話のところで焦ってしまって話が飛んでしまい、殴れずに終わりました。</p>
+
+<p>ガチの組み込み屋さんから組み込み機器で動作検証したのかとの質問がありましたがそもそも持ってないです。そろそろ1.0が出ると思うのでそのあたりでやります。</p>
+
+<p><strong>GCがconservativeかとの質問に対して「はい」と答えてしまいましたが間違いでした。</strong> conservativeなのはcall/ccでした。GCはexactですね。<a href="http://picrin.readthedocs.org/en/latest/intro.html">ドキュメント</a>に載ってます。</p>
+
+<p>wasabizの名前に反応した人が多かったようですね。やっぱ有名人なのかぁ。</p>
+
+<h1>興味深かった話</h1>
+
+<h2><a href="http://www.slideshare.net/RuiccRail/engineerusesmonads?ref=http://connpass.com/event/8634/presentation/">エンジニアとモナド</a></h2>
+
+<p>またモナドで殴る話かと思ったら全然違いました。トップダウンで設計するときにそれぞれを小さなDSLに分割してそれらをモナドで実装し、モナド変換子で組み合わせると良いよねとのこと。タスクアサインもモナド単位になるし分かり易い。スピードのために実際には単相化すると良いとか現実的な話をしてて非常に良かったです。</p>
+
+<p>Lispで考えるとこうはいかないなと思います。トップダウンで設計するのが他の言語以上に向いてない気がします。というか、ボトムアップに向きすぎてる。小っさく始めて抽象が欲しければマクロを書いて…って。オブジェクト指向で作るにしてもオブジェクトとメソッドが分離してるのでボトムアップと相性が良い。この辺はポールグレアムの「ハッカーと画家」に詳しいです。</p>
+
+<h2><a href="http://xuwei-k.github.io/slides/functional-something-shapeless/#0">shapelessの紹介</a></h2>
+
+<p>興味を持ったのはshaplessそのものではなくてヘテロなリストやヘテロなハッシュに型をつける話。<code>{ 1 =&gt; "foo", "bar" =&gt; 2}</code>に型がつくのは面白すぎます。「高度に多相化された静的型は動的型と区別がつかなくなる」っぽかったです。</p>
+
+<h2>パターンマッチいろいろ</h2>
+
+<p>議論を呼んだ発表。パターンマッチを拡張する話。例えば年月日に対して<code>YMD(y, 12 25)</code>でクリスマスならそのときの年を取り出せるだとかさらにアンドを使えばHMSも一緒にマッチ出来るだとか。
+そこからEgisonに話が飛んでEgisonの例のようにポーカーの役をScalaでパターンマッチする例の紹介。</p>
+
+<p>議論を呼んだというのはパターンマッチにガードが吸収されてる件ですね。データ型のコンストラクタとエクストラクタが一対一対応してこそパターンマッチは真価を発揮する派vsパターンマッチの表現力が高ければ高い方が良い派の対立ですね。さらに前者は型の表現力が足りてないのなら型をもっと複雑にすべき派とガードを付けて網羅性の証明をすれば良い派に分かれます。私はパターンマッチには表現力があればあるほど良いよね派。</p>
+
+<p>これはそもそもパターンに対する立場の違いがある気がするんですよね。私はパターンマッチは同じデータに対する条件判定のシンタックスシュガーとして捉えています。マッチと束縛を一緒に行なうのは便利なのとパフォーマンスのため。ガードが必要なのはパターンの表現力が足りないため。だからパターンがリッチならリッチな方が良い。そもそもLispでは網羅性のチェックは期待出来ませんので。そもそもの話動的言語はコンパイル時の検査をあきらめてその代わり表現力を得ようという思想ですからね。</p>
+
+<p>パターンが複雑になるとメモリが爆発するとの指摘がありましたがそれに直面した人がいるらしく、パターンによる分岐の枝を実行時に伸ばしていくようなパターンマッチライブラリも存在します。（Lispは実行時にもマクロが動いていて、実行時にコードを生成することも可能なのです。）</p>
+
+<h1>懇親会その他</h1>
+
+<p>名古屋の<s>型々</s>方々と色々喋れました。偶々でこれきさん、みずぴーさんと同じテーブルに座り、昼御飯も一緒に。普段休日出勤してる印象が強く、名古屋に行かないと会えないと思っていたブレイスさんといよさんも一緒でした。でこれき先生はやっぱり大先生だった。</p>
+
+<p>よんたさんにSML#のコードリーディング会開いて下さいって言ったら良いよって言ってもらいました。そろそろ64bit版も出るそうなのでリリース記念コードリーディング会&amp;芋煮会やろうって話になりました。</p>
+
+<p>OCamlのユニコードライブラリを作ってる方とも話しました。内部でropeで持ってるらしく、その話を聞きました。ropeのユニコード化はどうやら普通に文字列をUTF-8で保持し、ropeに文字列長のフィールドを保たせるだけで良いよう。ただ、picrinはCとの連携のためちょくちょくCの文字列に変換してまた新たにropeを作って、とするので若干勝手というかボトルネックが違いそう。</p>
+
+<p>Schemeのネイティブコンパイラを作ってる方とも話しました。Schemeの実装について喋ったり、GCについて喋ったり。GCについては興味深いことを聴いたのでもう1本エントリー書きます。あとはプロセス代数とかモデル検査とか。</p>
+
+<h1>まとめ</h1>
+
+<p>楽しかった。どうしてもLispは関数型とはあまり言われない（し、私も関数型言語とは思ってない）のでLisperが少なかったのですが私自身はMLも好きなので楽しめました。GCとTaPLとHaskellとScalaとEgisonに対するモチベーションが上がりました。</p>
+
+<p>最後に開催して下さった主催の方々、会場を提供して下さったドワンゴ様、ありがとう御座いました。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Lisp Meet Up #20でLTしてきました]]></title>
+    <link href="http://KeenS.github.io/blog/2014/09/30/lisp-meet-up-number-20/"/>
+    <updated>2014-09-30T09:35:05+09:00</updated>
+    <id>http://KeenS.github.io/blog/2014/09/30/lisp-meet-up-number-20</id>
+    <content type="html"><![CDATA[<p>κeenです。lisp meet up # 20に参加したのでレポートです。</p>
+
+<!-- more -->
+
+
+<p>20人の募集に19人参加予定。会場は今回初めてのところでした。</p>
+
+<h1>LT</h1>
+
+<p>LTはTOYOZUMIさんが仕事で来れなくなったので私の1件のみ。内容はpicrinのチューニングの話と思わせてほとんどがその前振りのGCの話。</p>
+
+<p>スライドはこちら。</p>
+
+<p><a href="http://keens.github.io/slide/picrin-gc.html">Picrinのチューニングの話、もといGCの話 | κeenのHappy Hacκing Blog</a></p>
+
+<p>TOYOZUMIさんのdocstringの話聞きたかった</p>
+
+<h2>飛び入り</h2>
+
+<ul>
+<li>ブラウザ上でbiwa schemeの環境(REPLだけでなくオートインデントとか)を作ってる</li>
+<li>関連して、websocketでswankと対話できるやつ作ってる</li>
+<li>関連して、ブラウザ上で動くLispに似てそうなBlockyというヴィジュアル言語がある
+なんかの話がありました。</li>
+</ul>
+
+
+<h1>余った時間</h1>
+
+<p>chikuさんが前でGCの話してました。んで話が尽きたあたりで私がpicrinの宣伝しました。<code>(picrin control list)</code>の話です。非同期プロミス然りpicrinにはトリッキーな機能が多いですね。</p>
+
+<p>結局ライブコーディングはしませんでしたね。</p>
+
+<h1>懇親会</h1>
+
+<p>Raspberry Piの話とかちょいとGCの話とかVarnishの話とかaltJSとか。ブログの話題が出たのでOctopress推しといたり。なんでみんなGithub Pages + Octopress使わないん？便利ですやん。</p>
+
+<p>結構色々話してた気がするんですが覚えてないですね。</p>
+]]></content>
+  </entry>
+  
+</feed>

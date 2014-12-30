@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: asdf | κeenのHappy Hacκing Blog]]></title>
+  <link href="http://KeenS.github.io/categories/asdf/atom.xml" rel="self"/>
+  <link href="http://KeenS.github.io/"/>
+  <updated>2014-12-19T15:28:27+09:00</updated>
+  <id>http://KeenS.github.io/</id>
+  <author>
+    <name><![CDATA[κeen]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[require, ASDF, quicklispを正しく使う]]></title>
+    <link href="http://KeenS.github.io/blog/2014/11/30/quicklisp/"/>
+    <updated>2014-11-30T22:05:39+09:00</updated>
+    <id>http://KeenS.github.io/blog/2014/11/30/quicklisp</id>
+    <content type="html"><![CDATA[<p>κeenです。最近のCommon Lispのパッケージ管理は<code>ql:quickload</code>しか知らないという方も多いのではないでしょうか。しかしそれだけでは機能が足りないこともあります。Common Lispには様々な管理システムがあるので整理しましょう。</p>
+
+<!-- more -->
+
+
+<h1><code>provide</code>, <code>require</code></h1>
+
+<p>同じファイルを読み込まないための原始的なシステムです。Common Lispの標準の機能です。<code>(require 'foo)</code>がファイルをロードし、ロードされたファイル内で<code>(provide 'foo)</code>しておくと2回目以降の<code>(require 'foo')</code>はファイルを読まずにすぐさま返ります。</p>
+
+<p>ここで問題なのが<code>require</code>がどこのファイルを捜しにいくかは処理系依存なところですね。なので生の<code>require</code>は使えないと思っておいた方が良いでしょう。</p>
+
+<h1>ASDF 3</h1>
+
+<p>Another Sysytem Defininion Facility。過去にはAnotherじゃないSysytem Defininion Facilityもあった模様。最新版は3系です。結構APIが変っているので必ず3の情報を捜しましょう。</p>
+
+<p>この「System」というのが聞き慣れませんが、ASDFの<code>defsystem</code>で</p>
+
+<ol>
+<li>systemに含まれるファイルの定義</li>
+<li>依存systemの記述</li>
+<li>その他作者、ライセンス、バージョンなどの記述</li>
+<li>systemのコンパイルやロード、テストなどの操作</li>
+</ol>
+
+
+<p>が可能です。ASDFはCにとってのmake + ldを標榜しています。Makefile的なものは(systemname).asdになります。</p>
+
+<p><code>require</code>との統合もされており、ASDFを適切に設定することで<code>defsystem</code>されたsystemを<code>require</code>でロードすることが出来ます。このときASDFは処理系に依存せずにASDFのパスに従って.asdファイルを捜しにいきます。</p>
+
+<p>また、ほとんどの処理系はASDFを標準添付していて、大抵<code>(require 'asdf)</code>すれば使えるようになっています。</p>
+
+<p>尚、コンパイル後のファイルは処理系、バージョン毎に互換性がないので本来なら適切に管理する必要がありますが、ASDFが適切に~/.cache/common-lisp以下に管理してくれます。優秀ですね。</p>
+
+<h1>quicklisp</h1>
+
+<p>lispプロジェクトのインストーラと微妙にパッケージマネージャ的な役割をします。</p>
+
+<p><a href="http://beta.quicklisp.org/quicklisp.lisp">http://beta.quicklisp.org/quicklisp.lisp</a> をダウンロードしてきてそのファイルを読み込んで<code>(quicklisp-quickstart:install)</code>すれば~/quicklisp/以下にquicklispがインストールされ、ロードされます。処理系を再起動したあとまたquicklispをロードするには~/quicklisp/setup.lispを<code>load</code>します。が、毎回それをやるのが面倒な人は<code>(ql:add-to-init-file)</code>しておけば処理系の初期化ファイルに~/quicklisp/setup.lispを読み込む処理が書き加えられます。</p>
+
+<p>さて、このquicklispを扱う上で3つの概念を覚えておくと良いです。</p>
+
+<p>dist
+:    releaseの配布元。普通は'quicklisp'のみだがほかのdistを使うことも可能。自前のやつとか。新たなdistを追加したり削除したり出来る。gitのremoteをイメージすればよい。</p>
+
+<p>release
+:    quicklispがダウンロードしてくる単位。ライブラリの作者が登録するときの単位。複数のsystemをもつこともある。</p>
+
+<p>system
+:    ASDFのsystem。ユーザーが使うときの単位。</p>
+
+<p>さて、quicklispを使うときは通常使いたいシステムを<code>ql:quickload</code>すればそのシステムと依存システムの含まれているリリースをダウンロード、展開、ロードまでしてくれます。</p>
+
+<p>開発中はREPLを立ち上げているので「あ、このライブライリ使おう」と思ったら<code>ql:quickload</code>するだけで即座に使えるようになりますね。</p>
+
+<p>quicklispのリリースは毎月下旬にアップデートされていて、毎月ちゃんと全てのライブラリが対応処理系で動くことがテストされています。なのでメンテナが居なくなったライブラリはドロップします。代わりにquicklispの作者がテスト出来ないライブラリは登録させてもらえなかったりします（cl-cudaとか）</p>
+
+<h1>quicklispの問題</h1>
+
+<p>既にCommon Lispのライブラリマネージャとしてデファクトスタンダード的位置を築きつつあるquicklispですが、私は結構不満があります。</p>
+
+<ul>
+<li>~/quicklisp/setup.lispを読み込むとquicklispの全てを読み込んでしまう: これには過去全てのバージョンのdistとreleaseとsystemのデータベース、HTTPクライアント、圧縮ファイルの解凍ライブラリなども含まれており、処理系の起動が非常に遅くなる</li>
+<li>特にデータベースはファイルに書かれていても高速に読める形式なのに初期化時に毎回全ての内容をLispのハッシュに変換するという愚行をする。</li>
+<li><code>(ql:add-to-init-file)</code>が推奨されているが、前述の通り処理系の起動が遅くなってしまう。特に、（インストーラではなく、インストール済みの）ライブラリマネージャとして使いたくてもインストーラの機能までロードしてしまう。結構メモリを食うしアプリケーションには要らない。</li>
+<li>処理系に依っては初期化ファイルはlispファイルをスクリプトとして使うときは読み込まれないこともあるのでスクリプトには使えない。まあ、前述の通り使いたくもない。</li>
+</ul>
+
+
+<p>のでライブラリマネージャにはASDFが向いてるのですが、</p>
+
+<ul>
+<li>quicklispでインストールしたシステムはquicklispを一旦ロードするかASDFの設定をいじるかしなければASDFからは使えない</li>
+<li>quicklispはシステムのダウンロード/インストールだけすれば良いものをロードまでする</li>
+<li>要はASDFを隠す</li>
+<li>じゃASDFのラッパーかというとロードしかせず、コンパイルやテストなどはしない</li>
+</ul>
+
+
+<p>など様々な問題があります。</p>
+
+<p>一応quicklispの弁護をしておくと、Common Lispは他のスクリプト言語とはちょっと使い方が違って、</p>
+
+<ul>
+<li>初期化ファイルは大抵オレオレライブラリで埋め尽くされていてそもそも起動には時間がかかる</li>
+<li>Emacsのように一度REPLを立ち上げたら滅多に落とさない</li>
+<li>アプリケーションも基本的にはREPLの中で使う</li>
+<li>起動時間を気にするなら初期化ファイルを全てロードした、コアファイルをダンプしておいて使う</li>
+</ul>
+
+
+<p>といった使い方をされることが多いのです。そのような人からしてみたら細々処理されるよりも起動時間とメモリは気にしないから速いやつをくれ、となるのです。</p>
+
+<p>じゃあそれなりにCommon Lispを使う私が何故そうしないかというと</p>
+
+<ul>
+<li>立ち上げっぱなしというのが性に合わない。立ち上がっているものを見るとすぐに落としたくなる。EmacsのヘビーユーザーだがEmacsもすぐ落とす。</li>
+<li>コマンドラインアプリケーションを作りたいため、起動時間が命になる。</li>
+<li>私はSBCLの開発版を使っていて、コアファイルはすぐに無効になるためコアダンプはしない（意味がない）</li>
+</ul>
+
+
+<p>といった理由があります。これは初心者にも共通する部分があるんじゃないでしょうか。REPLを立ち上げっぱなしにはしないし「コアダンプ？なにそれ？エラー出してんじゃん」状態でしょう。</p>
+
+<h1>ASDFを正しく使う</h1>
+
+<p>ということでquicklispをあまり使わない方法を紹介します。</p>
+
+<p>前述の通り、quicklispでインストールしたシステムはquicklispを一旦ロードするかasdfの設定をいじるかしなければasdfからは使えません。具体的に言うと、</p>
+
+<ul>
+<li>ASDFのデフォルトパスは~/common-lisp以下</li>
+<li>quicklispのシステムのインストールパスは~/quicklisp/dists/(dist name)/software/以下</li>
+</ul>
+
+
+<p>なので~/quicklisp/dists/以下にパスを通します。少し無駄なディレクトリもパスに含まれてしまうので気にする人はそれぞれのdistについて~/quicklisp/dists/(dist name)/software/にパスを通しましょう。</p>
+
+<p>因みに拙作の<a href="https://github.com/KeenS/CIM">CIM</a>は~/.cim/quicklisp以下にquicklispをインストールするのでCIM使いの方は~/.cim/quicklisp/dists/ですね。~/quicklispの方が混乱少ないかなあ。</p>
+
+<p>さて、ASDFの設定は<a href="http://common-lisp.net/project/asdf/asdf.html#Configuring-ASDF-to-find-your-systems">公式マニュアル</a>を参照すれば良いのですが一応実際のものを書いておくと</p>
+
+<p>~/.config/common-lisp/source-registry.conf に
+<code>lisp
+(:source-registry
+  (:tree "~/quicklisp/dists/")
+  (:tree (:home "Lisp/"))
+  :INHERIT-CONFIGURATION)
+</code>
+を書けばOKです。2つめのLisp/は私がCommon Lispファイルを置いているディレクトリですね。この書き方だとquicklispより自分のLispライブラリを優先して読みにいきます。開発版を使いたいときとかむしろ開発をするときとかに必須です。この設定をミスるといくら開発してもロードされてるのはリリース版で、機能が動かないとかの地獄を見ます。</p>
+
+<p>ここまでくれば</p>
+
+<p><code>lisp
+(require 'asdf)
+(require 'hoge)
+</code>
+とすればquicklispでインストールしたライブラリをロード出来ます。</p>
+
+<h2>require以外のASDFの使い方</h2>
+
+<p>バージョンに依って使い方が異なるのですが、3系だと<code>(asdf:xxx-system 'hoge)</code>などとします。具体的には</p>
+
+<ul>
+<li><code>(asdf:load-system 'hoge)</code> ( = <code>(require 'hoge)</code>)</li>
+<li><code>(asdf:test-system 'hoge)</code> (テストがあるときのみ)</li>
+<li><code>(asdf:compile-system 'hoge)</code></li>
+</ul>
+
+
+<p>を覚えておけば良いでしょう。他にもいくつか操作があるようですが私は使ったことがないです。<code>asdf:locate-system</code>は名前的に便利そうではあるんですけどね。</p>
+
+<p>開発するときはまず.asdファイルを書いておいて(あるいはcl-projectから生成して)、<code>(require 'hoge)</code>で始めて書いていき、ある程度進んだらテストを書いてテストの項目を.asdファイルに書き足して<code>(asdf:test-system 'hoge)</code>、それなりに動くようになったら<code>(asdf:compile-system 'hoge)</code>してコンパイルの様子を見たりコンパイル後のベンチマークを取ったりします。</p>
+
+<h2>quickloadを成仏させる</h2>
+
+<p>これでロードの処理はASDFで全てカバー出来るようになりました。じゃあquickloadのロード機能は邪魔ですね。quicklispをインストーラとしてのみ使いましょう。</p>
+
+<p>まず処理系の初期化ファイル(sbclなら~/.sbclrc)から</p>
+
+<p>```lisp
+;;; The following lines added by ql:add-to-init-file:</p>
+
+<h1>-quicklisp</h1>
+
+<p>(let ((quicklisp-init (merge-pathnames &ldquo;~quicklisp/setup.lisp&rdquo;</p>
+
+<pre><code>                                   (user-homedir-pathname))))
+</code></pre>
+
+<p>  (when (probe-file quicklisp-init)</p>
+
+<pre><code>(load quicklisp-init :verbose nil)))
+</code></pre>
+
+<p>```</p>
+
+<p>を削除します。quicklispを使いたいときだけ<code>(load "~/quicklisp/setup.lisp")</code>します。そして欲しいシステムをインストールするには</p>
+
+<p><code>lisp
+(ql::recursively-install "foo")
+</code></p>
+
+<p>します。quickloadに比べて爆速です。ここにきて名前が文字列な上にexportされてないシンポル参照してますね。気持ち悪いという方は大人しくquickloadしましょう。</p>
+
+<p>拙作のCIMにはこれをコマンドラインから行なう<code>ql install</code>なるコマンドが存在します。</p>
+
+<h1>最後に</h1>
+
+<p>quicklispが嫌いなのは私の好みですがASDFを正しく使えて損はないと思うので知らなかった方々は是非試してみて下さい。</p>
+]]></content>
+  </entry>
+  
+</feed>

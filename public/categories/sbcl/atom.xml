@@ -1,0 +1,455 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: sbcl | κeenのHappy Hacκing Blog]]></title>
+  <link href="http://KeenS.github.io/categories/sbcl/atom.xml" rel="self"/>
+  <link href="http://KeenS.github.io/"/>
+  <updated>2014-12-19T15:28:27+09:00</updated>
+  <id>http://KeenS.github.io/</id>
+  <author>
+    <name><![CDATA[κeen]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[VOPで遊ぶ]]></title>
+    <link href="http://KeenS.github.io/blog/2014/12/02/vopdeyou-bu/"/>
+    <updated>2014-12-02T23:38:26+09:00</updated>
+    <id>http://KeenS.github.io/blog/2014/12/02/vopdeyou-bu</id>
+    <content type="html"><![CDATA[<p>(:meta<br/>
+ ((:this &ldquo;<a href="http://qiita.com/advent-calendar/2014/lisp">Lisp Advent Calendar 2014</a>の3日目の記事&rdquo;)<br/>
+  (:prev (:author &ldquo;tk_riple&rdquo; :title <a href="http://compassoftime.blogspot.jp/2014/12/r7rs.html">&ldquo;時の羅針盤＠blog: R7RSポータブルライブラリを書く際の落とし穴&rdquo;</a>))<br/>
+  (:next (:author &ldquo;nobkz&rdquo; :tite &ldquo;Shenについて&rdquo;))))</p>
+
+<p>κeenです。さっきまでVOPで遊んでたので当初の予定を変更してVOPの話をします。</p>
+
+<!-- more -->
+
+
+<h1>VOPとは何か</h1>
+
+<p>SBCLやCMU CLで使われているネイティブコードを吐くための機構、要はインラインアセンブラです。</p>
+
+<h1>VOPとはどんなものか</h1>
+
+<p>とりあえずコードをば。x86-64用です。</p>
+
+<p>```lisp
+(in-package :cl-user)
+(defpackage vop-sample
+  (:use :cl :sb-ext :sb-c))
+(in-package :vop-sample)</p>
+
+<p>(defknown add (fixnum fixnum)          ; addのftypeを宣言</p>
+
+<pre><code>fixnum
+(movable                            ; 副作用がない
+ flushable                          ; デッドコードとして除去してよい
+ foldable                           ; 定数畳み込みをしてよい
+ always-translatable)               ; 必ずアセンブラコードになる
+</code></pre>
+
+<p>  :overwrite-fndb-silently t)           ; 関数上書きのエラーを出さない</p>
+
+<p>(in-package &ldquo;SB-VM&rdquo;)
+(define-vop (vop-sample::add)          ; VOP名
+  (:translate vop-sample::add)         ; 関数名
+  (:policy :fast-safe)                  ; declare optimize的な
+  (:args (x :scs (signed-reg))          ; 引数宣言。後述</p>
+
+<pre><code>     (y :scs (signed-reg)))
+</code></pre>
+
+<p>  (:arg-types fixnum fixnum)            ; 引数の型宣言
+  (:results (r :scs (signed-reg)))      ; 返り値宣言。後述
+  (:result-types fixnum)                ; 返り値の型宣言
+  (:generator 4                         ; 翻訳するときのコスト</p>
+
+<pre><code>          (move r x)                ; 返り値レジスタにxを移動
+          (inst add r y)))          ; 返り値レジスタにyを足し込む
+</code></pre>
+
+<p>(in-package :vop-sample)</p>
+
+<p>(defun add (x y)                        ; 安全なバージョンでラップする
+  (add x y))
+```</p>
+
+<p>ちょっとおまじないが多いですね。</p>
+
+<p>すこし解説すると引数は基本レジスタ渡しで、レジスタが足りなければスタックも使います。で、レジスタやスタックの値には型があります。それがストレージクラス(sc)です。この場合、x、y、rは<code>signed-reg</code>と宣言されてますね。符号付きレジスタです。<code>:scs</code>の最後のsは複数形のsです。今回は1つしか指定してませんが複数指定することも可能なのです。</p>
+
+<p><code>move</code>というのはアセンブラ命令ではなく、マクロかなんかです（適当）。VOPなのかな？どのストレージクラスからどのストレージクラスに移動するかを認知して適切な命令を吐きます。</p>
+
+<p><code>inst</code>が付いてるのがアセンブラですね。</p>
+
+<p>このコード、xとrが等しいときに最適化出来るのですがそれはまあおいといて、こいつをディスアセンブルしてみましょう。</p>
+
+<pre><code>VOP-SAMPLE&gt; (disassemble #'add)
+; disassembly for ADD
+; Size: 43 bytes. Origin: #x1005C26416
+; 16:       488BD3           MOV RDX, RBX                     ; no-arg-parsing entry point
+; 19:       48D1FA           SAR RDX, 1
+; 1C:       488BF9           MOV RDI, RCX
+; 1F:       48D1FF           SAR RDI, 1
+; 22:       4801FA           ADD RDX, RDI
+; 25:       48D1E2           SHL RDX, 1
+; 28:       488BE5           MOV RSP, RBP
+; 2B:       F8               CLC
+; 2C:       5D               POP RBP
+; 2D:       C3               RET
+; 2E:       CC0A             BREAK 10                         ; error trap
+; 30:       02               BYTE #X02
+; 31:       19               BYTE #X19                        ; INVALID-ARG-COUNT-ERROR
+; 32:       9A               BYTE #X9A                        ; RCX
+; 33:       CC0A             BREAK 10                         ; error trap
+; 35:       04               BYTE #X04
+; 36:       08               BYTE #X08                        ; OBJECT-NOT-FIXNUM-ERROR
+; 37:       FE1B01           BYTE #XFE, #X1B, #X01            ; RDX
+; 3A:       CC0A             BREAK 10                         ; error trap
+; 3C:       04               BYTE #X04
+; 3D:       08               BYTE #X08                        ; OBJECT-NOT-FIXNUM-ERROR
+; 3E:       FE9B03           BYTE #XFE, #X9B, #X03            ; RDI
+NIL
+</code></pre>
+
+<p>主要な部分はここです。</p>
+
+<pre><code>; 19:       48D1FA           SAR RDX, 1
+; 1C:       488BF9           MOV RDI, RCX
+; 1F:       48D1FF           SAR RDI, 1
+; 22:       4801FA           ADD RDX, RDI
+; 25:       48D1E2           SHL RDX, 1
+; 28:       488BE5           MOV RSP, RBP
+; 2B:       F8               CLC
+; 2C:       5D               POP RBP
+; 2D:       C3               RET
+</code></pre>
+
+<p><code>ADD</code>の他に無駄な命令がいくつかありますね。</p>
+
+<p>SBCLはintの下位1bitをGCのときのタグとして使ってるのでアセンブラに渡す前に算術右シフト(<code>SAR</code>)して渡してます。
+そして返るときはまた左シフト(<code>SHL</code>)してます。</p>
+
+<p>その後の</p>
+
+<pre><code>; 28:       488BE5           MOV RSP, RBP
+; 2B:       F8               CLC
+; 2C:       5D               POP RBP
+; 2D:       C3               RET
+</code></pre>
+
+<p>は関数から返るときのイディオム(スタックポインタを復元してフラグをクリアして呼び出し元に戻る)です。</p>
+
+<p>余談ですがLispマシンなどのタグマシンは下位ビットにあるタグを無視して計算出来るのでシフトが不要になります。なので速いんですね。</p>
+
+<h1>シフトをなくす</h1>
+
+<p>さっきは<code>signed-reg</code>を指定しました。つまり「（アセンブラの）intをくれ」と要求した訳です。
+intの下位1bitは0なので足し算する分には別にシフトされなくても問題ありませんよね。シフトを殺しましょう。</p>
+
+<p>さっきのコードの下にこれを足します。<code>add</code>は再定義しないと反映されないようでした。</p>
+
+<p>```lisp
+(in-package &ldquo;SB-VM&rdquo;)
+(define-vop (vop-sample::add/v2)        ; vop名は異なる
+  (:translate vop-sample::add)          ; 関数名は同じ
+  (:policy :fast-safe)
+  (:args (x :scs (any-reg))             ; any-regになってる</p>
+
+<pre><code>     (y :scs (any-reg)))            ; any-regになってる
+</code></pre>
+
+<p>  (:arg-types fixnum fixnum)
+  (:results (r :scs (any-reg)))         ; any-regになってる
+  (:result-types fixnum)
+  (:generator 3                         ; コストをさっきより低くすると優先して使ってくれる</p>
+
+<pre><code>          (move r x)
+          (inst add r y)))
+</code></pre>
+
+<p>(in-package :vop-sample)</p>
+
+<p>(defun add (x y)
+  (add x y))</p>
+
+<p>```</p>
+
+<p>んで、ディスアセンブルしてみると</p>
+
+<pre><code>VOP-SAMPLE&gt; (disassemble #'add)
+
+; disassembly for ADD
+; Size: 31 bytes. Origin: #x1004C2AB83
+; 83:       488BD1           MOV RDX, RCX                     ; no-arg-parsing entry point
+; 86:       4801FA           ADD RDX, RDI
+; 89:       488BE5           MOV RSP, RBP
+; 8C:       F8               CLC
+; 8D:       5D               POP RBP
+; 8E:       C3               RET
+; 8F:       CC0A             BREAK 10                         ; error trap
+; 91:       02               BYTE #X02
+; 92:       19               BYTE #X19                        ; INVALID-ARG-COUNT-ERROR
+; 93:       9A               BYTE #X9A                        ; RCX
+; 94:       CC0A             BREAK 10                         ; error trap
+; 96:       04               BYTE #X04
+; 97:       08               BYTE #X08                        ; OBJECT-NOT-FIXNUM-ERROR
+; 98:       FE1B01           BYTE #XFE, #X1B, #X01            ; RDX
+; 9B:       CC0A             BREAK 10                         ; error trap
+; 9D:       04               BYTE #X04
+; 9E:       08               BYTE #X08                        ; OBJECT-NOT-FIXNUM-ERROR
+; 9F:       FE9B03           BYTE #XFE, #X9B, #X03            ; RDI
+NIL
+</code></pre>
+
+<p>はい。見事にSARとSHLが消えましたね。</p>
+
+<h1>もう少し複雑な型を扱う</h1>
+
+<p>アセンブラですし<code>(simple-array (unsigned-byte 8) (*))</code>(以下octets)を扱いたいですよね。とりあえず難しいことは考えずにoctetsの0番目の要素にアクセスしてみましょう。とはいっても<code>simple-array</code>は長さや要素の型の情報も持っていることが予想されるので少しデータを読み飛ばさないといけませんね。</p>
+
+<p>その辺の計算が分からなかったのでsbclのソースからそれっぽいものを参考にしました。</p>
+
+<p>```lisp
+(defknown access-simple-array-0 ((simple-array (unsigned-byte 8) (*)))</p>
+
+<pre><code>(unsigned-byte 8)
+(movable flushable always-translatable)
+</code></pre>
+
+<p>  :overwrite-fndb-silently t)
+(in-package &ldquo;SB-VM&rdquo;)
+(define-vop (vop-sample::access-simple-array-0)
+  (:translate vop-sample::access-simple-array-0)
+  (:policy :fast-safe)
+  (:args (x :scs (descriptor-reg)))
+  (:arg-types *)
+  (:results (r :scs (unsigned-reg)))
+  (:result-types unsigned-num)
+  (:generator 4</p>
+
+<pre><code>          (inst movzx r 
+           (make-ea :byte :base x
+                    :disp (- (* vector-data-offset n-word-bytes)
+                           other-pointer-lowtag)))))
+</code></pre>
+
+<p>(in-package :vop-sample)
+(defvar <em>octets</em> (make-array 4</p>
+
+<pre><code>                         :element-type '(unsigned-byte 8)
+                         :initial-contents '(10 11 12 13)))
+</code></pre>
+
+<p>(defun access-simple-array-0 (x)
+  (access-simple-array-0 x))
+```</p>
+
+<p>こんな感じになります。境界チェックとかはやってませんが許して下さい。</p>
+
+<p><code>descriptor-reg</code>というのがポインタが入ってるレジスタっぽいです。<code>movzx</code>は8bitの値を64bitのレジスタに符号拡張しながらロードする命令です。</p>
+
+<p><code>make-ea</code>というのがアドレッシングですね。<code>x</code>レジスタを起点として<code>(- (* vector-data-offset n-word-bytes) other-pointer-lowtag)</code>バイト(？ワード？)先のメモリ1byteを指します。</p>
+
+<p>ディスアセンブルしてみましょう。みなさんもう慣れてきたと思うので主要部だけ抜き出します。</p>
+
+<pre><code>; 65:       0FB65101         MOVZX EDX, BYTE PTR [RCX+1]      ; no-arg-parsing entry point
+; 69:       48D1E2           SHL RDX, 1
+</code></pre>
+
+<p>短いですね。この<code>BYTE PTR [RCX+1]</code>が<code>make-ea</code>した値に対応します。<code>RCX</code>は<code>x</code>で<code>(- (* vector-data-offset n-word-bytes) other-pointer-lowtag)</code>の結果が1に現れてるんでしょう。補足しておくと、<code>EDX</code>と<code>RDX</code>は同じ場所を指します。32bitとして扱うときはE、64bitとして扱うときはRで指します。</p>
+
+<p>さて、私はx86のアドレッシングモードなんて全然知らないのですがコードを見る限りもうちょっと複雑なアドレッシングが出来るようです。</p>
+
+<p>配列のn番目にアクセスするコードが良い例のようです。</p>
+
+<p>```lisp
+(defknown access-simple-array-n ((simple-array (unsigned-byte 8) (*)) (unsigned-byte 64))</p>
+
+<pre><code>(unsigned-byte 8)
+(movable flushable always-translatable)
+</code></pre>
+
+<p>  :overwrite-fndb-silently t)
+(in-package &ldquo;SB-VM&rdquo;)
+(define-vop (vop-sample::access-simple-array-n)
+  (:translate vop-sample::access-simple-array-n)
+  (:policy :fast-safe)
+  (:args (x :scs (descriptor-reg))</p>
+
+<pre><code>     (i :scs (unsigned-reg)))
+</code></pre>
+
+<p>  (:arg-types * unsigned-num)
+  (:results (r :scs (unsigned-reg)))
+  (:result-types unsigned-num)
+  (:generator 4</p>
+
+<pre><code>          (inst movzx r 
+           (make-ea :byte :base x
+                    :scale 1
+                    :index i
+                    :disp (- (* vector-data-offset n-word-bytes)
+                           other-pointer-lowtag)))))
+</code></pre>
+
+<p>(in-package :vop-sample)
+(defun access-simple-array-n (x i)
+  (access-simple-array-n x i))
+```</p>
+
+<p>新たに引数<code>i</code>をとるようになったのと<code>make-ea</code>の引数に<code>:scale 1 :index i</code>が加わってます。</p>
+
+<p>ディスアセンブルしてみましょう。</p>
+
+<pre><code>; 98:       0FB6543901       MOVZX EDX, BYTE PTR [RCX+RDI+1]  ; no-arg-parsing entry point
+; 9D:       48D1E2           SHL RDX, 1
+</code></pre>
+
+<p>アドレッシングに<code>+RDI</code>が加わりましたね。どうして<code>i</code>(<code>RDI</code>)を<code>RAS</code>しなくていいのか気になりますがまあ、とりあえず正常に動いてるようです。</p>
+
+<p>おわかりかと思いますがアドレッシングが<code>x</code>をベースにして今までの定数オフセット+新たにレジスタで指定したオフセットになってます。</p>
+
+<p><code>make-ea</code>に渡した<code>:index</code>は何か分かるとしても<code>:scale</code>が気になりますよね。<code>scale</code>を2にしてディスアセンブルしてみます。</p>
+
+<pre><code>; 58:       0FB6547901       MOVZX EDX, BYTE PTR [RCX+RDI*2+1]  ; no-arg-parsing entry point
+; 5D:       48D1E2           SHL RDX, 1
+</code></pre>
+
+<p>はい。インデックスを定数倍するようですね。</p>
+
+<h1>SSEにチャレンジ</h1>
+
+<p>インテルアーキテクチャにあるSSEとはStreaming SIMD Extensionsの略です。じゃあSIMDは何かというとSimple Instruction Mulitple Dataの略で、1命令で複数のデータを処理出来ます。</p>
+
+<p>この「複数のデータ」というのは64bit2つや32bit4つなどを128bitにまとめて渡します。128bitの値なんてどうやって作るんだよって感じですがsbcl-1.1.8から入った<code>sb-ext:%make-simd-pack-*</code>が存在します。</p>
+
+<pre><code>VOP-SAMPLE&gt; (%make-simd-pack-ub32 1 2 3 4)
+#&lt;SIMD-PACK  01 00 00 00  02 00 00 00  03 00 00 00  04 00 00 00&gt;
+</code></pre>
+
+<p>こんな感じです。x86_64がリトルエンディアンだったのを思い出させる表記ですね。ub32の他にub64、single、doubleが存在します。</p>
+
+<p>ストレージクラスも<code>*-sse-reg</code>というものがあるのでこれを使いましょう。</p>
+
+<p>```lisp
+(defknown simd-add ((simd-pack (unsigned-byte 64)) (simd-pack (unsigned-byte 64)))</p>
+
+<pre><code>(simd-pack (unsigned-byte 32))
+(movable flushable always-translatable)
+</code></pre>
+
+<p>  :overwrite-fndb-silently t)
+(in-package &ldquo;SB-VM&rdquo;)
+(define-vop (vop-sample::simd-add)
+  (:translate vop-sample::simd-add)
+  (:policy :fast-safe)
+  (:args (x :scs (int-sse-reg))</p>
+
+<pre><code>     (y :scs (int-sse-reg)))
+</code></pre>
+
+<p>  (:arg-types simd-pack-int simd-pack-int)
+  (:results (r :scs (int-sse-reg)))
+  (:result-types simd-pack-int)
+  (:generator 4</p>
+
+<pre><code>          (move r x)
+          (inst padddw r y)))
+</code></pre>
+
+<p>(in-package :vop-sample)
+(defun simd-add (x y)
+  (simd-add x y))
+```</p>
+
+<p>はい。こんな感じですね。<code>paddw</code>はparallel add wordですかね。これをディスアセンブルすると思ったより大きな命令になったので全部貼っときますね。</p>
+
+<pre><code>VOP-SAMPLE&gt; (disassemble #'simd-add)
+
+; disassembly for SIMD-ADD
+; Size: 108 bytes. Origin: #x1006D64A21
+; 21:       660F6FC2         MOVDQA XMM0, XMM2                ; no-arg-parsing entry point
+; 25:       660FFDC1         PADDW XMM0, XMM1
+; 29:       49896C2440       MOV [R12+64], RBP                ; thread.pseudo-atomic-bits
+; 2E:       4D8B5C2418       MOV R11, [R12+24]                ; thread.alloc-region
+; 33:       498D5320         LEA RDX, [R11+32]
+; 37:       493B542420       CMP RDX, [R12+32]
+; 3C:       7740             JNBE L2
+; 3E:       4989542418       MOV [R12+24], RDX                ; thread.alloc-region
+; 43:       498D530F         LEA RDX, [R11+15]
+; 47: L0:   48C742F165030000 MOV QWORD PTR [RDX-15], 869
+; 4F:       48C742F900000000 MOV QWORD PTR [RDX-7], 0
+; 57:       660F7F4201       MOVDQA [RDX+1], XMM0
+; 5C:       49316C2440       XOR [R12+64], RBP                ; thread.pseudo-atomic-bits
+; 61:       7402             JEQ L1
+; 63:       cc09             break 9                          ; pending interrupt trap
+; 65: l1:   488be5           mov rsp, rbp
+; 68:       f8               clc
+; 69:       5d               pop rbp
+; 6a:       c3               ret
+; 6b:       cc0a             break 10                         ; error trap
+; 6d:       02               byte #x02
+; 6e:       19               byte #x19                        ; invalid-arg-count-error
+; 6f:       9a               byte #x9a                        ; rcx
+; 70:       cc0a             break 10                         ; error trap
+; 72:       04               byte #x04
+; 73:       32               byte #x32                        ; object-not-simd-pack-error
+; 74:       fe1b01           byte #xfe, #x1b, #x01            ; rdx
+; 77:       cc0a             break 10                         ; error trap
+; 79:       04               byte #x04
+; 7a:       32               byte #x32                        ; object-not-simd-pack-error
+; 7b:       fe9b03           byte #xfe, #x9b, #x03            ; rdi
+; 7e: l2:   6a20             push 32
+; 80:       bac0854200       mov edx, 4359616                 ; alloc_tramp
+; 85:       ffd2             call rdx
+; 87:       5a               pop rdx
+; 88:       80ca0f           or dl, 15
+; 8b:       ebba             jmp l0
+nil
+</code></pre>
+
+<p>なにやってるのやら。</p>
+
+<h1>出来なかったこと</h1>
+
+<p><code>PCMPESTRI</code>を使ってみたかったのですが扱いがトリッキーなので断念しました。具体的に言うと操作する値を格納するレジスタがEAXとECX固定なようなのです。
+<code>:temporary</code>節で内部で使うレジスタも要求出来るようなのですが名指しでもらえるんですかね。</p>
+
+<p>SSEの使い方とsimple-arrayから要素の配列を取り出す方法までは示したので誰かやって下さい。</p>
+
+<p>参考資料いっぱい置いときますね。</p>
+
+<p>VOPの使い方。最初の方に出てきたaddの最適化のやつとかも出てくる。(en)
+: <a href="http://www.pvk.ca/Blog/2014/08/16/how-to-define-new-intrinsics-in-sbcl/">How to Define New Intrinsics in SBCL &ndash; Paul Khuong mostly on Lisp</a></p>
+
+<p>SBCLのsimd-packの具体的解説(en)
+: <a href="http://pvk.ca/Blog/Lisp/hacking_SSE_intrinsics-part_1.html">Hacking SSE Intrinsics in SBCL (part 1) &ndash; Paul Khuong mostly on Lisp</a></p>
+
+<p>SBCLでVOPとSSEを使ってマンデルブロ集合を計算する(en)
+<a href="http://www.pvk.ca/Blog/2013/06/05/fresh-in-sbcl-1-dot-1-8-sse-intrinsics/">Fresh in SBCL 1.1.8: SSE Intrinsics! &ndash; Paul Khuong mostly on Lisp</a></p>
+
+<p>IntelのPCMPESTRIとかのマニュアル(en)
+: <a href="https://software.intel.com/en-us/node/514244">Packed Compare Intrinsics</a></p>
+
+<p>MicrosoftのPCMPESTRIのマニュアル。こっちの方が分かりやすい(en)
+<a href="http://msdn.microsoft.com/en-us/library/bb531465.aspx">_mm_cmpestri</a></p>
+
+<p>PCMPISTRIを使った<code>strlen</code>の実装例(ja)
+: <a href="http://homepage1.nifty.com/herumi/prog/intel-opt.html">Intel optimization</a></p>
+
+<p>PCMPESTRIを使ってHTTPパーサーを高速化した話。これをやりたかった。(en)
+: <a href="http://blog.kazuhooku.com/2014/12/improving-parser-performance-using-sse.html">Kazuho&rsquo;s Weblog: Improving Parser Performance using SSE Instructions (in case of PicoHTTPParser)</a></p>
+
+<h1>おわりに</h1>
+
+<p>おつかれ様でした。たまには低レベルなことをやっても良いんじゃないでしょうか。</p>
+
+<p>明日はnobkzさんで、Shenについてです。</p>
+]]></content>
+  </entry>
+  
+</feed>
