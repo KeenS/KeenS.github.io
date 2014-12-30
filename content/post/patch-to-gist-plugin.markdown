@@ -1,7 +1,7 @@
 ---
 type: post
 title: "Octopressのgistプラグインが動かなかったので修正した"
-date: 2013-09-26
+date: 2013-09-26T22:57:00Z
 comments: true
 sharing: true
 categories: [Github, Octopress, Ruby]

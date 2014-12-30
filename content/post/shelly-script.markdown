@@ -1,7 +1,7 @@
 ---
 type: post
 title: "Shellyを使ってCommon LispファイルをExecutableにする"
-date: 2013-09-26
+date: 2013-09-26T21:25:00Z
 comments: true
 sharing: true
 categories: [Common Lisp, Lisp, Shelly, Command Line]

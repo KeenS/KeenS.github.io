@@ -1,7 +1,7 @@
 ---
 type: post
 title: "PDFユーティリティ"
-date: 2013-09-03T23:34Z
+date: 2013-09-03T23:34:00Z
 comments: true
 sharing: true
 categories: [PDF, Utility, Command Line, 備忘録]
