@@ -7,7 +7,7 @@ BLOG_PATH=public
 
 SOURCE_ORIGIN=git@github.com:KeenS/KeenS.github.io.git
 BLOG_ORIGIN=$(SOURCE_ORIGIN)
-THEME_ORIGIN=git@github.com:KeenS/liquerice-k.git
+THEME_ORIGIN=git@github.com:KeenS/liquorice-k.git
 
 preview:
 	$(HUGO) server -vw -t $(THEME)
