@@ -7,7 +7,778 @@
     <language>en-us</language>
     
     
-    <updated>Thu, 08 Jan 2015 14:37:36 UTC</updated>
+    <updated>Sat, 10 Jan 2015 09:40:51 UTC</updated>
+    
+    <item>
+      <title>picrinのcodegenプロセスを説明してみる</title>
+      <link>/blog/2015/01/10/picrin-codegen-explanation</link>
+      <pubDate>Sat, 10 Jan 2015 09:40:51 UTC</pubDate>
+      
+      <guid>/blog/2015/01/10/picrin-codegen-explanation</guid>
+      <description>
+
+&lt;p&gt;今、picrinのcodegenプロセスに手を入れる機運が高まってます。picrinはバイトコードインタプリタなのでS式を渡されたらそれをバイトコードに変換する作業が必要です。それがcodegen。本当はcompileなんだけどpicrinのCのソースコードのコンパイルと紛らわしいからcodegen。私も完全にはプロセスを理解してないので説明して理解度を試しつつ問題点を洗い出します。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_0&#34;&gt;関連ファイル&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;extlib/benz/codegen.c&lt;/li&gt;
+&lt;li&gt;extlib/benz/macro.c&lt;/li&gt;
+&lt;li&gt;(extlib/benz/read.c)&lt;/li&gt;
+&lt;li&gt;(extlib/benz/vm.c)&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h1 id=&#34;toc_1&#34;&gt;おおまかな流れ&lt;/h1&gt;
+
+&lt;ol&gt;
+&lt;li&gt;(&lt;code&gt;read&lt;/code&gt;する)&lt;/li&gt;
+&lt;li&gt;マクロ展開する&lt;/li&gt;
+&lt;li&gt;コードの解析をする&lt;/li&gt;
+&lt;li&gt;バイトコードを生成する&lt;/li&gt;
+&lt;li&gt;(実行する)&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;今回説明するのは2~4です。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_2&#34;&gt;マクロ展開&lt;/h1&gt;
+
+&lt;p&gt;入力:Schemeの式&lt;br /&gt;
+出力:マクロ展開済みのS式&lt;br /&gt;
+副作用:マクロテーブルの更新、ライブラリテーブルの更新、その他マクロ毎の副作用&lt;/p&gt;
+
+&lt;p&gt;extlib/benz/macro.cに処理があります。&lt;/p&gt;
+
+&lt;p&gt;メインの部分はこれです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;static pic_value
+macroexpand_node(pic_state *pic, pic_value expr, struct pic_senv *senv)
+{
+  switch (pic_type(expr)) {
+  case PIC_TT_SYMBOL: {
+    return macroexpand_symbol(pic, pic_sym(expr), senv);
+  }
+  case PIC_TT_PAIR: {
+    pic_value car;
+    struct pic_macro *mac;
+
+    if (! pic_list_p(expr)) {
+      pic_errorf(pic, &amp;quot;cannot macroexpand improper list: ~s&amp;quot;, expr);
+    }
+
+    car = macroexpand(pic, pic_car(pic, expr), senv);
+    if (pic_sym_p(car)) {
+      pic_sym tag = pic_sym(car);
+
+      if (tag == pic-&amp;gt;rDEFINE_SYNTAX) {
+        return macroexpand_defsyntax(pic, expr, senv);
+      }
+      else if (tag == pic-&amp;gt;rLAMBDA) {
+        return macroexpand_defer(pic, expr, senv);
+      }
+      else if (tag == pic-&amp;gt;rDEFINE) {
+        return macroexpand_define(pic, expr, senv);
+      }
+      else if (tag == pic-&amp;gt;rQUOTE) {
+        return macroexpand_quote(pic, expr);
+      }
+
+      if ((mac = find_macro(pic, tag)) != NULL) {
+        return macroexpand_node(pic, macroexpand_macro(pic, mac, expr, senv), senv);
+      }
+    }
+
+    return pic_cons(pic, car, macroexpand_list(pic, pic_cdr(pic, expr), senv));
+  }
+  default:
+    return expr;
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;S式を行きがけ順でマクロ展開していきます。&lt;/p&gt;
+
+&lt;p&gt;リストの先頭にあるものをマクロと疑って展開しようとしますが、見ての通り&lt;code&gt;define-syntax&lt;/code&gt;、&lt;code&gt;lambda&lt;/code&gt;、&lt;code&gt;define&lt;/code&gt;、&lt;code&gt;quote&lt;/code&gt;だけは特別扱いされています。このスペシャルフォーム達は引数に括弧つきのものを取ったり引数を全く触ってほしくなかったりするのでマクロ展開時に特別な処理がされるんですね。他はシンボルは変数名(identifier)として処理し、リストとシンボル以外のものはそのまま返します。&lt;/p&gt;
+
+&lt;p&gt;ここに1つ問題があります。&lt;code&gt;find_macro&lt;/code&gt;です。&lt;a href=&#34;https://github.com/picrin-scheme/picrin/issues/234&#34;&gt;イシューにも挙げられて&lt;/a&gt;いますが、マクロを定義したあと同じ名前の手続を定義したら手続で上書きされる筈なのにマクロとして展開されてしまいます。これはマクロと手続きで別のテーブルを持っていることに起因します。ちゃんと上書きされるようにするにはマクロも変数束縛テーブルに登録すれば解決出来るのかなと思ってます。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_3&#34;&gt;シンボル&lt;/h2&gt;
+
+&lt;p&gt;変なことはしてません。スコープを遡っていき、最初に見付かったインターンされたシンボルを返します。見付からなかった(=未定義のシンボルだった)ときは新たなgensymを返します。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_4&#34;&gt;&lt;code&gt;define-syntax&lt;/code&gt;&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;static pic_value
+macroexpand_defsyntax(pic_state *pic, pic_value expr, struct pic_senv *senv)
+{
+  pic_value var, val;
+  pic_sym sym, rename;
+
+  if (pic_length(pic, expr) != 3) {
+    pic_errorf(pic, &amp;quot;syntax error&amp;quot;);
+  }
+
+  var = pic_cadr(pic, expr);
+  if (! pic_sym_p(var)) {
+    pic_errorf(pic, &amp;quot;binding to non-symbol object&amp;quot;);
+  }
+  sym = pic_sym(var);
+  if (! pic_find_rename(pic, senv, sym, &amp;amp;rename)) {
+    rename = pic_add_rename(pic, senv, sym);
+  } else {
+    pic_warnf(pic, &amp;quot;redefining syntax variable: ~s&amp;quot;, pic_sym_value(sym));
+  }
+
+  val = pic_cadr(pic, pic_cdr(pic, expr));
+
+  pic_try {
+    val = pic_eval(pic, val, pic-&amp;gt;lib);
+  } pic_catch {
+    pic_errorf(pic, &amp;quot;macroexpand error while definition: %s&amp;quot;, pic_errmsg(pic));
+  }
+
+  if (! pic_proc_p(val)) {
+    pic_errorf(pic, &amp;quot;macro definition \&amp;quot;~s\&amp;quot; evaluates to non-procedure object&amp;quot;, var);
+  }
+
+  define_macro(pic, rename, pic_proc_ptr(val), senv);
+
+  return pic_none_value();
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;手を入れる候補。やってることは単純で、&lt;code&gt;(define-syntax &amp;lt;name&amp;gt; &amp;lt;definition&amp;gt;)&lt;/code&gt;の形で引数を渡される筈だからnameをdefinitionに関連づけてマクロとして登録します。返り値はnone。返り値はnone。大事なことなので2回言いました。&lt;/p&gt;
+
+&lt;p&gt;一応実行時にはマクロ展開は全て終了してる筈なので&lt;code&gt;define-syntax&lt;/code&gt;をマクロ展開時に消し去っても良い筈なんですが、気持ち悪いですよね。コアを小さくするという意味では正解なんですが…。あとファイルのコンパイルを考えた時に&lt;code&gt;define-syntax&lt;/code&gt;をファイルの外に持ち出せなくなるという実用上の問題もあります。&lt;/p&gt;
+
+&lt;p&gt;あと、definitionがマクロ展開だけで止まってしまうと困るのでdefinitionだけはevalしているのもキモいポイントですね。&lt;/p&gt;
+
+&lt;p&gt;改善案は&lt;code&gt;define&lt;/code&gt;と同じようにすること。そのためにはマクロ展開後の処理(analyze、codegen、VM命令)にも&lt;code&gt;define-syntax&lt;/code&gt;用の処理を入れる必要があって、面倒。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_5&#34;&gt;&lt;code&gt;lambda&lt;/code&gt;&lt;/h2&gt;
+
+&lt;p&gt;&lt;code&gt;lambda&lt;/code&gt;の扱いは面倒です。一番分かり易い例は再帰マクロですかね。マクロの定義中に定義中のマクロが見えてる必要があります。この解決策として&lt;code&gt;lambda&lt;/code&gt;だけはマクロ展開を遅延(defer)します。じゃあいつ遅延されたマクロが展開されるかというと&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;pic_value
+pic_macroexpand(pic_state *pic, pic_value expr, struct pic_lib *lib)
+{
+  struct pic_lib *prev;
+  pic_value v;
+
+#if DEBUG
+  puts(&amp;quot;before expand:&amp;quot;);
+  pic_debug(pic, expr);
+  puts(&amp;quot;&amp;quot;);
+#endif
+
+  /* change library for macro-expansion time processing */
+  prev = pic-&amp;gt;lib;
+  pic-&amp;gt;lib = lib;
+
+  lib-&amp;gt;env-&amp;gt;defer = pic_nil_value(); /* the last expansion could fail and leave defer field old */
+
+  v = macroexpand(pic, expr, lib-&amp;gt;env);
+
+  macroexpand_deferred(pic, lib-&amp;gt;env);
+
+  pic-&amp;gt;lib = prev;
+
+#if DEBUG
+  puts(&amp;quot;after expand:&amp;quot;);
+  pic_debug(pic, v);
+  puts(&amp;quot;&amp;quot;);
+#endif
+
+  return v;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;macroexpand&lt;/code&gt;の後です。&lt;code&gt;macroexpand&lt;/code&gt;は&lt;code&gt;macroexpand_node&lt;/code&gt;の薄いラッパと思って下さい。&lt;/p&gt;
+
+&lt;p&gt;遅延されたマクロ展開は&lt;code&gt;senv-&amp;gt;defer&lt;/code&gt;にpushされ、&lt;code&gt;macroexpand_deferred&lt;/code&gt;で1つずつ&lt;code&gt;macroexpand_lambda&lt;/code&gt;されます。&lt;code&gt;macroexpand_lambda&lt;/code&gt;はまあ、想像通りです。formalをα変換したあとformalとbodyをマクロ展開します。α変換は&lt;code&gt;senv&lt;/code&gt;にシンボル -&amp;gt; gensymのキーペアを突っ込むだけです。返り値は&lt;code&gt;(lambda formal body)&lt;/code&gt;。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_6&#34;&gt;define&lt;/h2&gt;
+
+&lt;p&gt;比較的単純です。&lt;code&gt;(define name value)&lt;/code&gt;の他に&lt;code&gt;(define (name formal) body)&lt;/code&gt;のMIT記法にも対応する必要があるのでマクロ展開時に特別扱いされてます。&lt;code&gt;(define name value)&lt;/code&gt;を返り値として返します。MIT記法もこの形に正規化されます。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_7&#34;&gt;quote&lt;/h2&gt;
+
+&lt;p&gt;特に語る事はないです。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_8&#34;&gt;他のマクロ&lt;/h2&gt;
+
+&lt;p&gt;Schemeのマクロ展開は簡単で、マクロ手続をbody、展開場所の環境、定義場所の環境の3つを引数として呼び出せば終りです。勿論&lt;code&gt;macroexpand_node&lt;/code&gt;を見て分かるように最後まで展開します。picrinはCommon Lisp風の伝統的マクロもサポートしてるので伝統的マクロだった時はbodyだけを引数として呼び出します。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_9&#34;&gt;蛇足&lt;/h2&gt;
+
+&lt;p&gt;&lt;code&gt;define-syntax&lt;/code&gt;だけを指摘しましたが、マクロ展開後にnoneになるマクロは他にもあります。library関係全部です。個人的にはやつらもVM命令まで残すべきだと思ってます。&lt;/p&gt;
+
+&lt;p&gt;因みにもう1つlibrary関係の問題があります。&lt;code&gt;define-library&lt;/code&gt;直下の&lt;code&gt;begin&lt;/code&gt;についてです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-scheme&#34;&gt;(define-library (hoge)
+  (begin
+    (define foo ...)
+    (define bar ...)
+  )
+)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;のようなコードを考えます。&lt;code&gt;define-library&lt;/code&gt;直下の&lt;code&gt;begin&lt;/code&gt;は他とセマンティクスが違って、&lt;code&gt;begin&lt;/code&gt;内のコードをトップレベルで定義されたかのように扱う必要があります。しかしpicrinは普通の&lt;code&gt;begin&lt;/code&gt;と同じように扱っています。これがどのような違いを産むかというと、コンパイル順を見れば分かり易いです。&lt;/p&gt;
+
+&lt;p&gt;仕様: fooのマクロ展開-&amp;gt;fooの解析-&amp;gt;fooのコード生成-&amp;gt;barのマクロ展開-&amp;gt;barの解析-&amp;gt;barのコード生成&lt;br /&gt;
+picrin: fooのマクロ展開-&amp;gt;barのマクロ展開-&amp;gt;fooの解析-&amp;gt;barの解析-&amp;gt;fooのコード生成-&amp;gt;barのコード生成&lt;/p&gt;
+
+&lt;p&gt;picrinのコンパイル順序だとマクロ展開を先にやってしまうのでマクロ展開中に同じ&lt;code&gt;begin&lt;/code&gt;内で&lt;code&gt;define&lt;/code&gt;されたシンボルが見えなくなってしまいます。尚、後述しますが今のpicrinはこのコンパイル順序のおかげで手続の相互参照が可能になってます。ここもどうにかしないといけない。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_10&#34;&gt;コード解析&lt;/h1&gt;
+
+&lt;p&gt;入力:マクロ展開済みのS式&lt;br /&gt;
+出力:中間表現&lt;br /&gt;
+副作用:無し&lt;/p&gt;
+
+&lt;p&gt;extlib/benz/codegen.cに処理があります。&lt;/p&gt;
+
+&lt;p&gt;ここの処理ではS式をVM命令に近いS式に書き換えます。&lt;code&gt;(+ 1 x)&lt;/code&gt;が&lt;code&gt;(+ (quote 1) (gref x))&lt;/code&gt;になるなど。この解析後のS式は特に呼び名はなさそうなので中間表現と呼んでおきます。&lt;/p&gt;
+
+&lt;p&gt;中間表現には&lt;code&gt;cons&lt;/code&gt;、&lt;code&gt;car&lt;/code&gt;などの16の基本的な手続に対応する命令や&lt;code&gt;if&lt;/code&gt;、&lt;code&gt;define&lt;/code&gt;などの6つのスペシャルフォームの他、&lt;code&gt;call&lt;/code&gt;、&lt;code&gt;tailcall&lt;/code&gt;、&lt;code&gt;call-with-values&lt;/code&gt;、&lt;code&gt;tailcall-with-values&lt;/code&gt;の4つの手続呼び出し命令、&lt;code&gt;gref&lt;/code&gt;、&lt;code&gt;lref&lt;/code&gt;、&lt;code&gt;cref&lt;/code&gt;の3つの変数参照、&lt;code&gt;return&lt;/code&gt;があります。合計30の命令です。JIT化も視野に入れてるので基本命令は少なくする方針なんでしょう。また、組み込みも意識しているのでその気になればコアを小さく出来るようにする意味もあるのかもしれません。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;gref&lt;/code&gt;はグローバル変数、&lt;code&gt;lref&lt;/code&gt;はローカル変数、&lt;code&gt;cref&lt;/code&gt;はクcaptured変数を参照します。ここでピンときた方も居るかと思いますが、コード解析がスコープ周りを担当しています。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;analyze_*&lt;/code&gt;系は&lt;code&gt;analyze_state&lt;/code&gt;を持ち回ししますが、こいつはpicrin VMとスコープを表現する構造体の他に中間命令のシンボル(の一部)のキャッシュや中間命令にそのまま翻訳されるべき手続(&lt;code&gt;cons&lt;/code&gt;や&lt;code&gt;car&lt;/code&gt;)のキャッシュを持ちます。手続はライブラリに属するのでキャッシュを捜すときに少し特別な処理が入ってますね。中間命令のシンボルのキャッシュが一部だけなのは他は&lt;code&gt;pic_state&lt;/code&gt;構造体が既に持ってるからですね。&lt;/p&gt;
+
+&lt;p&gt;さて、本体はやはり&lt;code&gt;analyze_node&lt;/code&gt;ですが30命令分のifを持つので少し大きいですね。載せるのをやめて面白いやつだけ取り上げましょうか。どうでもいいけどこれ、caseじゃなくてif elseなので並び換えたら高速化しそうですね。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_11&#34;&gt;変数&lt;/h2&gt;
+
+&lt;p&gt;&lt;code&gt;analyze_var&lt;/code&gt;がスコープの深さでgref、lref、crefに振り分けます。&lt;code&gt;analyze_*_var&lt;/code&gt;はgref、lref、crefを返すだけの関数。&lt;/p&gt;
+
+&lt;p&gt;スコープを遡って変数を捜していき、変数が見付かったスコープの深さ=今いるスコープの深さならグローバル変数、、今いるスコープならローカル変数、それ以外なら捕捉変数です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;static pic_value
+analyze_var(analyze_state *state, pic_sym sym)
+{
+  pic_state *pic = state-&amp;gt;pic;
+  int depth;
+
+  if ((depth = find_var(state, sym)) == -1) {
+    pic_errorf(pic, &amp;quot;unbound variable %s&amp;quot;, pic_symbol_name(pic, sym));
+  }
+
+  if (depth == state-&amp;gt;scope-&amp;gt;depth) {
+    return analyze_global_var(state, sym);
+  } else if (depth == 0) {
+    return analyze_local_var(state, sym);
+  } else {
+    return analyze_free_var(state, sym, depth);
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;因みにこれ、変数が見付からなかったらエラー出してますけどSchemeは仕様上は&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-scheme&#34;&gt;(define (foo) (bar))
+(define (bar) ...)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;のように後から定義することも可能なので仕様に準拠してないことになります。ここが手を入れるポイント2つ目。&lt;/p&gt;
+
+&lt;p&gt;改善案は見付からなかった変数は一旦NOWHEREとかに束縛しておいてanalyze時にはエラーを出さない。実行時にNOWHEREに束縛された変数が出てくればエラー。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_12&#34;&gt;define&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;static pic_value
+analyze_define(analyze_state *state, pic_value obj)
+{
+  pic_state *pic = state-&amp;gt;pic;
+  pic_value var, val;
+  pic_sym sym;
+
+  if (pic_length(pic, obj) != 3) {
+    pic_errorf(pic, &amp;quot;syntax error&amp;quot;);
+  }
+
+  var = pic_list_ref(pic, obj, 1);
+  if (! pic_sym_p(var)) {
+    pic_errorf(pic, &amp;quot;syntax error&amp;quot;);
+  } else {
+    sym = pic_sym(var);
+  }
+  var = analyze_declare(state, sym);
+
+  if (pic_pair_p(pic_list_ref(pic, obj, 2))
+      &amp;amp;&amp;amp; pic_sym_p(pic_list_ref(pic, pic_list_ref(pic, obj, 2), 0))
+      &amp;amp;&amp;amp; pic_sym(pic_list_ref(pic, pic_list_ref(pic, obj, 2), 0)) == pic-&amp;gt;rLAMBDA) {
+    pic_value formals, body_exprs;
+
+    formals = pic_list_ref(pic, pic_list_ref(pic, obj, 2), 1);
+    body_exprs = pic_list_tail(pic, pic_list_ref(pic, obj, 2), 2);
+
+    val = analyze_defer(state, pic_sym_value(sym), formals, body_exprs);
+  } else {
+    if (pic_length(pic, obj) != 3) {
+      pic_errorf(pic, &amp;quot;syntax error&amp;quot;);
+    }
+    val = analyze(state, pic_list_ref(pic, obj, 2), false);
+  }
+
+  return pic_list3(pic, pic_symbol_value(pic-&amp;gt;sSETBANG), var, val);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;手続を&lt;code&gt;define&lt;/code&gt;するときに上の後から定義(interreferencial definitionという)を一部の状況で実現するために束縛する値がlambdaかどうかで場合分けしています。lambdaの場合は&lt;code&gt;analyze_defer&lt;/code&gt;を使います。そうすることで&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-scheme&#34;&gt;(begin
+  (define (foo) (bar))
+  (define (bar) ...))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と書けばbegin -&amp;gt; define foo -&amp;gt; define bar -&amp;gt; (analyze deferred) -&amp;gt; foo本体 -&amp;gt; bar本体
+の順番に解析されることになるのでコンパイルが通ります。&lt;/p&gt;
+
+&lt;p&gt;また、&lt;code&gt;define&lt;/code&gt;された手続に名前をつける(シンボルと手続を関連付けるのではない)役割もあります。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_13&#34;&gt;lambda&lt;/h2&gt;
+
+&lt;p&gt;また例の再帰定義とかで面倒なやつです。&lt;code&gt;analyze_lambda&lt;/code&gt;が引数のチェックだけしたら&lt;code&gt;analyze_defer&lt;/code&gt;に丸投げして、&lt;code&gt;analyze_defer&lt;/code&gt;はモックのエントリーポイントだけ返してdeferリストに処理をpushします。&lt;/p&gt;
+
+&lt;p&gt;んで後から呼ばれる&lt;code&gt;analyze_deferred&lt;/code&gt;が1つずつ&lt;code&gt;analyze_procedure&lt;/code&gt;します。マクロ展開と微妙に名前が違うのが気になりますね。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;analyze_procedure&lt;/code&gt;が本体になるのですが、スコープを作るので少しややこしいことになってます。&lt;/p&gt;
+
+&lt;h3 id=&#34;toc_14&#34;&gt;スコープと変数&lt;/h3&gt;
+
+&lt;p&gt;スコープの解説をしてませんでしたね。変数を参照するときはスコープの関係で4種類出てきます。&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;グローバル変数 : トップレベルで&lt;code&gt;define&lt;/code&gt;されたもの&lt;/li&gt;
+&lt;li&gt;ローカル変数 : lambda内で&lt;code&gt;define&lt;/code&gt;されたもの&lt;/li&gt;
+&lt;li&gt;自由変数 : lambdaの外かつトップレベルでない変数&lt;/li&gt;
+&lt;li&gt;引数 : lambdaの引数&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;captureについて: 変数を導入した側から見たら「捕捉された変数」で、変数を参照する側から見たら「自由変数」です。&lt;/p&gt;
+
+&lt;p&gt;さて、変数の種類を見たところで&lt;code&gt;analyze_procedure&lt;/code&gt;の定義を見てみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;static pic_value
+analyze_procedure(analyze_state *state, pic_value name, pic_value formals, pic_value body_exprs)
+{
+  pic_state *pic = state-&amp;gt;pic;
+  pic_value args, locals, varg, captures, body;
+
+  assert(pic_sym_p(name) || pic_false_p(name));
+
+  if (push_scope(state, formals)) {
+    analyze_scope *scope = state-&amp;gt;scope;
+    pic_sym *var;
+    size_t i;
+
+    args = pic_nil_value();
+    for (i = xv_size(&amp;amp;scope-&amp;gt;args); i &amp;gt; 0; --i) {
+      var = xv_get(&amp;amp;scope-&amp;gt;args, i - 1);
+      pic_push(pic, pic_sym_value(*var), args);
+    }
+
+    varg = scope-&amp;gt;varg
+      ? pic_true_value()
+      : pic_false_value();
+
+    /* To know what kind of local variables are defined, analyze body at first. */
+    body = analyze(state, pic_cons(pic, pic_sym_value(pic-&amp;gt;rBEGIN), body_exprs), true);
+
+    analyze_deferred(state);
+
+    locals = pic_nil_value();
+    for (i = xv_size(&amp;amp;scope-&amp;gt;locals); i &amp;gt; 0; --i) {
+      var = xv_get(&amp;amp;scope-&amp;gt;locals, i - 1);
+      pic_push(pic, pic_sym_value(*var), locals);
+    }
+
+    captures = pic_nil_value();
+    for (i = xv_size(&amp;amp;scope-&amp;gt;captures); i &amp;gt; 0; --i) {
+      var = xv_get(&amp;amp;scope-&amp;gt;captures, i - 1);
+      pic_push(pic, pic_sym_value(*var), captures);
+    }
+
+    pop_scope(state);
+  }
+  else {
+    pic_errorf(pic, &amp;quot;invalid formal syntax: ~s&amp;quot;, args);
+  }
+
+  return pic_list7(pic, pic_sym_value(pic-&amp;gt;sLAMBDA), name, args, locals, varg, captures, body);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;スコープを作ったあとは最初に引数をスコープに登録して本体内ででcapture出来るようにしてます。んで本体をanalyzeしてローカル変数と捕捉された変数を洗い出してます。&lt;/p&gt;
+
+&lt;p&gt;因みにvargというのはCommon Lispでいう&amp;amp;restや&amp;amp;optionalを引っ括めたものです。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_15&#34;&gt;begin&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;static pic_value
+analyze_begin(analyze_state *state, pic_value obj, bool tailpos)
+{
+  pic_state *pic = state-&amp;gt;pic;
+  pic_value seq;
+  bool tail;
+
+  switch (pic_length(pic, obj)) {
+  case 1:
+    return analyze(state, pic_none_value(), tailpos);
+  case 2:
+    return analyze(state, pic_list_ref(pic, obj, 1), tailpos);
+  default:
+    seq = pic_list1(pic, pic_symbol_value(pic-&amp;gt;sBEGIN));
+    for (obj = pic_cdr(pic, obj); ! pic_nil_p(obj); obj = pic_cdr(pic, obj)) {
+      if (pic_nil_p(pic_cdr(pic, obj))) {
+        tail = tailpos;
+      } else {
+        tail = false;
+      }
+      seq = pic_cons(pic, analyze(state, pic_car(pic, obj), tail), seq);
+    }
+    return pic_reverse(pic, seq);
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そんなに大したコードじゃないんですけど末尾呼出最適化のためのコードが垣間見えたので載せました。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;begin&lt;/code&gt;自身が末尾位置にいれば&lt;code&gt;begin&lt;/code&gt;の最後の式は末尾位置になりますがそれ以外は必ず非末尾位置になるよねーってコードです。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_16&#34;&gt;バイトコード生成&lt;/h1&gt;
+
+&lt;p&gt;入力:中間表現&lt;br /&gt;
+出力:バイトコード&lt;br /&gt;
+副作用:無し&lt;/p&gt;
+
+&lt;p&gt;extlib/benz/codegen.cに処理があります。&lt;/p&gt;
+
+&lt;p&gt;ここの処理では中間表現をスタックベースのpicrin VM命令に変換します。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_17&#34;&gt;VM命令やlambdaの内部表現&lt;/h2&gt;
+
+&lt;h3 id=&#34;toc_18&#34;&gt;VM命令フォーマット&lt;/h3&gt;
+
+&lt;p&gt;フォーマットは3種類あります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;struct pic_code {
+  enum pic_opcode insn;
+  union {
+    int i;
+    char c;
+    struct {
+      int depth;
+      int idx;
+    } r;
+  } u;
+};
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;見ての通り命令番号(opcode)+&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;int&lt;/li&gt;
+&lt;li&gt;char&lt;/li&gt;
+&lt;li&gt;int2つ&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;になっています。因みに普通使われるのは1. intで、2. charはOP_PUSHCHARのみ、3. int2つはOP_CREFとOP_CSETのみに使われます。また、引数(?)を全く持たない命令もあります(スタックマシンなため)。&lt;/p&gt;
+
+&lt;h3 id=&#34;toc_19&#34;&gt;愉快なVM命令たち&lt;/h3&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;enum pic_opcode {
+  OP_NOP,
+  OP_POP,
+  OP_PUSHNIL,
+  OP_PUSHTRUE,
+  OP_PUSHFALSE,
+  OP_PUSHINT,
+  OP_PUSHCHAR,
+  OP_PUSHCONST,
+  OP_GREF,
+  OP_GSET,
+  OP_LREF,
+  OP_LSET,
+  OP_CREF,
+  OP_CSET,
+  OP_JMP,
+  OP_JMPIF,
+  OP_NOT,
+  OP_CALL,
+  OP_TAILCALL,
+  OP_RET,
+  OP_LAMBDA,
+  OP_CONS,
+  OP_CAR,
+  OP_CDR,
+  OP_NILP,
+  OP_ADD,
+  OP_SUB,
+  OP_MUL,
+  OP_DIV,
+  OP_MINUS,
+  OP_EQ,
+  OP_LT,
+  OP_LE,
+  OP_STOP
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;大体名前から分かるかと思います。&lt;code&gt;quote&lt;/code&gt;は&lt;code&gt;OP_PUSH*&lt;/code&gt;系になります。&lt;code&gt;OP_STOP&lt;/code&gt;はあるのに&lt;code&gt;OP_START&lt;/code&gt;がないのは分かりますね。開始はユーザーの操作から始まるのに対して停止はプログラム側が行うからです。&lt;/p&gt;
+
+&lt;h3 id=&#34;toc_20&#34;&gt;lambdaとか&lt;/h3&gt;
+
+&lt;p&gt;lambdaとかのエントリポイント付きのコード1まとまりはirepと呼ばれています。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;struct pic_irep {
+  PIC_OBJECT_HEADER
+  pic_sym name;
+  pic_code *code;
+  int argc, localc, capturec;
+  bool varg;
+  struct pic_irep **irep;
+  pic_valuel *pool;
+  size_t clen, ilen, plen;
+};
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;PIC_OBJECT_HEADER&lt;/code&gt;: オブジェクトタイプのタグ&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;name&lt;/code&gt;: 名前（あれば）&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;*code&lt;/code&gt;: VM命令たち&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;argc&lt;/code&gt;、 &lt;code&gt;localc&lt;/code&gt;、 &lt;code&gt;capturec&lt;/code&gt;: 引数数、ローカル変数数、捕捉された変数数&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;varg&lt;/code&gt;: &amp;amp;rest引数を持つか&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;**irep&lt;/code&gt;: irepプール&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;*pool&lt;/code&gt;: 定数プール&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;clen&lt;/code&gt;、&lt;code&gt;ilen&lt;/code&gt;、&lt;code&gt;plen&lt;/code&gt;: *code、**irep、*poolの長さ&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;スコープを作るので変数を格納するpoolを持ちます。そしてlambdaだけは定数プールとは別にirepに格納します。&lt;/p&gt;
+
+&lt;h2 id=&#34;toc_21&#34;&gt;コード生成&lt;/h2&gt;
+
+&lt;p&gt;本体は&lt;code&gt;codegen&lt;/code&gt;なんですがこれまた長いので掻い摘んで。帰りがけ順でコード生成します。&lt;/p&gt;
+
+&lt;h3 id=&#34;toc_22&#34;&gt;cons&lt;/h3&gt;
+
+&lt;p&gt;まずは肩馴らし。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;  else if (sym == pic-&amp;gt;sCONS) {
+    codegen(state, pic_list_ref(pic, obj, 1));
+    codegen(state, pic_list_ref(pic, obj, 2));
+    cxt-&amp;gt;code[cxt-&amp;gt;clen].insn = OP_CONS;
+    cxt-&amp;gt;clen++;
+    return;
+  }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;引数1と引数2を生成する命令を吐いてから&lt;code&gt;OP_CONS&lt;/code&gt;命令を吐きます。引数1と引数2は自ら値をスタックにPUSHします。&lt;/p&gt;
+
+&lt;h3 id=&#34;toc_23&#34;&gt;quote&lt;/h3&gt;
+
+&lt;p&gt;少し長いですが。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;  else if (sym == pic-&amp;gt;sQUOTE) {
+    int pidx;
+
+    obj = pic_list_ref(pic, obj, 1);
+    switch (pic_type(obj)) {
+    case PIC_TT_BOOL:
+      if (pic_true_p(obj)) {
+        cxt-&amp;gt;code[cxt-&amp;gt;clen].insn = OP_PUSHTRUE;
+      } else {
+        cxt-&amp;gt;code[cxt-&amp;gt;clen].insn = OP_PUSHFALSE;
+      }
+      cxt-&amp;gt;clen++;
+      return;
+    case PIC_TT_INT:
+      cxt-&amp;gt;code[cxt-&amp;gt;clen].insn = OP_PUSHINT;
+      cxt-&amp;gt;code[cxt-&amp;gt;clen].u.i = pic_int(obj);
+      cxt-&amp;gt;clen++;
+      return;
+    case PIC_TT_NIL:
+      cxt-&amp;gt;code[cxt-&amp;gt;clen].insn = OP_PUSHNIL;
+      cxt-&amp;gt;clen++;
+      return;
+    case PIC_TT_CHAR:
+      cxt-&amp;gt;code[cxt-&amp;gt;clen].insn = OP_PUSHCHAR;
+      cxt-&amp;gt;code[cxt-&amp;gt;clen].u.c = pic_char(obj);
+      cxt-&amp;gt;clen++;
+      return;
+    default:
+      if (cxt-&amp;gt;plen &amp;gt;= cxt-&amp;gt;pcapa) {
+        cxt-&amp;gt;pcapa *= 2;
+        cxt-&amp;gt;pool = pic_realloc(pic, cxt-&amp;gt;pool, sizeof(pic_value) * cxt-&amp;gt;pcapa);
+      }
+      pidx = (int)cxt-&amp;gt;plen++;
+      cxt-&amp;gt;pool[pidx] = obj;
+      cxt-&amp;gt;code[cxt-&amp;gt;clen].insn = OP_PUSHCONST;
+      cxt-&amp;gt;code[cxt-&amp;gt;clen].u.i = pidx;
+      cxt-&amp;gt;clen++;
+      return;
+    }
+  }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;リテラルや定数をPUSHする命令を吐いてますね。&lt;/p&gt;
+
+&lt;h3 id=&#34;toc_24&#34;&gt;REF系&lt;/h3&gt;
+
+&lt;p&gt;local、captureはirep構造体についてるのpoolを参照します。globalはVMのシンボルテーブルから直接引きます。因みにpicrinのシンボルはただのintです。&lt;/p&gt;
+
+&lt;p&gt;captureは上位のスコープで既に出てきた変数を参照するだけなので「n個上位のm番目のcaptured変数」と指定するだけなので簡単ですが、localはarg、普通のlocal、下位スコープにcaptureされたlocal、の3つに分けて置いているので少し面倒です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;  if (sym == state-&amp;gt;sGREF) {
+    cxt-&amp;gt;code[cxt-&amp;gt;clen].insn = OP_GREF;
+    cxt-&amp;gt;code[cxt-&amp;gt;clen].u.i = pic_sym(pic_list_ref(pic, obj, 1));
+    cxt-&amp;gt;clen++;
+    return;
+  } else if (sym == state-&amp;gt;sCREF) {
+    pic_sym name;
+    int depth;
+
+    depth = pic_int(pic_list_ref(pic, obj, 1));
+    name  = pic_sym(pic_list_ref(pic, obj, 2));
+    cxt-&amp;gt;code[cxt-&amp;gt;clen].insn = OP_CREF;
+    cxt-&amp;gt;code[cxt-&amp;gt;clen].u.r.depth = depth;
+    cxt-&amp;gt;code[cxt-&amp;gt;clen].u.r.idx = index_capture(state, name, depth);
+    cxt-&amp;gt;clen++;
+    return;
+  } else if (sym == state-&amp;gt;sLREF) {
+    pic_sym name;
+    int i;
+
+    name = pic_sym(pic_list_ref(pic, obj, 1));
+    if ((i = index_capture(state, name, 0)) != -1) {
+      cxt-&amp;gt;code[cxt-&amp;gt;clen].insn = OP_LREF;
+      cxt-&amp;gt;code[cxt-&amp;gt;clen].u.i = i + (int)xv_size(&amp;amp;cxt-&amp;gt;args) + (int)xv_size(&amp;amp;cxt-&amp;gt;locals) + 1;
+      cxt-&amp;gt;clen++;
+      return;
+    }
+    cxt-&amp;gt;code[cxt-&amp;gt;clen].insn = OP_LREF;
+    cxt-&amp;gt;code[cxt-&amp;gt;clen].u.i = index_local(state, name);
+    cxt-&amp;gt;clen++;
+    return;
+  }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;因みにset系もほぼ同じようなコードです。&lt;/p&gt;
+
+&lt;h3 id=&#34;toc_25&#34;&gt;lambda&lt;/h3&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;  else if (sym == pic-&amp;gt;sLAMBDA) {
+    int k;
+
+    if (cxt-&amp;gt;ilen &amp;gt;= cxt-&amp;gt;icapa) {
+      cxt-&amp;gt;icapa *= 2;
+      cxt-&amp;gt;irep = pic_realloc(pic, cxt-&amp;gt;irep, sizeof(struct pic_irep *) * cxt-&amp;gt;icapa);
+    }
+    k = (int)cxt-&amp;gt;ilen++;
+    cxt-&amp;gt;code[cxt-&amp;gt;clen].insn = OP_LAMBDA;
+    cxt-&amp;gt;code[cxt-&amp;gt;clen].u.i = k;
+    cxt-&amp;gt;clen++;
+
+    cxt-&amp;gt;irep[k] = codegen_lambda(state, obj);
+    return;
+  }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;codegen_lambda&lt;/code&gt;に投げているのでこの部分は簡単です。irepプールにコードを置いてそれを参照する命令を吐くだけ。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;codegen_lambda&lt;/code&gt;はというとそこまで長くなくて&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;static struct pic_irep *
+codegen_lambda(codegen_state *state, pic_value obj)
+{
+  pic_state *pic = state-&amp;gt;pic;
+  pic_value name, args, locals, closes, body;
+  bool varg;
+
+  name = pic_list_ref(pic, obj, 1);
+  args = pic_list_ref(pic, obj, 2);
+  locals = pic_list_ref(pic, obj, 3);
+  varg = pic_true_p(pic_list_ref(pic, obj, 4));
+  closes = pic_list_ref(pic, obj, 5);
+  body = pic_list_ref(pic, obj, 6);
+
+  /* inner environment */
+  push_codegen_context(state, name, args, locals, varg, closes);
+  {
+    /* body */
+    codegen(state, body);
+  }
+  return pop_codegen_context(state);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;単純に本体に対して&lt;code&gt;codegen&lt;/code&gt;を呼んで出来た命令を取り出してるだけです。&lt;/p&gt;
+
+&lt;h3 id=&#34;toc_26&#34;&gt;if&lt;/h3&gt;
+
+&lt;p&gt;schemeはほとんどの制御を継続に任せているのでなんとjmp命令を吐くのはifだけです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;  else if (sym == pic-&amp;gt;sIF) {
+    int s, t;
+
+    codegen(state, pic_list_ref(pic, obj, 1));
+
+    cxt-&amp;gt;code[cxt-&amp;gt;clen].insn = OP_JMPIF;
+    s = (int)cxt-&amp;gt;clen++;
+
+    /* if false branch */
+    codegen(state, pic_list_ref(pic, obj, 3));
+    cxt-&amp;gt;code[cxt-&amp;gt;clen].insn = OP_JMP;
+    t = (int)cxt-&amp;gt;clen++;
+
+    cxt-&amp;gt;code[s].u.i = (int)cxt-&amp;gt;clen - s;
+
+    /* if true branch */
+    codegen(state, pic_list_ref(pic, obj, 2));
+    cxt-&amp;gt;code[t].u.i = (int)cxt-&amp;gt;clen - t;
+    return;
+  }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;toc_27&#34;&gt;call&lt;/h3&gt;
+
+&lt;p&gt;思ったより短いです。単純に引数を評価する命令を吐いたあと引数の数を指定して呼ぶだけです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;  else if (sym == state-&amp;gt;sCALL || sym == state-&amp;gt;sTAILCALL) {
+    int len = (int)pic_length(pic, obj);
+    pic_value elt;
+
+    pic_for_each (elt, pic_cdr(pic, obj)) {
+      codegen(state, elt);
+    }
+    cxt-&amp;gt;code[cxt-&amp;gt;clen].insn = (sym == state-&amp;gt;sCALL) ? OP_CALL : OP_TAILCALL;
+    cxt-&amp;gt;code[cxt-&amp;gt;clen].u.i = len - 1;
+    cxt-&amp;gt;clen++;
+    return;
+  }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;toc_28&#34;&gt;最後に&lt;/h1&gt;
+
+&lt;p&gt;これを書くのに半日掛かりましたがちゃんとコンパイルプロセスを理解して問題を洗い出すことが出来ました。良かった。&lt;/p&gt;
+
+&lt;p&gt;今のところ中間表現までS式なのでS式操作に長けたSchemeでコンパイラ書けないかなとか考えてますが現状マクロ展開で副作用があるので厳しいですね。&lt;/p&gt;
+
+&lt;p&gt;因みに気付いた方もいらっしゃるかと思いますが今のpicrinは最適化をtco以外は行っていません。行うとしたら&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;マクロ展開後にコンパイラマクロ展開を挟む&lt;/li&gt;
+&lt;li&gt;中間表現から一旦ssa形式の第二中間表現に落して定数伝播や畳み込みなどの一般的な最適化を行なう&lt;/li&gt;
+&lt;li&gt;生成されたvm命令に対して覗き穴最適化を行なう&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;あたりかなと思います。1. は楽しそうですけど普通のマクロ展開のバグとか問題に悩んでる今入れるべきではないですし、2. は効果高いですしjit化の布石にもなりますが実装コストが高いのでwasabiz次第かなといったところ、3. は今どの程度非効率な命令が吐かれてるのか分からないので効果が見えにくいですね。&lt;/p&gt;
+
+&lt;p&gt;いずれにせよ最適化は仕様準拠してからにしますか。&lt;/p&gt;
+
+&lt;p&gt;何か質問や突っ込みがあれば@blackenedgoldまで。&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>FreeBSDの環境構築</title>
@@ -1615,188 +2386,6 @@ nil
 &lt;p&gt;おつかれ様でした。たまには低レベルなことをやっても良いんじゃないでしょうか。&lt;/p&gt;
 
 &lt;p&gt;明日はnobkzさんで、Shenについてです。&lt;/p&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>require, ASDF, quicklispを正しく使う</title>
-      <link>/blog/2014/11/30/quicklisp</link>
-      <pubDate>Sun, 30 Nov 2014 00:00:00 UTC</pubDate>
-      
-      <guid>/blog/2014/11/30/quicklisp</guid>
-      <description>
-
-&lt;p&gt;κeenです。最近のCommon Lispのパッケージ管理は&lt;code&gt;ql:quickload&lt;/code&gt;しか知らないという方も多いのではないでしょうか。しかしそれだけでは機能が足りないこともあります。Common Lispには様々な管理システムがあるので整理しましょう。&lt;/p&gt;
-
-&lt;h1 id=&#34;toc_0&#34;&gt;&lt;code&gt;provide&lt;/code&gt;, &lt;code&gt;require&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;同じファイルを読み込まないための原始的なシステムです。Common Lispの標準の機能です。&lt;code&gt;(require &#39;foo)&lt;/code&gt;がファイルをロードし、ロードされたファイル内で&lt;code&gt;(provide &#39;foo)&lt;/code&gt;しておくと2回目以降の&lt;code&gt;(require &#39;foo&#39;)&lt;/code&gt;はファイルを読まずにすぐさま返ります。&lt;/p&gt;
-
-&lt;p&gt;ここで問題なのが&lt;code&gt;require&lt;/code&gt;がどこのファイルを捜しにいくかは処理系依存なところですね。なので生の&lt;code&gt;require&lt;/code&gt;は使えないと思っておいた方が良いでしょう。&lt;/p&gt;
-
-&lt;h1 id=&#34;toc_1&#34;&gt;ASDF 3&lt;/h1&gt;
-
-&lt;p&gt;Another System Definition Facility。過去にはAnotherじゃないSystem Definition Facilityもあった模様。最新版は3系です。結構APIが変っているので必ず3の情報を捜しましょう。&lt;/p&gt;
-
-&lt;p&gt;この「System」というのが聞き慣れませんが、ASDFの&lt;code&gt;defsystem&lt;/code&gt;で&lt;/p&gt;
-
-&lt;ol&gt;
-&lt;li&gt;systemに含まれるファイルの定義&lt;/li&gt;
-&lt;li&gt;依存systemの記述&lt;/li&gt;
-&lt;li&gt;その他作者、ライセンス、バージョンなどの記述&lt;/li&gt;
-&lt;li&gt;systemのコンパイルやロード、テストなどの操作&lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;p&gt;が可能です。ASDFはCにとってのmake + ldを標榜しています。Makefile的なものは(systemname).asdになります。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;require&lt;/code&gt;との統合もされており、ASDFを適切に設定することで&lt;code&gt;defsystem&lt;/code&gt;されたsystemを&lt;code&gt;require&lt;/code&gt;でロードすることが出来ます。このときASDFは処理系に依存せずにASDFのパスに従って.asdファイルを捜しにいきます。&lt;/p&gt;
-
-&lt;p&gt;また、ほとんどの処理系はASDFを標準添付していて、大抵&lt;code&gt;(require &#39;asdf)&lt;/code&gt;すれば使えるようになっています。&lt;/p&gt;
-
-&lt;p&gt;尚、コンパイル後のファイルは処理系、バージョン毎に互換性がないので本来なら適切に管理する必要がありますが、ASDFが適切に~/.cache/common-lisp以下に管理してくれます。優秀ですね。&lt;/p&gt;
-
-&lt;h1 id=&#34;toc_2&#34;&gt;quicklisp&lt;/h1&gt;
-
-&lt;p&gt;lispプロジェクトのインストーラと微妙にパッケージマネージャ的な役割をします。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://beta.quicklisp.org/quicklisp.lisp&#34;&gt;http://beta.quicklisp.org/quicklisp.lisp&lt;/a&gt; をダウンロードしてきてそのファイルを読み込んで&lt;code&gt;(quicklisp-quickstart:install)&lt;/code&gt;すれば~/quicklisp/以下にquicklispがインストールされ、ロードされます。処理系を再起動したあとまたquicklispをロードするには~/quicklisp/setup.lispを&lt;code&gt;load&lt;/code&gt;します。が、毎回それをやるのが面倒な人は&lt;code&gt;(ql:add-to-init-file)&lt;/code&gt;しておけば処理系の初期化ファイルに~/quicklisp/setup.lispを読み込む処理が書き加えられます。&lt;/p&gt;
-
-&lt;p&gt;さて、このquicklispを扱う上で3つの概念を覚えておくと良いです。&lt;/p&gt;
-
-&lt;p&gt;dist
-:    releaseの配布元。普通は&amp;rsquo;quicklisp&amp;rsquo;のみだがほかのdistを使うことも可能。自前のやつとか。新たなdistを追加したり削除したり出来る。gitのremoteをイメージすればよい。&lt;/p&gt;
-
-&lt;p&gt;release
-:    quicklispがダウンロードしてくる単位。ライブラリの作者が登録するときの単位。複数のsystemをもつこともある。&lt;/p&gt;
-
-&lt;p&gt;system
-:    ASDFのsystem。ユーザーが使うときの単位。&lt;/p&gt;
-
-&lt;p&gt;さて、quicklispを使うときは通常使いたいシステムを&lt;code&gt;ql:quickload&lt;/code&gt;すればそのシステムと依存システムの含まれているリリースをダウンロード、展開、ロードまでしてくれます。&lt;/p&gt;
-
-&lt;p&gt;開発中はREPLを立ち上げているので「あ、このライブライリ使おう」と思ったら&lt;code&gt;ql:quickload&lt;/code&gt;するだけで即座に使えるようになりますね。&lt;/p&gt;
-
-&lt;p&gt;quicklispのリリースは毎月下旬にアップデートされていて、毎月ちゃんと全てのライブラリが対応処理系で動くことがテストされています。なのでメンテナが居なくなったライブラリはドロップします。代わりにquicklispの作者がテスト出来ないライブラリは登録させてもらえなかったりします（cl-cudaとか）&lt;/p&gt;
-
-&lt;h1 id=&#34;toc_3&#34;&gt;quicklispの問題&lt;/h1&gt;
-
-&lt;p&gt;既にCommon Lispのライブラリマネージャとしてデファクトスタンダード的位置を築きつつあるquicklispですが、私は結構不満があります。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;~/quicklisp/setup.lispを読み込むとquicklispの全てを読み込んでしまう: これには過去全てのバージョンのdistとreleaseとsystemのデータベース、HTTPクライアント、圧縮ファイルの解凍ライブラリなども含まれており、処理系の起動が非常に遅くなる&lt;/li&gt;
-&lt;li&gt;特にデータベースはファイルに書かれていても高速に読める形式なのに初期化時に毎回全ての内容をLispのハッシュに変換するという愚行をする。&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;(ql:add-to-init-file)&lt;/code&gt;が推奨されているが、前述の通り処理系の起動が遅くなってしまう。特に、（インストーラではなく、インストール済みの）ライブラリマネージャとして使いたくてもインストーラの機能までロードしてしまう。結構メモリを食うしアプリケーションには要らない。&lt;/li&gt;
-&lt;li&gt;処理系に依っては初期化ファイルはlispファイルをスクリプトとして使うときは読み込まれないこともあるのでスクリプトには使えない。まあ、前述の通り使いたくもない。&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;のでライブラリマネージャにはASDFが向いてるのですが、&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;quicklispでインストールしたシステムはquicklispを一旦ロードするかASDFの設定をいじるかしなければASDFからは使えない&lt;/li&gt;
-&lt;li&gt;quicklispはシステムのダウンロード/インストールだけすれば良いものをロードまでする&lt;/li&gt;
-&lt;li&gt;要はASDFを隠す&lt;/li&gt;
-&lt;li&gt;じゃASDFのラッパーかというとロードしかせず、コンパイルやテストなどはしない&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;など様々な問題があります。&lt;/p&gt;
-
-&lt;p&gt;一応quicklispの弁護をしておくと、Common Lispは他のスクリプト言語とはちょっと使い方が違って、&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;初期化ファイルは大抵オレオレライブラリで埋め尽くされていてそもそも起動には時間がかかる&lt;/li&gt;
-&lt;li&gt;Emacsのように一度REPLを立ち上げたら滅多に落とさない&lt;/li&gt;
-&lt;li&gt;アプリケーションも基本的にはREPLの中で使う&lt;/li&gt;
-&lt;li&gt;起動時間を気にするなら初期化ファイルを全てロードした、コアファイルをダンプしておいて使う&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;といった使い方をされることが多いのです。そのような人からしてみたら細々処理されるよりも起動時間とメモリは気にしないから速いやつをくれ、となるのです。&lt;/p&gt;
-
-&lt;p&gt;じゃあそれなりにCommon Lispを使う私が何故そうしないかというと&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;立ち上げっぱなしというのが性に合わない。立ち上がっているものを見るとすぐに落としたくなる。EmacsのヘビーユーザーだがEmacsもすぐ落とす。&lt;/li&gt;
-&lt;li&gt;コマンドラインアプリケーションを作りたいため、起動時間が命になる。&lt;/li&gt;
-&lt;li&gt;私はSBCLの開発版を使っていて、コアファイルはすぐに無効になるためコアダンプはしない（意味がない）&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;といった理由があります。これは初心者にも共通する部分があるんじゃないでしょうか。REPLを立ち上げっぱなしにはしないし「コアダンプ？なにそれ？エラー出してんじゃん」状態でしょう。&lt;/p&gt;
-
-&lt;h1 id=&#34;toc_4&#34;&gt;ASDFを正しく使う&lt;/h1&gt;
-
-&lt;p&gt;ということでquicklispをあまり使わない方法を紹介します。&lt;/p&gt;
-
-&lt;p&gt;前述の通り、quicklispでインストールしたシステムはquicklispを一旦ロードするかasdfの設定をいじるかしなければasdfからは使えません。具体的に言うと、&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;ASDFのデフォルトパスは~/common-lisp以下&lt;/li&gt;
-&lt;li&gt;quicklispのシステムのインストールパスは~/quicklisp/dists/(dist name)/software/以下&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;なので~/quicklisp/dists/以下にパスを通します。少し無駄なディレクトリもパスに含まれてしまうので気にする人はそれぞれのdistについて~/quicklisp/dists/(dist name)/software/にパスを通しましょう。&lt;/p&gt;
-
-&lt;p&gt;因みに拙作の&lt;a href=&#34;https://github.com/KeenS/CIM&#34;&gt;CIM&lt;/a&gt;は~/.cim/quicklisp以下にquicklispをインストールするのでCIM使いの方は~/.cim/quicklisp/dists/ですね。~/quicklispの方が混乱少ないかなあ。&lt;/p&gt;
-
-&lt;p&gt;さて、ASDFの設定は&lt;a href=&#34;http://common-lisp.net/project/asdf/asdf.html#Configuring-ASDF-to-find-your-systems&#34;&gt;公式マニュアル&lt;/a&gt;を参照すれば良いのですが一応実際のものを書いておくと&lt;/p&gt;
-
-&lt;p&gt;~/.config/common-lisp/source-registry.conf に&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(:source-registry
-  (:tree &amp;quot;~/quicklisp/dists/&amp;quot;)
-  (:tree (:home &amp;quot;Lisp/&amp;quot;))
-  :INHERIT-CONFIGURATION)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;を書けばOKです。2つめのLisp/は私がCommon Lispファイルを置いているディレクトリですね。この書き方だとquicklispより自分のLispライブラリを優先して読みにいきます。開発版を使いたいときとかむしろ開発をするときとかに必須です。この設定をミスるといくら開発してもロードされてるのはリリース版で、機能が動かないとかの地獄を見ます。&lt;/p&gt;
-
-&lt;p&gt;ここまでくれば&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(require &#39;asdf)
-(require &#39;hoge)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;とすればquicklispでインストールしたライブラリをロード出来ます。&lt;/p&gt;
-
-&lt;h2 id=&#34;toc_5&#34;&gt;require以外のASDFの使い方&lt;/h2&gt;
-
-&lt;p&gt;バージョンに依って使い方が異なるのですが、3系だと&lt;code&gt;(asdf:xxx-system &#39;hoge)&lt;/code&gt;などとします。具体的には&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;code&gt;(asdf:load-system &#39;hoge)&lt;/code&gt; ( = &lt;code&gt;(require &#39;hoge)&lt;/code&gt;)&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;(asdf:test-system &#39;hoge)&lt;/code&gt; (テストがあるときのみ)&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;(asdf:compile-system &#39;hoge)&lt;/code&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;を覚えておけば良いでしょう。他にもいくつか操作があるようですが私は使ったことがないです。&lt;code&gt;asdf:locate-system&lt;/code&gt;は名前的に便利そうではあるんですけどね。&lt;/p&gt;
-
-&lt;p&gt;開発するときはまず.asdファイルを書いておいて(あるいはcl-projectから生成して)、&lt;code&gt;(require &#39;hoge)&lt;/code&gt;で始めて書いていき、ある程度進んだらテストを書いてテストの項目を.asdファイルに書き足して&lt;code&gt;(asdf:test-system &#39;hoge)&lt;/code&gt;、それなりに動くようになったら&lt;code&gt;(asdf:compile-system &#39;hoge)&lt;/code&gt;してコンパイルの様子を見たりコンパイル後のベンチマークを取ったりします。&lt;/p&gt;
-
-&lt;h2 id=&#34;toc_6&#34;&gt;quickloadを成仏させる&lt;/h2&gt;
-
-&lt;p&gt;これでロードの処理はASDFで全てカバー出来るようになりました。じゃあquickloadのロード機能は邪魔ですね。quicklispをインストーラとしてのみ使いましょう。&lt;/p&gt;
-
-&lt;p&gt;まず処理系の初期化ファイル(sbclなら~/.sbclrc)から&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;;;; The following lines added by ql:add-to-init-file:
-#-quicklisp
-(let ((quicklisp-init (merge-pathnames &amp;quot;~quicklisp/setup.lisp&amp;quot;
-                                       (user-homedir-pathname))))
-  (when (probe-file quicklisp-init)
-    (load quicklisp-init :verbose nil)))
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;を削除します。quicklispを使いたいときだけ&lt;code&gt;(load &amp;quot;~/quicklisp/setup.lisp&amp;quot;)&lt;/code&gt;します。そして欲しいシステムをインストールするには&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(ql::recursively-install &amp;quot;foo&amp;quot;)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;します。quickloadに比べて爆速です。ここにきて名前が文字列な上にexportされてないシンポル参照してますね。気持ち悪いという方は大人しくquickloadしましょう。&lt;/p&gt;
-
-&lt;p&gt;拙作のCIMにはこれをコマンドラインから行なう&lt;code&gt;ql install&lt;/code&gt;なるコマンドが存在します。&lt;/p&gt;
-
-&lt;h1 id=&#34;toc_7&#34;&gt;最後に&lt;/h1&gt;
-
-&lt;p&gt;quicklispが嫌いなのは私の好みですがASDFを正しく使えて損はないと思うので知らなかった方々は是非試してみて下さい。&lt;/p&gt;
 </description>
     </item>
     
