@@ -1,7 +1,7 @@
 ---
 type: slide
 title: "言葉遣いの時代変遷を追う"
-date: 2014-07-09
+date: 2014-07-09T00:00:00Z
 aliases:
     - /slide/NLP.html
 categories: [言語処理]
