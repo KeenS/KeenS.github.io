@@ -1,5 +1,5 @@
 ---
-categories: [picrin, Scheme]
+categories: [picrin, Lisp, Scheme]
 date: 2015-01-10T09:40:51Z
 title: picrinのcodegenプロセスを説明してみる
 ---

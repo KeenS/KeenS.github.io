@@ -1,7 +1,7 @@
 ---
 type: page
 title: "About"
-date: 2014-06-12
+date: 2014-06-12T00:00:00Z
 comments: true
 sharing: true
 footer: true
