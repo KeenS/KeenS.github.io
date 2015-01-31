@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+      <title>Mllex on κeenのHappy Hacκing Blog </title>
+      <generator uri="https://hugo.spf13.com">Hugo</generator>
+    <link>/categories/mllex/index.xml/</link>
+    <language>en-us</language>
+    
+    
+    <updated>Wed, 10 Dec 2014 00:00:00 UTC</updated>
+    
+    <item>
+      <title>mllexを使ってみる。あるいはlexユーザーに対するmllexの解説</title>
+      <link>/blog/2014/12/10/mllexwoshi-tutemiru</link>
+      <pubDate>Wed, 10 Dec 2014 00:00:00 UTC</pubDate>
+      
+      <guid>/blog/2014/12/10/mllexwoshi-tutemiru</guid>
+      <description>
+
+&lt;p&gt;このエントリーは&lt;a href=&#34;http://qiita.com/advent-calendar/2014/ml&#34;&gt;ML Advent Calendar 10日目&lt;/a&gt;の記事です。&lt;br /&gt;
+前 &lt;a href=&#34;http://h-sakurai.hatenablog.com/entry/2014/12/09/144655&#34;&gt;OCamlで作ったgoma言語 - h_sakurai&amp;rsquo;s diary&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;ふと思い立ってPrologのコンパイラかインタプリタかを作ってみようとして、その第一段でlexerに着手しました。&lt;/p&gt;
+
+&lt;p&gt;ちょ、SML分かる人はmllexくらい常識的に知ってるなんて言わないで下さい。私は初めて触りました。&lt;/p&gt;
+
+&lt;p&gt;ちょっと変則的なんですが、smlsharpの配布物にあるドキュメントを読みながらmlton付属のmllexを使い、sml/nj上で動作を確認しました。SMLの処理系管理ガバガバですね。&lt;/p&gt;
+
+&lt;p&gt;まあ、初めて使ってみたとは言ってもほぼC版のlexのCを書く部分をそのままSMLで書けば良いだけなので簡単ですね。&lt;/p&gt;
+
+&lt;p&gt;因みにPrologの文法は以下のようなもの。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-prolog&#34;&gt;%reverse a list into X
+reverse([], []).
+
+reverse([Hd|Tl], X):-
+    reverse(Tl, Y),
+    append(Y, [Hd], X).
+
+reverse(List, X):-
+    reverse(List, []).
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;だいたいの部分は見れば分かるかと思うのですが、小文字で始まるのがリテラル（文字列？識別子？）で大文字から始まるのが変数です。&lt;/p&gt;
+
+&lt;p&gt;で、これをイメージしながらlexファイルを書いていきます。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_0&#34;&gt;Lexファイル&lt;/h1&gt;
+
+&lt;p&gt;全体はこのようになっています。lexと同じですね。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;SMLの補助コード部分
+
+%%
+
+補助ルールの記述
+
+%%
+
+解析ルールの記述
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;SMLの補助コードの部分は典型的には&lt;code&gt;datatype&lt;/code&gt;を書きます。あとはどうも&lt;code&gt;error : string -&amp;gt; unit&lt;/code&gt;と &lt;code&gt;eof : unit -&amp;gt; &#39;a&lt;/code&gt;が必要みたいですね（マニュアルちゃんと読んでない）。&lt;code&gt;&#39;a&lt;/code&gt;というのは他の解析ルールと同じ型です。&lt;/p&gt;
+
+&lt;p&gt;補助ルールはlexとだいたい同じです。生成した関数やらデータ型を収めるstructureの指定とかもします。&lt;/p&gt;
+
+&lt;p&gt;解析ルールもだいたいlexと同じです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;pattern =&amp;gt; (SMLのコード);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;のような形をしてます。&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_1&#34;&gt;実際のコード&lt;/h1&gt;
+
+&lt;p&gt;結構適当です。あ、カットのこと忘れてた。ほら、適当だった。&lt;/p&gt;
+
+&lt;p&gt;このコードをprolog.lexとして保存します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;datatype lexresult =
+         Comment of string
+       | LeftParen
+       | RightParen
+       | LeftBracket
+       | RightBracket
+       | Comma
+       | Dot
+       | Bar
+       | Medaka
+       | UnderScore
+       | String of string
+       | Number of int
+       | Variable of string
+       | EOF
+
+val linenum = ref 1
+val error = fn x =&amp;gt; print (x ^ &amp;quot;\n&amp;quot;)
+val eof = fn () =&amp;gt; EOF
+%%
+%structure PrologLex                      
+
+alphanum = [A-Za-z0-9];
+alpha    = [A-Za-z];
+digit    = [0-9];
+ws       = [\ \t\n];
+
+%%
+
+{ws}+            =&amp;gt; (lex());
+%(.*)\n          =&amp;gt; (Comment yytext);
+&amp;quot;(&amp;quot;              =&amp;gt; (LeftParen);
+&amp;quot;)&amp;quot;              =&amp;gt; (RightParen);
+&amp;quot;[&amp;quot;              =&amp;gt; (LeftBracket);
+&amp;quot;]&amp;quot;              =&amp;gt; (RightBracket);
+&amp;quot;,&amp;quot;              =&amp;gt; (Comma);
+&amp;quot;.&amp;quot;              =&amp;gt; (Dot);
+&amp;quot;|&amp;quot;              =&amp;gt; (Bar);
+&amp;quot;:-&amp;quot;             =&amp;gt; (Medaka);
+&amp;quot;_&amp;quot;              =&amp;gt; (UnderScore);
+[a-z]{alphanum}* =&amp;gt; (String yytext);
+{digit}+         =&amp;gt; (Number (foldl (fn(a, r)=&amp;gt; (ord(a)-ord(#&amp;quot;0&amp;quot;)) + 10*r) 0 (explode yytext)));
+[A-Z]{alphanum}* =&amp;gt; (Variable yytext);
+    
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;toc_2&#34;&gt;実際に使ってみる。&lt;/h1&gt;
+
+&lt;pre&gt;&lt;code&gt;$ mllex prolog.lex
+
+Number of states = 19
+Number of distinct rows = 8
+Approx. memory size of trans. table = 1032 bytes
+$ rlwrap sml
+Standard ML of New Jersey v110.77 [built: Thu Sep  4 12:32:33 2014]
+- use &amp;quot;prolog.lex.sml&amp;quot;;
+[opening prolog.lex.sml]
+[autoloading]
+[library $SMLNJ-BASIS/basis.cm is stable]
+[autoloading done]
+structure PrologLex :
+  sig
+    structure UserDeclarations : &amp;lt;sig&amp;gt;
+    exception LexError
+    structure Internal : &amp;lt;sig&amp;gt;
+    structure YYPosInt : &amp;lt;sig&amp;gt;
+    val makeLexer : (int -&amp;gt; string) -&amp;gt; unit -&amp;gt; Internal.result
+  end
+val it = () : unit
+- val lexer = PrologLex.makeLexer (fn i =&amp;gt; TextIO.inputN(TextIO.openIn &amp;quot;reverse.pl&amp;quot;, i));
+val lexer = fn : unit -&amp;gt; PrologLex.Internal.result
+- lexer();
+val it = Comment &amp;quot;%reverse a list into X\n&amp;quot; : PrologLex.Internal.result
+- lexer();
+val it = String &amp;quot;reverse&amp;quot; : PrologLex.Internal.result
+- lexer();
+val it = LeftParen : PrologLex.Internal.result
+- lexer();
+val it = LeftBracket : PrologLex.Internal.result
+- lexer();
+val it = RightBracket : PrologLex.Internal.result
+- 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;コメントの扱い失敗してますね。この辺はどうしようもないのかなあ&lt;/p&gt;
+
+&lt;h1 id=&#34;toc_3&#34;&gt;困ったところ&lt;/h1&gt;
+
+&lt;p&gt;ドキュメントが古いSML/NJのものらしく、SMLのコードをそのまま書いても動かなかった。&lt;code&gt;revfold&lt;/code&gt;とか&lt;code&gt;inputc&lt;/code&gt;とか。&lt;/p&gt;
+
+&lt;p&gt;次回はmlyaccでも触ってみますか。&lt;/p&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>
