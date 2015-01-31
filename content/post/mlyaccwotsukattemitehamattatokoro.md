@@ -5,6 +5,7 @@ title: mlyaccを使ってみてハマったところ
 ---
 κeenです。前回の[mllexの記事](http://keens.github.io/blog/2014/12/10/mllexwoshi-tutemiru/)の続きです。今回はmlyaccを使ってみました。
 <!--more-->
+<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
 
 前回はprologをパースするためにこのようなmllexのコードを書いたのでした。
 
@@ -143,7 +144,14 @@ ATOM           : UnderScore               ("_")
 
     $ mlyacc prolog.yacc
 
-とするとprolog.yacc.smlとprolog.yacc.sigが出来ます。シグネチャは.sigが
+とするとprolog.yacc.smlとprolog.yacc.sigが出来ます。
+
+追記:
+<blockquote class="twitter-tweet" lang="ja"><p><a href="https://twitter.com/blackenedgold">@blackenedgold</a> あと拡張子ですが、compilation managerは.grmをmlyaccのファイルと認識してくれるはずなので手間が少なそうです。</p>&mdash; ELD-R-ESH-2 (@eldesh) <a href="https://twitter.com/eldesh/status/561515838461583361">2015, 1月 31</a></blockquote>
+大人しく.grmを使いましょう。
+
+
+シグネチャは.sigが
 
 ```sml
 signature PrologParser_TOKENS =
@@ -297,6 +305,12 @@ functor PrologLexFun(<param>: sig
 まず、必要なモジュールやシグネチャをmlyaccから読み込みます。前回同様mltonのmlyaccを使って、SML/NJで動作確認を行ないました。
 
 私は分かってないのですが、useってもしかしてSML/NJの固有の機能なんですかね。
+
+追記:
+<blockquote class="twitter-tweet" lang="ja"><p>useはThe Standard ML Basis Libraryに記載があるのでSML/NJ固有の機能ではないですが、implementation dependentと書いてあるのでまぁそういう事なんでしょう</p>&mdash; ろんだ (@fetburner) <a href="https://twitter.com/fetburner/status/561514796734877698">2015, 1月 31</a></blockquote>
+
+<blockquote class="twitter-tweet" lang="ja"><p><a href="https://twitter.com/blackenedgold">@blackenedgold</a> useは標準ですが意味は実装依存ですね&gt; <a href="http://t.co/fPC38xtD1X">http://t.co/fPC38xtD1X</a> (例外の直後辺り)</p>&mdash; ELD-R-ESH-2 (@eldesh) <a href="https://twitter.com/eldesh/status/561515332469137408">2015, 1月 31</a></blockquote>
+とのことなので処理系依存の機能ではなかった模様。
 
 ```sml
 use "/home/kim/compile/mlton/lib/mlyacc-lib/base.sig";
