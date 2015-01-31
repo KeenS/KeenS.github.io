@@ -9,6 +9,8 @@ SOURCE_ORIGIN=git@github.com:KeenS/KeenS.github.io.git
 BLOG_ORIGIN=$(SOURCE_ORIGIN)
 THEME_ORIGIN=git@github.com:KeenS/liquorice-k.git
 
+default: preview
+
 preview:
 	$(HUGO) server -vw -t $(THEME)
 
