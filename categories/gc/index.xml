@@ -1,25 +1,25 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes" ?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-      <title>Gc on κeenのHappy Hacκing Blog </title>
-      <generator uri="https://hugo.spf13.com">Hugo</generator>
-    <link>/categories/gc/index.xml/</link>
+    <title>Gc on κeenのHappy Hacκing Blog</title>
+    <link>/categories/gc/</link>
+    <description>Recent content in Gc on κeenのHappy Hacκing Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    
-    
-    <updated>Sun, 26 Oct 2014 19:13:45 UTC</updated>
+    <lastBuildDate>Sun, 26 Oct 2014 19:13:45 +0000</lastBuildDate>
+    <atom:link href="/categories/gc/index.xml" rel="self" type="application/rss+xml" />
     
     <item>
       <title>GCの話</title>
       <link>/blog/2014/10/26/gcfalsehua</link>
-      <pubDate>Sun, 26 Oct 2014 19:13:45 UTC</pubDate>
+      <pubDate>Sun, 26 Oct 2014 19:13:45 +0000</pubDate>
       
       <guid>/blog/2014/10/26/gcfalsehua</guid>
       <description>
 
 &lt;p&gt;#関数型なんたら でGCの話を聴いて、&lt;a href=&#34;http://www.pllab.riec.tohoku.ac.jp/papers/icfp2011UenoOhoriOtomoAuthorVersion.pdf&#34;&gt;SML#のGCの論文&lt;/a&gt;を読んで色々感じたのでエントリー。&lt;/p&gt;
 
-&lt;h1 id=&#34;toc_0&#34;&gt;Snapshot GC&lt;/h1&gt;
+&lt;h1 id=&#34;snapshot-gc:574dd6de2647876f3340f949e3c099e0&#34;&gt;Snapshot GC&lt;/h1&gt;
 
 &lt;p&gt;まず、湯浅先生のSnapshot GC (&lt;a href=&#34;http://seesaawiki.jp/w/author_nari/d/GC/extend/%A5%B9%A5%CA%A5%C3%A5%D7%A5%B7%A5%E7%A5%C3%A5%C8%B7%BFGC&#34;&gt;解説&lt;/a&gt;)。並列、並行、インクリメンタルにGCが出来る。恐らく一番性能が出るとのこと。解説ではmark &amp;amp; sweepだけど私が聴いたのはCopyingだった。&lt;/p&gt;
 
@@ -29,7 +29,7 @@
 
 &lt;p&gt;ただ、全ての場合で速くなる訳ではない。Copying GCはオブジェクトを移動するため、オブジェクトのアドレスが変わる。普通の参照ならGCのアルゴリズムが書き換えてくれるのだがそうはいかないのがハッシュ。ハッシュは多くの場合オブジェクトのアドレスをハッシュ値に使うため、GCが走ったらハッシュ値の再計算が必要になる。しかもハッシュの操作には破壊的なものが多いため、ライトバリアの影響も受ける。その場合、 &lt;strong&gt;ハッシュマップよりもツリーマップの方がパフォーマンスが出る&lt;/strong&gt; ことがある。勿論、アルゴリズムのオーダが違うので要素数がケタ違いに大きくなるとハッシュに軍配が上がるが、通常そこまで要素を入れない。ようやく関数型言語でツリーマップが使われる理由が分かった。&lt;/p&gt;
 
-&lt;h1 id=&#34;toc_1&#34;&gt;Bitmap GC&lt;/h1&gt;
+&lt;h1 id=&#34;bitmap-gc:574dd6de2647876f3340f949e3c099e0&#34;&gt;Bitmap GC&lt;/h1&gt;
 
 &lt;p&gt;関数型言語と相性の良いCopying GCだけど問題もある。Stop the Worldの話は世代別化やらそれこそSnopsht GCでどうにでもなるからそれはいい。Copying GCに本質的な問題。オブジェクトのアドレスの問題。GCが走ると現在のポインタが無効になる。処理系内部だけならまだ開発者が頑張れば良いんだけどC拡張を許すとそうもいかない。普通のポインタの問題だけじゃなくて構造体にポインタがあったら、とかそもそも外部ライブラリの内部のポインタをとか考えてるとどこかで割り切る必要がある。&lt;/p&gt;
 
@@ -39,7 +39,7 @@
 
 &lt;p&gt;局所性が上がるとはいっても単にキャッシュが効くとかではない。ビット列になることでCPU命令で操作出来るようになって$O(n)$が$O(n/32)$になったりする。そして何より、Mark &amp;amp; SweepじゃなくてSweep &amp;amp; Markになる。Sweepはビット列を0で埋める論理削除。ほぼ一瞬。なので実質Markのコストしかかからない。&lt;/p&gt;
 
-&lt;h2 id=&#34;toc_2&#34;&gt;構成&lt;/h2&gt;
+&lt;h2 id=&#34;構成:574dd6de2647876f3340f949e3c099e0&#34;&gt;構成&lt;/h2&gt;
 
 &lt;p&gt;勿論、ただのbit列でオブジェクトの生死を管理するにはヒープをサイズ毎に用意する必要がある。8bitのオブジェクト用のサブヒープ、16bitのオブジェクト用のサブヒープ…という風に。そしてそれぞれのヒープ毎にビットマップをつける。ただそれだと無限に大きいサイズのヒープが必要になるのでどこかで切ってそれ以降は普通のMark &amp;amp; Sweepで管理するらしい。因みにSML#では4096bitが上限。32bit専用アーキテクチャなので64bitだと少し違うのかもしれない。以下、32bitアーキテクチャを仮定する。64bitでも適切に読み替えれば問題ない。&lt;/p&gt;
 
@@ -57,7 +57,7 @@
 
 &lt;p&gt;オブジェクトをサイズ毎に管理することでSweepを論理削除で済ませているところが良い。&lt;/p&gt;
 
-&lt;h2 id=&#34;toc_3&#34;&gt;世代別化&lt;/h2&gt;
+&lt;h2 id=&#34;世代別化:574dd6de2647876f3340f949e3c099e0&#34;&gt;世代別化&lt;/h2&gt;
 
 &lt;p&gt;論文には世代別化の話もある。ライトバリアが必要なのは一緒だけど世代の管理が面白かった。安直には世代毎にサブヒープを分ける方法が思い付くが、それだとオブジェクトの移動が発生する。論文では世代毎にbitmap treeを持っている。ある世代のbitmap treeはその世代とそれより古い世代全ての生きているオブジェクトのbitmapになっている。&lt;/p&gt;
 
@@ -67,7 +67,7 @@
 
 &lt;p&gt;全て完了したら若い世代達にも反映する(どう反映するかは論文には載ってない。差分をとって…とかかな？)。面白いのはある世代狙い撃ちでGC走らせられる点。あるいはいくつかの世代でも可能だろう。多くのアルゴリズムはある世代&amp;rdquo;以下&amp;rdquo;な気がする。これによって、マイナーGCでダメならミドルGCして、それでもダメならメジャーGCしてってなってたのが若年、中年、高年で別々に可能になる。まあ、ライトバリアの数がものすごいことになるからやらないだろうけど。なんでかっていうと若い世代から古い世代への参照もトレースする必要が出てくるから。論文に詳しく載ってないのはそんなに多くの世代を作っても現実的でないからだろう。勿論、ある世代以下を全てsweepも出来るので普通はそうする筈。&lt;/p&gt;
 
-&lt;h2 id=&#34;toc_4&#34;&gt;リメンバーセットとライトバリア&lt;/h2&gt;
+&lt;h2 id=&#34;リメンバーセットとライトバリア:574dd6de2647876f3340f949e3c099e0&#34;&gt;リメンバーセットとライトバリア&lt;/h2&gt;
 
 &lt;p&gt;さて、さっきからライトバリアの話は出てたのに具体的になんなのかが出てこなかった。&lt;/p&gt;
 
@@ -89,7 +89,7 @@
 
 &lt;p&gt;そこまでやらないのは性能に問題があるからかな。あとそもそも世代別GC自体正確にはオブジェクトを回収しないから正確にやってもあまり意味がないのもある。&lt;/p&gt;
 
-&lt;h2 id=&#34;toc_5&#34;&gt;Sticky Mark世代別化&lt;/h2&gt;
+&lt;h2 id=&#34;sticky-mark世代別化:574dd6de2647876f3340f949e3c099e0&#34;&gt;Sticky Mark世代別化&lt;/h2&gt;
 
 &lt;p&gt;Sticky Mark世代別GCというのは世代別GCを世代2つ、生存回数の閾値1とするときの簡単な実装方法。本当に簡単で、前回のMarkを残しておけば良い。それが旧世代の目印になる。あとはライトバリアとリメンバーセットを用意するだけ。元々Markのときに既にMarkされているオブジェクトはスルーされるのでアルゴリズムはほぼ変更が要らない。普通のMark &amp;amp; Sweepでも出来るし、Bitmap GCでもアロケーションのときにbitmap treeをいじってないのでbitmap treeを0にする処理をしなければ良い。&lt;/p&gt;
 
@@ -115,15 +115,15 @@ contents is the remembered set&lt;/p&gt;
 
 &lt;p&gt;誰か分かる人教えて下さい。&lt;/p&gt;
 
-&lt;h2 id=&#34;toc_6&#34;&gt;複数mutater対応&lt;/h2&gt;
+&lt;h2 id=&#34;複数mutater対応:574dd6de2647876f3340f949e3c099e0&#34;&gt;複数mutater対応&lt;/h2&gt;
 
 &lt;p&gt;要はアプリケーションでスレッドを使ったときの話。1スレッドにつき1セグメント割り当てて新たなセグメントを確保するときだけロックとればアロケーション速いよねって言ってる。GCはStop the Worldしないようにするとか言ってるけど出来るのかな。&lt;/p&gt;
 
-&lt;h2 id=&#34;toc_7&#34;&gt;パフォーマンス&lt;/h2&gt;
+&lt;h2 id=&#34;パフォーマンス:574dd6de2647876f3340f949e3c099e0&#34;&gt;パフォーマンス&lt;/h2&gt;
 
 &lt;p&gt;Bitmap GC、sticky bit世代別Bitmap GC、シンプルなCopying GC、2世代、5世代の世代別Copying GCでの比較が載ってる。Copying GCは2世代が最もパフォーマンスが良く、世代別Bitmap GCもそんなに負けてない。少くともシンプルなCopying GCには勝ってる。アロケーションは及びもつかないものの、世代別Bitmap GCはGCのStop the Worldは圧倒的に短いみたい。&lt;/p&gt;
 
-&lt;h1 id=&#34;toc_8&#34;&gt;picrinの話&lt;/h1&gt;
+&lt;h1 id=&#34;picrinの話:574dd6de2647876f3340f949e3c099e0&#34;&gt;picrinの話&lt;/h1&gt;
 
 &lt;p&gt;picrinのGCは超シンプルなMark &amp;amp; Sweep。んで、picrinのボトルネック。どうにかしたい。先述の理由からMark &amp;amp; Sweepなのは維持なんだけどどう拡張しようねという話。&lt;/p&gt;
 
@@ -138,7 +138,7 @@ contents is the remembered set&lt;/p&gt;
     <item>
       <title>Picrinのチューニングの話、もといGCの話</title>
       <link>/slide/picrin-gc/</link>
-      <pubDate>Mon, 29 Sep 2014 00:00:00 UTC</pubDate>
+      <pubDate>Mon, 29 Sep 2014 00:00:00 +0000</pubDate>
       
       <guid>/slide/picrin-gc/</guid>
       <description>&lt;section data-markdown
