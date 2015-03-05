@@ -1,5 +1,6 @@
 ---
-categories: 
+categories: []
+description:
 
 ---
 <section data-markdown
@@ -12,11 +13,12 @@ categories:
 
 # About Me
 ---------
-![κeenのアイコン](/images/icon.png) <!-- .element: style="position:relative;right 0;" -->
+![κeenのアイコン](/images/icon.png) <!-- .element: style="position:absolute;right:0;z-index:-1" -->
 
  + κeen
- + 東大数学科の4年生
- + ソーシャルアカウントは上のアイコン達から。
+ + [@blackenedgold](https://twitter.com/blackenedgold)
+ + Github: [KeenS](https://github.com/KeenS)
+ + 野生のLisper
  + Lisp, Ruby, OCaml, Shell Scriptあたりを書きます
 
 
