@@ -6,8 +6,364 @@
     <description>Recent content in Common Lisp on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Thu, 22 Jan 2015 07:51:02 +0000</lastBuildDate>
+    <lastBuildDate>Mon, 02 Mar 2015 23:36:03 +0900</lastBuildDate>
     <atom:link href="http://KeenS.github.io/categories/common-lisp/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>既存のテンプレートエンジンの問題点と再設計</title>
+      <link>http://keens.github.io/slide/kizonnotenpure-toenjinnomondaitentosaisekkeiaruihaArrowsnitsuite/</link>
+      <pubDate>Mon, 02 Mar 2015 23:36:03 +0900</pubDate>
+      
+      <guid>http://keens.github.io/slide/kizonnotenpure-toenjinnomondaitentosaisekkeiaruihaArrowsnitsuite/</guid>
+      <description>&lt;section data-markdown
+    data-separator=&#34;\n\n&#34;
+    data-vertical=&#34;\n\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+&lt;script type=&#34;text/template&#34;&gt;
+&lt;style type=&#34;text/css&#34;&gt;
+.red {
+color: red;
+}
+&lt;/style&gt;
+# 既存のテンプレートエンジンの問題点と再設計、あるいはArrowsについて
+-----------------------------------------------------------------
+Clack Meet Up #1  
+2015-03-05 @サムライト
+
+# About Me
+---------
+![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
+
+ + κeen
+ + [@blackenedgold](https://twitter.com/blackenedgold)
+ + Github: [KeenS](https://github.com/KeenS)
+ + 野生のLisper
+ + Lisp, Ruby, OCaml, Shell Scriptあたりを書きます
+
+# Template Engines
+
+# Existing Architeture
+----------------------
+0. (リクエスト)
+1. アプリ
+  0. 引数を計算
+  1. テンプレートに引数を渡す
+  2. レスポンスをレンダリング &lt;!--.element: class=&#34;fragment grow&#34;  --&gt;
+4. レスポンスをサーバに渡す
+5. (レスポンス)
+
+# Rendering?
+----------------------
+* 結合した文字列はクライアントに返ったらその後はゴミ
+ + GCへ負荷がかかる (後述)
+* クライアントにとって1つの文字列である必要はない
+* むしろ返せる部分だけ先に返した方が得（後述）
+
+# GC Pressure (SBCL)
+-----------------
+* 世代別Copy GC
+* 結合した文字列は比較的大きい
+* `alloc_space`に入らない大きさならアロケートが遅い
+* GCを頻繁に起動してしまう
+* 16KBを越えると特別扱いされて遅い/メモリを喰う
+* LispのWebアプリはレスポンスタイムの分散が大きい（要出展）
+
+参考: [SBCL GENCGC @ x86 Linux](http://cl-www.msi.co.jp/reports/sbcl-gc-memo.html)
+
+# Split Response
+---------------
+例えば、こんなの
+
+&lt;pre&gt;&lt;code class=&#34;html&#34;&gt;&amp;lt;!DOCTYPE html&amp;gt;
+&amp;lt;html xmlns=&amp;quot;http://www.w3.org/1999/xhtml&amp;quot; xml:lang=&amp;quot;en&amp;quot; lang=&amp;quot;en-us&amp;quot;&amp;gt;
+    &amp;lt;head&amp;gt;
+        &amp;lt;link rel=&amp;quot;stylesheet&amp;quot; href=&amp;quot;http://localhost:1313//reveal.js/lib/css/xcode.css&amp;quot;&amp;gt;
+        &amp;lt;script src=&amp;quot;//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js&amp;quot;&amp;gt;&amp;lt;/script&amp;gt;
+        ....
+        &amp;lt;/script&amp;gt;
+    &amp;lt;/head&amp;gt;
+    &amp;lt;body class=&amp;quot;li-body&amp;quot;&amp;gt;
+    &amp;lt;header&amp;gt;{{ header }}&amp;lt;/header&amp;gt;
+    {{ body }}
+    ...
+&lt;/code&gt;&lt;/pre&gt;
+
+# Split Response
+---------------
+1. `{{ header }}`の前に先頭から`&lt;header&gt;`までを返す
+2. `{{ header }}`を返す
+3. `&lt;/header&gt;`を返す
+4. `{{ body }}`を返す
+
+...
+
+
+# Pros of Split Response
+------------------------
+* `header`を計算してる間にクライアントにhead部分が渡る
+  + 先に`&lt;link&gt;`や`&lt;script&gt;`を要求出来る
+  + サーバ側のスループットやレスポンスタイムは変わらないが
+    クライアントのレンダリング完了までの時間は大幅に短縮出来る
+* 文字列を結合する必要がない
+* 定数部分については長さが判ってるので最適化し易い
+
+# How TEs Work 
+---------------------------
+## Compilation
+1. テンプレート文字列
+ + パーサ &lt;!-- .element: style=&#34;list-style-image: url(/images/arrow_down.svg);&#34; --&gt;
+2. 抽象構文木
+ + コードエミット &lt;!-- .element: style=&#34;list-style-image: url(/images/arrow_down.svg);&#34; --&gt;
+3. レンダリング関数
+
+# How TEs Work 
+---------------------------
+## Rendering
+1. レンダリング関数
+ + 引数 &lt;!-- .element: style=&#34;list-style-image: url(/images/arrow_down.svg);&#34; --&gt;
+2. 文字列
+
+# Misc Problems
+---------------
+* サーバに渡すのは文字列なのにソケットに書き込む時はオクテット？
+  + 文字列で返す？オクテットで返す？（デバッグがー）
+  + オクテットの変換はいつ？
+* ストリームが遅い？
+  + POSIX APIが使える&#34;なら&#34;fdの方が速い？
+* ユーザが用意したバッファに書き出したい？
+* テンプレートに渡す引数が定数文字列なら畳み込める筈？
+* リクエストの度にテンプレートパースするのは筋悪だけど開発中は毎回コンパイルするのは面倒？
+
+&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
+# Arrows
+Template flies like an arrow
+
+&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
+# Arrows
+--------
+* [KeenS/arrows](https://github.com/KeenS/arrows)
+* 現在開発中のテンプレートエンジン
+* 複数のテンプレートが選べる（予定）
+* 複数のバックエンドが選べる
+* バックエンドに依ってはnon-consing
+
+&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
+# How Arrows Works
+------------------
+## Compilation
+1. テンプレート文字列&lt;span class=&#34;red&#34;&gt; + 定数引数&lt;/span&gt;
+  + パーサ&lt;span class=&#34;red&#34;&gt;(default, cl-emd互換...)&lt;/span&gt; &lt;!-- .element: style=&#34;list-style-image: url(/images/arrow_down.svg);&#34; --&gt;
+2. 抽象構文木
+  + &lt;span class=&#34;red&#34;&gt;最適化(const folding, concat, convert...)&lt;/span&gt; &lt;!-- .element: style=&#34;list-style-image: url(/images/arrow_down.svg);&#34; --&gt;
+  + コードエミット &lt;!-- .element: style=&#34;list-style-image: url(/images/arrow_down.svg);&#34; --&gt;
+3. レンダリング関数&lt;span class=&#34;red&#34;&gt;(string, octets, stream, fast-io ...)&lt;/span&gt;
+
+&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
+# How Arrows Works
+------------------
+## Rendering
+1. レンダリング関数
+  + 引数 &lt;!-- .element: style=&#34;list-style-image: url(/images/arrow_down.svg);&#34; --&gt;
+2. 文字列&lt;span class=&#34;red&#34;&gt;、オクテット列、ストリーム書き出し、fast-io…&lt;/span&gt;
+
+&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
+# How compiled
+--------------
+
+```html
+&lt;h1&gt;Hi {{var name}}!&lt;/h1&gt;
+```
+を
+
+```lisp
+(compile-template-string :xxx
+  &#34;&lt;h1&gt;Hi {{var name}}!&lt;/h1&gt;&#34; ())
+```
+とコンパイル
+
+# Stream backend
+----------------
+&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
+
+```lisp
+(lambda (stream &amp;key name)
+  (write-string &#34;&lt;h1&gt;Hi &#34; stream)
+  (write-string
+    (encode-for-tt (princ-to-string name))
+    stream)
+  (write-string &#34;!&lt;/h1&gt;&#34; stream))
+```
+* ほとんどアロケートしない
+
+&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
+# Octet backend
+----------------
+
+```lisp
+(lambda (&amp;key name)
+  (with-fast-output (buffer)
+    (fast-write-sequence
+      #.(string-to-octets &#34;&lt;h1&gt;Hi &#34;)
+       buffer)
+    (fast-write-sequence
+      (string-to-octets
+        (encode-for-tt (princ-to-string name)))
+                       buffer)
+    (fast-write-sequence
+      #.(string-to-octets &#34;!&lt;/h1&gt;&#34;)
+      buffer)))
+```
+
+&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
+# How optimized
+---------------
+
+```html
+&lt;h1&gt;Hi {{var name}}!&lt;/h1&gt;
+```
+を
+
+```lisp
+(compile-template-string :stream
+   &#34;&lt;h1&gt;Hi {{var name}}!&lt;/h1&gt;&#34;
+   &#39;(:known-args (:name &#34;&lt;κeen&gt;&#34;)))
+```
+とコンパイル
+
+&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
+# How optimized
+---------------
+## variable folding
+
+```lisp
+(lambda (stream)
+  (write-string &#34;&lt;h1&gt;Hi &#34; stream)
+  (write-string (encode-for-tt &#34;&lt;κeen&gt;&#34;) stream)
+  (write-string &#34;!&lt;/h1&gt;&#34; stream))
+```
+* 既知の引数は畳み込む
+* 文字列なら`princ-to-string`しない
+
+&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
+# How optimized
+---------------
+## const folding
+
+```lisp
+(lambda (stream)
+  (write-string &#34;&lt;h1&gt;Hi &#34; stream)
+  (write-string &#34;&amp;lt;κeen&amp;gt;&#34; stream)
+  (write-string &#34;!&lt;/h1&gt;&#34; stream))
+```
+* 定数のエスケープはコンパイル時に済ませる
+
+&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
+# How optimized
+---------------
+## append sequence
+
+```lisp
+(lambda (stream)
+  (write-string &#34;&lt;h1&gt;Hi &amp;lt;κeen&amp;gt;!&lt;/h1&gt;&#34;
+                stream))
+```
+* 複数シーケンスの書き出しは1つにまとめる
+
+&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
+# Further Ideas
+---------------
+* 引数計算の遅延
+* 引数計算の並列化
+* 非同期化
+* HTML compction
+
+&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
+# Further Ideas
+---------------
+## 引数計算の遅延
+* `name`の計算が重いときに先に`&#34;&lt;h1&gt;Hi &#34;`を返す。
+* `name`は必要になったら値を計算する(Promise パターン)
+
+```lisp
+(lambda (stream &amp;key name)
+  (write-string &#34;&lt;h1&gt;Hi &#34; stream)
+  (write-string
+    (encode-for-tt (princ-to-string name))
+    stream)
+  (write-string &#34;!&lt;/h1&gt;&#34; stream))
+```
+
+&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
+# Further Ideas
+---------------
+## 引数計算の並列化
+* `name`の計算が重いときに先に`&#34;&lt;h1&gt;Hi &#34;`を返す。
+* `name`は並列に計算して必要になったら値を要求する(Futureパターン)
+
+```lisp
+(lambda (stream &amp;key name)
+  (write-string &#34;&lt;h1&gt;Hi &#34; stream)
+  (write-string
+    (encode-for-tt (princ-to-string name))
+    stream)
+  (write-string &#34;!&lt;/h1&gt;&#34; stream))
+```
+
+&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
+# Further Ideas
+---------------
+## 非同期化
+* 単純にwriteを非同期にする
+* 他にFutureもブロックするので非同期Futureを使う
+
+&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
+# Further Ideas
+---------------
+## HTML compction
+
+```html
+&lt;ol&gt;
+  &lt;li&gt; item 1 &lt;/li&gt;
+  &lt;li&gt; item 2 &lt;/li&gt;
+  &lt;li&gt; item 3 &lt;/li&gt;
+&lt;/ol&gt;
+
+```
+を
+
+```html
+&lt;ol&gt;&lt;li&gt;item 1&lt;/li&gt;&lt;li&gt;item 2&lt;/li&gt;&lt;li&gt;item 3&lt;/li&gt;&lt;/ol&gt;
+
+```
+* DOM構造が変わってしまう
+
+
+&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
+# TODOs
+-------
+* 設計上複数シンタックスをサポート可能だがまだしてない
+* 既存のテンプレートエンジンとの比較ベンチマーク
+* 高速化
+* 多機能化
+  + テンプレート
+  + 最適化
+  + バックエンド
+* clackとの連携
+  + clackのAPIはメモリアロケーションが多めに必要になる
+
+# Summary
+---------
+* 既存のテンプレートエンジンは非効率
+  + メモリを無駄遣いしていた
+  + ユーザーのことを考えてなかった
+* 新しいテンプレートエンジンを設計した
+  + メモリアロケーションをあまりしない
+  + ユーザー側の速度まで考慮した
+  + 柔軟
+&lt;/script&gt;
+&lt;/section&gt;
+</description>
+    </item>
     
     <item>
       <title>Common Lispのポータビリティとユニバーサリティ</title>
@@ -2117,55 +2473,6 @@ Allegro CLは&lt;code&gt;interrupt-signal&lt;/code&gt;がconditionのサブク�
 &lt;li&gt;Common Lispのセットアップ方法を示した&lt;/li&gt;
 &lt;li&gt;誰か諸問題解決して下さい&lt;/li&gt;
 &lt;/ul&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>Lisp Meet Up #19でLTしてきました</title>
-      <link>http://keens.github.io/blog/2014/07/30/lisp-meet-up-number-19</link>
-      <pubDate>Wed, 30 Jul 2014 00:00:00 +0000</pubDate>
-      
-      <guid>http://keens.github.io/blog/2014/07/30/lisp-meet-up-number-19</guid>
-      <description>&lt;p&gt;κeenです毎月恒例の&lt;a href=&#34;https://atnd.org/events/53246&#34;&gt;Lisp Meet Up presented by Shibuya.lisp&lt;/a&gt;でLTしてきたのでレポートです。&lt;/p&gt;
-
-&lt;p&gt;今回は募集20に対して参加登録20、参加18、LT4本と集りの良い会でした。&lt;/p&gt;
-
-&lt;p&gt;自己紹介ではほぼCLの人ばっかりでした。珍しいところ（？）では数理システムの方が居たり会場を提供して下さってるサイバーエージェントの方が覗きにきてたり。&lt;/p&gt;
-
-&lt;p&gt;LT1本目はTOYOZUMIさんから連作の一つのCommon Lisp最適化発展。画像のエッジ検出をするときの関数の最適化の話でした。カーネルを渡すだけで最適なコードを生成するそうです。コーナーケースのif式をループの外に追い出してたりと半分成程、あとはよく分かんない話してるなーって。&lt;br /&gt;
-最終的には&lt;code&gt;eval&lt;/code&gt;を使ってるらしく、本当に速度出るの？って気になりましたが本人もやってみたところ速くなってビックリだったそうです。&lt;/p&gt;
-
-&lt;p&gt;スライドはこちら。&lt;/p&gt;
-
-&lt;p&gt;&lt;iframe src=&#34;//www.slideshare.net/slideshow/embed_code/37456264&#34; width=&#34;427&#34; height=&#34;356&#34; frameborder=&#34;0&#34; marginwidth=&#34;0&#34; marginheight=&#34;0&#34; scrolling=&#34;no&#34; style=&#34;border:1px solid #CCC; border-width:1px 1px 0; margin-bottom:5px; max-width: 100%;&#34; allowfullscreen&gt; &lt;/iframe&gt; &lt;div style=&#34;margin-bottom:5px&#34;&gt; &lt;strong&gt; &lt;a href=&#34;https://www.slideshare.net/toyozumiKouichi/common-lisp-37456264&#34; title=&#34;Common lisp最適化発展&#34; target=&#34;_blank&#34;&gt;Common lisp最適化発展&lt;/a&gt; &lt;/strong&gt; from &lt;strong&gt;&lt;a href=&#34;http://www.slideshare.net/toyozumiKouichi&#34; target=&#34;_blank&#34;&gt;Toyozumi Kouichi&lt;/a&gt;&lt;/strong&gt; &lt;/div&gt;&lt;/p&gt;
-
-&lt;p&gt;動画は今回から私が担当なので処理が終ったらリンク張ります。&lt;/p&gt;
-
-&lt;p&gt;次はTakagiさんよりcl-cudaについて。話聞く前は「どうせC APIをCFFIで叩いただけだろ(ホジ」って思ってましたがさすがにGPGPUはそんなに簡単じゃなかったようです。
-cl-cudaはLispのAPIを叩いたらCUDA向けのCコードを吐いてCUDA専用のコンパイラ通してモジュールとして動的に読み込んで、ってやってくれるそうです。すごい。
-完成度も、CUDAを研究に使ってたchikuさんによると普通使う分にはほぼ困らなくて、あとは構造体のサポートがあれば良いかも程度だそうです。すごい。&lt;/p&gt;
-
-&lt;p&gt;スライドはまだ見付けてないです。&lt;/p&gt;
-
-&lt;p&gt;3番目は私から、WebブラウザベースのIDE、&lt;a href=&#34;https://c9.io/&#34;&gt;Cloud9&lt;/a&gt;の紹介とLispの対応状況について。
-スライドはこのブログに載せてますが、こちら&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://KeenS.github.io/slide/cloud-9.html&#34;&gt;Cloud 9の紹介 | κeenのHappy Hacκing Blog&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;もうちょっと説明が欲しそうな雰囲気だったので別記事立てますね。@potix2さんが社内チャットに流したところなり反応が良かったようなので普通にIDEとして優れてるんじゃないでしょうか。&lt;/p&gt;
-
-&lt;p&gt;最後はかにたん(@kazh98)から床下からLispが出てきた話。うん。本当に床下からLispが出てきた話でした。かにたんの研究室すごいですね。みなさんの家の床下にもLispがあるかもしれませんよm9っ。&lt;/p&gt;
-
-&lt;p&gt;最後の最後にかにたんの研究室から出てきたLispについてTOYOZUMIさんがモニタをスクリーンに映しつつみんなで色々議論。なんかWEBのマニュアルがポルトガル語で書かれてたのでポルトガル語喋れる人捜したけど居なかったり。次回、床下Lispを動かしてみようってなりました。&lt;/p&gt;
-
-&lt;p&gt;そこでもう閉場の時間だったので懇親会へ。11名が参加。&lt;/p&gt;
-
-&lt;p&gt;私とかにたんとpotix2さんがschemeの実装の話してたり@mhkojiさんがhunchentootがありえないくらい遅いって話してたり色々でしたね。
-CIMの話も出てました。実用上Windowsサポートは外せないってことで@snmstsさんがCでCIMを書き直してるだとか@nitro_idiotさんがshellyでCIMを使うにあたってCIM側でコアのマネジメントして欲しいって言ってただとか。&lt;/p&gt;
-
-&lt;p&gt;C CIMは面白そうですね。ビルドしなきゃいけないから手軽さの問題が…とかlibcurlに依存するとLinuxが…とか言ってたら「ディストリのパッケージシステムに乗せてしまえば問題無い」と一刀両断。その発想はなかった。むしろパッケージシステムに入った方が手軽。&lt;/p&gt;
-
-&lt;p&gt;今からCloud9の記事とCIMのコアマネジメント頑張りますね。&lt;/p&gt;
 </description>
     </item>
     
