@@ -6,8 +6,117 @@
     <description>Recent content on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Fri, 10 Apr 2015 19:55:59 +0900</lastBuildDate>
+    <lastBuildDate>Sun, 12 Apr 2015 19:49:41 +0900</lastBuildDate>
     <atom:link href="http://KeenS.github.io/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>SMLのファンクタに少し踏み込んだ</title>
+      <link>http://keens.github.io/blog/2015/04/12/smlnofankutanisukoshifumikonda</link>
+      <pubDate>Sun, 12 Apr 2015 19:49:41 +0900</pubDate>
+      
+      <guid>http://keens.github.io/blog/2015/04/12/smlnofankutanisukoshifumikonda</guid>
+      <description>
+
+&lt;p&gt;κeenです。&lt;a href=&#34;https://github.com/bleis-tift/SmlSharpContrib&#34;&gt;SmlSharpContrib&lt;/a&gt;にコントリビュートしてます。そこでファンクタを使う用事があったのですが少し踏み込んだ使い方をしようとしたらハマったのでメモ。&lt;/p&gt;
+
+&lt;h1 id=&#34;ファンクタおさらい:921b7b3c7820999b28763bd2de5241d3&#34;&gt;ファンクタおさらい&lt;/h1&gt;
+
+&lt;p&gt;SMLの&lt;code&gt;functor&lt;/code&gt;は&lt;code&gt;structure&lt;/code&gt;に引数がついたもので、モジュールを引数にとり、モジュールを返します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;functor List (Args : sig type elem end) =
+struct
+  type elem = Args.elem
+  datatype list = Nil | Cons of elem * list
+  fun length Nil = 0
+    | length (Cons (x, xs)) = 1 + length xs
+end
+
+structure IntList = List(struct type elem = int end)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;複雑なファンクタ:921b7b3c7820999b28763bd2de5241d3&#34;&gt;複雑なファンクタ&lt;/h1&gt;
+
+&lt;p&gt;&lt;a href=&#34;blog/2015/01/31/mlyaccwotsukattemitehamattatokoro/&#34;&gt;以前mlyaccを使った時&lt;/a&gt;に&lt;code&gt;Join&lt;/code&gt;なる3つのモジュールを引数にとるファンクタが登場したのでした。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;structure PrologParser =
+Join(structure LrParser = LrParser
+     structure ParserData = PrologParserLrVals.ParserData
+     structure Lex = PrologLex)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これの定義を覗いてみます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;functor Join(structure Lex : LEXER
+             structure ParserData: PARSER_DATA
+             structure LrParser : LR_PARSER
+             sharing ParserData.LrTable = LrParser.LrTable
+             sharing ParserData.Token = LrParser.Token
+             sharing type Lex.UserDeclarations.svalue = ParserData.svalue
+             sharing type Lex.UserDeclarations.pos = ParserData.pos
+             sharing type Lex.UserDeclarations.token = ParserData.Token.token)
+                 : PARSER =
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;複数のモジュールの他に&lt;code&gt;sharing&lt;/code&gt;なるキーワードも出てきています。それに&lt;code&gt;structure&lt;/code&gt;キーワードもプリフィクスされています。&lt;/p&gt;
+
+&lt;p&gt;先程の例とは大分離れてますね。何があったのでしょう。&lt;code&gt;structure&lt;/code&gt;を付けとけば複数書ける…？&lt;/p&gt;
+
+&lt;h1 id=&#34;省略記法:921b7b3c7820999b28763bd2de5241d3&#34;&gt;省略記法&lt;/h1&gt;
+
+&lt;p&gt;実はファンクタの引数の中では省略記法が使えます。引数のモジュール名と&lt;code&gt;sig ... end&lt;/code&gt;が省略可能なのです。さらに適用の時も&lt;code&gt;struct ... end&lt;/code&gt;も省略可能なのです。&lt;/p&gt;
+
+&lt;p&gt;つまり、最初の例はこうも書けるのです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;functor List (type elem) =
+struct
+  type elem = Args.elem
+  datatype list = Nil | Cons of elem * list
+  fun length Nil = 0
+    | length (Cons (x, xs)) = 1 + length xs
+end
+
+structure IntList = List(type elem = int)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;モジュール内モジュールと省略記法:921b7b3c7820999b28763bd2de5241d3&#34;&gt;モジュール内モジュールと省略記法&lt;/h1&gt;
+
+&lt;p&gt;そうです。複雑怪奇な&lt;code&gt;Join&lt;/code&gt;ファンクタは省略記法で書かれていたのでした。省略せずに書くと&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;structure PrologParser =
+Join(struct
+     structure LrParser = LrParser
+     structure ParserData = PrologParserLrVals.ParserData
+     structure Lex = PrologLex
+     end)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;functor Join(X: sig
+             structure Lex : LEXER
+             structure ParserData: PARSER_DATA
+             structure LrParser : LR_PARSER
+             sharing ParserData.LrTable = LrParser.LrTable
+             sharing ParserData.Token = LrParser.Token
+             sharing type Lex.UserDeclarations.svalue = ParserData.svalue
+             sharing type Lex.UserDeclarations.pos = ParserData.pos
+             sharing type Lex.UserDeclarations.token = ParserData.Token.token
+             end)
+                 : PARSER =
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;となります。形式的には引数のモジュールは1つでありながら事実上複数のモジュールを渡していたのです。&lt;code&gt;structure&lt;/code&gt;が付いていたのはモジュール内モジュールだったから、&lt;code&gt;sharing&lt;/code&gt;はモジュール内モジュールに対する制約宣言です。&lt;/p&gt;
+
+&lt;p&gt;なぜこれでハマったかというとSML#のインターフェースファイルでは省略記法が使えなかったからです。地雷の数だけ強くなれるよ♪&lt;/p&gt;
+
+&lt;h1 id=&#34;参考:921b7b3c7820999b28763bd2de5241d3&#34;&gt;参考&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://walk.wgag.net/sml/module.html&#34;&gt;モジュール - ウォークスルー Standard ML&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.pllab.riec.tohoku.ac.jp/smlsharp/docs/2.0/ja/Ch11.S6.xhtml&#34;&gt;ファンクタのサポート in Ch.11. SML#分割コンパイルシステム in プログラミング言語SML#解説&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
     
     <item>
       <title>CyberAgentに入社しました</title>
@@ -2651,27 +2760,6 @@ exec /usr/local/bin/uim-xim
 &lt;/ul&gt;&lt;/li&gt;
 &lt;li&gt;どうもappendオプションを使えばヒストリ付きのアーカイバとして使えるらしい&lt;/li&gt;
 &lt;/ul&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>新年の挨拶及び内部実装変更のお知らせ</title>
-      <link>http://keens.github.io/blog/2015/01/01/new-year-greeting</link>
-      <pubDate>Thu, 01 Jan 2015 06:44:31 +0000</pubDate>
-      
-      <guid>http://keens.github.io/blog/2015/01/01/new-year-greeting</guid>
-      <description>&lt;p&gt;新年明けましておめでとう御座います。κeenです。私から一つお知らせが御座います。&lt;/p&gt;
-
-&lt;p&gt;私、本名を金舜琳といいますが今年から日本に帰化して志村舜琳と名乗ります。アルファベット表記もSunrim KIMからSunrin SHIMURAに変更致します。Sunrinも微妙に変化します。
-尚、外部インターフェースのκeenは変らず、内部のみの変更になるので多くの方には影響は無いかと思います。
-さらに正式に日本国籍を取得するまでは本名の金舜琳と通称名の志村舜琳両方で呼び出せるのでこの期間に移行下さい。&lt;/p&gt;
-
-&lt;p&gt;さて、帰化の理由についてですが、主に外国人参政権に関連します。昔は私も外国人に参政権を渡せと叫んでおりましたが最近考え方が変わりました。権利が欲いなら国籍とればくれてやる、国籍を取る事は認める。それで良いと思います。韓国の権利よりも日本の権利が欲い、なら日本国籍を取る。筋は通っていると思います。書類上の変更で血筋が変わる訳でもありませんし。父親の世代は在日韓国人というだけで日本の社会から拒絶され、帰化＝屈服だったそうで今でも帰化には否定的なようですが特に反対はありませんでした。私と同世代の姉は、もっと歴史を勉強して納得してから決めると言っています。価値感はそれぞれでしょう。&lt;/p&gt;
-
-&lt;p&gt;それでは皆様、今年も一年κeenこと志村舜琳を宜くお願い致します。&lt;/p&gt;
-
-&lt;p&gt;P.S.&lt;br /&gt;
-志村舜琳ってDQNネームっぽくて嫌だなぁ。下の名前も変えようかなぁ。&lt;/p&gt;
 </description>
     </item>
     
