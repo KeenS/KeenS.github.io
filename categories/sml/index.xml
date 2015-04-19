@@ -6,8 +6,280 @@
     <description>Recent content in Sml on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Sun, 12 Apr 2015 19:49:41 +0900</lastBuildDate>
+    <lastBuildDate>Sun, 19 Apr 2015 13:51:33 +0900</lastBuildDate>
     <atom:link href="http://KeenS.github.io/categories/sml/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>SMLSharpでFFIバインディングを書く時の知見</title>
+      <link>http://keens.github.io/blog/2015/04/19/smlsharpdeffibaindinguwokakutokinochiken</link>
+      <pubDate>Sun, 19 Apr 2015 13:51:33 +0900</pubDate>
+      
+      <guid>http://keens.github.io/blog/2015/04/19/smlsharpdeffibaindinguwokakutokinochiken</guid>
+      <description>
+
+&lt;p&gt;κeenです。最近頻繁にSML#を使ってます。SML#のメイン機能の1つであるC連携ですが、ちょっと複雑なことをやろうとするとテクニックが必要になるので共有します。&lt;/p&gt;
+
+&lt;p&gt;disqus付けといたのでコメントや突っ込みもお願いします。&lt;/p&gt;
+
+&lt;h1 id=&#34;簡単な型:017736760057fcde64c6904c3e916b13&#34;&gt;簡単な型&lt;/h1&gt;
+
+&lt;p&gt;型が簡単な関数なら普通に&lt;code&gt;_import&lt;/code&gt;で済みます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val puts = _import &amp;quot;puts&amp;quot;: string -&amp;gt; ()
+val () = puts &amp;quot;Hello, C&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;尚、簡単な型とは&lt;a href=&#34;http://www.pllab.riec.tohoku.ac.jp/smlsharp/docs/2.0/ja/Ch9.S2.xhtml&#34;&gt;公式ドキュメント&lt;/a&gt;にある通り、いわゆる即値、即値の組（タプル）、即値の配列、即値の参照、それらを引数、返り値に持つ関数などです。&lt;/p&gt;
+
+&lt;p&gt;又、以下のような制約もあります。&lt;/p&gt;
+
+&lt;blockquote&gt;
+&lt;p&gt;C関数全体の型は，引数リストを組型とするMLの関数型に対応付けられます． ただし，C関数の引数や返り値に書ける相互運用型には，以下の制約があり ます．
+   配列型や組型など，Cのポインタ型に対応する相互運用型を，C関数の返り値の 型として指定することはできません．&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;恐らくGCとの兼ね合いでしょうがつらいですね。stringすら返り値で受け取れません。&lt;/p&gt;
+
+&lt;p&gt;それにこの制約がどこまで効いてるのかが不明で、同じ型でも型付けに成功したり失敗したりすることがあります。例えば上の例でstring型を引数にとる関数をインポートしましたが関数に依ってはstringが相互運用型でないとか怒られることがあります。タプルの配列やタプルの参照などは確実にダメみたいです。&lt;/p&gt;
+
+&lt;p&gt;尚、string型はCでいう &lt;code&gt;const char *&lt;/code&gt; 、タプルは変更不能な構造体へのポインタになるそうです。構造体の即値は扱えないんですね…。また、参照とは別に &lt;code&gt;ptr&lt;/code&gt; 型も存在します。SML#側からは作れず、Cとの相互運用のためだけに存在するようです。&lt;/p&gt;
+
+&lt;h1 id=&#34;魔法の-unit-ptr:017736760057fcde64c6904c3e916b13&#34;&gt;魔法の &lt;code&gt;unit ptr&lt;/code&gt;&lt;/h1&gt;
+
+&lt;p&gt;じゃあ複雑な型はインポート出来ないのかというとそうでもなく、 &lt;code&gt;unit ptr&lt;/code&gt; 型にしておけばとりあえずインポート出来ます。Cで言うところの &lt;code&gt;void *&lt;/code&gt; です。
+邪悪な雰囲気を感じますね。しかしそこは型安全言語、ちゃんと型安全に &lt;code&gt;unit ptr&lt;/code&gt; を扱えます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;type file = unit ptr
+val fopen = _import &amp;quot;fopen&amp;quot;: (string, string) -&amp;gt; file
+val fgetc = _import &amp;quot;fgetc&amp;quot;: (file) -&amp;gt; int
+val fclose = _import &amp;quot;fclose&amp;quot;: (file) -&amp;gt; int
+val () = let
+      val f = fopen(&amp;quot;test&amp;quot;, &amp;quot;r&amp;quot;)
+      val c = fgetc(f)
+    in
+      print(str(chr c));
+      fclose(f)
+    end
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;はい。単に &lt;code&gt;type&lt;/code&gt; で名前をつけてあげれば大丈夫です。SML#側ではポイント先が何であるかには関知せず、インポートしたC関数の間で完結してれば問題ありません。多くのライブラリはそのようなAPIになっているのではないでしょうか。&lt;/p&gt;
+
+&lt;h1 id=&#34;ポインタを扱う:017736760057fcde64c6904c3e916b13&#34;&gt;ポインタを扱う&lt;/h1&gt;
+
+&lt;p&gt;とはいえ時にポインタを扱う必要もあります。構造体の配列を扱えないのでその辺で。&lt;/p&gt;
+
+&lt;p&gt;そういった時に便利なのが &lt;code&gt;SMLSharp_Builtin.Pointer&lt;/code&gt; と &lt;code&gt;Pointer&lt;/code&gt; です。 &lt;code&gt;Pointer&lt;/code&gt; の方は .smi ファイルの中で &lt;code&gt;_require &amp;quot;ffi.smi&amp;quot;&lt;/code&gt; してから使います。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;structure SMLSharp_Builtin
+  structure Pointer =
+  struct
+    val identityEqual = _builtin val IdentityEqual : boxed * boxed -&amp;gt; bool
+    val advance = _builtin val Ptr_advance : &#39;a ptr * int -&amp;gt; &#39;a ptr
+    val deref = _builtin val Ptr_deref : &#39;a ptr -&amp;gt; &#39;a
+    val store = _builtin val Ptr_store : &#39;a ptr * &#39;a -&amp;gt; unit
+
+    val toUnitPtr = _builtin val Cast : &#39;a ptr -&amp;gt; unit ptr
+    val fromUnitPtr = _builtin val Cast : unit ptr -&amp;gt; &#39;a ptr
+    val toCodeptr = _builtin val BitCast : unit ptr -&amp;gt; codeptr
+  end
+  end
+
+structure Pointer =
+struct
+  val advance = SMLSharp_Builtin.Pointer.advance
+
+  val load =
+      case &#39;a in &#39;a ptr -&amp;gt; &#39;a of
+        int =&amp;gt; SMLSharp_Builtin.Pointer.deref
+      | word =&amp;gt; SMLSharp_Builtin.Pointer.deref
+      | SMLSharp_Builtin.Word8.word =&amp;gt; SMLSharp_Builtin.Pointer.deref
+      | char =&amp;gt; SMLSharp_Builtin.Pointer.deref
+      | real =&amp;gt; SMLSharp_Builtin.Pointer.deref
+      | SMLSharp_Builtin.Real32.real =&amp;gt; SMLSharp_Builtin.Pointer.deref
+      | &#39;b ptr =&amp;gt; SMLSharp_Builtin.Pointer.deref
+
+  val store =
+      case &#39;a in &#39;a ptr * &#39;a -&amp;gt; unit of
+        int =&amp;gt; SMLSharp_Builtin.Pointer.store
+      | word =&amp;gt; SMLSharp_Builtin.Pointer.store
+      | SMLSharp_Builtin.Word8.word =&amp;gt; SMLSharp_Builtin.Pointer.store
+      | char =&amp;gt; SMLSharp_Builtin.Pointer.store
+      | real =&amp;gt; SMLSharp_Builtin.Pointer.store
+      | SMLSharp_Builtin.Real32.real =&amp;gt; SMLSharp_Builtin.Pointer.store
+      | &#39;b ptr =&amp;gt; SMLSharp_Builtin.Pointer.store
+
+  val isNull : &#39;a ptr -&amp;gt; bool
+  val NULL : unit -&amp;gt; &#39;a ptr
+
+  val importBytes : SMLSharp_Builtin.Word8.word ptr * int
+                    -&amp;gt; SMLSharp_Builtin.Word8.word vector
+  val importString : char ptr -&amp;gt; string
+end
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;load&lt;/code&gt; 、 &lt;code&gt;store&lt;/code&gt; 、 &lt;code&gt;deref&lt;/code&gt; 、 &lt;code&gt;advance&lt;/code&gt; あたりを良く使いそうですね。&lt;/p&gt;
+
+&lt;p&gt;実際にあった話。 &lt;code&gt;struct header { const char *name; int name_len; const char *value; int value_len}&lt;/code&gt; の配列(&lt;code&gt;struct header *&lt;/code&gt;)を扱う必要がありました。
+その配列をCの関数に渡して書き換えてもらって、後で値を取り出したいという状況がです。その時値を取り出すコードがこれです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;fun getHeader headers i =
+      let
+          val header_ptr : char ptr ptr = fromUnitPtr(headers)
+          val header_ptr = advance(header_ptr, i * 2)
+          val header_ptr : int ptr =
+              fromUnitPtr(toUnitPtr(header_ptr))
+          val header_ptr = advance(header_ptr , i * 2)
+
+          val header_ptr : char ptr ptr =
+              fromUnitPtr(toUnitPtr(header_ptr))
+          val name = deref(header_ptr)
+          val header_ptr = advance(header_ptr, 1)
+
+          val header_ptr : int ptr =
+              fromUnitPtr(toUnitPtr(header_ptr))
+          val nameLen = deref(header_ptr)
+          val header_ptr = advance(header_ptr, 1)
+
+          val header_ptr : char ptr ptr =
+              fromUnitPtr(toUnitPtr(header_ptr))
+          val value = deref(header_ptr)
+          val header_ptr = advance(header_ptr, 1)
+
+          val header_ptr : int ptr =
+              fromUnitPtr(toUnitPtr(header_ptr))
+          val valueLen = deref(header_ptr)
+      in
+          if isNull name
+          then (NONE, String.substring(importString(value), 0, valueLen))
+          else (SOME(String.substring(importString(name), 0, nameLen)),
+                String.substring(importString(value), 0, valueLen))
+      end
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;まず、タプルは構造体へのポインタなので今回の &lt;code&gt;struct header *&lt;/code&gt; は &lt;code&gt;(string * int * string * int) ptr&lt;/code&gt; ではありません。それは &lt;code&gt;struct header **&lt;/code&gt; になってしまいます。
+また、ポインタを扱う関数が &lt;code&gt;ptr&lt;/code&gt; 型しか受け付けないので &lt;code&gt;string&lt;/code&gt; ではなく &lt;code&gt;char ptr&lt;/code&gt; にしておいて後から &lt;code&gt;importString&lt;/code&gt; で文字列にする戦略をとります。&lt;/p&gt;
+
+&lt;p&gt;そして配列のi番目にアクセスしたかったら先述の通り &lt;code&gt;(string * int * string * int) ptr&lt;/code&gt; ではないので地道に &lt;code&gt;char ptr ptr&lt;/code&gt; 2*i個分、 &lt;code&gt;int ptr&lt;/code&gt; 2*i個分ポインタを進めます。
+ポインタの型を変える時はダイレクトには変換出来ないようなので一旦 &lt;code&gt;unit ptr&lt;/code&gt; を経由してから変換。そして次のメンバにアクセスするために &lt;code&gt;advance&lt;/code&gt; という形をとります。&lt;/p&gt;
+
+&lt;p&gt;そこまでしたら後は &lt;code&gt;deref&lt;/code&gt; してあげれば欲しい値がとれます。&lt;/p&gt;
+
+&lt;h1 id=&#34;replからのimportと-dynamiclink:017736760057fcde64c6904c3e916b13&#34;&gt;REPLからのimportと &lt;code&gt;DynamicLink&lt;/code&gt;&lt;/h1&gt;
+
+&lt;p&gt;SML#のREPLからも勿論インポート出来ますが、SML#のランタイムにリンクされてないライブラリのものはインポート出来ないのでダイナミックリンクを使います。 &lt;code&gt;DynamicLink&lt;/code&gt; にCの &lt;code&gt;dl*&lt;/code&gt; と同じ関数群が用意されているのでそれらを使います。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;structure DynamicLink =
+struct
+  type lib (= ptr)
+  datatype scope = LOCAL | GLOBAL
+  datatype mode = LAZY | NOW
+  val dlopen : string -&amp;gt; lib
+  val dlopen&#39; : string * scope * mode -&amp;gt; lib
+  val dlsym : lib * string -&amp;gt; codeptr
+  val dlsym&#39; : lib * string -&amp;gt; unit ptr
+  val dlclose : lib -&amp;gt; unit
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;val lib = dlopen(&amp;quot;libawsome.so&amp;quot;)&lt;/code&gt; でライブラリのオープン、 &lt;code&gt;dlsym(lib, &amp;quot;awm_function&amp;quot;): _import () -&amp;gt;unit&lt;/code&gt; で読み込みです。&lt;/p&gt;
+
+&lt;p&gt;これでインポートする関数は必要になった時に読み込んで欲しいのですがトップレベルで &lt;code&gt;val&lt;/code&gt; でバインドすると即読み込まれてしまいます。その辺を上手くやるテクニックがSML#のソースにありました。MySQLのバインディングの部分です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;  fun lazy f =
+      let
+        val r = ref NONE
+      in
+        fn () =&amp;gt;
+           case !r of
+             SOME x =&amp;gt; x
+           | NONE =&amp;gt;
+             let val x = f ()
+             in r := SOME x; x
+             end
+      end
+
+  val lib =
+      lazy (fn _ =&amp;gt;
+               DynamicLink.dlopen
+                 (case OS.Process.getEnv &amp;quot;SMLSHARP_LIBMYSQLCLIENT&amp;quot; of
+                    NONE =&amp;gt; &amp;quot;libmysqlclient.16.&amp;quot; ^ SMLSharp_Config.DLLEXT ()
+                  | SOME x =&amp;gt; x))
+
+  fun find s = DynamicLink.dlsym(lib (), s)
+  val mysql_init =
+      lazy (fn _ =&amp;gt; find &amp;quot;mysql_init&amp;quot;
+                    : _import (MYSQL) -&amp;gt; MYSQL)
+
+
+...
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;遅延評価してますね。これ。呼び出す時は &lt;code&gt;mysql_init () (mysql)&lt;/code&gt; みたいに一旦lazyを剥がさないといけないので注意です。&lt;/p&gt;
+
+&lt;h1 id=&#34;問題とか:017736760057fcde64c6904c3e916b13&#34;&gt;問題とか&lt;/h1&gt;
+
+&lt;h2 id=&#34;cの仕様:017736760057fcde64c6904c3e916b13&#34;&gt;Cの仕様&lt;/h2&gt;
+
+&lt;p&gt;確かCの仕様上構造体のメモリ上の表現にはメンバ以外のものも置いていいことになっていた筈です。
+上の方法では変なコンパイラでコンパイルしたコードだと動きそうにないですね。GCCやClangは大丈夫な筈。&lt;/p&gt;
+
+&lt;p&gt;そもそもSML#自体GCCとABI互換なコンパイラでコンパイルしたものじゃないとリンク出来なそうな気がするので杞憂ですかね。&lt;/p&gt;
+
+&lt;h2 id=&#34;メモリ確保:017736760057fcde64c6904c3e916b13&#34;&gt;メモリ確保&lt;/h2&gt;
+
+&lt;p&gt;Cの関数から構造体のポインタが返ってくるケースだと良いんですが自分で構造体を用意してCの関数に渡すケースだとメモリの確保が問題になります。現状、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;struct header
+*prepare_headers(int n)
+{
+  return malloc(n * sizeof(struct header));
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;みたいなヘルパ関数を用意して凌いでますが欲しい構造体毎に書かないといけないのであまり嬉しくないです。 &lt;code&gt;sizeof&lt;/code&gt; をSML#側でとれれば単に &lt;code&gt;malloc&lt;/code&gt; をバインドするだけで済むのに。
+もう少し欲を言うと &lt;code&gt;malloc&lt;/code&gt; したらGCから外れそうな気がするので明示的に &lt;code&gt;free&lt;/code&gt; する必要がありそうです。GCに載るメモリ確保関数も欲しいですね。
+さらに欲を言うとスタックアロケートする版のメモリ確保関数も欲しい。もしかしたら &lt;code&gt;alloca&lt;/code&gt; で大丈夫なんでしょうか。&lt;/p&gt;
+
+&lt;h2 id=&#34;define:017736760057fcde64c6904c3e916b13&#34;&gt;&lt;code&gt;#define&lt;/code&gt;&lt;/h2&gt;
+
+&lt;p&gt;ヘッダファイル内で定数を &lt;code&gt;#define&lt;/code&gt; してあることが多々あります。それらは地道に手書きでSML#側に持ってくることになりますが気になるのが互換性の問題。
+特にOSのヘッダファイルには名前は同じだけどOS毎に値が異なるものが存在します。シグナルとか。OSで条件分岐するか理想的にはプリプロセッサのサポートがあればどうにかなりそうなんですけどねぇ。
+現状だとCで定数を返すgetter関数を書いてSML#側でインポートして…ってやればどうにか出来そうですけどやりたくないですね。&lt;/p&gt;
+
+&lt;h2 id=&#34;変数:017736760057fcde64c6904c3e916b13&#34;&gt;変数&lt;/h2&gt;
+
+&lt;p&gt;私はまだ遭遇してないのですがライブラリによってはグローバル変数にアクセスしないといけないものが存在します。これもgetterとsetterを書いて…ってやるとどうにか出来そうですがどうせなら変数のインポートも出来ると良いですよね。&lt;/p&gt;
+
+&lt;h2 id=&#34;まとめ:017736760057fcde64c6904c3e916b13&#34;&gt;まとめ&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;SML#でCのバインドを書く時は少しテクニックが必要&lt;/li&gt;
+&lt;li&gt;SML#にはポインタを直接扱える関数もある&lt;/li&gt;
+&lt;li&gt;それでも機能が足りない時はCでヘルパ関数を書こう。&lt;/li&gt;
+&lt;li&gt;ダイナミックリンクライブラリも扱えるよ&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;&lt;div id=&#34;disqus_thread&#34;&gt;&lt;/div&gt;
+&lt;script type=&#34;text/javascript&#34;&gt;
+    /* * * CONFIGURATION VARIABLES * * */
+    var disqus_shortname = &amp;lsquo;blackenedgold&amp;rsquo;;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;/* * * DON&#39;T EDIT BELOW THIS LINE * * */
+(function() {
+    var dsq = document.createElement(&#39;script&#39;); dsq.type = &#39;text/javascript&#39;; dsq.async = true;
+    dsq.src = &#39;//&#39; + disqus_shortname + &#39;.disqus.com/embed.js&#39;;
+    (document.getElementsByTagName(&#39;head&#39;)[0] || document.getElementsByTagName(&#39;body&#39;)[0]).appendChild(dsq);
+})();
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;/script&gt;
+&lt;noscript&gt;Please enable JavaScript to view the &lt;a href=&#34;https://disqus.com/?ref_noscript&#34; rel=&#34;nofollow&#34;&gt;comments powered by Disqus.&lt;/a&gt;&lt;/noscript&gt;&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>SMLのファンクタに少し踏み込んだ</title>
