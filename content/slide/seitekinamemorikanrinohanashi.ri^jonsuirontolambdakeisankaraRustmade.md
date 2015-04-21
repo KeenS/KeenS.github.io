@@ -96,6 +96,12 @@ title: 静的なメモリ管理の話。リージョン推論とλ計算からRu
 * 弱い = ユーザがミスるとメモリ周りのエラーやリークが実行時に起きる
 * 動的 = 実行時になるまでメモリの使われ方が分からない
 
+### 例
+
+* バグったGC
+  + 普通はない
+  + (参照カウント？)
+
 
 # メモリ管理の話
 ---------------
@@ -121,7 +127,6 @@ title: 静的なメモリ管理の話。リージョン推論とλ計算からRu
 * 実現可能性は？
 
 
-
 # 強い静的メモリ管理の話をしよう
 
 
@@ -157,7 +162,7 @@ title: 静的なメモリ管理の話。リージョン推論とλ計算からRu
 * データが保存される場所を指す。リージョンはいくつもある。
 * リージョン推論でデータがどのリージョンに入るかが分かる
 * さらにリージョンのサイズもある程度予想がつくので静的に管理出来る
-* 関数などは引数のリージョンによ対して多相になる「リージョン多相」などもある
+* 関数などは引数のリージョンに対して多相になる「リージョン多相」などもある
 * この辺は[Martin Elsmanの論文たち](http://www.elsman.com/mlkit/papers.html)を参考にして下さい
   + [A Brief Introduction to Regions](http://www.elsman.com/mlkit/pdf/ismm98.pdf)とか。
 
@@ -170,7 +175,8 @@ title: 静的なメモリ管理の話。リージョン推論とλ計算からRu
 * 実現可能性
 * 実用性
 
-
+# 実現可能性
+
 # 実現可能性
 -----------
 
@@ -196,8 +202,10 @@ title: 静的なメモリ管理の話。リージョン推論とλ計算からRu
 ----------
 
 * Mozillaが開発した言語
+* 2008~
+* Cycloneを参考にしたらしい。
 * 活発に開発される
-* 大きなプロジェクトに現行のGeckoを置き換えるべく開発された[Servo](https://github.com/servo/servo)がある
+* 大きなプロジェクトに現行のレンダリングエンジン、Geckoを置き換えるべく開発された[Servo](https://github.com/servo/servo)がある
   + 既にC++製のGockoの3倍速い
   + 並列レンダリングすればさらに速い。
 
@@ -313,17 +321,18 @@ error: use of moved value: `x`
 
 ```rust
 fn main() {
-    let x = Box::new(5);
+  let x = Box::new(5);
 
-    add_one(x);
+  add_one(x);
 
-    println!("{}", x);
+  println!("{}", x);
 }
 
 fn add_one(mut num: Box<i32>) {
     *num += 1;
 }
 ```
+
 
 # 所有権
 -------
@@ -331,19 +340,20 @@ fn add_one(mut num: Box<i32>) {
 
 ```rust
 fn main() {
-    let x = Box::new(5);
+  let x = Box::new(5);
 
-    let y = add_one(x);
+  let y = add_one(x);
 
-    println!("{}", y);
+  println!("{}", y);
 }
 
 fn add_one(mut num: Box<i32>) -> Box<i32> {
-    *num += 1;
+  *num += 1;
 
-    num
+  num
 }
 ```
+
 
 # 所有権の貸し借り
 ---------------
@@ -358,15 +368,15 @@ fn add_one(mut num: Box<i32>) -> Box<i32> {
 
 ```rust
 fn main() {
-    let mut x = 5;
+  let mut x = 5;
 
-    add_one(&mut x);
+  add_one(&mut x);
 
-    println!("{}", x);
+  println!("{}", x);
 }
 
 fn add_one(num: &mut i32) {
-    *num += 1;
+  *num += 1;
 }
 ```
 
@@ -379,7 +389,7 @@ fn add_one(num: &mut i32) {
 
 ```rust
 fn add_one<'a>(num: &'a mut i32) {
-    *num += 1;
+  *num += 1;
 }
 ```
 
@@ -391,42 +401,42 @@ fn add_one<'a>(num: &'a mut i32) {
 
 ```rust
 fn main() {
-    let y = &5;     // -+ y goes into scope
-                    //  |
-    // stuff        //  |
-                    //  |
-}                   // -+ y goes out of scope
+  let y = &5;     // -+ y goes into scope
+                  //  |
+  // stuff        //  |
+                  //  |
+}                 // -+ y goes out of scope
 ```
 
 
-# ライフタイムの明示的宣言
+# LTの明示的宣言
 --------------
-こんな構造体を宣言したとする。
+こんな構造体を宣言したとする。 `x` はコンストラクタに渡された値のライフタイムを引き継ぐ。
 
 ```rust
 struct Foo<'a> {
     x: &'a i32,
 }
 ```
-
 
-# ライフタイムの明示的宣言
+
+# LTの明示的宣言
 --------------
 `f.x`のライフタイムが `y` のライフタイムに制限されるので
 `y` より広いスコープにある `x` には代入出来ない。
 
 ```rust
 fn main() {
-    let x;                    // -+ x goes into scope
-                              //  |
-    {                         //  |
-        let y = &5;           // ---+ y goes into scope
-        let f = Foo { x: y }; // ---+ f goes into scope
-        x = &f.x;             //  | | error here
-    }                         // ---+ f and y go out of scope
-                              //  |
-    println!("{}", x);        //  |
-}                             // -+ x goes out of scope
+  let x;                  // -+ x goes into scope
+                          //  |
+  {                       //  |
+    let y = &5;           // ---+ y goes into scope
+    let f = Foo { x: y }; // ---+ f goes into scope
+    x = &f.x;             //  | | error here
+  }                       // ---+ f and y go out of scope
+                          //  |
+  println!("{}", x);      //  |
+}                         // -+ x goes out of scope
 ```
 
 
@@ -443,5 +453,10 @@ fn main() {
 * Rust言語がリージョン推論を利用している。
 * Rustをみんな使おう!
 
+
+# 参考
+* [ML Kit](http://www.elsman.com/mlkit/)
+* [Rust](http://www.rust-lang.org/)
+* [Allocators in Rust - Baby Steps](http://smallcultfollowing.com/babysteps/blog/2014/11/14/allocators-in-rust/)
 </script>
 </section>
