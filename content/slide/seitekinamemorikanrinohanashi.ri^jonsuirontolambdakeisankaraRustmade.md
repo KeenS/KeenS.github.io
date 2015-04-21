@@ -161,6 +161,7 @@ title: 静的なメモリ管理の話。リージョン推論とλ計算からRu
 * データが保存される場所を指す。リージョンはいくつもある。
 * リージョン推論でデータがどのリージョンに入るかが分かる
 * さらにリージョンのサイズもある程度予想がつくので静的に管理出来る
+* 関数などは引数のリージョンによ対して多相になる「リージョン多相」などもある
 * この辺は[Martin Elsmanの論文たち](http://www.elsman.com/mlkit/papers.html)を参考にして下さい
   + [A Brief Introduction to Regions](http://www.elsman.com/mlkit/pdf/ismm98.pdf)とか。
 
@@ -209,8 +210,208 @@ title: 静的なメモリ管理の話。リージョン推論とλ計算からRu
 ----------
 
 * リージョン推論(ライフタイム)でメモリを管理する
+  - かなり賢くて、ヒープにアロケートする必要なけばスタックを使う。
+* mallocとfreeは全てコンパイル時に自動で挿入される
 * (多分)リージョン推論のみでメモリ管理するために所有権という概念がある。
   + 所有権自体は並列性の導入などにも有用だと思われる。
+    -  競合状態の回避とか
+* その他
+  + 代数的データ型とパターンマッチ
+  + トレイトベース(non-nominal)のジェネリクス
+
+詳細は[公式ページ](http://www.rust-lang.org/)から
+
+
+# Rustのライフタイムと所有権
+-------------------------
+
+
+
+# Cの例
+-------
+
+```c
+{
+    int *x = malloc(sizeof(int));
+
+    // we can now do stuff with our handle x
+    *x = 5;
+
+    free(x);
+}
+```
+
+
+# Rustに翻訳
+------------
+
+```rust
+{
+    let x = Box::new(5);
+}
+```
+
+
+# 少しいじってみる
+---------------
+
+trivialに見える
+
+```rust
+fn main() {
+    let x = Box::new(5);
+
+    add_one(x);
+}
+
+fn add_one(mut num: Box<i32>) {
+    *num += 1;
+}
+```
+
+
+# 少しいじってみる
+---------------
+
+printlnを追加してみる
+
+```rust
+fn main() {
+    let x = Box::new(5);
+
+    add_one(x);
+
+    println!("{}", x);
+}
+
+fn add_one(mut num: Box<i32>) {
+    *num += 1;
+}
+```
+
+
+# 少しいじってみる
+----------------
+
+エラーになる。
+
+```
+error: use of moved value: `x`
+   println!("{}", x);
+                  ^
+```
+
+
+# 所有権
+-------
+
+`add_one` を呼んだ時点で所有権が `add_one` に移るので `println!` では使えない。
+
+```rust
+fn main() {
+    let x = Box::new(5);
+
+    add_one(x);
+
+    println!("{}", x);
+}
+
+fn add_one(mut num: Box<i32>) {
+    *num += 1;
+}
+```
+
+# 所有権
+-------
+新たに値を返してもらえば使える。
+
+```rust
+fn main() {
+    let x = Box::new(5);
+
+    let y = add_one(x);
+
+    println!("{}", y);
+}
+
+fn add_one(mut num: Box<i32>) -> Box<i32> {
+    *num += 1;
+
+    num
+}
+```
+
+# 所有権の貸し借り
+---------------
+
+* さっきの例は面倒。
+* `add_one` が `x` を奪ったのが問題。
+* `x` を「借り」ることが出来る。
+
+
+# 所有権の貸し借り
+----------------
+
+```rust
+fn main() {
+    let mut x = 5;
+
+    add_one(&mut x);
+
+    println!("{}", x);
+}
+
+fn add_one(num: &mut i32) {
+    *num += 1;
+}
+```
+
+
+# ライフタイム
+------------
+
+先の `add_one` はライフタイム(リージョン)アノテーションを省略していた。  
+省略せずに書くとこうなる。(リージョン多相)
+
+```rust
+fn add_one<'a>(num: &'a mut i32) {
+    *num += 1;
+}
+```
+
+
+# ライフタイム
+------------
+
+スコープの終わりでライフタイムが終わる。普通に見える。
+
+```rust
+fn main() {
+    let y = &5;     // -+ y goes into scope
+                    //  |
+    // stuff        //  |
+                    //  |
+}                   // -+ y goes out of scope
+```
+
+
+# ライフタイム
+------------
+所有権がからむと非自明
+
+```rust
+fn main() {
+    let x;                    // -+ x goes into scope
+                              //  |
+    {                         //  |
+        let y = &5;           // ---+ y goes into scope
+        let f = Foo { x: y }; // ---+ f goes into scope
+        x = &f.x;             //  | | error here
+    }                         // ---+ f and y go out of scope
+                              //  |
+    println!("{}", x);        //  |
+}                             // -+ x goes out of scope
+```
 
 </script>
 </section>
