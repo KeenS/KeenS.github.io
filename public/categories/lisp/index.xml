@@ -6,8 +6,504 @@
     <description>Recent content in Lisp on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Thu, 05 Mar 2015 13:18:44 +0900</lastBuildDate>
+    <lastBuildDate>Sun, 26 Apr 2015 21:09:07 +0900</lastBuildDate>
     <atom:link href="http://KeenS.github.io/categories/lisp/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Common Lispで限定継続と遊ぶ</title>
+      <link>http://keens.github.io/slide/Common_Lispdegenteikeizokutoasobu_/</link>
+      <pubDate>Sun, 26 Apr 2015 21:09:07 +0900</pubDate>
+      
+      <guid>http://keens.github.io/slide/Common_Lispdegenteikeizokutoasobu_/</guid>
+      <description>&lt;section data-markdown
+    data-separator=&#34;\n\n&#34;
+    data-vertical=&#34;\n\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+&lt;script type=&#34;text/template&#34;&gt;
+# Common Lispで限定継続と遊ぶ
+----------------------
+[Lisp Meet Up #27](https://atnd.org/events/64988)
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# About Me
+---------
+![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
+
+ + κeen
+ + [@blackenedgold](https://twitter.com/blackenedgold)
+ + Github: [KeenS](https://github.com/KeenS)
+ + 渋谷のエンジニア
+ + Lisp, ML, Shell Scriptあたりを書きます
+
+
+# Agenda
+--------
+
+0. cl-contの紹介
+1. 限定継続の話
+2. 限定継続の使い方の話
+3. 限定継続の実装の話
+
+
+# CL-CONTの紹介
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# CL-CONT
+---------
+
+* Common Lispの限定継続ライブラリ
+* 結構古くからあるっぽい
+* 割と色々なライブラリが使ってる
+
+# CL-CONT
+---------
+
+![cl-cont dependers](/images/cl-cont-dependers.png)
+
+# API
+-----
+
+* 継続を区切るマクロ
+  + `with-call/cc`
+  + `defun/cc`
+  + `lambda/cc`
+* 継続を取得するマクロ
+  + `call/cc`
+  + `let/cc`
+
+※後で説明するので意味が分からなくても問題ないです。
+
+
+# 限定継続の話
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# 継続とは
+---------
+
+* &#34;その後&#34;の計算を表わす概念。
+* 値が決定した後トップレベルに戻るまでの計算。
+* Schemeが一級市民として扱えることで有名
+* 値として取り出した時は0-1引数関数として振る舞う
+
+# 継続とは
+----------
+`foo`の継続は、`foo`を虫食いにしたものと思えば良い。
+
+```lisp
+(mapc #&#39;writ-line
+      (loop :for x :in list
+         :collect (if (evenp x)
+                      (foo x))))
+```
+
+# 継続とは
+----------
+`foo`の継続は、`foo`を虫食いにしたものと思えば良い。
+
+```lisp
+(mapc #&#39;writ-line
+      (loop :for x :in list
+         :collect (if (evenp x)
+                      □)))
+```
+
+# 継続とは
+----------
+あとはそれを関数にするだけ
+
+```lisp
+(lambda (k)
+  (mapc #&#39;writ-line
+        (loop :for x :in list
+           :collect (if (evenp x)
+                        k))))
+```
+
+
+# 限定継続とは
+---------
+
+* &#34;その後&#34;の計算を表わす概念。
+* 値が決定した後 *指定した位置* に戻るまでの計算。
+* 継続がトップレベルまで戻るのに対して限定継続途中で止まる。それだけ。
+* 部分継続などの言い方もある
+  + 英語もpart contとdelimited contで分かれる
+
+
+# 限定継続とは
+-------------
+先の例を`loop`までの限定継続にすると
+
+```lisp
+(mapc #&#39;writ-line
+      (loop :for x :in list
+         :collect (if (evenp x)
+                      (foo x))))
+```
+
+
+# 限定継続とは
+-------------
+先の例を`loop`までの限定継続にすると
+
+```lisp
+(loop :for x :in list
+           :collect (if (evenp x)
+                        □))
+```
+
+
+# 限定継続とは
+-------------
+
+```lisp
+(lambda (k)
+  (loop :for x :in list
+     :collect (if (evenp x)
+                  k)))
+```
+
+# 限定継続の挙動
+---------------
+普通のやつ
+
+```lisp
+(with-call/cc
+  (+ 1 (call/cc
+        (lambda (k)
+          (funcall k 2)))))
+```
+
+これは
+
+```lisp
+(+ 1 2)
+```
+
+と等価
+
+# 限定継続の挙動
+---------------
+今度は継続を呼ばないでみる
+
+```lisp
+(with-call/cc
+  (+ 1 (call/cc (lambda (k) 2))))
+```
+
+これは
+
+```lisp
+2
+```
+
+と等価
+
+# 限定継続の挙動
+---------------
+もうちょっと呼ばない例  
+(`(let/cc k ...)` = `(call/cc (lambda (k) ...))`)
+
+```lisp
+(with-call/cc
+  (write-line &#34;hello&#34;)
+  (let/cc k 1)
+  (write-line &#34;world&#34;))
+```
+
+は
+
+```lisp
+(progn
+  (write-line &#34;hello&#34;)
+  1)
+```
+
+と等価
+
+
+# 限定継続の使い方の話
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# 限定継続の使い方の話
+---------------------
+
+* グリーンスレッド
+* コールバックを綺麗に書き換える
+* 非決定性計算
+* etc...
+
+
+## グリーンスレッド
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+
+## グリーンスレッド
+-----------------
+
+* またの名をコルーチン
+* またの名を強調スレッド
+
+
+
+## グリーンスレッド
+-----------------
+
+```lisp
+(let (c)
+  (setf c (with-call/cc
+            (write-line &#34;in thread A 1&#34;)
+            (let/cc k k)
+            (write-line &#34;in thread A 2&#34;)
+            (let/cc k k)
+            (write-line &#34;in thread A 3&#34;)))
+  (write-line &#34;in main thread 1&#34;)
+  (setq c (funcall c))
+  (write-line &#34;in main thread 2&#34;)
+  (setq c (funcall c))
+  (write-line &#34;in main thread 3&#34;))
+```
+
+## グリーンスレッド
+-----------------
+実行結果
+
+```
+in thread A 1
+in main thread 1
+in thread A 2
+in main thread 2
+in thread A 2
+in main thread 3
+
+```
+
+
+## コールバックの書き換え
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+## コールバックの書き換え
+----------------------
+本当はこう書きたい
+
+```lisp
+(with-event-loop
+    (format t &#34;Hello, ~a!~%&#34; (async-read stream)))
+```
+
+## コールバックの書き換え
+----------------------
+しかしライブラリがコールバック関数を要求してくる
+
+```lisp
+(with-event-loop
+    (async-read stream (lambda (line)
+                         (format t &#34;Hello, ~a!~%&#34; line))))
+```
+
+## コールバックの書き換え
+-----------------------
+コールバック = 限定継続（後述）なのでこうしてやれば良い。
+
+```lisp
+(with-event-loop
+    (with-call/cc
+      (format t &#34;Hello, ~a!~%&#34;
+              (call/cc (lambda (k))
+                       (async-read stream k)))))
+```
+
+## 非決定性計算
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+## 非決定性計算
+-------------
+### ベースアイディア
+
+* 継続を関数として取り出した後同じ処理を何回も実行出来るんじゃね？
+
+
+## 非決定性計算
+-------------
+### ベースアイディア
+複数回呼び出してみる
+
+```lisp
+(let (c)
+  (setf c (with-call/cc
+            (+ 1 (* 2 (- 3 (let/cc k k))))))
+  (list (funcall c 1)
+        (funcall c 2)
+        (funcall c 3)))
+```
+
+
+## 非決定性計算
+-------------
+### ベースアイディア
+普通の1引数関数として使ってみる
+
+```lisp
+(let (c)
+  (setf c (with-call/cc
+            (+ 1 (* 2 (- 3 (let/cc k k))))))
+  (mapcar c (list 1 2 3)))
+```
+
+## 非決定性計算
+-------------
+### ベースアイディア
+マクロでラップしてみる
+
+```lisp
+(defmacro for (&amp;body expr)
+  `(with-call/cc ,@expr))
+(defmacro in (m)
+  `(let/cc k (apply #&#39;append (mapcar k ,m))))
+(defun yield (x) (list x))
+(defun unit () nil)
+```
+
+
+## 非決定性計算
+-------------
+使ってみる
+
+```lisp
+(for
+  (let ((x (in &#39;(1 2 3)))
+        (y (in &#39;(a b c))))
+    (yield (cons x y))))
+```
+
+```
+((1 . A) (1 . B) (1 . C) (2 . A) (2 . B) (2 . C) (3 . A) (3 . B) (3 . C))
+```
+
+
+# 限定継続の実装の話
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# 限定継続の実装の話
+-------------------
+
+* 継続は0~1引数関数として取り出せるのであった。
+  + 実は機械的に取り出せる
+* 継続は全ての式に暗黙に存在するのであった
+  + 全ての式を継続を明示的に使うようにも出来る
+
+
+# CPS変換
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# CPS変換
+---------
+
+* 全ての関数の引数を1つ増やして、そこで継続を受け取る
+* 値を返す時は暗黙のreturnを使うのではなく明示的に継続を呼ぶ
+* 関数を呼ぶ時は必ず継続を渡す。呼び出し元には返ってこない（自然と末尾再帰になる）
+
+
+# CPS変換
+---------
+例えば
+
+```lisp
+(with-call/cc
+  (foo (call/cc
+        (lambda (k)
+          (funcall k 2)))))
+```
+
+は、取り出された継続が
+
+```lisp
+(lambda (k) (foo k))
+```
+
+。
+
+
+# CPS変換
+---------
+よって
+
+```lisp
+((lambda (k) (foo k)) 2)
+```
+
+と変換される
+
+
+# CPS変換
+---------
+再帰関数だと少し面倒
+
+```lisp
+(defun fact (n)
+  (if (&lt;= n)
+      1
+      (* n (fact (- n 1))))))
+
+```
+
+が
+
+```lisp
+(defun fact (n c)
+  (if (&lt;= n)
+      (c 1)
+      (fact (- n 1) (lambda (v) (* n v)))))
+```
+
+となる
+
+
+# CPS変換
+---------
+
+* CPS変換を行なうことでいつでも継続を値として使える
+
+
+# 限定継続の実装の話
+-------------------
+
+* CPS変換を裏で行なっている
+* 自動で出来るのでマクロで変換をしている
+  + 組み込み関数は変更出来ないので特別扱い
+  + スペシャルフォームも気をつける必要がある
+* `lambda`が乱立するのでパフォーマンスは酷い。
+
+
+# まとめ
+-------
+
+* cl-contというライブラリがあって、限定継続が扱える
+* 限定継続は処理を中断したり再開したり繰り返したりに使える
+* 裏ではえげつないことをやっている
+* パフォーマンスが必要なところでは使っちゃダメ
+
+
+# 参考
+------
+* [picrin/partcont.scm at master · picrin-scheme/picrin](https://github.com/picrin-scheme/picrin)
+* [cl-cont | Quickdocs](http://quickdocs.org/cl-cont/)
+* [コルーチンをCommon Lispで簡単に定義 - さくらんぼのlambda日記](http://lambdasakura.hatenablog.com/entry/20111026/1319598590)
+* [継続渡しスタイル - Wikipedia](http://ja.wikipedia.org/wiki/%E7%B6%99%E7%B6%9A%E6%B8%A1%E3%81%97%E3%82%B9%E3%82%BF%E3%82%A4%E3%83%AB)
+* [M.Hiroi&#39;s Home Page / お気楽 Scheme プログラミング入門](http://www.geocities.jp/m_hiroi/func/abcscm20.html)
+&lt;/script&gt;
+&lt;/section&gt;
+</description>
+    </item>
     
     <item>
       <title>caveman2、ningle…Common LispのWeb周りのフレームワークを快適に使うためのたった1つのコト</title>
@@ -2943,299 +3439,6 @@ ageの計算が壊れているとする
 &lt;span style=&#34;font-size:600%&#34;&gt;以上&lt;/span&gt;  
 何か質問あればどうぞ
 
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-&lt;/script&gt;
-&lt;/section&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>claspを少し触ってみた</title>
-      <link>http://keens.github.io/slide/clasp/</link>
-      <pubDate>Tue, 28 Oct 2014 00:00:00 +0000</pubDate>
-      
-      <guid>http://keens.github.io/slide/clasp/</guid>
-      <description>&lt;section data-markdown
-    data-separator=&#34;\n\n&#34;
-    data-vertical=&#34;\n\n&#34;
-    data-notes=&#34;^Note:&#34;&gt;
-&lt;script type=&#34;text/template&#34;&gt;
-
-# claspを少し触ってみた
-----------------------
-Lisp Meet Up presented by Shibuya.lisp #21  
-2014-10-29  
-κeen(@blackenedgold)
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# About Me
----------
-![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:relative;right 0;&#34; --&gt;
-
- + κeen
- + 東大数学科の4年生
- + ソーシャルアカウントは上のアイコン達から。
- + Lisp, Ruby, OCaml, Shell Scriptあたりを書きます
-
-
-# clasp
--------
-
-* Github: [drmeister/clasp](https://github.com/drmeister/clasp)
-* 2014-09-18に0.1リリース(現在0.11プレビューが出ている)
-* 今は0.11プレビューが出ている
-* ANSI Common Lisp準拠を目指す(現在80 ~90%)
-* ECLからのフォーク
-* LLVMベースのJIT([MCJIT](http://llvm.org/docs/MCJITDesignAndImplementation.html))搭載
-* C++とLispで書かれている
-* C++との連携を意識
-
-Note:
-C++との連携の部分を強調。今回は0.11プレビューでの話
-
-
-# メモリ管理
-------------------
-
-* Memory Pool Systemと Boehm GCから選べる
-* ビルドするときにどっちかを選ぶ
-
-
-# メモリ管理
-------------------
-## [Boehm GC](http://www.hboehm.info/gc/)
-
-* Mark &amp;amp; Sweepのライブラリ
-* 枯れた有名なライブラリ
-* Lisp有名どころではGaucheが使う
-* RedHat系だとこれを使ってないとrpmリジェクトされやすいらしい(?)
-
-Note:
-他にはMozilla, W3M, GNU GCJ, GNU Obj-Cなどなど
-
-# メモリ管理
-------------------
-## [Memory Pool System](http://www.ravenbrook.com/project/mps/)
-
-* 複数のGCアルゴリズムを組み合わせて使えるらしい
-* since 1994
-* あまり分からないです&amp;gt;&amp;lt;
-
-
-# 依存ライブラリ
-----------------------
-
-* LLVM **3.6**
-* LLVM/clang **3.5** compiler
-* Boost build v2
-* boost libraries ver 1.55
-* Boehm 7.2
-* gmp-6.0.0
-* expat-2.0.1
-* zlib-1.2.8
-* readline-6.2
-
-
-&lt;span style=&#34;font-size:600%&#34;&gt;無理&lt;/span&gt;
-
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# externals-clasp
---------------------------
-
-* Github: [drmeister/externals-clasp](https://github.com/drmeister/externals-clasp)
-* 依存ライブラリを揃えるのが難しいとの声から作られた
-* 依存ライブラリを全てビルド&lt;!-- .element: class=&#34;fragment grow&#34; --&gt;
-
-
-&lt;span style=&#34;font-size:300%&#34;&gt;＼LLVMをビルド／&lt;/span&gt;
-
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-&lt;span style=&#34;font-size:300%&#34;&gt;＼Boostをビルド／&lt;/span&gt;
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-&lt;span style=&#34;font-size:200%&#34;&gt;ビルド時間はお察しです&lt;/span&gt;
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# 本体のビルド
-------------------
-Twitter実況をどうぞ↓↓
-
-# 本体のビルド
-------------------
-&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p&gt;clangがメモリ6GB以上食い続けてて怖い。何やってんの。&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/526417151486205952&#34;&gt;2014, 10月 26&lt;/a&gt;&lt;/blockquote&gt;
-
-# 本体のビルド
-------------------
-&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p&gt;clangの起動時間1時間超えてますよ…&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/526418636735401984&#34;&gt;2014, 10月 26&lt;/a&gt;&lt;/blockquote&gt;
-
-# 本体のビルド
-------------------
-&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p&gt;HDDプチプチ言ってるし今にも壊れそう&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/526420001587068929&#34;&gt;2014, 10月 26&lt;/a&gt;&lt;/blockquote&gt;
-
-# 本体のビルド
-------------------
-&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p&gt;&lt;a href=&#34;https://twitter.com/nobkz&#34;&gt;@nobkz&lt;/a&gt; claspのコンパイル中です。&amp;#10;clangなのにIOネックという謎の状態です。&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/526420473232367616&#34;&gt;2014, 10月 26&lt;/a&gt;&lt;/blockquote&gt;
-
-# 本体のビルド
-------------------
-&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p&gt;clangの消費メモリ7GB超えた&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/526423982992420864&#34;&gt;2014, 10月 26&lt;/a&gt;&lt;/blockquote&gt;
-
-&lt;span style=&#34;font-size:300%&#34;&gt;ビルドは自己責任で&lt;/span&gt;
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# 使ってみる
-------------
-## 起動オプション
-
-```
-/usr/local/clasp/bin/clasp_mps_o --help
-clasp options
--I/--ignore-image    - Don&#39;t load the boot image/start with init.lsp
--i/--image file      - Use the file as the boot image
--N/--non-interactive - Suppress all repls
--v/--version         - Print version
--s/--verbose         - Print more info while booting
--f/--feature feature - Add the feature to *features*
--e/--eval {form}     - Evaluate a form
--l/--load {file}     - LOAD the file
--r/--norc            - Don&#39;t load the ~/.clasprc file
--n/--noinit          - Don&#39;t load the init.lsp (very minimal environment)
--s/--seed #          - Seed the random number generator
--- {ARGS}*           - Trailing are added to core:*command-line-arguments*
-```
-
-# 使ってみる
-------------
-## ASDF
-
-* &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;1&#34; --&gt;動かない
-  + &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;2&#34; --&gt;ASDFの処理系依存の部分(`#+`)の問題
-  + &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;2&#34; --&gt;ECLと見做されるけどECLのコードは動かない
-
-# 使ってみる
-------------
-## cl-ppcre
-
-* [手動ロードスクリプト](https://gist.github.com/KeenS/4e25cb6e424ebe4e7a4a)
-* &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;1&#34; --&gt;動かない
-  + &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;2&#34; --&gt;`schar`がない
-  + &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;2&#34; --&gt;ANSI Common Lispにあるのに…
-
-# 使ってみる
-------------
-## C++との連携
-
-* &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;1&#34; --&gt;ドキュメントがない
-* &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;2&#34; --&gt;サンプルコードもない
-* &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;3&#34; --&gt;遂行不能
-
-# 使ってみる
-------------
-## LLVMの呼び出し
-* [clasp/src/llvmo/demo.lisp](https://github.com/drmeister/clasp/blob/master/src/llvmo/demo.lsp)
-* &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;1&#34; --&gt;動かない
-
-# 使ってみる
-------------
-&lt;style type=&#34;text/css&#34;&gt;
-.graph{
-  background:#aaa;
-  border-radius:5px;
-  white-space: nowrap;
-  text-align: left;
-}
-td {
-  white-space: nowrap;
-}
-&lt;/style&gt;
-
-処理系              |  `(time (fib 29))`
---------------------|-----------------------------------------------------------------
-clasp-0.1(boehm)    | &lt;div class=&#34;graph fragment&#34; style=&#34;width:calc(264.3px * 3);&#34; data-fragment-index=&#34;1&#34;&gt;26.43s&lt;/div&gt;
-clasp-0.1(mps)      | &lt;div class=&#34;graph fragment&#34; style=&#34;width:calc(172.8px * 3);&#34; data-fragment-index=&#34;1&#34;&gt;17.28s&lt;/div&gt;
-clasp-0.11(boehm)   | &lt;div class=&#34;graph fragment&#34; style=&#34;width:calc(213.2px * 3);&#34; data-fragment-index=&#34;2&#34;&gt;21.32s&lt;/div&gt;
-clasp-0.11(mps)     | &lt;div class=&#34;graph fragment&#34; style=&#34;width:calc(187.9px * 3);&#34; data-fragment-index=&#34;2&#34;&gt;18.79s&lt;/div&gt;
-ECL-13.5.1          | &lt;div class=&#34;graph&#34; style=&#34;width:calc( 16.0px * 3);&#34;&gt;1.603s&lt;/div&gt;
-ECL-13.5.1(compile) | &lt;div class=&#34;graph&#34; style=&#34;width:calc(  1.9px * 3);&#34;&gt;0.192s&lt;/div&gt;
-ABCL-1.3.1          | &lt;div class=&#34;graph&#34; style=&#34;width:calc( 32.9px * 3);&#34;&gt;3.292s&lt;/div&gt;
-ABCL-1.3.1(compile) | &lt;div class=&#34;graph&#34; style=&#34;width:calc(  2.4px * 3);&#34;&gt;0.241s&lt;/div&gt;
-
-
-# 使ってみる
-------------
-
-処理系              |  `(time (fib 29))`
---------------------|-----------------------------------------------------------------
-CLISP-2.49          | &lt;div class=&#34;graph&#34; style=&#34;width:calc( 38.4px * 3);&#34;&gt;3.847s&lt;/div&gt;
-CLISP-2.49(compile) | &lt;div class=&#34;graph&#34; style=&#34;width:calc(  7.1px * 3);&#34;&gt;0.7146s&lt;/div&gt;
-ccl-1.10            | &lt;div class=&#34;graph&#34; style=&#34;width:calc(  0.4px * 3);&#34;&gt;0.04033s&lt;/div&gt;
-sbcl-1.2.5          | &lt;div class=&#34;graph&#34; style=&#34;width:calc(  0.6px * 3);&#34;&gt;0.06469s&lt;/div&gt;
-alisp-9.0           | &lt;div class=&#34;graph&#34; style=&#34;width:calc(  230px * 3);&#34;&gt;23.09s&lt;/div&gt;
-alisp-9.0(compile)  | &lt;div class=&#34;graph&#34; style=&#34;width:calc(  0.6px * 3);&#34;&gt;0.06194s&lt;/div&gt;
-
-&lt;span style=&#34;font-size:200%&#34;&gt;LLVM/JITなのになぜ遅い？&lt;/span&gt;
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# LLVM/JITで遅い？
--------------------------
-
-* LLVMって速いんじゃ？
-* JIT搭載した○○が速いって聞いたよ
-  + JVM
-  + lua-jit
-  + Rubinius
-  + pypy
-
-
-# 言葉の罠: LLVM
---------------------
-
-* 遅いコードはどんなに頑張っても遅い
-* ECLのバックエンドにClang(=LLVM)を使ってもSBCLに勝てないのと同じ
-
-
-# 言葉の罠: JIT搭載
---------------------
-
-* JIT(実行時コンパイル)の意味は広い
-* 実行時にネイティブコードを吐けばJITと言える
-* claspは実行直前にコンパイルするだけ
-* 多くの速いJIT処理系はTracing JITを使う
-  + またの名を適応的コンパイル
-  + 実行時の情報に基いて実行中に最適化する
-  + `(declare ...)` を自動生成してる的な
-
-
-# Tracing JITへの道
---------------------
-
-* LLVMのJITは実行直前にコンパイルするだけ
-  + &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;1&#34; --&gt;Tracing JITのバックエンドには使える
-* 実行時最適化には最適化用のコードが必要
-  + &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;2&#34; --&gt;Common Lispでは`(declare ...)`用のコードを使い回せる
-* &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;3&#34; --&gt;案外近い
-
-
-# 結論
-------
-
-* &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;1&#34; --&gt;遅い
-* &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;2&#34; --&gt;時期尚早
-* &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;3&#34; --&gt;今後機能や速度改善があれば使えるようになるかも
-
-
-&lt;span style=&#34;font-size:600%&#34;&gt;以上&lt;/span&gt;  
-何か質問あればどうぞ
 
 &lt;!-- .slide: class=&#34;center&#34; --&gt;
 &lt;/script&gt;
