@@ -18,8 +18,8 @@ description:
  + κeen
  + [@blackenedgold](https://twitter.com/blackenedgold)
  + Github: [KeenS](https://github.com/KeenS)
- + 野生のLisper
- + Lisp, Ruby, OCaml, Shell Scriptあたりを書きます
+ + 渋谷のエンジニア
+ + Lisp, ML, Shell Scriptあたりを書きます
 
 
 
