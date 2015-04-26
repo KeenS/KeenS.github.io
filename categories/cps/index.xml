@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Cps on κeenのHappy Hacκing Blog</title>
+    <link>http://KeenS.github.io/categories/cps/</link>
+    <description>Recent content in Cps on κeenのHappy Hacκing Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en-us</language>
+    <lastBuildDate>Sat, 25 Apr 2015 23:44:46 +0900</lastBuildDate>
+    <atom:link href="http://KeenS.github.io/categories/cps/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>非同期処理の「その後」の話。goto、継続、限定継続、CPS、そしてコールバック地獄。</title>
+      <link>http://keens.github.io/slide/hidoukishorino_sononochi_nohanashi_goto_keizoku_genteikeizoku_CPS_soshiteko_rubakkujigoku_/</link>
+      <pubDate>Sat, 25 Apr 2015 23:44:46 +0900</pubDate>
+      
+      <guid>http://keens.github.io/slide/hidoukishorino_sononochi_nohanashi_goto_keizoku_genteikeizoku_CPS_soshiteko_rubakkujigoku_/</guid>
+      <description>&lt;section data-markdown
+    data-separator=&#34;\n\n&#34;
+    data-vertical=&#34;\n\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+&lt;script type=&#34;text/template&#34;&gt;
+# 非同期処理の「その後」の話
+----------------------
+## goto、継続、限定継続、CPS、そしてコールバック地獄
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# About Me
+---------
+![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
+
+ + κeen
+ + [@blackenedgold](https://twitter.com/blackenedgold)
+ + Github: [KeenS](https://github.com/KeenS)
+ + 野生のLisper
+ + Lisp, Ruby, OCaml, Shell Scriptあたりを書きます
+
+# 同期処理とは
+-------------
+通常、プログラムが外部とやりとり(I/O)する時に待ち時間が発生する。  
+
+
+# 非同期処理とは
+---------------
+待ち時間に別の処理をしようという発想。
+
+
+# 非同期処理の裏側
+-----------------
+処理Aと処理Bの他にいつどっちを動かすかを決めるスケジューラが存在することが多い
+
+# どうやって戻る問題
+-------------------
+処理Aを一時停止するにはどうしたらいいか。（保留）
+また、一時停止した後「その後」の処理を再開するにはどうしたらいいか。
+
+
+# 「その後」とは
+-----------
+
+```c
+...
+fputc(c); // ここの処理でI/Oが入る
+// 再開する時にここに戻ってきたい
+printf(&#34;Work done&#34;);
+...
+```
+
+# GOTO
+------
+`goto` を使えば戻れる
+
+```c
+...
+  fputc(c); // ここの処理でI/Oが入る
+  // 再開する時にここに戻ってきたい
+RESTART:
+  printf(&#34;Work done&#34;);
+...
+```
+
+# GOTOの問題
+------------
+こういうコードだとGOTOでは困る
+
+```c
+if ((c = fgetc(f)) != -1)
+```
+
+
+# GOTOの問題
+------------
+
+* 式の途中に入れない
+* 値を返せない
+* I/Oが終わった「その後」が思ったより複雑
+
+# &#34;継続&#34;という概念
+-----------------
+
+* continuation
+* ここで言ってる「その後」に名前をつけたもの
+* その後に行なわれる全ての処理のこと
+* 全ての言語に存在する
+
+
+# (限定)継続を値として扱える言語
+------------------------------
+
+* Scheme
+* OchaCaml
+* SML/NJ
+* (Ruby)
+* etc.
+
+
+## 正確には限定継続
+------------------
+
+* 細かい話だが継続と言うと処理Aとスケジューラ全てを含んでしまうので
+今回欲しいのは処理Aの中に限定した限定継続
+* 継続を値として扱えれば限定継続を[実装出来る]()ので今回はそこまで深く違いを気にする必要はない
+
+
+# 限定継続を使った非同期処理の例
+------------------------------
+`reset`で切り取りたい部分を囲って`shift`で限定継続を値として取り出し、引数の`lambda`に渡す。  
+`reset`、`shift`、`lambda`、`k`を無視すれば以前のコードと一致する。
+
+```scheme
+(reset
+  (if (/= (shift (lambda (k)
+                   (k (read-char f))))
+          -1)))
+
+```
+
+# 限定継続を使った非同期処理の例
+------------------------------
+`reset`で切り取りたい部分を囲って`shift`で限定継続を値として取り出し、引数の`lambda`に渡す。  
+`reset`、`shift`、`lambda`、`k`を無視すれば以前のコードと一致する。
+
+```scheme
+
+  (if (/= 
+                      (read-char f)
+          -1))
+
+```
+
+# 限定継続を使った非同期処理の例
+------------------------------
+`reset`で切り取りたい部分を囲って`shift`で限定継続を値として取り出し、引数の`lambda`に渡す。  
+`reset`、`shift`、`lambda`、`k`を無視すれば以前のコードと一致する。
+
+```scheme
+(if (/= (read-char f) -1))
+```
+
+# 継続を値として扱えない言語での継続
+----------------------------------
+
+# CPS
+# CPS変換
+# コールバック地獄の正体
+# 非同期処理の実装のまとめ
+# まとめ: なぜコールバック&#34;地獄&#34;なのか
+
+&lt;/script&gt;
+&lt;/section&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>
