@@ -10,6 +10,8 @@ description:
 <script type="text/template">
 # {{ .Page.Titile }}
 ----------------------
+
+<!-- .slide: class="center" -->
 
 # About Me
 ---------
@@ -20,8 +22,6 @@ description:
  + Github: [KeenS](https://github.com/KeenS)
  + 渋谷のエンジニア
  + Lisp, ML, Shell Scriptあたりを書きます
-
-
 
 </script>
 </section>
