@@ -6,7 +6,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <title>言葉遣いの時代変遷を追う | κeenのHappy Hacκing Blog</title>
+        <title>非同期処理の「その後」の話。goto、継続、限定継続、CPS、そしてコールバック地獄。 | κeenのHappy Hacκing Blog</title>
         <link rel="stylesheet" href="http://keens.github.io//reveal.js/css/reveal.min.css">
         <link rel='stylesheet' href='http://fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css'>
         <link rel="stylesheet" href="http://keens.github.io//libraries/normalize.3.0.1.css" />
@@ -89,13 +89,25 @@
         <div class="sixteen columns" style="height: 100%">
             <article class="li-article" style="height: 100%">
                 <header class="li-article-header" style="position:fixed">
-                    <h1 class="li-article-title">言葉遣いの時代変遷を追う</h1>
+                    <h1 class="li-article-title">非同期処理の「その後」の話。goto、継続、限定継続、CPS、そしてコールバック地獄。</h1>
                     <div class="li-article-meta">
-    <time class="li-article-date">2014-07-09</time>
+    <time class="li-article-date">2015-04-25</time>
     <ul class="li-article-tag">
     
         <li>
-            <a href="http://KeenS.github.io/categories/%e8%a8%80%e8%aa%9e%e5%87%a6%e7%90%86">言語処理</a>
+            <a href="http://KeenS.github.io/categories/%e9%9d%9e%e5%90%8c%e6%9c%9f">非同期</a>
+        </li>
+    
+        <li>
+            <a href="http://KeenS.github.io/categories/cps">CPS</a>
+        </li>
+    
+        <li>
+            <a href="http://KeenS.github.io/categories/%e7%b6%99%e7%b6%9a">継続</a>
+        </li>
+    
+        <li>
+            <a href="http://KeenS.github.io/categories/%e9%99%90%e5%ae%9a%e7%b6%99%e7%b6%9a">限定継続</a>
         </li>
     
 </ul>
@@ -110,38 +122,152 @@
     data-vertical="\n\n"
     data-notes="^Note:">
 <script type="text/template">
+# 非同期処理の「その後」の話
+----------------------
+## goto、継続、限定継続、CPS、そしてコールバック地獄
 
-# 言葉遣いの時代変遷を追う
-  理学部数学科4年
-  金 舜琳 （きん すんりん）
+<!-- .slide: class="center" -->
 
-## 概要
-   古いものから新しいものまであるリソースから単語を抽出し、使用頻度から単語の時代変遷を追う
-
-## 手法
-
-## step1
-<hr />
-青空か新聞から単語抽出抽出を行なう
+# About Me
+---------
+![κeenのアイコン](/images/icon.png) <!-- .element: style="position:absolute;right:0;z-index:-1" -->
 
-* 名詞、形容詞、語尾などが候補
-* 青空は多様性がある/話し言葉もとれるが古いのしかない？
-* 新聞は均質だからサンプル調査に向いてる？
+ + κeen
+ + [@blackenedgold](https://twitter.com/blackenedgold)
+ + Github: [KeenS](https://github.com/KeenS)
+ + 野生のLisper
+ + Lisp, Ruby, OCaml, Shell Scriptあたりを書きます
 
-## step2
-<hr/>
-年代別に使用頻度上位数十〜百ぐらいを使用頻度順まとめてみる
-
-## step3
-<hr/>
-似たような意味の単語で順位の入れ替わりが見受けられたら詳細に追ってみる  
-とりあえず手動を考えている。発展課題的にプログラムでやっても良いかもしれない
-
-##step4
-<hr/>
-変遷の背景を考えてみる  
-戦前/戦後とか分りやすいものとかなんとか
+# 同期処理とは
+-------------
+通常、プログラムが外部とやりとり(I/O)する時に待ち時間が発生する。  
 
+
+# 非同期処理とは
+---------------
+待ち時間に別の処理をしようという発想。
+
+
+# 非同期処理の裏側
+-----------------
+処理Aと処理Bの他にいつどっちを動かすかを決めるスケジューラが存在することが多い
+
+# どうやって戻る問題
+-------------------
+処理Aを一時停止するにはどうしたらいいか。（保留）
+また、一時停止した後「その後」の処理を再開するにはどうしたらいいか。
+
+
+# 「その後」とは
+-----------
+
+```c
+...
+fputc(c); // ここの処理でI/Oが入る
+// 再開する時にここに戻ってきたい
+printf("Work done");
+...
+```
+
+# GOTO
+------
+`goto` を使えば戻れる
+
+```c
+...
+  fputc(c); // ここの処理でI/Oが入る
+  // 再開する時にここに戻ってきたい
+RESTART:
+  printf("Work done");
+...
+```
+
+# GOTOの問題
+------------
+こういうコードだとGOTOでは困る
+
+```c
+if ((c = fgetc(f)) != -1)
+```
+
+
+# GOTOの問題
+------------
+
+* 式の途中に入れない
+* 値を返せない
+* I/Oが終わった「その後」が思ったより複雑
+
+# "継続"という概念
+-----------------
+
+* continuation
+* ここで言ってる「その後」に名前をつけたもの
+* その後に行なわれる全ての処理のこと
+* 全ての言語に存在する
+
+
+# (限定)継続を値として扱える言語
+------------------------------
+
+* Scheme
+* OchaCaml
+* SML/NJ
+* (Ruby)
+* etc.
+
+
+## 正確には限定継続
+------------------
+
+* 細かい話だが継続と言うと処理Aとスケジューラ全てを含んでしまうので
+今回欲しいのは処理Aの中に限定した限定継続
+* 継続を値として扱えれば限定継続を[実装出来る]()ので今回はそこまで深く違いを気にする必要はない
+
+
+# 限定継続を使った非同期処理の例
+------------------------------
+`reset`で切り取りたい部分を囲って`shift`で限定継続を値として取り出し、引数の`lambda`に渡す。  
+`reset`、`shift`、`lambda`、`k`を無視すれば以前のコードと一致する。
+
+```scheme
+(reset
+  (if (/= (shift (lambda (k)
+                   (k (read-char f))))
+          -1)))
+
+```
+
+# 限定継続を使った非同期処理の例
+------------------------------
+`reset`で切り取りたい部分を囲って`shift`で限定継続を値として取り出し、引数の`lambda`に渡す。  
+`reset`、`shift`、`lambda`、`k`を無視すれば以前のコードと一致する。
+
+```scheme
+
+  (if (/= 
+                      (read-char f)
+          -1))
+
+```
+
+# 限定継続を使った非同期処理の例
+------------------------------
+`reset`で切り取りたい部分を囲って`shift`で限定継続を値として取り出し、引数の`lambda`に渡す。  
+`reset`、`shift`、`lambda`、`k`を無視すれば以前のコードと一致する。
+
+```scheme
+(if (/= (read-char f) -1))
+```
+
+# 継続を値として扱えない言語での継続
+----------------------------------
+
+# CPS
+# CPS変換
+# コールバック地獄の正体
+# 非同期処理の実装のまとめ
+# まとめ: なぜコールバック"地獄"なのか
 
 </script>
 </section>

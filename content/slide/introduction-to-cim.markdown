@@ -19,6 +19,8 @@ description: "CIMの紹介スライド。<br>
 <hr />
 
 κeen(@blackenedgold)  
+
+<!-- .slide: class="center" -->
 
 ## 突然ですが
 Common Lispのスクリプトファイルの実行方法知ってますか？
@@ -73,6 +75,8 @@ case "$LISP_IMPL" in
 ＿人人人人人人＿  
 ＞　CIMの誕生　＜  
 ￣Y^Y^Y^Y^Y￣
+
+<!-- .slide: class="center" -->
 
 ## CIMとは
 <hr />
@@ -208,5 +212,7 @@ exec cl --  "$0" "$@"
 
 <span style="font-size:600%">以上</span>  
 何か質問あればどうぞ
+
+<!-- .slide: class="center" -->
 </script>
 </section>

@@ -19,6 +19,8 @@ description: "天下一altJS武闘大会でLTしたときの資料です。<br>
 κeen(@blackenedgold)  
 天下一altJS武闘会(#tenka1altJS)  
 @渋谷プライムプラザ四階
+
+<!-- .slide: class="center" -->
 
 ## 自己紹介
  + κeen
@@ -57,8 +59,12 @@ Shenの公式ページより
 ```
 
 そもそもaltJSじゃない…
+
+<!-- .slide: class="center" -->
 
 ボツ
+
+<!-- .slide: class="center" -->
 
 ## ECL with Emscripten
   + ANSI Common Lisp準拠のCommon Lisp処理系
@@ -67,8 +73,12 @@ Shenの公式ページより
 
 `#include <ecl/ecl-cmp.h>`
 が悪さをしてコンパイル出来ない
+
+<!-- .slide: class="center" -->
 
 ボツ
+
+<!-- .slide: class="center" -->
 
 ##  picrin
   + R7RS small準拠を目指すScheme処理系
@@ -80,8 +90,12 @@ Shenの公式ページより
 コンパイル出来ない…
 ( `va_args` は64bit x Clang3.3では
 コンパイル出来ないとか言われる。回避策も効かない)
+
+<!-- .slide: class="center" -->
 
 ボツ
+
+<!-- .slide: class="center" -->
 
 ##  オレオレaltJSの作り方の話
 escodegenを使う
@@ -106,8 +120,12 @@ JSON
 JS
 
 escodegenのドキュメントがあんまりない…
+
+<!-- .slide: class="center" -->
 
 ボツ
+
+<!-- .slide: class="center" -->
 
 ## ParenScript
   + Common Lisp製
@@ -127,5 +145,7 @@ escodegenのドキュメントがあんまりない…
 など
 
 以上
+
+<!-- .slide: class="center" -->
 </script>
 </section>

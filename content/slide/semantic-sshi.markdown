@@ -19,6 +19,8 @@ description: "Lisp Meet Up #22でLT間に合えばなと思っている内容。
 ---
 2014-11-27  
 κeen(@blackenedgold)
+
+<!-- .slide: class="center" -->
 
 
 # About Me
@@ -31,6 +33,8 @@ description: "Lisp Meet Up #22でLT間に合えばなと思っている内容。
  + Lisp, Ruby, OCaml, Shell Scriptあたりを書きます
 
 # Semantic Web とは
+
+<!-- .slide: class="center" -->
 
 # [Semantic Web](http://ja.wikipedia.org/wiki/%E3%82%BB%E3%83%9E%E3%83%B3%E3%83%86%E3%82%A3%E3%83%83%E3%82%AF%E3%83%BB%E3%82%A6%E3%82%A7%E3%83%96)
 ----------------
@@ -41,6 +45,8 @@ description: "Lisp Meet Up #22でLT間に合えばなと思っている内容。
 
 
 # Semantic S式とは
+
+<!-- .slide: class="center" -->
 
 # Semantic S式
 --------------
@@ -60,6 +66,8 @@ description: "Lisp Meet Up #22でLT間に合えばなと思っている内容。
 
 
 # 1. 意味が分かり易い
+
+<!-- .slide: class="center" -->
 
 # 1. 意味が分かり易い
 --------------------
@@ -131,6 +139,8 @@ description: "Lisp Meet Up #22でLT間に合えばなと思っている内容。
 ```
 
 # 2. パースし易い
+
+<!-- .slide: class="center" -->
 
 # 2. パースし易い
 ----------------
@@ -160,6 +170,8 @@ description: "Lisp Meet Up #22でLT間に合えばなと思っている内容。
 
 
 # 3. 編集が楽になる
+
+<!-- .slide: class="center" -->
 
 # 3. 編集が楽になる
 ------------------
@@ -193,6 +205,8 @@ description: "Lisp Meet Up #22でLT間に合えばなと思っている内容。
 * `c`だけじゃなくて`d`も、と考えると…
 
 # 4. 壊れにくい
+
+<!-- .slide: class="center" -->
 
 # 4. 壊れにくい
 ---------------
@@ -275,5 +289,7 @@ ageの計算が壊れているとする
 <span style="font-size:600%">以上</span>  
 何か質問あればどうぞ
 
+
+<!-- .slide: class="center" -->
 </script>
 </section>

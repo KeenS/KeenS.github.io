@@ -20,6 +20,8 @@ WEBベースのIDE Cloud 9でのLisp対応について。
 
 Lisp Meet Up #19 presented by Shibuya.lisp  
 κeen(@blackenedgold)  
+
+<!-- .slide: class="center" -->
 
 ## 自己紹介
 <hr />
@@ -49,16 +51,28 @@ Lisp Meet Up #19 presented by Shibuya.lisp
 
 ## こんなん
 <img src="/images/cloud9/login.png" alt="ログイン画面" />
+
+<!-- .slide: class="center" -->
 
 <img src="/images/cloud9/dashboard.png" alt="ダッシュボード" />
+
+<!-- .slide: class="center" -->
 
 <img src="/images/cloud9/workspace.png" alt="ワークスペース" />
+
+<!-- .slide: class="center" -->
 
 <img src="/images/cloud9/lookandfeel.png" alt="こんなかんじ" />
+
+<!-- .slide: class="center" -->
 
 <img src="/images/cloud9/CIMworks.png" alt="CIMも動く" />
+
+<!-- .slide: class="center" -->
 
 <img src="/images/cloud9/clworks.png" alt="CLもRun出来る" />
+
+<!-- .slide: class="center" -->
 
 ## デモ
 
@@ -84,5 +98,7 @@ Lisp Meet Up #19 presented by Shibuya.lisp
 
 <span style="font-size:600%">以上</span>  
 何か質問あればどうぞ
+
+<!-- .slide: class="center" -->
 </script>
 </section>

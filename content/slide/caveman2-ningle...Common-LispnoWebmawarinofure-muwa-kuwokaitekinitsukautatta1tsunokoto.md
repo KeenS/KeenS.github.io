@@ -14,9 +14,15 @@ title: caveman2、ningle…Common LispのWeb周りのフレームワークを快
 ----------------------
 Clack Meet Up #1  
 2015-03-05 @サムライト
+
+<!-- .slide: class="center" -->
 
 <span style="font-size:300%">ずっと俺のターン</span>
+
+<!-- .slide: class="center" -->
 
+# 問題
+------
 Common Lispは case
 
 * Sensitive <!--.element: class="fragment grow" data-fragment-index="1" -->  
@@ -24,12 +30,19 @@ Common Lispは case
 
 どっち?
 
+# 問題
+-------
+
 あれ？
+
 ```lisp
 (eql? 'CaseInsensitive 'caseinsensitive) ;=> t
 ```
 
 
+# 問題
+-------
+
 リーダがデフォルトで大文字にするだけ
 ```lisp
 (eql? '|CaseSensitive| '|casesensitive|) ;=> nil
@@ -62,6 +75,8 @@ Common Lispは case
 デフォルトでそのままだたっらいいのに
 
 # 魔法の`readtable-case`
+
+<!-- .slide: class="center" -->
 
 # 魔法の`readtable-case`
 -----------------------

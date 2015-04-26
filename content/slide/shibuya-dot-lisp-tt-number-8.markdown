@@ -22,6 +22,8 @@ moclを授業で半年扱ったときの雑感です。
 Shibuya.lisp TT #8  
 <br>
 κeen(@blackenedgold)  
+
+<!-- .slide: class="center" -->
 
 ## 自己紹介
 <hr />
@@ -32,6 +34,8 @@ Shibuya.lisp TT #8
  + Lisp, Ruby, OCaml, Shell Scriptあたりを書きます
 
  一年前
+
+<!-- .slide: class="center" -->
 
 ## [計算数学II](http://ks.ms.u-tokyo.ac.jp/)
 ![計算数学IIのホームページ](/images/shibuya_lisp_TT8/calculation_math.png)
@@ -42,6 +46,9 @@ Shibuya.lisp TT #8
 ![チーム人造エイリアン](/images/shibuya_lisp_TT8/android_alien.png)
 
 ## Common Lisp でAndroid?
+
+<!-- .slide: class="center" -->
+
 
 ## [mocl](https://wukix.com/mocl)
 ![mocl home](/images/shibuya_lisp_TT8/mocl.png)
@@ -86,6 +93,8 @@ void nextHand(){
     ...
 }
 ```
+
+## コードサンプル
 
 ```lisp
 (declaim (call-in next))
@@ -131,6 +140,9 @@ void nextHand(){
 使おうとしたライブラリは全て動かなかった
 
 現在の状態は不明
+
+
+<!-- .slide: class="center" -->
 
 ## 作業フロー(Android)
 <hr />
@@ -147,6 +159,8 @@ void nextHand(){
 <li>アプリをコンパイル</li>
 <li>実機/エミュレータに転送</li>
 </ol>
+
+<!-- .slide: class="center" -->
 
 <ol start="8">
 <li>動かす</li>
@@ -154,6 +168,8 @@ void nextHand(){
 <li>ひたすらlogcat眺める</li>
 <li>1に戻る</li>
 </ol>
+
+<!-- .slide: class="center" -->
 
 ### ここがつらい
 <hr />
@@ -182,6 +198,8 @@ void nextHand(){
 * [デモ動画](http://www.slideshare.net/blackenedgold/ss-30373688)
 
 ## おまけ
+
+<!-- .slide: class="center" -->
 
 ## 5月のアップデート内容
 <hr />
@@ -197,5 +215,7 @@ void nextHand(){
 
 <span style="font-size:600%">以上</span>  
 何か質問あればどうぞ
+
+<!-- .slide: class="center" -->
 </script>
 </section>

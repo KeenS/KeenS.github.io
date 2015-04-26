@@ -21,6 +21,8 @@ description: "<a href='https://atnd.org/events/56406'>Lisp Meet Up presented by 
 Lisp Meet Up presented by Shibuya.lisp #20  
 2014-09-29  
 κeen(@blackenedgold)
+
+<!-- .slide: class="center" -->
 
 # 自己紹介
 ---
@@ -180,6 +182,8 @@ time seconds seconds calls s/call s/call name
 
 <span style="font-size:200%">ほとんどGCですね。  
 本当にありがとう御座いました。</span>
+
+<!-- .slide: class="center" -->
 
 # 解決案
 ---
@@ -247,5 +251,7 @@ time seconds seconds calls s/call s/call name
 
 <span style="font-size:600%">以上</span>  
 何か質問あればどうぞ
+
+<!-- .slide: class="center" -->
 </script>
 </section>

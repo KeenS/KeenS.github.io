@@ -13,6 +13,8 @@ title: 静的なメモリ管理の話。リージョン推論とλ計算からRu
 # 静的なメモリ管理の話。リージョン推論とλ計算からRustまで
 ----------------------
 サイバーエージェント新卒エンジニア勉強会
+
+<!-- .slide: class="center" -->
 
 # About Me
 ---------
@@ -129,6 +131,8 @@ title: 静的なメモリ管理の話。リージョン推論とλ計算からRu
 
 # 強い静的メモリ管理の話をしよう
 
+
+<!-- .slide: class="center" -->
 
 # 強い静的メモリ管理の話をしよう
 ------------------------------
@@ -176,6 +180,8 @@ title: 静的なメモリ管理の話。リージョン推論とλ計算からRu
 * 実用性
 
 # 実現可能性
+
+<!-- .slide: class="center" -->
 
 # 実現可能性
 -----------
@@ -197,6 +203,8 @@ title: 静的なメモリ管理の話。リージョン推論とλ計算からRu
 
 # 実用性
 
+
+<!-- .slide: class="center" -->
 
 # Rust言語
 ----------
@@ -237,6 +245,8 @@ title: 静的なメモリ管理の話。リージョン推論とλ計算からRu
 # Rustのライフタイムと所有権
 -------------------------
 
+
+<!-- .slide: class="center" -->
 
 
 # Cの例
@@ -458,5 +468,7 @@ fn main() {
 * [ML Kit](http://www.elsman.com/mlkit/)
 * [Rust](http://www.rust-lang.org/)
 * [Allocators in Rust - Baby Steps](http://smallcultfollowing.com/babysteps/blog/2014/11/14/allocators-in-rust/)
+
+<!-- .slide: class="center" -->
 </script>
 </section>

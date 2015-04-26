@@ -20,6 +20,8 @@ color: red;
 -----------------------------------------------------------------
 Clack Meet Up #1  
 2015-03-05 @サムライト
+
+<!-- .slide: class="center" -->
 
 # About Me
 ---------
@@ -32,6 +34,8 @@ Clack Meet Up #1
  + Lisp, Ruby, OCaml, Shell Scriptあたりを書きます
 
 # Template Engines
+
+<!-- .slide: class="center" -->
 
 # Existing Architeture
 ----------------------
@@ -126,8 +130,12 @@ Clack Meet Up #1
 * リクエストの度にテンプレートパースするのは筋悪だけど開発中は毎回コンパイルするのは面倒？
 
 <!-- .slide: data-background="/images/arrows.jpg" -->
+
 # Arrows
+
 Template flies like an arrow
+
+<!-- .slide: class="center" -->
 
 <!-- .slide: data-background="/images/arrows.jpg" -->
 # Arrows

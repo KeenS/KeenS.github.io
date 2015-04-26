@@ -18,6 +18,7 @@ picrinの紹介とnitro、今開発中のsulfuricについてです。<br>
 ------------------------
 関数型なんたらの集い <2014-10-25>  
 κeen(@blackenedgold)
+<!-- .slide: class="center" -->
 
 # picrinについて
 ---------------
@@ -29,6 +30,9 @@ Note:
 ニトロ化に硫酸を使うことを触れる。
 
 ![picrinのロゴ](/images/picrin/picrin-logo-fin01-02.png)  
+
+
+<!-- .slide: class="center" -->
 
 # About Me
 ----------
@@ -155,6 +159,9 @@ Note:
 
 どう見ても<span style="font-size:150%">手動(ディレクトリ名)ソート</span>ですね。  
 本当にありがとうございました。
+
+<!-- .slide: class="center" -->
+
 
 
 * さすがにどうにかしたい
@@ -162,8 +169,12 @@ Note:
 * なんかmrubyのmrbgemとかみたいにしたら楽しいんじゃね？
 * 個々のnitroを別プロジェクトにも出来る!
 
+
+<!-- .slide: class="center" -->
 
 # sulfuricプロジェクト
+
+<!-- .slide: class="center" -->
 
 # sulfuricプロジェクト
 ---------------------
@@ -219,6 +230,7 @@ Note:
 
 # Q. なぜpicrin?
 ------------
+
 
 # A. picrinの独自拡張
 -----------------
@@ -230,7 +242,6 @@ Note:
 arrayとdictionaryに触れる。
 マクロに触れる
 C APIの項目があることにも触れる。
-
 
 # picrinのマクロ
 ----------------
@@ -256,8 +267,12 @@ C APIの項目があることにも触れる。
 
 # picrinにコミットしよう
 
+
+<!-- .slide: class="center" -->
 
 <span style="font-size:600%">以上</span>  
 何か質問あればどうぞ
+
+<!-- .slide: class="center" -->
 </script>
 </section>

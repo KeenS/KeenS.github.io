@@ -22,6 +22,8 @@ description: "Lisp Meet Up #21 の発表資料です。<br>
 Lisp Meet Up presented by Shibuya.lisp #21  
 2014-10-29  
 κeen(@blackenedgold)
+
+<!-- .slide: class="center" -->
 
 # About Me
 ---------
@@ -93,6 +95,8 @@ Note:
 
 <span style="font-size:600%">無理</span>
 
+
+<!-- .slide: class="center" -->
 
 # externals-clasp
 --------------------------
@@ -104,10 +108,16 @@ Note:
 
 <span style="font-size:300%">＼LLVMをビルド／</span>
 
+
+<!-- .slide: class="center" -->
 
 <span style="font-size:300%">＼Boostをビルド／</span>
+
+<!-- .slide: class="center" -->
 
 <span style="font-size:200%">ビルド時間はお察しです</span>
+
+<!-- .slide: class="center" -->
 
 # 本体のビルド
 ------------------
@@ -134,6 +144,8 @@ Twitter実況をどうぞ↓↓
 <blockquote class="twitter-tweet" lang="ja"><p>clangの消費メモリ7GB超えた</p>&mdash; κeen (@blackenedgold) <a href="https://twitter.com/blackenedgold/status/526423982992420864">2014, 10月 26</a></blockquote>
 
 <span style="font-size:300%">ビルドは自己責任で</span>
+
+<!-- .slide: class="center" -->
 
 # 使ってみる
 ------------
@@ -225,6 +237,8 @@ alisp-9.0           | <div class="graph" style="width:calc(  230px * 3);">23.09s
 alisp-9.0(compile)  | <div class="graph" style="width:calc(  0.6px * 3);">0.06194s</div>
 
 <span style="font-size:200%">LLVM/JITなのになぜ遅い？</span>
+
+<!-- .slide: class="center" -->
 
 # LLVM/JITで遅い？
 -------------------------
@@ -276,5 +290,7 @@ alisp-9.0(compile)  | <div class="graph" style="width:calc(  0.6px * 3);">0.0619
 
 <span style="font-size:600%">以上</span>  
 何か質問あればどうぞ
+
+<!-- .slide: class="center" -->
 </script>
 </section>
