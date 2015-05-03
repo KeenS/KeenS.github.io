@@ -5,7 +5,7 @@
         <meta http-equiv="content-type" content="text/html; charset=utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
 
-        <title>SML#をMacでビルドする | κeenのHappy Hacκing Blog</title>
+        <title>SMLを書くLisperの悩み | κeenのHappy Hacκing Blog</title>
         <link rel="stylesheet" href='http://fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css' />
         <link rel="stylesheet" href="http://keens.github.io//libraries/normalize.3.0.1.css" />
         <link rel="stylesheet" href="http://keens.github.io//css/liquorice.css" />
@@ -84,17 +84,13 @@
             <div class="sixteen columns">
                 <article class="li-article">
                     <header class="li-article-header">
-                        <h1 class="li-article-title">SML#をMacでビルドする</h1>
+                        <h1 class="li-article-title">SMLを書くLisperの悩み</h1>
                         <div class="li-article-meta">
-    <time class="li-article-date">2015-04-29</time>
+    <time class="li-article-date">2015-05-03</time>
     <ul class="li-article-tag">
     
         <li>
             <a href="http://KeenS.github.io/categories/sml">SML</a>
-        </li>
-    
-        <li>
-            <a href="http://KeenS.github.io/categories/smlsharp">SMLSharp</a>
         </li>
     
 </ul>
@@ -103,64 +99,103 @@
 
                     </header>
                     <section>
-                        
+                        <p>SMLばっかり書いてたら「お前Lisperじゃないだろ」って怒られたとかそういう話ではなく。</p>
 
-<p>κeenです。SML#2.0.0を文鎮と化していたMBAにインストールしたのでメモをば。</p>
+<p>ML系の言語は関数は1つの引数しかとれません。じゃあ複数の値を受け取りたい時はどうするかというと 1. 値を組(タプル)にして受け取る 2. 関数を返す関数((を返す関数)*)にして1つづつ受け取る の2種類の方法があります。
+それに纏わる話。</p>
 
-<p>基本は<a href="http://d.hatena.ne.jp/keita44_f4/20140412/1397279451">よんたさんの記事</a>をMacに翻訳した感じです。</p>
+<p>それぞれの記法を例示すると</p>
 
-<p>モチベーションは、<a href="http://www.pllab.riec.tohoku.ac.jp/smlsharp/ja/?Download">公式の配布物</a>がMac版だとMacPorts版しかなく、
-portsとhomebrewの混在は避けた方が良いと聞いたのでどうにかして自前ビルドしようとしたことです。</p>
+<ol>
+<li><p>値を組(タプル)にして受け取る</p>
 
-<h1 id="注意書き:d4eee8946023292eeefbfeb9ba252a7c">注意書き</h1>
-
-<p>冒頭にも書いてあるようにMBAは普段使ってなくて、このエントリーもMBAじゃないマシンから書いているのでコマンド類はコピペでなく写経してます。
-typoがあるかもしれないのでコピペして動かなかったら一応この記事のtypoを疑って下さい。</p>
-
-<h1 id="gmp32bitの準備:d4eee8946023292eeefbfeb9ba252a7c">GMP32bitの準備</h1>
-
-<pre><code>$ brew install gmp --32-bit
+<pre><code class="language-sml">fun add (x, y) = x + y
+add (1, 2)
 </code></pre>
 
-<p>で終わり。バージョン6.0.0aが入りました。
-既にインストールされていたら多分64bit版が入っているので一旦 <code>brew remove gmp</code> してから再度インストールすると良いです。尚、バイナリ版はないようで、ビルドが始まります。checkに時間が掛かる。</p>
+<p>あるいは、手続型言語に似せて</p>
 
-<h1 id="llvm34-32bitの準備:d4eee8946023292eeefbfeb9ba252a7c">LLVM34 32bitの準備</h1>
-
-<p>骨が折れるところですね。</p>
-
-<pre><code>$ wget http://llvm.org/releases/3.4.2/llvm-3.4.2.src.tar.gz
-$ gzcat llvm-3.4.2.src.tar.gz | tar xf -
-$ cd llvm-3.4.2.src
-$ ./configure --build=i686-mac-darwin CC='gcc -m32' CXX='g++ -m32' --prefix=/usr/local/Cellar/llvm34/3.4.2a
-$ make -j4
-$ make -j4 install
-$ cd ../
+<pre><code class="language-sml">add(1, 2)
 </code></pre>
 
-<p>としたら上手くいきました。何故上手くいったんでしょうねー。あとprefixは割と気持悪いのでみなさん適切な場所にインストールしましょうね。</p>
+<p>とするスタイルもあります</p></li>
 
-<h1 id="sml-のビルド:d4eee8946023292eeefbfeb9ba252a7c">SML# のビルド</h1>
+<li><p>関数を返す関数((を返す関数)*)に(カリー化)して1つづつ受け取る</p>
 
-<p>これが一番骨が折れるところですね。</p>
+<pre><code class="language-sml">fun add x y = x + y
+add x y  (*= ((add x) y)  *)
+</code></pre></li>
+</ol>
 
-<pre><code>$ wget http://www.pllab.riec.tohoku.ac.jp/smlsharp/download/smlsharp-2.0.0.tar.gz
-$ gzcat smlsharp-2.0.0.tar.gz | tar xf -
-$ cd smlsharp-2.0.0
-$ ./configure --with-llvm=/usr/local/Cellar/llvm34/3.4.2a/      \
-               LDFLAGS='-L/usr/local/Cellar/gmp/6.0.0a/lib'     \
-              CPPFLAGS='-I/usr/local/Cellar/gmp/6.0.0a/include' \
-                    CC='gcc -m32'                               \
-                   CXX='g++ -m32'
-$ make -j4
-$ make -j4 install
+<p>となります。勿論、2.のように何度も関数を呼び出すよりは1.のように一度で全ての値を渡してしまった方が速い筈です。なのでプリミティブっぽい関数はタプル式にした方が良さそうです。
+また、無名関数を定義する時にSMLでは<code>fun</code>のように自動でカリー化してくれる構文がないので複数の引数を受け付ける関数を引数にとる高階関数を定義するときはタプル式の方が都合が良いでしょう。</p>
+
+<p>例えば二項演算子はタプル式で定義しなければなりませんし、<code>List.foldl</code>のシグネチャも</p>
+
+<pre><code>('a * 'b -&gt; 'b) -&gt; 'b -&gt; 'a list -&gt; 'b
 </code></pre>
 
-<p>としたら出来ました。</p>
+<p>です。</p>
 
-<h1 id="まとめ:d4eee8946023292eeefbfeb9ba252a7c">まとめ</h1>
+<p>勿論、積極的に最適化を行なうコンパイラではuncurry optimizationや、closure eliminationでカリー化によるオーバーヘッドはなくなります。
+むしろ、カリー化した方が部分適用が出来るので利便性は上がります。となると後は無名関数の問題ですが、OCamlやHaskellなど無名関数にもカリー化した定義が出来る構文のある言語だとそれも問題なく、タプル式の引数の渡し方はしないようです。</p>
 
-<p>誰かhomebrewにして。</p>
+<p>SMLは流石に&rsquo;Standard&rsquo;なので最適化を仮定したり余計な構文を突っ込んだりはしづらいのでしょう。なのでこの問題はSML特有のようです。</p>
+
+<hr />
+
+<p>ここまで、なぜタイトルがML系言語ではなくSML限定なのかの前置き。</p>
+
+<hr />
+
+<p>こういう関数呼び出しがあるとします。<code>sub: string * int -&gt; char</code>は文字列の0番目の文字を取り出します。</p>
+
+<pre><code class="language-sml">sub(str, 0)
+</code></pre>
+
+<p>これに<code>Char.isAlpha : char -&gt; bool</code>を適用します。</p>
+
+<pre><code class="language-sml">Char.isAlpha sub(str, 0)
+</code></pre>
+
+<p>これ、コンパイルエラーになります。みなさん何でか分かりますか？</p>
+
+<p><code>sub(str, 0)</code>はあくまで<code>sub</code>に<code>(str, 0)</code>というタプルを渡している文なのでコンパイラはこう解釈するのです。</p>
+
+<pre><code class="language-sml">(Char.isAlpha sub) (str, 0)
+</code></pre>
+
+<p>毎回このようなエラーを出すのが面倒なので関数の呼び出しには全て手続き型言語のように括弧をつけることを考え始めます。</p>
+
+<pre><code class="language-sml">Char.isAlpha(sub(str, 0))
+</code></pre>
+
+<p>しかしそうは問屋が卸さないのがカリー化された関数。<code>String.isPrefix: string -&gt; string -&gt; bool</code>に次のような呼び出しをすると勿論怒られます。</p>
+
+<pre><code class="language-sml">String.isPrefix(&quot;/usr/local&quot; path)
+</code></pre>
+
+<p>必ず</p>
+
+<pre><code class="language-sml">String.isPrefix &quot;/usr/local&quot; path
+</code></pre>
+
+<p>としないといけません。これまた関数呼び出しがネストすると面倒で、</p>
+
+<pre><code class="language-sml">app (fn s =&gt; print (s ^ &quot;\n&quot;)) (List.filter (String.isPrefix &quot;/usr/local&quot;) paths)
+</code></pre>
+
+<p>のように毎回括弧が付き纏います。ここまでくるとS式みたく</p>
+
+<pre><code class="language-sml">(app (fn s =&gt; print (s ^ &quot;\n&quot;)) (List.filter (String.isPrefix &quot;/usr/local&quot;) paths))
+</code></pre>
+
+<p>と書きたくなってくるのがLisperの心情。これなら慣れないデータコンストラクタや関数呼び出しや中置演算子の優先順位問題も解決!やったね!!と思ったのですがやっぱりタプル式の関数呼出が行く手を阻むのでした。
+<code>(sub(str, i))</code> とか訳分からなすぎる。括弧多すぎる。</p>
+
+<p>ということでどっちに揃えたら良いのかさえ分かってないのにどっちにも揃えられてないSMLに対して悩みを抱えるLisperの悩みでした。</p>
+
+<p>因みに<a href="https://github.com/nrnrnr/SML-Lint">SML-Lint</a>は<code>Char.isAlpha()</code>のような書き方は無駄な括弧がついてると怒ってきます。</p>
 
                     </section>
                 </article>
@@ -178,8 +213,7 @@ $ make -j4 install
             <div class="eight columns">
                 <div class="li-pagination-previous">
                     
-                        Later article<br />
-                        <a href="http://keens.github.io/blog/2015/05/03/smlwokakulispernonayami"> SMLを書くLisperの悩み</a>
+                        &nbsp;
                     
                 </div>
             </div>
@@ -187,7 +221,7 @@ $ make -j4 install
                 <div class="li-pagination-next">
                     
                         Older article<br />
-                        <a href="http://keens.github.io/slide/Common_Lispdegenteikeizokutoasobu_/"> Common Lispで限定継続と遊ぶ</a>
+                        <a href="http://keens.github.io/blog/2015/04/29/smlsharpwomacdebirudosuru"> SML#をMacでビルドする</a>
                     
                 </div>
             </div>
