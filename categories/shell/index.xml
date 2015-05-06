@@ -6,8 +6,127 @@
     <description>Recent content in Shell on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Mon, 08 Dec 2014 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Wed, 06 May 2015 20:45:53 +0900</lastBuildDate>
     <atom:link href="http://KeenS.github.io/categories/shell/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>tarballベースの軽量バックアップツール&#39;Sheltar&#39;を作った</title>
+      <link>http://keens.github.io/blog/2015/05/06/tarballbe_sunokeiryoubakkuapputsu_rutsukutta</link>
+      <pubDate>Wed, 06 May 2015 20:45:53 +0900</pubDate>
+      
+      <guid>http://keens.github.io/blog/2015/05/06/tarballbe_sunokeiryoubakkuapputsu_rutsukutta</guid>
+      <description>
+
+&lt;p&gt;κeenです。みなさんバックアップは何使ってますか？大抵のOSには標準でバックアップツールが付いてますがそれ使ってます？私も使ってます。
+しかしやつらはそのOSでしか動かない/動かす方法があまり知られていないのでマシンがクラッシュしたりマシンを失くした時に困ります。&lt;/p&gt;
+
+&lt;p&gt;そこで候補に上がるのが安心と信頼のtarballですが今度は増分バックアップが取りづらいという問題があります。なのでtarballベースの差分バックアップツールを作りました。&lt;/p&gt;
+
+&lt;p&gt;まあ、捜せば同じようなものが色々あるでしょうが捜し回るのが面倒だし色々インストールするのも嫌なのでえいやと作ってしまいました。&lt;/p&gt;
+
+&lt;p&gt;タイトルにある通り&lt;a href=&#34;https://github.com/KeenS/sheltar&#34;&gt;Sheltar&lt;/a&gt;といいます。ポータブルなB Shellスクリプト製です。どこでも動くと思います。バックアップ（避難）だしshellだしtarだしって適当に付けたら意外にもコンフリクトがありませんでした。しかも&lt;a href=&#34;http://ultra.wikia.com/wiki/Sheltar&#34;&gt;ウルトラ怪獣&lt;/a&gt;にも居るという奇跡的な名前です。&lt;/p&gt;
+
+&lt;h1 id=&#34;目的:1c518fffcb9f45ff4a1b2c6719541034&#34;&gt;目的&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://ja.wikipedia.org/wiki/%E5%A2%97%E5%88%86%E3%83%90%E3%83%83%E3%82%AF%E3%82%A2%E3%83%83%E3%83%97&#34;&gt;増分バックアップ&lt;/a&gt;をとる&lt;/li&gt;
+&lt;li&gt;UbuntuとMac間でのデータ同期にも使いたい(家のルータがしょぼいのでrsyncを使いたくなく、USBメモリ経由とかが良い)&lt;/li&gt;
+&lt;li&gt;なのでファイル形式はポータブルなtarballで&lt;/li&gt;
+&lt;li&gt;メタデータとかは極力置かず、最悪他のツールからでもバックアップデータをサルベージ出来るようにしたい&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;です。 GNU tarには増分バックアップ用のオプションがありますがファイル抽出は手作業でやる必要があります。
+また、(多分)BSD tarには増分バックアップ用のオプションがないのでそこもカバーする必要があるかなと思って作りました。&lt;/p&gt;
+
+&lt;p&gt;あとオプションがあるとはいっても一々覚えてられないのでスクリプト化してしまいたかったってのもあります。&lt;/p&gt;
+
+&lt;h1 id=&#34;使い方:1c518fffcb9f45ff4a1b2c6719541034&#34;&gt;使い方&lt;/h1&gt;
+
+&lt;h2 id=&#34;step0:1c518fffcb9f45ff4a1b2c6719541034&#34;&gt;STEP0&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/KeenS/sheltar&#34;&gt;ここ&lt;/a&gt;からSheltarを入手しましょう。&lt;code&gt;sheltar&lt;/code&gt;スクリプト1つで完結しているのでcloneしなくてもrawをwgetしてきても大丈夫です。&lt;/p&gt;
+
+&lt;h2 id=&#34;step1:1c518fffcb9f45ff4a1b2c6719541034&#34;&gt;STEP1&lt;/h2&gt;
+
+&lt;p&gt;増分バックアップなので複数のtarballが作られます。バックアップ用のディレクトリを用意しましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;$ mkdir /mnt/dev1/backup
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;step2:1c518fffcb9f45ff4a1b2c6719541034&#34;&gt;STEP2&lt;/h2&gt;
+
+&lt;p&gt;バックアップしたいファイルをリストアップしましょう。バックアップは継続的に行なうものなので1回限りのコマンドライン引数で渡す訳にはいきませんね。&lt;/p&gt;
+
+&lt;p&gt;pngファイルをバックアップしたいとしましょうか。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;$ find Pictures -name &#39;*.png&#39; &amp;gt;&amp;gt; list.txt
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これで良さそうです。ディレクトリの中身全部をバックアップしたいなら&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;$ echo Pictures/ &amp;gt;&amp;gt; list.txt
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;でも構いません。最後の&amp;rsquo;/&amp;lsquo;重要です。最初のバックアップの時には問題ありませんが&amp;rsquo;/&amp;lsquo;がないと増分バックアップの時にディレクトリ自体のlast modified timeを見て変更を判断します。&lt;/p&gt;
+
+&lt;h2 id=&#34;step3:1c518fffcb9f45ff4a1b2c6719541034&#34;&gt;STEP3&lt;/h2&gt;
+
+&lt;p&gt;あとは実行するだけですね。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;$ sheltar backup /mnt/dev1/backup list.txt
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;その後、増分バックアップを取るのも同じく&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;$ sheltar backup /mnt/dev1/backup list.txt
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;で可能です。前回のアーカイブファイルのlast modified time より新しいファイルだけをバックアップしてくれます。&lt;/p&gt;
+
+&lt;p&gt;因みに今のところバックアップディレクトリに余計なものがあると正しく動作してくれないので注意です。&lt;/p&gt;
+
+&lt;h2 id=&#34;復元:1c518fffcb9f45ff4a1b2c6719541034&#34;&gt;復元&lt;/h2&gt;
+
+&lt;p&gt;全部のファイルをカレントディレクトリにぶちまけたいなら&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;$ sheltar extract /mnt/dev1/backup
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;です。抽出するファイルを指定したいなら&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;$ sheltar extract /mnt/dev1/backup file1 file2 ...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;とします。&lt;/p&gt;
+
+&lt;p&gt;カレントディレクトリに同名ファイルが既にある場合は新しい方を残します。&lt;/p&gt;
+
+&lt;h1 id=&#34;その他:1c518fffcb9f45ff4a1b2c6719541034&#34;&gt;その他&lt;/h1&gt;
+
+&lt;p&gt;まだまだ未完成です。欲しい機能があったら&lt;a href=&#34;https://github.com/KeenS/sheltar/issues&#34;&gt;issue&lt;/a&gt;に投げてくれると実装するかもしれません。&lt;a href=&#34;https://github.com/KeenS/sheltar/pulls&#34;&gt;Pull Request&lt;/a&gt;もお待ちしております
+あと、ドックフードはまだ食べてません。一応テストはしてますが…。Macをまともに使う気になったら使い始めると思います。&lt;/p&gt;
+
+&lt;p&gt;あ、そうそう。今回比較的コメントを多く書いたのでシェルスクリプトを勉強したい方はソース読んでみて下さい。
+こんな感じです。Doxygenがシェルスクリプトに対応してないので疑似ドキュメント形式のコメントですが。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;# Extract the all files from backups in $ST_BACKUP_DIR.
+# A file with the same name as extracting file will be preserved if it is newer than its counterpart.
+## @filesystem extract all the backup files to CWD
+st_extract_all()
+{
+    # This is preferable to `for TARBALL in $(ls)` because the names of listed files
+    # can contain whilespaces
+    ls --sort=time -r &amp;quot;${ST_BACKUP_DIR}&amp;quot; | while read TARBALL
+    do
+        tar xf &amp;quot;${ST_BACKUP_DIR}/${TARBALL}&amp;quot; \
+            --keep-newer-files               \
+            --preserve-permissions           \
+            --preserve-order
+    done
+}
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+    </item>
     
     <item>
       <title>割と処理系ポータブルなCommon Lisp実行可能ファイルを作る</title>
