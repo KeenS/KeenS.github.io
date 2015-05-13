@@ -12,7 +12,7 @@ THEME_ORIGIN=git@github.com:KeenS/liquorice-k.git
 default: preview
 
 preview:
-	$(HUGO) server -vw -t $(THEME)
+	$(HUGO) server -Dtrue -vw -t $(THEME)
 
 build:
 	$(HUGO) -v -t $(THEME)
