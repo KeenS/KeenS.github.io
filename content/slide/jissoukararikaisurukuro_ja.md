@@ -193,7 +193,7 @@ function outer(x) {
 
 ```js
 var global = 1;
-function sample(x) {
+function sample(arg) {
     var local = 2;
     var captured = 3;
     return function(){ return captured;};
