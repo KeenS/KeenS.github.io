@@ -6,8 +6,364 @@
     <description>Recent content in Slides on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Wed, 06 May 2015 22:02:12 +0900</lastBuildDate>
+    <lastBuildDate>Sun, 17 May 2015 01:33:39 +0900</lastBuildDate>
     <atom:link href="http://KeenS.github.io/slide/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>実装から理解するクロージャ</title>
+      <link>http://keens.github.io/slide/jissoukararikaisurukuro_ja/</link>
+      <pubDate>Sun, 17 May 2015 01:33:39 +0900</pubDate>
+      
+      <guid>http://keens.github.io/slide/jissoukararikaisurukuro_ja/</guid>
+      <description>&lt;section data-markdown
+    data-separator=&#34;\n\n&#34;
+    data-vertical=&#34;\n\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+&lt;script type=&#34;text/template&#34;&gt;
+# 実装から理解するクロージャ
+----------------------
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# About Me
+---------
+![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
+
+ + κeen
+ + [@blackenedgold](https://twitter.com/blackenedgold)
+ + Github: [KeenS](https://github.com/KeenS)
+ + 渋谷のエンジニア
+ + Lisp, ML, Shell Scriptあたりを書きます
+
+
+# クロージャとは？
+-----------------
+
+* 日本語にすると（関数）閉包
+* 関数が外側のローカル変数を補足する
+* 補足されたローカル変数は無限の生存期間を持つ
+  + ローカル変数は本来スコープを抜けると生存期間が終わる
+  + 言い換えるとグローバル変数みたいになる
+  + でもあくまでスコープはローカル
+
+# コード例
+---------
+
+```js
+function genpower(n){
+    var x = 1;
+    return function(){
+        x *= n;
+        return x;
+    };
+}
+var p = genpower(2);
+```
+
+# コード例
+----------
+
+```js
+p()  // =&gt; 2
+p()  // =&gt; 4
+p()  // =&gt; 8
+x * 2 // x is not defined
+```
+
+
+# コード例
+----------
+
+* `p`が`n`と`x`を補足しているので関数を抜けた後も`x`と`n`は使える。
+  + 関数の仮引数もローカル変数。
+* でもローカル変数なので外からは見えない。
+
+
+
+```
++-----------------------+
+| function genpower(n){ |
+|   var x = 1;          |
+| ...   ^               |
+| }     |               |
++-----------------------+
+        |
+ +------+
+ |
++-------------+
+||function(){ |
+|+-- x *= n;  |
+|   return x; |
+| };          |
++-------------+
+```
+
+
+
+# コード例2
+----------
+
+```js
+function incdec(){
+    var x = 0;
+    return [function(){ return ++x;},
+            function(){ return --x;}];
+}
+var fs = incdec();
+var inc = fs[0];
+var dec = fs[1];
+```
+
+# コード例2
+----------
+
+```js
+inc() // =&gt; 1
+inc() // =&gt; 2
+dec() // =&gt; 1
+inc() // =&gt; 2
+```
+
+# コード例2
+----------
+
+* 同じタイミングで作られたクロージャ群は捕捉変数を共有する
+
+
+
+```
++--------------------+
+| function incdec(){ |
+|   var x = 0;       |
+|   ... ^            |
+| }     |            |
++--------------------+
+        +--------------+----+
+                       |    |
++----------------------|---+|
+| function(){ return ++x;} ||
++--------------------------+|
+                       +----+
++----------------------|---+
+| function(){ return --x;} |
++--------------------------+
+```
+
+# コード例3
+----------
+
+```js
+function genpower(n){
+    var x = 1;
+    return function(){
+        x *= n;
+        return x;
+    };
+}
+var p1 = genpower(2);
+var p2 = genpower(2);
+```
+
+# コード例3
+----------
+
+```js
+p1()  // =&gt; 2
+p1()  // =&gt; 4
+p2()  // =&gt; 2
+p2()  // =&gt; 4
+```
+
+# コード例3
+----------
+
+* 逆に、同じ関数から生まれても違うタイミングなら共有しない。
+
+
+
+```
++-----------------------+ +-----------------------+
+| function genpower(n){ | | function genpower(n){ |
+|   var x = 1;          | |   var x = 1;          |
+| ...   ^               | | ...   ^               |
+| }     |               | | }     |               |
++-----------------------+ +-----------------------+
+        |                         |
+ +------+                  +------+
+ |                         |
++-------------+           +-------------+
+||function(){ |           ||function(){ |
+|+-- x *= n;  |           |+-- x *= n;  |
+|   return x; |           |   return x; |
+| };          |           | };          |
++-------------+           +-------------+
+
+```
+
+# 実装方法
+----------
+
+* ここでは複数ある実装方法のうちの1つを紹介する。
+* 言語はVM型のインタプリタ（大抵のインタプリタの実装に同じ）を仮定する
+
+
+# 用語整理
+----------
+* `outer`から見たら`x`は捕捉(Captured)変数
+  + `inner`から捕捉されてるから
+* `inner`から見たら`x`は自由(Free)変数
+  + `inner`からしたら`x`は知らない子だから
+
+```js
+function outer(x) {
+    function inner(y){
+        return x * y;
+    }
+}
+```
+
+
+# 実装概要
+----------
+
+* **クロージャとは捕捉変数の集まり**
+  + つまり、捕捉した側ではなくされた側が作る
+  + 捕捉した側は作られたものを参照するだけ
+
+# 変数の話
+---------
+
+* グローバル変数はヒープ領域に置かれる
+  + グローバル DB（大抵巨大なハッシュテーブル）に登録される
+* ローカル変数はコールスタックに置かれる
+  + 配列が作られ、インデックスでアクセスされる感じ。
+  + ローカル変数の数は関数定義時に決定するので配列で管理出来る
+  + 関数の実引数も同じように置かれる
+
+# 捕捉変数の話
+-------------
+
+* 捕捉変数はヒープ領域に置かれる
+  + 簡単には小さなハッシュテーブルに登録される
+    - つまり、グローバル変数と同じ
+    - 捕捉変数も関数定義時に決定するので配列でも管理出来る
+  + ハッシュテーブル/配列はクロージャ毎に作られる
+
+※ [本気出した実装](http://practical-scheme.net/docs/stack-j.html)だとコールスタックでどうにかすることもある
+
+
+```js
+var g = 1;
+function sample(a) {
+    var l = 2;
+    var c = 3;
+    return function(){ return c;};
+}
+```
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+
+
+```
+| ....          |
+|---------------|
+| args[0] = _   | a
+|---------------| 
+| locals[0] = 1 | var l
+|---------------|--コールスタック↑--
+| ....          |
+| ....          |
+|---------------|--ヒープ領域↓--
+| caps[c] = 3   | var c = 3
+|---------------|
+| global[g] = 1 | var g = 1
+| global[_] = _ |
+| ....          |
+| ....          |
+
+```
+
+
+```js
+function incdec(){
+    var x = 0;
+    return [function(){ return ++x;},
+            function(){ return --x;}];
+}
+var fs = incdec();
+var inc = fs[0];
+var dec = fs[1];
+```
+
+
+```
+| ....          |
+|---------------|--ヒープ領域↓--
+| caps[x] = 0 &lt;-++------------------------+
+|---------------|| +----------------------|---+
+| global[_] = _ || | function(){ return ++x;} |
+| ....          || +--------------------------+
+| ....          |+------------------------+
+| ....          |  +----------------------|---+
+| ....          |  | function(){ return --x;} |
+| ....          |  +--------------------------+
+| ....          |
+| ....          |
+| ....          |
+
+```
+
+
+```js
+function genpower(n){
+    var x = 1;
+    return function(){
+        x *= n;
+        return x;
+    };
+}
+var p1 = genpower(2);
+var p2 = genpower(2);
+```
+
+AA略
+
+```
+| ....          |
+|---------------|--ヒープ領域↓--
+| caps[x] = 0 &lt;-+-|p1|
+|---------------|
+| caps[x] = 0 &lt;-+-|p2|
+|---------------|
+| global[_] = _ |
+| ....          |
+| ....          |
+
+```
+
+
+# 捕捉変数の実装
+-----------------
+
+* クロージャ毎にcapturedが作られる
+* capturedとlocalはソース上の見た目は似ているが実装は大きく異なる
+  + 多分この所為で分かりづらい
+* グローバルアクセス出来ないだけでグローバル変数に似ている
+
+# まとまってないけどまとめ
+-------------------------
+
+* クロージャについて説明した
+* クロージャの正体は捕捉変数の集まり
+* 捕捉変数はヒープ領域に置かれるローカルスコープな変数
+
+※あくまで実装の1例です
+
+&lt;/script&gt;
+&lt;/section&gt;
+</description>
+    </item>
     
     <item>
       <title>勉強会駆動勉強で猛勉強</title>
@@ -3817,55 +4173,6 @@ escodegenのドキュメントがあんまりない…
 以上
 
 &lt;!-- .slide: class=&#34;center&#34; --&gt;
-&lt;/script&gt;
-&lt;/section&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>言葉遣いの時代変遷を追う</title>
-      <link>http://keens.github.io/slide/NLP/</link>
-      <pubDate>Wed, 09 Jul 2014 00:00:00 +0000</pubDate>
-      
-      <guid>http://keens.github.io/slide/NLP/</guid>
-      <description>&lt;section data-markdown
-    data-separator=&#34;\n\n&#34;
-    data-vertical=&#34;\n\n&#34;
-    data-notes=&#34;^Note:&#34;&gt;
-&lt;script type=&#34;text/template&#34;&gt;
-
-# 言葉遣いの時代変遷を追う
-  理学部数学科4年
-  金 舜琳 （きん すんりん）
-
-## 概要
-   古いものから新しいものまであるリソースから単語を抽出し、使用頻度から単語の時代変遷を追う
-
-## 手法
-
-## step1
-&lt;hr /&gt;
-青空か新聞から単語抽出抽出を行なう
-
-* 名詞、形容詞、語尾などが候補
-* 青空は多様性がある/話し言葉もとれるが古いのしかない？
-* 新聞は均質だからサンプル調査に向いてる？
-
-## step2
-&lt;hr/&gt;
-年代別に使用頻度上位数十〜百ぐらいを使用頻度順まとめてみる
-
-## step3
-&lt;hr/&gt;
-似たような意味の単語で順位の入れ替わりが見受けられたら詳細に追ってみる  
-とりあえず手動を考えている。発展課題的にプログラムでやっても良いかもしれない
-
-##step4
-&lt;hr/&gt;
-変遷の背景を考えてみる  
-戦前/戦後とか分りやすいものとかなんとか
-
-
 &lt;/script&gt;
 &lt;/section&gt;
 </description>
