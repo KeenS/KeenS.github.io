@@ -14,6 +14,7 @@ title: 21世紀のエンジニアのためのHTTP/2入門
 <script type="text/template">
 # 21世紀のエンジニアのためのHTTP/2入門
 ----------------------
+サイバーエージェントFresh勉強会
 
 <!-- .slide: class="center" -->
 
