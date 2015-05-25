@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>正規表現 on κeenのHappy Hacκing Blog</title>
+    <link>http://KeenS.github.io/categories/%E6%AD%A3%E8%A6%8F%E8%A1%A8%E7%8F%BE/</link>
+    <description>Recent content in 正規表現 on κeenのHappy Hacκing Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en-us</language>
+    <lastBuildDate>Tue, 26 May 2015 01:14:54 +0900</lastBuildDate>
+    <atom:link href="http://KeenS.github.io/categories/%E6%AD%A3%E8%A6%8F%E8%A1%A8%E7%8F%BE/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Onigmoを最大49%高速化した話</title>
+      <link>http://keens.github.io/blog/2015/05/26/onigmowosaidai49_kousokukashitahanashi</link>
+      <pubDate>Tue, 26 May 2015 01:14:54 +0900</pubDate>
+      
+      <guid>http://keens.github.io/blog/2015/05/26/onigmowosaidai49_kousokukashitahanashi</guid>
+      <description>&lt;p&gt;κeenです。Rubyでも使われてる高速な正規表現エンジン、Onigmo(鬼雲)を高速化したのでその話を。&lt;/p&gt;
+
+&lt;p&gt;先日、&lt;a href=&#34;http://keens.github.io/blog/2015/05/10/seikihyougengijutsunyuumonwoyonda/&#34;&gt;正規表現技術入門を読んだ&lt;/a&gt;というエントリの中で&lt;/p&gt;
+
+&lt;blockquote&gt;
+&lt;p&gt;ところで本に載ってた鬼雲のコードはDT(編注: Direct Threaded)にしてなかったけど簡単のためなのかな？あるいは厳格にC89に準拠するため？picrinみたくプリプロセッサで分岐すれば使えるのに。&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;と書いたところ、鬼雲の作者、K.Takataさんから&lt;/p&gt;
+
+&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;&lt;a href=&#34;https://twitter.com/k_takata&#34;&gt;@k_takata&lt;/a&gt; 「picrinみたくプリプロセッサで分岐すれば使えるのに。」これも知らなかった。&lt;/p&gt;&amp;mdash; K.Takata (@k_takata) &lt;a href=&#34;https://twitter.com/k_takata/status/597690447499108352&#34;&gt;2015, 5月 11&lt;/a&gt;&lt;/blockquote&gt;
+&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
+
+&lt;p&gt;という反応を頂きました。そして&lt;a href=&#34;https://github.com/k-takata/Onigmo/issues/51&#34;&gt;イシュー&lt;/a&gt;にも乗ったので言い出しっぺとして実装してみました。&lt;a href=&#34;https://github.com/k-takata/Onigmo/pull/52&#34;&gt;こちらのプルリク&lt;/a&gt;です。&lt;/p&gt;
+
+&lt;p&gt;Direct Threaded VM自体の解説はRubyist Magazineに載っている笹田さんのものが詳しいようです &lt;a href=&#34;http://magazine.rubyist.net/?0008-YarvManiacs&#34;&gt;Rubyist Magazine - YARV Maniacs 【第 3 回】 命令ディスパッチの高速化&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;実装は少し技巧的ですが&lt;code&gt;while&lt;/code&gt;, &lt;code&gt;switch&lt;/code&gt;, &lt;code&gt;case&lt;/code&gt;, &lt;code&gt;break&lt;/code&gt;, &lt;code&gt;continue&lt;/code&gt;などをマクロでラップしつつDT VMが有効ならそれらと互換性のあるDT用のコード（&lt;code&gt;goto&lt;/code&gt;やラベル）に展開します。元は&lt;a href=&#34;https://github.com/picrin-scheme/picrin/blob/master/extlib/benz/vm.c#L583&#34;&gt;picrin&lt;/a&gt;で使われていたテクニックです。
+このコードは &lt;a href=&#34;https://twitter.com/wasabiz&#34;&gt;@wasabiz&lt;/a&gt;が書いたものなのでpicrinがどこを参考にして書かれたかは@wasabizに聞いて下さい。もしかしたらわさびずの発明かもしれませんね。&lt;/p&gt;
+
+&lt;p&gt;で、パフォーマンスの方ですが、最初、素直に制御命令を1つづつマクロで書き換えたのですが、こうなりました。&lt;/p&gt;
+
+&lt;p&gt;master&lt;/p&gt;
+
+&lt;table&gt;
+&lt;tr&gt;&lt;td&gt;パターン&lt;/td&gt;&lt;td&gt;時間&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;Twain&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;47 ms&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;^Twain&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;47 ms&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;Twain$&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;47 ms&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;Huck[a-zA-Z]+|Finn[a-zA-Z]+&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;127 ms&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;a[^x]{20}b&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;1172 ms&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;Tom|Sawyer|Huckleberry|Finn&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;151 ms&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;.{0,3}(Tom|Sawyer|Huckleberry|Finn)&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;497 ms&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;[a-zA-Z]+ing&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;4032 ms&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;^[a-zA-Z]{0,4}ing[^a-zA-Z]&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;96 ms&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;[a-zA-Z]+ing$&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;4175 ms&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;^[a-zA-Z ]{5,}$&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;1770 ms&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;^.{16,20}$&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;1757 ms&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;([a-f](.[d-m].){0,2}[h-n]){2}&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;1849 ms&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;([A-Za-z]awyer|[A-Za-z]inn)[^a-zA-Z]&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;656 ms&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;&#34;[^&#34;]{0,30}[?!\.]&#34;&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;115 ms&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;Tom.{10,25}river|river.{10,25}Tom&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;260 ms&lt;/td&gt;&lt;/tr&gt;
+&lt;/table&gt;
+
+&lt;p&gt;DT版&lt;/p&gt;
+
+&lt;table&gt;
+&lt;tr&gt;&lt;td&gt;パターン&lt;/td&gt;&lt;td&gt;時間&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;Twain&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;100 ms&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;^Twain&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;99 ms&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;Twain$&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;100 ms&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;Huck[a-zA-Z]+|Finn[a-zA-Z]+&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;246 ms&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;a[^x]{20}b&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;2182 ms&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;Tom|Sawyer|Huckleberry|Finn&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;288 ms&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;.{0,3}(Tom|Sawyer|Huckleberry|Finn)&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;847 ms&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;[a-zA-Z]+ing&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;6278 ms&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;^[a-zA-Z]{0,4}ing[^a-zA-Z]&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;203 ms&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;[a-zA-Z]+ing$&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;6430 ms&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;^[a-zA-Z ]{5,}$&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;3603 ms&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;^.{16,20}$&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;3596 ms&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;([a-f](.[d-m].){0,2}[h-n]){2}&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;3239 ms&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;([A-Za-z]awyer|[A-Za-z]inn)[^a-zA-Z]&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;1039 ms&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;&#34;[^&#34;]{0,30}[?!\.]&#34;&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;327 ms&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;Tom.{10,25}river|river.{10,25}Tom&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;487 ms&lt;/td&gt;&lt;/tr&gt;
+&lt;/table&gt;
+
+&lt;p&gt;はい。DT版の方が2倍ちょっと遅いです。そりゃないわー。最適化オプションとかも確認したのですがダメでした。&lt;/p&gt;
+
+&lt;p&gt;諦めて布団に入った後、ふと思い当たる節がありました。&lt;/p&gt;
+
+&lt;p&gt;元のコードで&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;case OP_XXX:
+   ...
+   continue;
+   break;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;というパターンが割と現れます。&lt;code&gt;continue&lt;/code&gt;の後の&lt;code&gt;break&lt;/code&gt;は本来なら不要ですが&lt;code&gt;case&lt;/code&gt;を書く際の作法というか癖というか
+とにかく&lt;code&gt;break&lt;/code&gt;を付けるスタイルもあります。これもそうなのでしょう。こいつらをマクロで書き換える時に愚直に&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;CASE(OP_XXX)
+   ...
+   JUMP;
+   NEXT;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;としてました。ここで、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;#if USE_DIRECT_THREADED_VM
+#define NEXT sprev = sbegin; JUMP
+#define JUMP goto *oplabels[*p++]
+#else
+#define NEXT break
+#define JUMP continue
+#endif
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;です。これはUSE_DIRECT_THREADED_VMが定義されてる時は&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;L_OP_XXX:
+   ...
+   goto *oplabels[*p++];
+   sprev = sbegin;goto *oplabels[*p++];
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と展開され、&lt;code&gt;goto&lt;/code&gt;が2つ現れることになります。どうせ無用コードだし最適化で消えるだろと思ってたらそうでもないらしく、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;CASE(OP_XXX)
+   ...
+   JUMP;
+   NEXT;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;を&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;CASE(OP_XXX)
+   ...
+   JUMP;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;にし、マクロの方も&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;#if USE_DIRECT_THREADED_VM
+#define NEXT sprev = sbegin; JUMP
+#define JUMP goto *oplabels[*p++]
+#else
+#define NEXT break
+#define JUMP continue; break
+#endif
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;としたらようやく本領発揮してくれました。その結果がこれです。&lt;/p&gt;
+
+&lt;table&gt;
+&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;Master&lt;/td&gt;&lt;td&gt;This PR&lt;/td&gt;&lt;td&gt;Improve Rate&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;Twain&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;47 ms&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;47 ms&lt;/td&gt;&lt;td&gt;0%&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;^Twain&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;47 ms&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;47 ms&lt;/td&gt;&lt;td&gt;0%&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;Twain$&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;47 ms&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;47 ms&lt;/td&gt;&lt;td&gt;0%&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;Huck[a-zA-Z]+|Finn[a-zA-Z]+&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;127 ms&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;127 ms&lt;/td&gt;&lt;td&gt;0%&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;a[^x]{20}b&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;1172 ms&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;889 ms&lt;/td&gt;&lt;td&gt;31%&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;Tom|Sawyer|Huckleberry|Finn&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;151 ms&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;153 ms&lt;/td&gt;&lt;td&gt;-1%&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;.{0,3}(Tom|Sawyer|Huckleberry|Finn)&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;497 ms&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;449 ms&lt;/td&gt;&lt;td&gt;10%&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;[a-zA-Z]+ing&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;4032 ms&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;2705 ms&lt;/td&gt;&lt;td&gt;49%&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;^[a-zA-Z]{0,4}ing[^a-zA-Z]&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;96 ms&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;98 ms&lt;/td&gt;&lt;td&gt;-2%&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;[a-zA-Z]+ing$&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;4175 ms&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;2797 ms&lt;/td&gt;&lt;td&gt;49%&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;^[a-zA-Z ]{5,}$&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;1770 ms&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;1623 ms&lt;/td&gt;&lt;td&gt;9%&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;^.{16,20}$&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;1757 ms&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;1637 ms&lt;/td&gt;&lt;td&gt;7%&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;([a-f](.[d-m].){0,2}[h-n]){2}&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;1849 ms&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;1670 ms&lt;/td&gt;&lt;td&gt;11%&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;([A-Za-z]awyer|[A-Za-z]inn)[^a-zA-Z]&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;656 ms&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;607 ms&lt;/td&gt;&lt;td&gt;8%&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;&#34;[^&#34;]{0,30}[?!\.]&#34;&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;115 ms&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;93 ms&lt;/td&gt;&lt;td&gt;24%&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class=&#34;pattern&#34;&gt;Tom.{10,25}river|river.{10,25}Tom&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;260 ms&lt;/td&gt;&lt;td class=&#34;time&#34;&gt;262 ms&lt;/td&gt;&lt;td&gt;-1%&lt;/td&gt;&lt;/tr&gt;
+&lt;/table&gt;
+
+&lt;p&gt;最大49%の高速化です。素晴しいですね。&lt;/p&gt;
+
+&lt;p&gt;因みに2つめの&lt;code&gt;goto&lt;/code&gt;は実際には実行されないのに何故遅くなったかというとgotoはコンパイラにとってはコントロールフログラフを乱す厄介な奴なので
+無用コード除去に引っ掛からなかったどころか最適化ルーチンを引っ掻き回したんじゃないかと思います。&lt;/p&gt;
+
+&lt;p&gt;このコード、私の手元の環境でしかテストしてないのでC89なら須くサポートするOnigmoにマージされるかは分かりませんがマージされると嬉しいですね。&lt;/p&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>
