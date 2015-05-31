@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+    <head>
+        
+        <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+
+        <title>TCOと例外ハンドル | κeenのHappy Hacκing Blog</title>
+        <link rel="stylesheet" href='http://fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css' />
+        <link rel="stylesheet" href="http://keens.github.io//libraries/normalize.3.0.1.css" />
+        <link rel="stylesheet" href="http://keens.github.io//css/liquorice.css" />
+        <link rel="shortcut icon" href="http://KeenS.github.io/favicon.ico" />
+        <link rel="apple-touch-icon-precomposed" href="http://KeenS.github.io/apple-touch-icon-144-precomposed.png" sizes="144x144" />
+        <link rel="alternate" href="" type="application/rss+xml" title="κeenのHappy Hacκing Blog" />
+        
+        <script>
+         (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+             (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+                                  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+         })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+         ga('create', 'UA-43779888-1', 'auto');
+         ga('send', 'pageview');
+
+        </script>
+        
+        <link rel="stylesheet" href="http://keens.github.io//highlight.js/styles/xcode.css" />
+<script src="http://keens.github.io//highlight.js/highlight.min.js"></script>
+<script>hljs.initHighlightingOnLoad();</script>
+<script type="text/x-mathjax-config">
+ MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
+</script>
+<script type="text/javascript"
+        src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML">
+</script>
+<meta http-equiv="X-UA-Compatible" CONTENT="IE=EmulateIE7" />
+
+    </head>
+    <body class="li-body">
+
+<header class="li-page-header">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-brand li-left">
+                <a href="http://keens.github.io//">κeenのHappy Hacκing Blog</a> | Lispエイリアンの狂想曲</div>
+                <div class="li-menu li-right">
+                    <span class="li-menu-icon" onclick="javascript:toggle('menu');">&#9776;</span>
+                    <ul id="menu2" class="li-menu-items">
+                        
+                            <li><a href="http://KeenS.github.io/about"> About </a></li>
+                        
+                            <li><a href="http://KeenS.github.io/post/"> Blog </a></li>
+                        
+                            <li><a href="http://KeenS.github.io/slide/"> Slide </a></li>
+                        
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="sixteen columns">
+                <ul id="menu" class="li-menu-items li-menu-mobile">
+                    
+                        <li><a href="http://KeenS.github.io/about"> About </a></li>
+                    
+                        <li><a href="http://KeenS.github.io/post/"> Blog </a></li>
+                    
+                        <li><a href="http://KeenS.github.io/slide/"> Slide </a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+
+
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <article class="li-article">
+                    <header class="li-article-header">
+                        <h1 class="li-article-title">TCOと例外ハンドル</h1>
+                        <div class="li-article-meta">
+    <time class="li-article-date">2015-05-31</time>
+    <ul class="li-article-tag">
+    
+        <li>
+            <a href="http://KeenS.github.io/categories/%e8%a8%80%e8%aa%9e%e5%87%a6%e7%90%86%e7%b3%bb">言語処理系</a>
+        </li>
+    
+        <li>
+            <a href="http://KeenS.github.io/categories/sml">SML</a>
+        </li>
+    
+</ul>
+
+</div>
+
+                    </header>
+                    <section>
+                        
+
+<p>κeenです。<a href="http://KeenS.github.io/blog/2015/05/29/daiikkyuuraberuwomotanaigengoniokerudirect_threaded_vmnojissou">先日のエントリー</a>の最後でループ内で例外ハンドルをすると極端に遅くなるということを書きましたが、それについて。</p>
+
+<blockquote class="twitter-tweet" lang="ja"><p lang="ja" dir="ltr">ループ内でExceptionをhandleしてる所為だった。ループの外に出したら超速になってインタプリタの方が20倍遅くなった。</p>&mdash; κeen (@blackenedgold) <a href="https://twitter.com/blackenedgold/status/604235677337714689">2015, 5月 29</a></blockquote>
+
+<blockquote class="twitter-tweet" lang="ja"><p lang="ja" dir="ltr"><a href="https://twitter.com/blackenedgold">@blackenedgold</a> うーん、ちょっと例外のことは詳しくないんですが、予想だと例外ハンドラをループ内にいれると毎回スタックに積むんで外す操作がはさまることになるのでレジスタで完結してるようなループ処理だと露骨に遅くなるかもしれません</p>&mdash; Ocamlアイドル (@no_maddo) <a href="https://twitter.com/no_maddo/status/604537509771501569">2015, 5月 30</a></blockquote>
+
+<blockquote class="twitter-tweet" lang="ja"><p lang="ja" dir="ltr"><a href="https://twitter.com/blackenedgold">@blackenedgold</a> あーありえますね。ジャンプで済むところを戻ってきてスタックに積んだのを除去しないといけませんからね。ちょっと手元にマシンが無いのですがネイティブコードで実験してみますー</p>&mdash; Ocamlアイドル (@no_maddo) <a href="https://twitter.com/no_maddo/status/604540519188815872">2015, 5月 30</a></blockquote>
+
+<p><blockquote class="twitter-tweet" lang="ja"><p lang="ja" dir="ltr"><a href="https://twitter.com/blackenedgold">@blackenedgold</a> ocamlでも例外ハンドラのはさみ方で末尾再帰になったり、ならなかったりするというのは聞いたことがあるので多分あたりな気がします</p>&mdash; Ocamlアイドル (@no_maddo) <a href="https://twitter.com/no_maddo/status/604545844000325632">2015, 5月 30</a></blockquote>
+<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script></p>
+
+<p>ということで実験してみましょう。</p>
+
+<p>次のような何がしたいのか分からないループのベンチマークを取ってみます。</p>
+
+<pre><code class="language-sml">val () = let
+    val arr = Array.array(1000000, 0)
+    val i = ref 0
+    fun loop () = (
+        Array.update(arr, !i, 1);
+        i := (!i) + 1;
+        loop ()
+    )
+in
+    Benchmark.benchmark &quot;loop&quot; 1 (fn () =&gt; 
+                                     loop()
+                                 )
+end
+</code></pre>
+
+<p>結果は無限ループではなく</p>
+
+<pre><code>uncaught exception: Subscript
+</code></pre>
+
+<p>と、境界外アクセスの例外が出ます。因みにSubscripは添字って意味だそうです。</p>
+
+<p>これではベンチマークがとれないので、例外が起きたらループを抜けるようにしてみましょう。</p>
+
+<pre><code class="language-sml">val () = let
+    val arr = Array.array(1000000, 0)
+    val i = ref 0
+    fun loop () = (
+        Array.update(arr, !i, 1);
+        i := (!i) + 1;
+        loop ()
+    )
+in
+    Benchmark.benchmark &quot;loop&quot; 1 (fn () =&gt; 
+                                     loop()
+                                     handle Subscript =&gt; ()
+                                 )
+end
+</code></pre>
+
+<pre><code>loop
+ Time:
+    [Total] 5 ms/1calls
+  [Average] 5.0 ms/call
+</code></pre>
+
+<p>一瞬ですね。では、末尾呼び出し位置でhandleしてみます。</p>
+
+<pre><code class="language-sml">val () = let
+    val arr = Array.array(100, 0)
+    val i = ref 0
+    fun loop () = (
+        Array.update(arr, !i, 1);
+        i := (!i) + 1;
+        loop ()
+        handle Subscript =&gt; ()
+    )
+in
+    Benchmark.benchmark &quot;loop&quot; 1 (fn () =&gt; 
+                                     loop()
+                                 )
+end
+</code></pre>
+
+<pre><code>loop
+ Time:
+    [Total] 1729 ms/1calls
+  [Average] 1729.0 ms/call
+</code></pre>
+
+<p>ふーむ。やはり大分遅くなってますね。しかしループ内で例外をハンドルした所為かもしれないのでループ内で末尾位置で例外をハンドルしてみます。大域脱出に例外使いますがまあ、パフォーマンスに問題ないでしょう。</p>
+
+<pre><code class="language-sml">exception Exit
+val () = let
+    val arr = Array.array(1000000, 0)
+    val i = ref 0
+    fun loop () = (
+        Array.update(arr, !i, 1)
+        handle Subscript =&gt; raise Exit;
+        i := (!i) + 1;
+        loop ()
+    )
+in
+    Benchmark.benchmark &quot;loop&quot; 1 (fn () =&gt; 
+                                     loop()
+                                     handle Exit =&gt; ()
+                                 ) 
+end
+</code></pre>
+
+<pre><code>loop
+ Time:
+    [Total] 11 ms/1calls
+  [Average] 11.0 ms/call
+</code></pre>
+
+<p>やはり多少は遅くなってますが末尾位置の時のように極端には遅くなってないようです。</p>
+
+<p>最後に非末尾再帰ループの速度を測っておきましょう。</p>
+
+<pre><code class="language-sml">val () = let
+    val arr = Array.array(1000000, 0)
+    val i = ref 0
+    fun loop () = (
+        Array.update(arr, !i, 1);
+        i := (!i) + 1;
+        1 + (loop ())
+    )
+in
+    Benchmark.benchmark &quot;loop&quot; 1 (fn () =&gt; 
+                                     loop()
+                                     handle Subscript =&gt; 0
+                                 ) 
+end
+</code></pre>
+
+<pre><code>loop
+ Time:
+    [Total] 403 ms/1calls
+  [Average] 403.0 ms/call
+</code></pre>
+
+<p>思ったより遅いですね。ループか末尾例外ハンドルかというと末尾例外ハンドルに近いスコア。</p>
+
+<h1 id="考察:f585d8bf5500b51a365c4e77d660ffa5">考察</h1>
+
+<p>末尾位置で例外をハンドルすると遅くなる原因はTCOが効かないから、で合ってそうです。</p>
+
+<p>しかしそれにしても遅いですね。例外ハンドラをスタックに積むのが1関数呼び出しくらいならせいぜい倍くらいの遅さで済む筈です。
+もしかしたらループ展開とかの外の最適化も掛からなくなるのかもしれません。</p>
+
+<h1 id="結論:f585d8bf5500b51a365c4e77d660ffa5">結論</h1>
+
+<p>例外をハンドルする時は位置に気をつけましょうね。</p>
+
+<h1 id="付録a:f585d8bf5500b51a365c4e77d660ffa5">付録A</h1>
+
+<p>ベンチマーカはこんなコードです。</p>
+
+<pre><code class="language-sml">structure Benchmark =
+struct
+fun repeat 0 f = ()
+  | repeat n f =  (f ();repeat (n - 1) f)
+ 
+fun bench n f = let
+    val startTime = Time.now ()
+    val _ = repeat n f
+    val endTime = Time.now ()
+in
+    Time.toMilliseconds (Time.-(endTime, startTime))
+end
+ 
+fun benchmark name n f = let
+    val time = bench n f
+in
+    print (name ^ &quot;\n&quot;);
+    print (&quot; Time:\n&quot;);
+    print (&quot;    [Total] &quot; ^ (LargeInt.toString time) ^ &quot; ms/&quot; ^ (Int.toString n) ^ &quot;calls\n&quot;);
+    print (&quot;  [Average] &quot; ^ (Real.toString((Real.fromLargeInt time) / (Real.fromInt n))) ^ &quot; ms/call\n&quot;)
+end
+
+fun nChars n char = CharArray.vector(CharArray.array(n, char))
+
+fun toWidth width str = let
+    val len = String.size str
+in
+    if len &lt; width
+    then str ^ (nChars (width - len) #&quot; &quot;)
+    else str
+end
+
+fun histLine width base value =
+  (nChars (Int.fromLarge(width * value div base)) #&quot;*&quot;) ^ &quot;\n&quot;
+
+fun benchset name n fs = let
+    val res = List.map (fn (label, f) =&gt; (label, bench n f)) fs
+    val max = List.foldl (fn ((_, time), m) =&gt; LargeInt.max(time, m)) 0 res
+    val maxLen = List.foldl (fn ((label, _), m) =&gt; Int.max(String.size label,  m)) 0 fs
+in
+    print &quot;name:\n&quot;;
+    print ((nChars ((String.size &quot; &quot;) + maxLen) #&quot;-&quot;) ^ &quot;+&quot; ^ (nChars ((String.size &quot;|&quot;) +  50) #&quot;-&quot;) ^ &quot;\n&quot;);
+    app (fn (label, time) =&gt; print(&quot; &quot; ^ (toWidth maxLen label) ^ &quot;|&quot; ^(histLine (50:LargeInt.int) max time))) res;
+    print ((nChars ((String.size &quot; &quot;) + maxLen) #&quot;-&quot;) ^ &quot;+&quot; ^ (nChars ((String.size &quot;|&quot;) +  50) #&quot;-&quot;) ^ &quot;\n&quot;)
+end
+
+end
+</code></pre>
+
+<h1 id="付録b:f585d8bf5500b51a365c4e77d660ffa5">付録B</h1>
+
+<p>元々、なんでこの問題が生じたかというと一々境界チェックして配列にアクセスするより例外出させといた方が速いんじゃね？ってことでそういうコードを書いたからです。
+例外が出るってことは内部でも境界チェックしてる筈ですから。</p>
+
+<p>ということでどちらが速いか確認してみましょう。</p>
+
+<p>まず例外ハンドル方式。先程のままだと数ミリ秒で終わってたので配列の大きさを10倍しました。あと。実際に書きそうな書き方に変えました。</p>
+
+<pre><code class="language-sml">val () = let
+    val len = 10000000
+    val arr = Array.array(len, 0)
+    fun loop i = (
+        Array.update(arr, i, 1);
+        loop (i + 1)
+    )
+in
+    Benchmark.benchmark &quot;loop&quot; 1 (fn () =&gt; 
+                                     loop 0
+                                     handle Subscript =&gt; ()
+                                 ) 
+end
+</code></pre>
+
+<pre><code>loop
+ Time:
+    [Total] 48 ms/1calls
+  [Average] 48.0 ms/call
+</code></pre>
+
+<p>まあ、こんなもんですね。</p>
+
+<p>次にifで分岐するやりかた。</p>
+
+<pre><code class="language-sml">val () = let
+    val len = 10000000
+    val arr = Array.array(len, 0)
+    fun
+    loop i = if i &lt; len
+             then (
+                 Array.update(arr, i, 1);
+                 loop (i + 1))
+             else ()
+in
+    Benchmark.benchmark &quot;loop&quot; 1 (fn () =&gt; 
+                                     loop 0
+                                     handle Subscript =&gt; ()
+                                 ) 
+end
+</code></pre>
+
+<pre><code>loop
+ Time:
+    [Total] 96 ms/1calls
+  [Average] 96.0 ms/call
+</code></pre>
+
+<p>倍くらい遅くなってますね。</p>
+
+<p>ということでみだりに境界チェックするより例外を出させといた方が速いようです。</p>
+
+                    </section>
+                </article>
+            </div>
+        </div>
+
+        <div class="row li-author">
+    <div class="sixteen columns">
+        Written by <strong>κeen</strong>
+    </div>
+</div>
+
+
+        <div class="row li-pagination">
+            <div class="eight columns">
+                <div class="li-pagination-previous">
+                    
+                        &nbsp;
+                    
+                </div>
+            </div>
+            <div class="eight columns">
+                <div class="li-pagination-next">
+                    
+                        Older article<br />
+                        <a href="http://keens.github.io/blog/2015/05/29/daiikkyuuraberuwomotanaigengoniokerudirect_threaded_vmnojissou"> 第一級ラベルを持たない言語におけるDirect Threaded VMの実装</a>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+<footer class="li-page-footer">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-page-footer-legal">
+                    &copy; 2015. All rights reserved. 
+                </div>
+                <div class="li-page-footer-theme">
+                    <span class=""><a href="https://github.com/eliasson/liquorice/">liquorice</a> is a theme for <a href="http://hugo.spf13.com">hugo</a></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+
+    <script type="text/javascript">
+    <!--
+    function toggle(id) {
+        var e = document.getElementById(id);
+        e.style.display == 'block' ? e.style.display = 'none' : e.style.display = 'block';
+    }
+    
+    </script>
+    <script type="text/javascript">
+    <!--
+        var _gaq = _gaq || [];
+        _gaq.push(['_setAccount', ""]);
+        _gaq.push(['_trackPageview']);
+
+        (function() {
+        var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+        ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+        var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+        })();
+    -->
+    </script>
+    </body>
+</html>
+

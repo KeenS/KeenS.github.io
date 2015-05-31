@@ -6,8 +6,282 @@
     <description>Recent content in 言語処理系 on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Fri, 29 May 2015 20:26:41 +0900</lastBuildDate>
+    <lastBuildDate>Sun, 31 May 2015 21:02:08 +0900</lastBuildDate>
     <atom:link href="http://KeenS.github.io/categories/%E8%A8%80%E8%AA%9E%E5%87%A6%E7%90%86%E7%B3%BB/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>TCOと例外ハンドル</title>
+      <link>http://keens.github.io/blog/2015/05/31/tcotoreigaihandoru</link>
+      <pubDate>Sun, 31 May 2015 21:02:08 +0900</pubDate>
+      
+      <guid>http://keens.github.io/blog/2015/05/31/tcotoreigaihandoru</guid>
+      <description>
+
+&lt;p&gt;κeenです。&lt;a href=&#34;http://KeenS.github.io/blog/2015/05/29/daiikkyuuraberuwomotanaigengoniokerudirect_threaded_vmnojissou&#34;&gt;先日のエントリー&lt;/a&gt;の最後でループ内で例外ハンドルをすると極端に遅くなるということを書きましたが、それについて。&lt;/p&gt;
+
+&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;ループ内でExceptionをhandleしてる所為だった。ループの外に出したら超速になってインタプリタの方が20倍遅くなった。&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/604235677337714689&#34;&gt;2015, 5月 29&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;&lt;a href=&#34;https://twitter.com/blackenedgold&#34;&gt;@blackenedgold&lt;/a&gt; うーん、ちょっと例外のことは詳しくないんですが、予想だと例外ハンドラをループ内にいれると毎回スタックに積むんで外す操作がはさまることになるのでレジスタで完結してるようなループ処理だと露骨に遅くなるかもしれません&lt;/p&gt;&amp;mdash; Ocamlアイドル (@no_maddo) &lt;a href=&#34;https://twitter.com/no_maddo/status/604537509771501569&#34;&gt;2015, 5月 30&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;&lt;a href=&#34;https://twitter.com/blackenedgold&#34;&gt;@blackenedgold&lt;/a&gt; あーありえますね。ジャンプで済むところを戻ってきてスタックに積んだのを除去しないといけませんからね。ちょっと手元にマシンが無いのですがネイティブコードで実験してみますー&lt;/p&gt;&amp;mdash; Ocamlアイドル (@no_maddo) &lt;a href=&#34;https://twitter.com/no_maddo/status/604540519188815872&#34;&gt;2015, 5月 30&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;&lt;a href=&#34;https://twitter.com/blackenedgold&#34;&gt;@blackenedgold&lt;/a&gt; ocamlでも例外ハンドラのはさみ方で末尾再帰になったり、ならなかったりするというのは聞いたことがあるので多分あたりな気がします&lt;/p&gt;&amp;mdash; Ocamlアイドル (@no_maddo) &lt;a href=&#34;https://twitter.com/no_maddo/status/604545844000325632&#34;&gt;2015, 5月 30&lt;/a&gt;&lt;/blockquote&gt;
+&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
+
+&lt;p&gt;ということで実験してみましょう。&lt;/p&gt;
+
+&lt;p&gt;次のような何がしたいのか分からないループのベンチマークを取ってみます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val () = let
+    val arr = Array.array(1000000, 0)
+    val i = ref 0
+    fun loop () = (
+        Array.update(arr, !i, 1);
+        i := (!i) + 1;
+        loop ()
+    )
+in
+    Benchmark.benchmark &amp;quot;loop&amp;quot; 1 (fn () =&amp;gt; 
+                                     loop()
+                                 )
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;結果は無限ループではなく&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;uncaught exception: Subscript
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と、境界外アクセスの例外が出ます。因みにSubscripは添字って意味だそうです。&lt;/p&gt;
+
+&lt;p&gt;これではベンチマークがとれないので、例外が起きたらループを抜けるようにしてみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val () = let
+    val arr = Array.array(1000000, 0)
+    val i = ref 0
+    fun loop () = (
+        Array.update(arr, !i, 1);
+        i := (!i) + 1;
+        loop ()
+    )
+in
+    Benchmark.benchmark &amp;quot;loop&amp;quot; 1 (fn () =&amp;gt; 
+                                     loop()
+                                     handle Subscript =&amp;gt; ()
+                                 )
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;loop
+ Time:
+    [Total] 5 ms/1calls
+  [Average] 5.0 ms/call
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;一瞬ですね。では、末尾呼び出し位置でhandleしてみます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val () = let
+    val arr = Array.array(100, 0)
+    val i = ref 0
+    fun loop () = (
+        Array.update(arr, !i, 1);
+        i := (!i) + 1;
+        loop ()
+        handle Subscript =&amp;gt; ()
+    )
+in
+    Benchmark.benchmark &amp;quot;loop&amp;quot; 1 (fn () =&amp;gt; 
+                                     loop()
+                                 )
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;loop
+ Time:
+    [Total] 1729 ms/1calls
+  [Average] 1729.0 ms/call
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ふーむ。やはり大分遅くなってますね。しかしループ内で例外をハンドルした所為かもしれないのでループ内で末尾位置で例外をハンドルしてみます。大域脱出に例外使いますがまあ、パフォーマンスに問題ないでしょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;exception Exit
+val () = let
+    val arr = Array.array(1000000, 0)
+    val i = ref 0
+    fun loop () = (
+        Array.update(arr, !i, 1)
+        handle Subscript =&amp;gt; raise Exit;
+        i := (!i) + 1;
+        loop ()
+    )
+in
+    Benchmark.benchmark &amp;quot;loop&amp;quot; 1 (fn () =&amp;gt; 
+                                     loop()
+                                     handle Exit =&amp;gt; ()
+                                 ) 
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;loop
+ Time:
+    [Total] 11 ms/1calls
+  [Average] 11.0 ms/call
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;やはり多少は遅くなってますが末尾位置の時のように極端には遅くなってないようです。&lt;/p&gt;
+
+&lt;p&gt;最後に非末尾再帰ループの速度を測っておきましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val () = let
+    val arr = Array.array(1000000, 0)
+    val i = ref 0
+    fun loop () = (
+        Array.update(arr, !i, 1);
+        i := (!i) + 1;
+        1 + (loop ())
+    )
+in
+    Benchmark.benchmark &amp;quot;loop&amp;quot; 1 (fn () =&amp;gt; 
+                                     loop()
+                                     handle Subscript =&amp;gt; 0
+                                 ) 
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;loop
+ Time:
+    [Total] 403 ms/1calls
+  [Average] 403.0 ms/call
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;思ったより遅いですね。ループか末尾例外ハンドルかというと末尾例外ハンドルに近いスコア。&lt;/p&gt;
+
+&lt;h1 id=&#34;考察:f585d8bf5500b51a365c4e77d660ffa5&#34;&gt;考察&lt;/h1&gt;
+
+&lt;p&gt;末尾位置で例外をハンドルすると遅くなる原因はTCOが効かないから、で合ってそうです。&lt;/p&gt;
+
+&lt;p&gt;しかしそれにしても遅いですね。例外ハンドラをスタックに積むのが1関数呼び出しくらいならせいぜい倍くらいの遅さで済む筈です。
+もしかしたらループ展開とかの外の最適化も掛からなくなるのかもしれません。&lt;/p&gt;
+
+&lt;h1 id=&#34;結論:f585d8bf5500b51a365c4e77d660ffa5&#34;&gt;結論&lt;/h1&gt;
+
+&lt;p&gt;例外をハンドルする時は位置に気をつけましょうね。&lt;/p&gt;
+
+&lt;h1 id=&#34;付録a:f585d8bf5500b51a365c4e77d660ffa5&#34;&gt;付録A&lt;/h1&gt;
+
+&lt;p&gt;ベンチマーカはこんなコードです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;structure Benchmark =
+struct
+fun repeat 0 f = ()
+  | repeat n f =  (f ();repeat (n - 1) f)
+ 
+fun bench n f = let
+    val startTime = Time.now ()
+    val _ = repeat n f
+    val endTime = Time.now ()
+in
+    Time.toMilliseconds (Time.-(endTime, startTime))
+end
+ 
+fun benchmark name n f = let
+    val time = bench n f
+in
+    print (name ^ &amp;quot;\n&amp;quot;);
+    print (&amp;quot; Time:\n&amp;quot;);
+    print (&amp;quot;    [Total] &amp;quot; ^ (LargeInt.toString time) ^ &amp;quot; ms/&amp;quot; ^ (Int.toString n) ^ &amp;quot;calls\n&amp;quot;);
+    print (&amp;quot;  [Average] &amp;quot; ^ (Real.toString((Real.fromLargeInt time) / (Real.fromInt n))) ^ &amp;quot; ms/call\n&amp;quot;)
+end
+
+fun nChars n char = CharArray.vector(CharArray.array(n, char))
+
+fun toWidth width str = let
+    val len = String.size str
+in
+    if len &amp;lt; width
+    then str ^ (nChars (width - len) #&amp;quot; &amp;quot;)
+    else str
+end
+
+fun histLine width base value =
+  (nChars (Int.fromLarge(width * value div base)) #&amp;quot;*&amp;quot;) ^ &amp;quot;\n&amp;quot;
+
+fun benchset name n fs = let
+    val res = List.map (fn (label, f) =&amp;gt; (label, bench n f)) fs
+    val max = List.foldl (fn ((_, time), m) =&amp;gt; LargeInt.max(time, m)) 0 res
+    val maxLen = List.foldl (fn ((label, _), m) =&amp;gt; Int.max(String.size label,  m)) 0 fs
+in
+    print &amp;quot;name:\n&amp;quot;;
+    print ((nChars ((String.size &amp;quot; &amp;quot;) + maxLen) #&amp;quot;-&amp;quot;) ^ &amp;quot;+&amp;quot; ^ (nChars ((String.size &amp;quot;|&amp;quot;) +  50) #&amp;quot;-&amp;quot;) ^ &amp;quot;\n&amp;quot;);
+    app (fn (label, time) =&amp;gt; print(&amp;quot; &amp;quot; ^ (toWidth maxLen label) ^ &amp;quot;|&amp;quot; ^(histLine (50:LargeInt.int) max time))) res;
+    print ((nChars ((String.size &amp;quot; &amp;quot;) + maxLen) #&amp;quot;-&amp;quot;) ^ &amp;quot;+&amp;quot; ^ (nChars ((String.size &amp;quot;|&amp;quot;) +  50) #&amp;quot;-&amp;quot;) ^ &amp;quot;\n&amp;quot;)
+end
+
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;付録b:f585d8bf5500b51a365c4e77d660ffa5&#34;&gt;付録B&lt;/h1&gt;
+
+&lt;p&gt;元々、なんでこの問題が生じたかというと一々境界チェックして配列にアクセスするより例外出させといた方が速いんじゃね？ってことでそういうコードを書いたからです。
+例外が出るってことは内部でも境界チェックしてる筈ですから。&lt;/p&gt;
+
+&lt;p&gt;ということでどちらが速いか確認してみましょう。&lt;/p&gt;
+
+&lt;p&gt;まず例外ハンドル方式。先程のままだと数ミリ秒で終わってたので配列の大きさを10倍しました。あと。実際に書きそうな書き方に変えました。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val () = let
+    val len = 10000000
+    val arr = Array.array(len, 0)
+    fun loop i = (
+        Array.update(arr, i, 1);
+        loop (i + 1)
+    )
+in
+    Benchmark.benchmark &amp;quot;loop&amp;quot; 1 (fn () =&amp;gt; 
+                                     loop 0
+                                     handle Subscript =&amp;gt; ()
+                                 ) 
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;loop
+ Time:
+    [Total] 48 ms/1calls
+  [Average] 48.0 ms/call
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;まあ、こんなもんですね。&lt;/p&gt;
+
+&lt;p&gt;次にifで分岐するやりかた。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val () = let
+    val len = 10000000
+    val arr = Array.array(len, 0)
+    fun
+    loop i = if i &amp;lt; len
+             then (
+                 Array.update(arr, i, 1);
+                 loop (i + 1))
+             else ()
+in
+    Benchmark.benchmark &amp;quot;loop&amp;quot; 1 (fn () =&amp;gt; 
+                                     loop 0
+                                     handle Subscript =&amp;gt; ()
+                                 ) 
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;loop
+ Time:
+    [Total] 96 ms/1calls
+  [Average] 96.0 ms/call
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;倍くらい遅くなってますね。&lt;/p&gt;
+
+&lt;p&gt;ということでみだりに境界チェックするより例外を出させといた方が速いようです。&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>第一級ラベルを持たない言語におけるDirect Threaded VMの実装</title>
