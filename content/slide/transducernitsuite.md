@@ -1,7 +1,7 @@
 ---
 categories: [Clojure, Lisp, transducer]
 date: 2015-06-03T22:29:50+09:00
-description: null
+description: "朝の3分スピーチ用"
 title: Transducerについて
 ---
 

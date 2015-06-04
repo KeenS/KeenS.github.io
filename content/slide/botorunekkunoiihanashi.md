@@ -1,8 +1,8 @@
 ---
 categories: [ISUCON, FRESH勉強会]
 date: 2015-06-04T00:03:14+09:00
-draft: true
-description: null
+description: "社内勉強会用のスライド。ボトルネックって難しいよねって話とISUCONについて。
+"
 title: ボトルネックのイイ話
 ---
 
@@ -40,6 +40,11 @@ FRESH勉強会
 * リバースプロキシ
 * アプリケーションサーバ
 * データベース
+
+
+![relation of reverse proxy, app and DB](/images/webapp.png)
+
+<!-- .slide: class="center" -->
 
 # レスポンスタイムとスループット
 ------------------------------
@@ -80,8 +85,10 @@ FRESH勉強会
 * データベース: CPU、ディスクIOなど
 
 
-「CPUは100%に行ってないのにアプリケーションが遅いんだよ」
+<span style="font-size: 200%">「CPUは100%に行ってないのにアプリケーションが遅いんだよ」</span>
 
+# 誤り
+------
 
 * ボトルネックはCPUとは限らない
 * 他のメトリクスも一緒に見るべき
@@ -95,16 +102,20 @@ FRESH勉強会
   + コストパフォーマンスも重要
 
 
-「パフォーマンスが悪いからCPUをグレードアップしよう」
+<span style="font-size: 200%">「パフォーマンスが悪いからCPUをグレードアップしよう」</span>
 
+# 誤り
+------
 
 * ボトルネックはCPUとは限らない
 * 例えばネットワーク帯域が詰まっているのにCPUを改善しても意味がない
 * 帯域が詰まってるならデータを減らす、NIC（マシン）を増やすなどをする
 
 
-「多分アプリケーションを高速化したよ」
+<span style="font-size: 200%">「多分アプリケーションを高速化したよ」</span>
 
+# 誤り
+------
 
 * 計測せずに高速化しても意味がない
   + テストの無いリファクタリングがただの破壊なのと同じ
@@ -116,8 +127,10 @@ FRESH勉強会
 * 一箇所をずっと改善してても意味がない
 * ある程度改善したら次のリソースの限界がきてるかもしれない
 
-「アプリケーションを10倍高速化したのにあんまり速くなってない」
+<span style="font-size: 200%">「アプリケーションを10倍高速化したのにあんまり速くなってない」</span>
 
+# 誤り
+------
 
 * 10倍くらい極端に高速化すると次のリソースがボトルネックになる
 * ディスクやネットワークの改善を考えるべき
@@ -153,8 +166,11 @@ FRESH勉強会
 * [アムダールの法則 - Wikipedia](http://ja.wikipedia.org/wiki/%E3%82%A2%E3%83%A0%E3%83%80%E3%83%BC%E3%83%AB%E3%81%AE%E6%B3%95%E5%89%87)
 * ざっくり言うと比率の小さな部分を高速化しても全体の高速化は高が知れてる
 
-「ORマッパ使うと遅そうだから生のSQL使おう」
+<span style="font-size: 200%">「ORマッパ使うと遅そうだから生のSQL使おう」</span>
 
+# 誤り
+------
+
 * ORマッピングにかかるコストは微小
 * 他にもっと効率的に改善出来る部分に手をつけるべき
 
@@ -185,8 +201,10 @@ FRESH勉強会
   + Cache-Control
 * 知識がないと計測しても数値の意味が分からない
 
-「やった。5%高速化した」
+<span style="font-size: 200%">「やった。5%高速化した」</span>
 
+# 誤り
+------
 
 * パフォーマンスは計測の度にゆらぎがある
 * 5%くらいなら普通に測定誤差の範囲内
@@ -236,6 +254,7 @@ FRESH勉強会
 * 本戦 10/31
 * 2~3人のチーム
 * Google Cloud Platform
+* 出題は[@tagomoris](https://twitter.com/tagomoris)さんと[@kamipo](https://twitter.com/kamipo)さん
 
 
 <span style="font-size: 300%">Let's ISUCON</span>
@@ -246,5 +265,7 @@ FRESH勉強会
 ------
 * [ISUCONで学ぶ Webアプケーションのパフォーマンス向上のコツ 実践編 完全版](http://www.slideshare.net/kazeburo/isucon-summerclass2014action2final)
 * [ISUCONの話(夏期講習2014)](http://www.slideshare.net/tagomoris/isucon2014)
+* [kamipoさんはすごい人](https://twitter.com/search?q=kamipo%E3%81%95%E3%82%93%E3%81%AF%E3%81%99%E3%81%94%E3%81%84%E4%BA%BA&src=typd&vertical=default&f=tweets)
+
 </script>
 </section>
