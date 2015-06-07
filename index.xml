@@ -6,8 +6,248 @@
     <description>Recent content on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Thu, 04 Jun 2015 00:03:14 +0900</lastBuildDate>
+    <lastBuildDate>Sun, 07 Jun 2015 16:56:51 +0900</lastBuildDate>
     <atom:link href="http://KeenS.github.io/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>ClojureでOpenCV 3.0と戯れる</title>
+      <link>http://keens.github.io/blog/2015/06/07/clojuredeopencv3_0totawamureru</link>
+      <pubDate>Sun, 07 Jun 2015 16:56:51 +0900</pubDate>
+      
+      <guid>http://keens.github.io/blog/2015/06/07/clojuredeopencv3_0totawamureru</guid>
+      <description>
+
+&lt;p&gt;κeenです。先日OpenCV 3.0がリリースされましたね。
+ちょっと触ってみようと思ったのですが公式バインディングがC++、C、Java、Pythonと中々つらい言語ばっかりなので扱いやすいClojureから触った時のメモです。&lt;/p&gt;
+
+&lt;p&gt;2系とはAPIが変わってる部分もあるらしく、苦労しました。
+UbuntuでやってるのでMacの人は適当に読み替えて下さい。&lt;/p&gt;
+
+&lt;h1 id=&#34;準備:f3a429adc3106e7ec83e1e87bf1a8a30&#34;&gt;準備&lt;/h1&gt;
+
+&lt;h2 id=&#34;opencv:f3a429adc3106e7ec83e1e87bf1a8a30&#34;&gt;OpenCV&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://opencv.org/&#34;&gt;公式&lt;/a&gt;からOpenCV 3.0をダウンロードしてきましょう。展開してからは&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cd opencv-3.0.0
+$ cmake .
+$ make -j4
+$ sudo make -j4 install
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;でインストールまでしてくれます。&lt;/p&gt;
+
+&lt;h2 id=&#34;imshow:f3a429adc3106e7ec83e1e87bf1a8a30&#34;&gt;ImShow&lt;/h2&gt;
+
+&lt;p&gt;どうも3.0からHighguiというQtベースのGUIツール群のJavaバインディングが作られなくなったそうです。Swing使えと。&lt;/p&gt;
+
+&lt;p&gt;ということでOpenCVとSwingのブリッジしてくれる軽いライブラリが&lt;a href=&#34;https://github.com/master-atul/ImShow-Java-OpenCV&#34;&gt;ImShow-Java-OpenCV&lt;/a&gt;
+です。.javaファイル1枚なので本当に軽いです。&lt;/p&gt;
+
+&lt;p&gt;.jarもレポジトリに入ってるのですがソースコードより古いらしく、自分でビルドする必要があります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ git clone git@github.com:master-atul/ImShow-Java-OpenCV.git
+$ cd ImShow-Java-OpenCV/ImShow_JCV/src
+$ javac com/atul/JavaOpenCV/Imshow.java
+$ jar -cf Imshow.jar com/atul/JavaOpenCV/Imshow.class
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;lein-プロジェクト:f3a429adc3106e7ec83e1e87bf1a8a30&#34;&gt;lein プロジェクト&lt;/h2&gt;
+
+&lt;p&gt;Clojureのプロジェクト管理ツールの&lt;a href=&#34;http://leiningen.org/&#34;&gt;Leiningen&lt;/a&gt;を使います。知らない人は適当にググって下さい。&lt;/p&gt;
+
+&lt;p&gt;まずプロジェクトを作ります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ lein new opencv-play
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;んで、mavenでいうところのpom.xmlにあたるproject.cljをいじります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cd opencv-play
+$ cat project.clj
+(defproject opencv-play &amp;quot;0.1.0-SNAPSHOT&amp;quot;
+  :description &amp;quot;FIXME: write description&amp;quot;
+  :url &amp;quot;http://example.com/FIXME&amp;quot;
+  :license {:name &amp;quot;Eclipse Public License&amp;quot;
+            :url &amp;quot;http://www.eclipse.org/legal/epl-v10.html&amp;quot;}
+  :dependencies [[org.clojure/clojure &amp;quot;1.6.0&amp;quot;]])
+$ edit project.clj
+$ cat project.clj
+(defproject opencv-play &amp;quot;0.1.0-SNAPSHOT&amp;quot;
+  :description &amp;quot;FIXME: write description&amp;quot;
+  :url &amp;quot;http://example.com/FIXME&amp;quot;
+  :license {:name &amp;quot;Eclipse Public License&amp;quot;
+            :url &amp;quot;http://www.eclipse.org/legal/epl-v10.html&amp;quot;}
+  :dependencies [[org.clojure/clojure &amp;quot;1.6.0&amp;quot;]
+                 [cider/cider-nrepl &amp;quot;0.9.0-SNAPSHOT&amp;quot;]]
+  :jvm-opts [&amp;quot;-Djava.library.path=./lib&amp;quot;]
+  :resource-paths [&amp;quot;./lib/opencv-300.jar&amp;quot;
+                   &amp;quot;./lib/Imshow.jar&amp;quot;]
+  :injections [(clojure.lang.RT/loadLibrary org.opencv.core.Core/NATIVE_LIBRARY_NAME)])
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そしたら先程のライブラリ達を配置します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ mkdir lib
+$ cp /usr/local/share/OpenCV/java/* lib
+$ cp /path/to/ImShow-Java-OpenCV/ImShow_JCV/src/Imshow.jar lib
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ついでにlenaも呼びましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ mkdir img
+$ cp /path/to/src/of/opencv-3.0.0/samples/data/lena.jpg img
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;遊ぶ:f3a429adc3106e7ec83e1e87bf1a8a30&#34;&gt;遊ぶ&lt;/h1&gt;
+
+&lt;p&gt;準備完了ってことでREPLを起動しましょう。ちょっと遅いですが我慢。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ lein repl
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+nREPL server started on port 52301 on host 127.0.0.1 - nrepl://127.0.0.1:52301
+REPL-y 0.3.5, nREPL 0.2.6
+Clojure 1.6.0
+Java HotSpot(TM) 64-Bit Server VM 1.8.0_25-b17
+    Docs: (doc function-name-here)
+          (find-doc &amp;quot;part-of-name-here&amp;quot;)
+  Source: (source function-name-here)
+ Javadoc: (javadoc java-object-or-class-here)
+    Exit: Control+D or (exit) or (quit)
+ Results: Stored in vars *1, *2, *3, an exception in *e
+
+user=&amp;gt; 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このままREPLを使ってもいいですが私はEmacsから&lt;a href=&#34;https://github.com/clojure-emacs/cider&#34;&gt;CIDER&lt;/a&gt;でnREPLにつなぎます。
+REPLでも補完は効くのでEmacsやらのエディタの設定が面倒ならこのままでも十分ですよ。&lt;/p&gt;
+
+&lt;p&gt;まずは画像のロードから。2系とは違ってImagecodecを使うようです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-clojure&#34;&gt;user&amp;gt; (import [org.opencv.imgcodecs Imgcodecs])
+org.opencv.imgcodecs.Imgcodecs
+user&amp;gt; (def lena (Imgcodecs/imread &amp;quot;img/lena.jpg&amp;quot;))
+#&#39;user/lena
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;いじる前に表示してみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-clojure&#34;&gt;user&amp;gt; (import [com.atul.JavaOpenCV Imshow])
+com.atul.JavaOpenCV.Imshow
+user&amp;gt; (def is (Imshow. &amp;quot;Lena&amp;quot;))
+#&#39;user/is
+user&amp;gt; (.showImage is lena)
+nil
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://KeenS.github.io/images/clojure-opencv/show-lena.png&#34; alt=&#34;lena&#34; /&gt;
+&lt;/p&gt;
+
+&lt;p&gt;よしよし。表示されましたね。ではこの辺を参考に顔認識してみましょう。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://qiita.com/woxtu/items/bf39e3d53cbf60396d2c&#34;&gt;Clojure - 二次元絵の顔を検出する - Qiita&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;まずは必要なパッケージの読み込み&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-clojure&#34;&gt;user&amp;gt; (import [org.opencv.core Mat CvType])
+org.opencv.core.CvType
+user&amp;gt; (import [org.opencv.imgproc Imgproc])
+org.opencv.imgproc.Imgproc
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;前処理のグレースケール変換からヒストグラムの均一化まで一気にやってしまいましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-clojure&#34;&gt;user&amp;gt; (def buffer (Mat. 512 512 CvType/CV_8UC3))
+#&#39;user/buffer
+user&amp;gt; (Imgproc/cvtColor lena buffer Imgproc/COLOR_RGB2GRAY)
+nil
+user&amp;gt; (Imgproc/equalizeHist buffer buffer)
+nil
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ここで一旦画像の確認。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-clojure&#34;&gt;user&amp;gt; (.showImage is buffer)
+nil
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://KeenS.github.io/images/clojure-opencv/gray-hist-lena.png&#34; alt=&#34;gray-hist-lena&#34; /&gt;
+&lt;/p&gt;
+
+&lt;p&gt;ふむふむ。ではでは顔を認識しますか。&lt;/p&gt;
+
+&lt;p&gt;まずは色々準備します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-clojure&#34;&gt;user&amp;gt; (import [org.opencv.core MatOfRect])
+org.opencv.core.MatOfRect
+user&amp;gt; (import [org.opencv.objdetect CascadeClassifier])
+org.opencv.objdetect.CascadeClassifier
+user&amp;gt; (def faces (MatOfRect.))
+#&#39;user/faces
+user&amp;gt; (def classifier (CascadeClassifier.))
+#&#39;user/classifier
+user&amp;gt; (.load classifier &amp;quot;/usr/local/share/OpenCV/haarcascades/haarcascade_frontalface_default.xml&amp;quot;)
+true
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;因みに分類器のデータのロードは成功がtrueで失敗がfalseだそうです。例外投げないんですね。ハマった。パス名に&lt;code&gt;~&lt;/code&gt;を使うと(ホームを省略表記すると)ロードに失敗するようなのでお気をつけて。&lt;/p&gt;
+
+&lt;p&gt;それでは実行。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-clojure&#34;&gt;user&amp;gt; (.detectMultiScale classifier buffer faces)
+nil
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;さて、顔の位置がとれたので画像に重ねるのですがここではSwing(AWT)の描画を使ってみましょう。
+OpenCVの描画は画像に描画するのでファイルに書き出しても残っているのに対してSwingのだと表示しているフレームに描画するので書き出した画像には残りません。また、リフレッシュすれば消えるのでインタラクティブに実験するのに向いてます。&lt;/p&gt;
+
+&lt;p&gt;一旦準備。フレームをレナの元画像に戻しておきましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-clojure&#34;&gt;user&amp;gt; (import [java.awt Rectangle Color])
+java.awt.Color
+user&amp;gt; (.showImage is lena)
+nil
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ImshowのWndowというパブリックなメンバにJFrameが入ってるのでそれを操作します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-clojure&#34;&gt;user&amp;gt; (def g2 (.getGraphics (.Window is)))
+#&#39;user/g2
+user&amp;gt; (.setColor g2 Color/GREEN)
+nil
+user&amp;gt; (doseq [face (.toList faces)]
+  (let [rect (Rectangle.)]
+    (do
+      (.setRect rect (.width face) (.height face) (.x face) (.y face))
+      (.draw g2 rect))))
+nil
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;はい。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://KeenS.github.io/images/clojure-opencv/face-recognized-lena.png&#34; alt=&#34;face recognized lena&#34; /&gt;
+&lt;/p&gt;
+
+&lt;p&gt;パチパチパチ&lt;/p&gt;
+
+&lt;p&gt;因みに四角形を消すには&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-clojure&#34;&gt;user&amp;gt; (.showImage is lena)
+nil
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;で十分です。ミスっても何回でもやり直せますね。&lt;/p&gt;
+
+&lt;h1 id=&#34;まとめ:f3a429adc3106e7ec83e1e87bf1a8a30&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;p&gt;因みに3.0のドキュメントが探しづらいのですが、masterにあるようです。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://docs.opencv.org/master/&#34;&gt;OpenCV: OpenCV&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;OpenCVをインタラクティブに扱えると楽しいのでみなさんClojure使いましょう。&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>ボトルネックのイイ話</title>
@@ -3276,388 +3516,6 @@ in main thread 3
 * [コルーチンをCommon Lispで簡単に定義 - さくらんぼのlambda日記](http://lambdasakura.hatenablog.com/entry/20111026/1319598590)
 * [継続渡しスタイル - Wikipedia](http://ja.wikipedia.org/wiki/%E7%B6%99%E7%B6%9A%E6%B8%A1%E3%81%97%E3%82%B9%E3%82%BF%E3%82%A4%E3%83%AB)
 * [M.Hiroi&#39;s Home Page / お気楽 Scheme プログラミング入門](http://www.geocities.jp/m_hiroi/func/abcscm20.html)
-&lt;/script&gt;
-&lt;/section&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>非同期処理の「その後」の話。goto、継続、限定継続、CPS、そしてコールバック地獄。</title>
-      <link>http://keens.github.io/slide/hidoukishorino_sononochi_nohanashi_goto_keizoku_genteikeizoku_CPS_soshiteko_rubakkujigoku_/</link>
-      <pubDate>Sat, 25 Apr 2015 23:44:46 +0900</pubDate>
-      
-      <guid>http://keens.github.io/slide/hidoukishorino_sononochi_nohanashi_goto_keizoku_genteikeizoku_CPS_soshiteko_rubakkujigoku_/</guid>
-      <description>&lt;section data-markdown
-    data-separator=&#34;\n\n&#34;
-    data-vertical=&#34;\n\n&#34;
-    data-notes=&#34;^Note:&#34;&gt;
-&lt;script type=&#34;text/template&#34;&gt;
-# 非同期処理の「その後」の話
-----------------------
-## goto、継続、限定継続、CPS、そしてコールバック地獄
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# About Me
----------
-![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
-
- + κeen
- + [@blackenedgold](https://twitter.com/blackenedgold)
- + Github: [KeenS](https://github.com/KeenS)
- + 渋谷のエンジニア
- + Lisp, ML, Shell Scriptあたりを書きます
-
-# 同期処理とは
--------------
-通常、外部とやりとり(I/O)する時に待ち時間(ブロック)が発生する。
-
-![sync task image](/images/sync.png)
-
-
-# 非同期処理とは
----------------
-待ち時間に(ブロックせずに)別の処理をしようという発想。
-
-![async task image](/images/async.png)
-
-# 非同期処理の裏側
------------------
-処理Aと処理Bの他にいつどっちを動かすかを決めるスケジューラが存在することが多い
-
-![async scheduler image](/images/async_scheduler.png)
-
-
-# どうやって戻る問題
--------------------
-* 一時停止した後「その後」の処理にどうやって戻るか
-
-![cont image](/images/cont.png)
-
-# 「その後」とは
------------
-
-```C
-...
-fputc(c); // ここの処理でI/Oが入る
-// 再開する時にここに戻ってきたい
-printf(&#34;Work done&#34;);
-...
-```
-
-# GOTO
-------
-`goto` を使えば戻れる
-
-```C
-...
-  fputc(c); // ここの処理でI/Oが入る
-  // 再開する時にここに戻ってきたい
-RESTART:
-  printf(&#34;Work done&#34;);
-...
-```
-
-# GOTOの問題
-------------
-こういうコードだとGOTOでは困る
-
-```C
-if ((c = fgetc(f)) != -1)
-...
-```
-
-
-# GOTOの問題
-------------
-こんな区切り方をしたい
-
-![cont in code image](/images/codecont.png)
-
-
-# GOTOの問題
-------------
-
-* 式の途中に入れない
-* 値を返せない
-* I/Oが終わった「その後」が思ったより複雑
-
-# &#34;継続&#34;という概念
------------------
-
-* continuation
-* ここで言ってる「その後」に名前をつけたもの
-* その後に行なわれる全ての処理のこと
-* 全ての言語に存在する
-
-
-# (限定)継続を値として扱える言語
-------------------------------
-値としての継続はちょっとリッチになったGOTO程度。
-
-* Scheme
-* OchaCaml
-* SML/NJ
-* (Ruby)
-* etc.
-
-
-## 正確には限定継続
-------------------
-
-* 細かい話だが継続と言うと処理Aとスケジューラ全てを含んでしまうので
-今回欲しいのは処理Aの中に限定した限定継続
-* 継続を値として扱えれば限定継続を[実装出来る]()ので今回はそこまで深く違いを気にする必要はない
-
-
-## 正確には限定継続
-------------------
-
-![continuation image](/images/continuation.png)
-
-
-## 正確には限定継続
-------------------
-
-![partcont image](/images/partcont.png)
-
-
-# 限定継続を使った非同期処理の例
-------------------------------
-Cの例をSchemeに翻訳してみる
-
-```scheme
-(if (/= (read-char f) -1)
-    ...)
-```
-
-
-# 限定継続を使った非同期処理の例
-------------------------------
-`lambda`は限定継続を`k`として受け取り、関数として使える。(今回はコールバックとして使っている)  
-`reset`、`shift`、`lambda`、`k`を無視すれば以前のコードと一致する。
-
-```scheme
-(reset
-  (if (/= (shift (lambda (k)
-                   (async-read-char f k)))
-          -1)
-      ...))
-```
-
-
-# 限定継続を使った非同期処理の例
-------------------------------
-`lambda`は限定継続を`k`として受け取り、関数として使える。(今回はコールバックとして使っている)  
-`reset`、`shift`、`lambda`、`k`を無視すれば以前のコードと一致する。
-
-```scheme
-
-  (if (/= 
-                  (async-read-char f  )
-          -1)
-      ...)
-
-```
-
-
-# 限定継続を使った非同期処理の例
-------------------------------
-`lambda`は限定継続を`k`として受け取り、関数として使える。(今回はコールバックとして使っている)  
-`reset`、`shift`、`lambda`、`k`を無視すれば以前のコードと一致する。
-
-```scheme
-(if (/= (read-char f) -1)
-    ...)
-```
-
-
-# ここまでのまとめ
------------------
-
-* 非同期処理を行なう時に継続という概念が出てくる
-* 継続を値として扱える言語もある
-* 値としての継続は1引数関数として振る舞う
-* そのような言語ではユーザレベルで非同期処理をサポート出来る
-
-
-# 継続を値として扱えない言語での非同期処理
-----------------------------------------
-
-* 先に言ったように全ての言語に継続が存在する
-  * マシン語レベルでjump命令とほぼ同じ
-* 言語処理系レベルで継続を取り出せば使える
-* 要は組込み機能
-
-
-# 継続を値として扱えない言語での非同期処理
-----------------------------------------
-
-* 処理系にそこまで求めるのは酷
-  * バグり易い
-  * デバッグし辛い
-* 処理系はもっと別のことに専念すべき
-* 機能が追加修正される度に処理系をアップグレードしないといけない
-
-実は継続を値として扱えない言語でもユーザレベルで継続を値として取り出す方法がある
-
-
-## Continuation Passing Style
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# CPS
------
-
-* 日本語にすると「継続渡し形式」
-* 継続を関数として切り出して引数に渡す
-  * 継続のために全ての関数の引数が1つ増える
-* 継続渡し形式に変換することを「CPS変換という」
-* CPS変換は機械的に出来る
-
-
-# CPS変換
-------------
-先は
-
-```scheme
-(if (/= (read-char f) -1)
-    ...)
-```
-
-が
-
-```scheme
-(reset
-  (if (/= (shift (lambda (k)
-                   (async-read-char f k)))
-          -1)
-      ...))
-```
-
-になった。
-
-# CPS変換
-------------
-今回は
-
-```scheme
-(if (/= (read-char f) -1)
-    ...)
-```
-
-が
-
-```scheme
-(async-read-char f
-           (lambda (c) (if (/= c -1) ...)))
-```
-
-になる
-
-
-# CPS変換
----------
-
-* パっと見限定継続のコードの`lambda`の外側と内側が入れ替わる
-* そんなり分かりやすくない
-
-
-# もっとCPS変換
----------------
-階乗関数の例
-
-```scheme
-(define fact (n)
-  (if (&lt;= n 1)
-      1
-      (* n (fact (- n 1)))))
-```
-
-
-# もっとCPS変換
----------------
-階乗関数の例
-
-```scheme
-(define fact (n c)
-  (if (&lt;= n 1)
-      (c 1)
-      (fact (- n 1) (lambda (c) (* n c)))))
-```
-
-# CPS変換まとめ
---------------
-
-* とりあえず機械的に変換できる
-  + 実際、CPS変換をサポートする言語はいくつかある
-    - Haskellのdo記法とか
-* むしろ機械がやるべきで人間がやることではない
-
-
-# コールバック地獄の正体
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# コールバック地獄の正体
------------------------
-先のCPS変換のコードをJSで書くと分かるかも
-
-```javascript
-async_read_char(f, function(c){
-    if(c === -1) {
-        ...
-    }
-})
-
-```
-
-
-# コールバック地獄の正体
------------------------
-先のCPS変換のコードをJSで書くと分かるかも
-
-```javascript
-function fact(n, callback) {
-    if(n &lt;= 1)
-        return callback(n);
-    else
-        return fact(n - 1, function(c){return n * c;})
-}
-```
-
-
-# コールバック地獄の正体
------------------------
-
-* 人間が手でやることではない&#34;CPS変換&#34;を手でやらせた結果
-* altJSは内部でCPS変換を行なうことで非同期プロミスなどを実現している
-  + DeNAのJSXとか
-
-# 非同期処理の実装まとめ
-------------------------
-下に行く程抽象度/汎用性が高い
-
-* コールバックスタイル
-  + JavaScript(&lt; ES6)とか
-* 言語レベル組み込みサポート
-  + C#とか
-* 言語レベルCPS変換サポート
-  + altJSとか
-* 言語レベル(限定)継続サポート
-  + Schemeとか
-* ユーザーレベルでも限定継続(CPS変換)を実現出来るエレガントなマクロサポート
-  * Lisp
-
-※ネタです。マサカリ投げないで下さい。
-
-
-# まとめ: なぜコールバック&#34;地獄&#34;なのか
-------------------------------------
-
-* そもそも難しいことをやろうとしている
-* 難しいことをカバーするだけの言語の機能が足りてない
-
 &lt;/script&gt;
 &lt;/section&gt;
 </description>

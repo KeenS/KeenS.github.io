@@ -6,8 +6,248 @@
     <description>Recent content in Posts on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Sun, 31 May 2015 21:02:08 +0900</lastBuildDate>
+    <lastBuildDate>Sun, 07 Jun 2015 16:56:51 +0900</lastBuildDate>
     <atom:link href="http://KeenS.github.io/post/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>ClojureでOpenCV 3.0と戯れる</title>
+      <link>http://keens.github.io/blog/2015/06/07/clojuredeopencv3_0totawamureru</link>
+      <pubDate>Sun, 07 Jun 2015 16:56:51 +0900</pubDate>
+      
+      <guid>http://keens.github.io/blog/2015/06/07/clojuredeopencv3_0totawamureru</guid>
+      <description>
+
+&lt;p&gt;κeenです。先日OpenCV 3.0がリリースされましたね。
+ちょっと触ってみようと思ったのですが公式バインディングがC++、C、Java、Pythonと中々つらい言語ばっかりなので扱いやすいClojureから触った時のメモです。&lt;/p&gt;
+
+&lt;p&gt;2系とはAPIが変わってる部分もあるらしく、苦労しました。
+UbuntuでやってるのでMacの人は適当に読み替えて下さい。&lt;/p&gt;
+
+&lt;h1 id=&#34;準備:f3a429adc3106e7ec83e1e87bf1a8a30&#34;&gt;準備&lt;/h1&gt;
+
+&lt;h2 id=&#34;opencv:f3a429adc3106e7ec83e1e87bf1a8a30&#34;&gt;OpenCV&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://opencv.org/&#34;&gt;公式&lt;/a&gt;からOpenCV 3.0をダウンロードしてきましょう。展開してからは&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cd opencv-3.0.0
+$ cmake .
+$ make -j4
+$ sudo make -j4 install
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;でインストールまでしてくれます。&lt;/p&gt;
+
+&lt;h2 id=&#34;imshow:f3a429adc3106e7ec83e1e87bf1a8a30&#34;&gt;ImShow&lt;/h2&gt;
+
+&lt;p&gt;どうも3.0からHighguiというQtベースのGUIツール群のJavaバインディングが作られなくなったそうです。Swing使えと。&lt;/p&gt;
+
+&lt;p&gt;ということでOpenCVとSwingのブリッジしてくれる軽いライブラリが&lt;a href=&#34;https://github.com/master-atul/ImShow-Java-OpenCV&#34;&gt;ImShow-Java-OpenCV&lt;/a&gt;
+です。.javaファイル1枚なので本当に軽いです。&lt;/p&gt;
+
+&lt;p&gt;.jarもレポジトリに入ってるのですがソースコードより古いらしく、自分でビルドする必要があります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ git clone git@github.com:master-atul/ImShow-Java-OpenCV.git
+$ cd ImShow-Java-OpenCV/ImShow_JCV/src
+$ javac com/atul/JavaOpenCV/Imshow.java
+$ jar -cf Imshow.jar com/atul/JavaOpenCV/Imshow.class
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;lein-プロジェクト:f3a429adc3106e7ec83e1e87bf1a8a30&#34;&gt;lein プロジェクト&lt;/h2&gt;
+
+&lt;p&gt;Clojureのプロジェクト管理ツールの&lt;a href=&#34;http://leiningen.org/&#34;&gt;Leiningen&lt;/a&gt;を使います。知らない人は適当にググって下さい。&lt;/p&gt;
+
+&lt;p&gt;まずプロジェクトを作ります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ lein new opencv-play
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;んで、mavenでいうところのpom.xmlにあたるproject.cljをいじります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cd opencv-play
+$ cat project.clj
+(defproject opencv-play &amp;quot;0.1.0-SNAPSHOT&amp;quot;
+  :description &amp;quot;FIXME: write description&amp;quot;
+  :url &amp;quot;http://example.com/FIXME&amp;quot;
+  :license {:name &amp;quot;Eclipse Public License&amp;quot;
+            :url &amp;quot;http://www.eclipse.org/legal/epl-v10.html&amp;quot;}
+  :dependencies [[org.clojure/clojure &amp;quot;1.6.0&amp;quot;]])
+$ edit project.clj
+$ cat project.clj
+(defproject opencv-play &amp;quot;0.1.0-SNAPSHOT&amp;quot;
+  :description &amp;quot;FIXME: write description&amp;quot;
+  :url &amp;quot;http://example.com/FIXME&amp;quot;
+  :license {:name &amp;quot;Eclipse Public License&amp;quot;
+            :url &amp;quot;http://www.eclipse.org/legal/epl-v10.html&amp;quot;}
+  :dependencies [[org.clojure/clojure &amp;quot;1.6.0&amp;quot;]
+                 [cider/cider-nrepl &amp;quot;0.9.0-SNAPSHOT&amp;quot;]]
+  :jvm-opts [&amp;quot;-Djava.library.path=./lib&amp;quot;]
+  :resource-paths [&amp;quot;./lib/opencv-300.jar&amp;quot;
+                   &amp;quot;./lib/Imshow.jar&amp;quot;]
+  :injections [(clojure.lang.RT/loadLibrary org.opencv.core.Core/NATIVE_LIBRARY_NAME)])
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そしたら先程のライブラリ達を配置します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ mkdir lib
+$ cp /usr/local/share/OpenCV/java/* lib
+$ cp /path/to/ImShow-Java-OpenCV/ImShow_JCV/src/Imshow.jar lib
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ついでにlenaも呼びましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ mkdir img
+$ cp /path/to/src/of/opencv-3.0.0/samples/data/lena.jpg img
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;遊ぶ:f3a429adc3106e7ec83e1e87bf1a8a30&#34;&gt;遊ぶ&lt;/h1&gt;
+
+&lt;p&gt;準備完了ってことでREPLを起動しましょう。ちょっと遅いですが我慢。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ lein repl
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+nREPL server started on port 52301 on host 127.0.0.1 - nrepl://127.0.0.1:52301
+REPL-y 0.3.5, nREPL 0.2.6
+Clojure 1.6.0
+Java HotSpot(TM) 64-Bit Server VM 1.8.0_25-b17
+    Docs: (doc function-name-here)
+          (find-doc &amp;quot;part-of-name-here&amp;quot;)
+  Source: (source function-name-here)
+ Javadoc: (javadoc java-object-or-class-here)
+    Exit: Control+D or (exit) or (quit)
+ Results: Stored in vars *1, *2, *3, an exception in *e
+
+user=&amp;gt; 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このままREPLを使ってもいいですが私はEmacsから&lt;a href=&#34;https://github.com/clojure-emacs/cider&#34;&gt;CIDER&lt;/a&gt;でnREPLにつなぎます。
+REPLでも補完は効くのでEmacsやらのエディタの設定が面倒ならこのままでも十分ですよ。&lt;/p&gt;
+
+&lt;p&gt;まずは画像のロードから。2系とは違ってImagecodecを使うようです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-clojure&#34;&gt;user&amp;gt; (import [org.opencv.imgcodecs Imgcodecs])
+org.opencv.imgcodecs.Imgcodecs
+user&amp;gt; (def lena (Imgcodecs/imread &amp;quot;img/lena.jpg&amp;quot;))
+#&#39;user/lena
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;いじる前に表示してみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-clojure&#34;&gt;user&amp;gt; (import [com.atul.JavaOpenCV Imshow])
+com.atul.JavaOpenCV.Imshow
+user&amp;gt; (def is (Imshow. &amp;quot;Lena&amp;quot;))
+#&#39;user/is
+user&amp;gt; (.showImage is lena)
+nil
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://KeenS.github.io/images/clojure-opencv/show-lena.png&#34; alt=&#34;lena&#34; /&gt;
+&lt;/p&gt;
+
+&lt;p&gt;よしよし。表示されましたね。ではこの辺を参考に顔認識してみましょう。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://qiita.com/woxtu/items/bf39e3d53cbf60396d2c&#34;&gt;Clojure - 二次元絵の顔を検出する - Qiita&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;まずは必要なパッケージの読み込み&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-clojure&#34;&gt;user&amp;gt; (import [org.opencv.core Mat CvType])
+org.opencv.core.CvType
+user&amp;gt; (import [org.opencv.imgproc Imgproc])
+org.opencv.imgproc.Imgproc
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;前処理のグレースケール変換からヒストグラムの均一化まで一気にやってしまいましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-clojure&#34;&gt;user&amp;gt; (def buffer (Mat. 512 512 CvType/CV_8UC3))
+#&#39;user/buffer
+user&amp;gt; (Imgproc/cvtColor lena buffer Imgproc/COLOR_RGB2GRAY)
+nil
+user&amp;gt; (Imgproc/equalizeHist buffer buffer)
+nil
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ここで一旦画像の確認。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-clojure&#34;&gt;user&amp;gt; (.showImage is buffer)
+nil
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://KeenS.github.io/images/clojure-opencv/gray-hist-lena.png&#34; alt=&#34;gray-hist-lena&#34; /&gt;
+&lt;/p&gt;
+
+&lt;p&gt;ふむふむ。ではでは顔を認識しますか。&lt;/p&gt;
+
+&lt;p&gt;まずは色々準備します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-clojure&#34;&gt;user&amp;gt; (import [org.opencv.core MatOfRect])
+org.opencv.core.MatOfRect
+user&amp;gt; (import [org.opencv.objdetect CascadeClassifier])
+org.opencv.objdetect.CascadeClassifier
+user&amp;gt; (def faces (MatOfRect.))
+#&#39;user/faces
+user&amp;gt; (def classifier (CascadeClassifier.))
+#&#39;user/classifier
+user&amp;gt; (.load classifier &amp;quot;/usr/local/share/OpenCV/haarcascades/haarcascade_frontalface_default.xml&amp;quot;)
+true
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;因みに分類器のデータのロードは成功がtrueで失敗がfalseだそうです。例外投げないんですね。ハマった。パス名に&lt;code&gt;~&lt;/code&gt;を使うと(ホームを省略表記すると)ロードに失敗するようなのでお気をつけて。&lt;/p&gt;
+
+&lt;p&gt;それでは実行。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-clojure&#34;&gt;user&amp;gt; (.detectMultiScale classifier buffer faces)
+nil
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;さて、顔の位置がとれたので画像に重ねるのですがここではSwing(AWT)の描画を使ってみましょう。
+OpenCVの描画は画像に描画するのでファイルに書き出しても残っているのに対してSwingのだと表示しているフレームに描画するので書き出した画像には残りません。また、リフレッシュすれば消えるのでインタラクティブに実験するのに向いてます。&lt;/p&gt;
+
+&lt;p&gt;一旦準備。フレームをレナの元画像に戻しておきましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-clojure&#34;&gt;user&amp;gt; (import [java.awt Rectangle Color])
+java.awt.Color
+user&amp;gt; (.showImage is lena)
+nil
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ImshowのWndowというパブリックなメンバにJFrameが入ってるのでそれを操作します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-clojure&#34;&gt;user&amp;gt; (def g2 (.getGraphics (.Window is)))
+#&#39;user/g2
+user&amp;gt; (.setColor g2 Color/GREEN)
+nil
+user&amp;gt; (doseq [face (.toList faces)]
+  (let [rect (Rectangle.)]
+    (do
+      (.setRect rect (.width face) (.height face) (.x face) (.y face))
+      (.draw g2 rect))))
+nil
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;はい。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://KeenS.github.io/images/clojure-opencv/face-recognized-lena.png&#34; alt=&#34;face recognized lena&#34; /&gt;
+&lt;/p&gt;
+
+&lt;p&gt;パチパチパチ&lt;/p&gt;
+
+&lt;p&gt;因みに四角形を消すには&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-clojure&#34;&gt;user&amp;gt; (.showImage is lena)
+nil
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;で十分です。ミスっても何回でもやり直せますね。&lt;/p&gt;
+
+&lt;h1 id=&#34;まとめ:f3a429adc3106e7ec83e1e87bf1a8a30&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;p&gt;因みに3.0のドキュメントが探しづらいのですが、masterにあるようです。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://docs.opencv.org/master/&#34;&gt;OpenCV: OpenCV&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;OpenCVをインタラクティブに扱えると楽しいのでみなさんClojure使いましょう。&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>TCOと例外ハンドル</title>
@@ -2077,56 +2317,6 @@ Join(struct
 &lt;p&gt;ライセンスは元データに倣ってパブリックドメインとします。&lt;/p&gt;
 
 &lt;p&gt;PNG形式のもの必要…ですか？&lt;/p&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>面接でLispを口にして落ちない企業、私気になります！</title>
-      <link>http://keens.github.io/blog/2015/02/10/mensetsudelispwokuchinishiteochinaikigyouwatashikininarimasu</link>
-      <pubDate>Tue, 10 Feb 2015 08:01:35 +0000</pubDate>
-      
-      <guid>http://keens.github.io/blog/2015/02/10/mensetsudelispwokuchinishiteochinaikigyouwatashikininarimasu</guid>
-      <description>
-
-&lt;p&gt;κeenです。先日の記事がやたら拡散しました。その中で&lt;/p&gt;
-
-&lt;p&gt;「面接でLispは口にしない方が良い。100%落ちる。」&lt;/p&gt;
-
-&lt;p&gt;の一文がえらく気に入られたようです。Lispの風評被害を防ぐために1つアンケートにご協力下さい。&lt;/p&gt;
-
-&lt;p&gt;このスプレッドシートです。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://docs.google.com/spreadsheets/d/1dUUOSpKqPK_tMqboxzAfPaL1eAEVwAdYy4AP_5HWeVw/edit?usp=sharing&#34;&gt;面接でLispを口にして落ちない企業調査表 - Google スプレッドシート&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;「うちの会社は面接でLispを口にしても落ちないぜ」って方はお手隙ならば書いて下さると嬉しいです。単純な興味目的のゆるふわなアンケートです。調査項目は&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;会社名&lt;/li&gt;
-&lt;li&gt;会社のURL&lt;/li&gt;
-&lt;li&gt;書いた人(本名、スクリーンネーム、なんかのIDかは任意。IDにすると連絡がとれて便利かも)&lt;/li&gt;
-&lt;li&gt;コメント、会社のアピールなど(長文可、任意)&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;で。&lt;/p&gt;
-
-&lt;p&gt;利用規約(？)は&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;社員が書く。会社に全く書かない人は勝手に書かない。&lt;/li&gt;
-&lt;li&gt;改竄を防ぐために一度書いたら同じ人しか編集してはいけない。同じ会社の人でもダメ。&lt;/li&gt;
-&lt;li&gt;どっかのメディアに掲載されても怒らない。&lt;/li&gt;
-&lt;li&gt;メディア側は改竄なしでリスト全部を引用し、引用した日時も付記する。あるいはURLにリンクを張る。二次引用は禁止する。&lt;/li&gt;
-&lt;li&gt;問題が生じたら管理者(@blackenedgold)がこのスプレッドシートを非公開にする。&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;こんなもんですかね。ゆるふわアンケートなので書く側もゆるふわな気持でお願いします。&lt;/p&gt;
-
-&lt;h1 id=&#34;補足:9e6d9857d06fd9b1ba5f4a8582464265&#34;&gt;補足&lt;/h1&gt;
-
-&lt;h1 id=&#34;面接でlispは口にしない方が良い-100-落ちる-について補足:9e6d9857d06fd9b1ba5f4a8582464265&#34;&gt;「面接でLispは口にしない方が良い。100%落ちる。」について補足&lt;/h1&gt;
-
-&lt;p&gt;振り返ってみるとそんなことはありませんでした。就活のある時点までは確かに真で、次の面接でLispを口にしなかったら落ちなかったのでそんなイメージになってました。
-しかしよく考えたら私が内定頂いたところはむしろ全部Lispのおかげで内定頂きました。こっちの情報の方が大事だった。拝承。&lt;/p&gt;
 </description>
     </item>
     
