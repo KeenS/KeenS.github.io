@@ -6,8 +6,133 @@
     <description>Recent content in Rust on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Tue, 21 Apr 2015 00:25:56 +0900</lastBuildDate>
+    <lastBuildDate>Sun, 14 Jun 2015 17:53:11 +0900</lastBuildDate>
     <atom:link href="http://KeenS.github.io/categories/rust/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Rustでstructのmutableなfieldあれこれ</title>
+      <link>http://keens.github.io/blog/2015/06/14/rustdestructnomutablenafieldarekore</link>
+      <pubDate>Sun, 14 Jun 2015 17:53:11 +0900</pubDate>
+      
+      <guid>http://keens.github.io/blog/2015/06/14/rustdestructnomutablenafieldarekore</guid>
+      <description>
+
+&lt;p&gt;κeenです。人々にRustを薦めておきながら本人は昨日ようやく入門しました。その時に困ったことをメモ。タイトルがルー語になってますが気にしない。&lt;/p&gt;
+
+&lt;p&gt;因みにこれはRust 1.0の情報です。&lt;/p&gt;
+
+&lt;h1 id=&#34;導入:3ab5e7833b8f9de647371db38dc333a5&#34;&gt;導入&lt;/h1&gt;
+
+&lt;p&gt;Rustを知らない人のために説明すると、Rustの値はデフォルトでイミュータブルです。デフォルトで、というのはもちろんミュータブルにすることも出来ます。
+標準ライブラリにも値がイミュータブルであることを要求するものもあります。
+そしてミュータビリティは&lt;code&gt;mut&lt;/code&gt;として型にも現れます。厳密に同じかは知りませんが&lt;code&gt;const&lt;/code&gt;の逆、と思えばいいでしょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct Point {
+    x: isize,
+    y: isize
+}
+
+fn double(p: &amp;amp;mut Point) {
+    p.x = p.x * 2;
+    p.y = p.y * 2;
+}
+
+fn main(){
+    let mut p1 = Point{x: 1, y: 2};
+    let p2 = Point{x: 1, y: 2};
+    double(&amp;amp;mut p1);
+    double(&amp;amp;mut p2); // error! p2 is immutable
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;イミュータビリティは継承します。親のstructがイミュータブルなら子もイミュータルになります。因みにフィールドに&lt;code&gt;mut&lt;/code&gt;を指定することは出来ないようです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::collections::HashMap;
+
+struct IntHashMap {
+    hash: HashMap&amp;lt;isize, isize&amp;gt;
+}
+fn main(){
+    let h = IntHashMap{hash: HashMap::new()};
+    h.hash.insert(1, 2);        // error! h.hash is immutable
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;最後に、少し本筋とずれますがtraitについて。他の言語でいうインターフェースのようなものです。今回これで困ったので。&lt;/p&gt;
+
+&lt;p&gt;例えばHTTPライブラリの&lt;a href=&#34;http://hyper.rs/hyper/hyper/server/trait.Handler.html&#34;&gt;hyper&lt;/a&gt;では次のようなトレイトを実装しているstructをrequest handlerとして登録できます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub trait Handler: Sync + Send {
+    fn handle&amp;lt;&#39;a, &#39;k&amp;gt;(&amp;amp;&#39;a self, Request&amp;lt;&#39;a, &#39;k&amp;gt;, Response&amp;lt;&#39;a, Fresh&amp;gt;);
+
+    fn check_continue(&amp;amp;self, _: (&amp;amp;Method, &amp;amp;RequestUri, &amp;amp;Headers)) -&amp;gt; StatusCode { ... }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これを見て下さい。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn handle&amp;lt;&#39;a, &#39;k&amp;gt;(&amp;amp;&#39;a self, Request&amp;lt;&#39;a, &#39;k&amp;gt;, Response&amp;lt;&#39;a, Fresh&amp;gt;);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;self&lt;/code&gt;に&lt;code&gt;mut&lt;/code&gt;がついてませんね。つまりhandlerはイミュータブルな値として渡されます。例えば先の例のようにフィールドにハッシュマップを持っていても更新出来ません。ちょっと困りますね。&lt;/p&gt;
+
+&lt;h1 id=&#34;cell-refcell:3ab5e7833b8f9de647371db38dc333a5&#34;&gt;Cell/RefCell&lt;/h1&gt;
+
+&lt;p&gt;ということでフィールドにミュータビリティを入れるのが &lt;code&gt;std::cell::{Cell, RefCell}&lt;/code&gt; です。この辺のブログを参考に。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://saneyukis.hatenablog.com/entry/2014/05/30/230351&#34;&gt;#rustlang における構造体のmutabilityと&lt;code&gt;Cell/RefCell&lt;/code&gt; - snyk_s log&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;で、喜び勇んで使ったのですが次なるエラーが。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct MyHandler {
+    cache: RefCell&amp;lt;HashMap&amp;lt;String, Vec&amp;lt;u8&amp;gt;&amp;gt;&amp;gt;
+}
+
+impl Handler for MyHandler {
+    fn handle&amp;lt;&#39;a, &#39;k&amp;gt;(&amp;amp;&#39;a self, Request&amp;lt;&#39;a, &#39;k&amp;gt;, Response&amp;lt;&#39;a, Fresh&amp;gt;){
+        ....
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;the trait `core::marker::Sync` is not implemented for the type `core::cell::UnsafeCell&amp;lt;...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;どうも、hyperは複数スレッドでも動かせるのでハンドラにスレッドセーフであることが要求されるようです。そしてRustコンパイラはRefCellがスレッドセーフでない事を知っているのでコンパイルを弾きます。怖いですね。&lt;/p&gt;
+
+&lt;h1 id=&#34;mutex:3ab5e7833b8f9de647371db38dc333a5&#34;&gt;Mutex&lt;/h1&gt;
+
+&lt;p&gt;無理っぽいので最早別の手段を捜し始めます。&lt;/p&gt;
+
+&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;キャッシュ用のアクター走らせるのが良い気がしてきた&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/609471732970209280&#34;&gt;2015, 6月 12&lt;/a&gt;&lt;/blockquote&gt;
+&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
+
+&lt;p&gt;これはちょっと無理がありそうですね。&lt;/p&gt;
+
+&lt;p&gt;しかし、別の方法があるようでした。&lt;a href=&#34;https://doc.rust-lang.org/std/sync/struct.Mutex.html&#34;&gt;std::sync::Mutex&lt;/a&gt;です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct MyHandler {
+    cache: Mutex&amp;lt;HashMap&amp;lt;String, Vec&amp;lt;u8&amp;gt;&amp;gt;&amp;gt;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;こんな感じで&lt;code&gt;lock().unwrap()&lt;/code&gt;するだけで使えます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let mut cache = self.cache.lock().unwrap();
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;因みにロックの解除は不要です。Rustコンパイラは値の生存期間を知っているので値がこれ以上使われなくなった箇所にコンパイラがunlockを挟みます。(正確に言うとdrop(デストラクタ)が挿入され、dropがリソースの開放を行なう)&lt;/p&gt;
+
+&lt;h1 id=&#34;まとめ:3ab5e7833b8f9de647371db38dc333a5&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;rustのイミュータビリティは継承する&lt;/li&gt;
+&lt;li&gt;structのfieldに直接&lt;code&gt;mut&lt;/code&gt;は指定出来ない&lt;/li&gt;
+&lt;li&gt;シングルスレッドでミュータブルなフィールドが欲しいなら&lt;code&gt;Cell&lt;/code&gt;/&lt;code&gt;RefCell&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;マルチスレッドなら&lt;code&gt;Mutex&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
     
     <item>
       <title>静的なメモリ管理の話。リージョン推論とλ計算からRustまで</title>
