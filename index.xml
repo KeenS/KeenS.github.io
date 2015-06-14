@@ -6,8 +6,133 @@
     <description>Recent content on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Sun, 07 Jun 2015 16:56:51 +0900</lastBuildDate>
+    <lastBuildDate>Sun, 14 Jun 2015 17:53:11 +0900</lastBuildDate>
     <atom:link href="http://KeenS.github.io/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Rustでstructのmutableなfieldあれこれ</title>
+      <link>http://keens.github.io/blog/2015/06/14/rustdestructnomutablenafieldarekore</link>
+      <pubDate>Sun, 14 Jun 2015 17:53:11 +0900</pubDate>
+      
+      <guid>http://keens.github.io/blog/2015/06/14/rustdestructnomutablenafieldarekore</guid>
+      <description>
+
+&lt;p&gt;κeenです。人々にRustを薦めておきながら本人は昨日ようやく入門しました。その時に困ったことをメモ。タイトルがルー語になってますが気にしない。&lt;/p&gt;
+
+&lt;p&gt;因みにこれはRust 1.0の情報です。&lt;/p&gt;
+
+&lt;h1 id=&#34;導入:3ab5e7833b8f9de647371db38dc333a5&#34;&gt;導入&lt;/h1&gt;
+
+&lt;p&gt;Rustを知らない人のために説明すると、Rustの値はデフォルトでイミュータブルです。デフォルトで、というのはもちろんミュータブルにすることも出来ます。
+標準ライブラリにも値がイミュータブルであることを要求するものもあります。
+そしてミュータビリティは&lt;code&gt;mut&lt;/code&gt;として型にも現れます。厳密に同じかは知りませんが&lt;code&gt;const&lt;/code&gt;の逆、と思えばいいでしょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct Point {
+    x: isize,
+    y: isize
+}
+
+fn double(p: &amp;amp;mut Point) {
+    p.x = p.x * 2;
+    p.y = p.y * 2;
+}
+
+fn main(){
+    let mut p1 = Point{x: 1, y: 2};
+    let p2 = Point{x: 1, y: 2};
+    double(&amp;amp;mut p1);
+    double(&amp;amp;mut p2); // error! p2 is immutable
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;イミュータビリティは継承します。親のstructがイミュータブルなら子もイミュータルになります。因みにフィールドに&lt;code&gt;mut&lt;/code&gt;を指定することは出来ないようです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::collections::HashMap;
+
+struct IntHashMap {
+    hash: HashMap&amp;lt;isize, isize&amp;gt;
+}
+fn main(){
+    let h = IntHashMap{hash: HashMap::new()};
+    h.hash.insert(1, 2);        // error! h.hash is immutable
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;最後に、少し本筋とずれますがtraitについて。他の言語でいうインターフェースのようなものです。今回これで困ったので。&lt;/p&gt;
+
+&lt;p&gt;例えばHTTPライブラリの&lt;a href=&#34;http://hyper.rs/hyper/hyper/server/trait.Handler.html&#34;&gt;hyper&lt;/a&gt;では次のようなトレイトを実装しているstructをrequest handlerとして登録できます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub trait Handler: Sync + Send {
+    fn handle&amp;lt;&#39;a, &#39;k&amp;gt;(&amp;amp;&#39;a self, Request&amp;lt;&#39;a, &#39;k&amp;gt;, Response&amp;lt;&#39;a, Fresh&amp;gt;);
+
+    fn check_continue(&amp;amp;self, _: (&amp;amp;Method, &amp;amp;RequestUri, &amp;amp;Headers)) -&amp;gt; StatusCode { ... }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これを見て下さい。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn handle&amp;lt;&#39;a, &#39;k&amp;gt;(&amp;amp;&#39;a self, Request&amp;lt;&#39;a, &#39;k&amp;gt;, Response&amp;lt;&#39;a, Fresh&amp;gt;);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;self&lt;/code&gt;に&lt;code&gt;mut&lt;/code&gt;がついてませんね。つまりhandlerはイミュータブルな値として渡されます。例えば先の例のようにフィールドにハッシュマップを持っていても更新出来ません。ちょっと困りますね。&lt;/p&gt;
+
+&lt;h1 id=&#34;cell-refcell:3ab5e7833b8f9de647371db38dc333a5&#34;&gt;Cell/RefCell&lt;/h1&gt;
+
+&lt;p&gt;ということでフィールドにミュータビリティを入れるのが &lt;code&gt;std::cell::{Cell, RefCell}&lt;/code&gt; です。この辺のブログを参考に。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://saneyukis.hatenablog.com/entry/2014/05/30/230351&#34;&gt;#rustlang における構造体のmutabilityと&lt;code&gt;Cell/RefCell&lt;/code&gt; - snyk_s log&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;で、喜び勇んで使ったのですが次なるエラーが。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct MyHandler {
+    cache: RefCell&amp;lt;HashMap&amp;lt;String, Vec&amp;lt;u8&amp;gt;&amp;gt;&amp;gt;
+}
+
+impl Handler for MyHandler {
+    fn handle&amp;lt;&#39;a, &#39;k&amp;gt;(&amp;amp;&#39;a self, Request&amp;lt;&#39;a, &#39;k&amp;gt;, Response&amp;lt;&#39;a, Fresh&amp;gt;){
+        ....
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;the trait `core::marker::Sync` is not implemented for the type `core::cell::UnsafeCell&amp;lt;...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;どうも、hyperは複数スレッドでも動かせるのでハンドラにスレッドセーフであることが要求されるようです。そしてRustコンパイラはRefCellがスレッドセーフでない事を知っているのでコンパイルを弾きます。怖いですね。&lt;/p&gt;
+
+&lt;h1 id=&#34;mutex:3ab5e7833b8f9de647371db38dc333a5&#34;&gt;Mutex&lt;/h1&gt;
+
+&lt;p&gt;無理っぽいので最早別の手段を捜し始めます。&lt;/p&gt;
+
+&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;キャッシュ用のアクター走らせるのが良い気がしてきた&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/609471732970209280&#34;&gt;2015, 6月 12&lt;/a&gt;&lt;/blockquote&gt;
+&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
+
+&lt;p&gt;これはちょっと無理がありそうですね。&lt;/p&gt;
+
+&lt;p&gt;しかし、別の方法があるようでした。&lt;a href=&#34;https://doc.rust-lang.org/std/sync/struct.Mutex.html&#34;&gt;std::sync::Mutex&lt;/a&gt;です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct MyHandler {
+    cache: Mutex&amp;lt;HashMap&amp;lt;String, Vec&amp;lt;u8&amp;gt;&amp;gt;&amp;gt;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;こんな感じで&lt;code&gt;lock().unwrap()&lt;/code&gt;するだけで使えます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let mut cache = self.cache.lock().unwrap();
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;因みにロックの解除は不要です。Rustコンパイラは値の生存期間を知っているので値がこれ以上使われなくなった箇所にコンパイラがunlockを挟みます。(正確に言うとdrop(デストラクタ)が挿入され、dropがリソースの開放を行なう)&lt;/p&gt;
+
+&lt;h1 id=&#34;まとめ:3ab5e7833b8f9de647371db38dc333a5&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;rustのイミュータビリティは継承する&lt;/li&gt;
+&lt;li&gt;structのfieldに直接&lt;code&gt;mut&lt;/code&gt;は指定出来ない&lt;/li&gt;
+&lt;li&gt;シングルスレッドでミュータブルなフィールドが欲しいなら&lt;code&gt;Cell&lt;/code&gt;/&lt;code&gt;RefCell&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;マルチスレッドなら&lt;code&gt;Mutex&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
     
     <item>
       <title>ClojureでOpenCV 3.0と戯れる</title>
@@ -3022,502 +3147,6 @@ $ make -j4 install
 &lt;h1 id=&#34;まとめ:d4eee8946023292eeefbfeb9ba252a7c&#34;&gt;まとめ&lt;/h1&gt;
 
 &lt;p&gt;誰かhomebrewにして。&lt;/p&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>Common Lispで限定継続と遊ぶ</title>
-      <link>http://keens.github.io/slide/Common_Lispdegenteikeizokutoasobu_/</link>
-      <pubDate>Sun, 26 Apr 2015 21:09:07 +0900</pubDate>
-      
-      <guid>http://keens.github.io/slide/Common_Lispdegenteikeizokutoasobu_/</guid>
-      <description>&lt;section data-markdown
-    data-separator=&#34;\n\n&#34;
-    data-vertical=&#34;\n\n&#34;
-    data-notes=&#34;^Note:&#34;&gt;
-&lt;script type=&#34;text/template&#34;&gt;
-# Common Lispで限定継続と遊ぶ
-----------------------
-[Lisp Meet Up #27](https://atnd.org/events/64988)
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# About Me
----------
-![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
-
- + κeen
- + [@blackenedgold](https://twitter.com/blackenedgold)
- + Github: [KeenS](https://github.com/KeenS)
- + 渋谷のエンジニア
- + Lisp, ML, Shell Scriptあたりを書きます
-
-
-# Agenda
---------
-
-0. cl-contの紹介
-1. 限定継続の話
-2. 限定継続の使い方の話
-3. 限定継続の実装の話
-
-
-# CL-CONTの紹介
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# CL-CONT
----------
-
-* Common Lispの限定継続ライブラリ
-* 結構古くからあるっぽい
-* 割と色々なライブラリが使ってる
-
-# CL-CONT
----------
-
-![cl-cont dependers](/images/cl-cont-dependers.png)
-
-# API
------
-
-* 継続を区切るマクロ
-  + `with-call/cc`
-  + `defun/cc`
-  + `lambda/cc`
-* 継続を取得するマクロ
-  + `call/cc`
-  + `let/cc`
-
-※後で説明するので意味が分からなくても問題ないです。
-
-
-# 限定継続の話
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# 継続とは
----------
-
-* &#34;その後&#34;の計算を表わす概念。
-* 値が決定した後トップレベルに戻るまでの計算。
-* Schemeが一級市民として扱えることで有名
-* 値として取り出した時は0-1引数関数として振る舞う
-
-# 継続とは
-----------
-`foo`の継続は、`foo`を虫食いにしたものと思えば良い。
-
-```lisp
-(mapc #&#39;writ-line
-      (loop :for x :in list
-         :collect (if (evenp x)
-                      (foo x))))
-```
-
-# 継続とは
-----------
-`foo`の継続は、`foo`を虫食いにしたものと思えば良い。
-
-```lisp
-(mapc #&#39;writ-line
-      (loop :for x :in list
-         :collect (if (evenp x)
-                      □)))
-```
-
-# 継続とは
-----------
-あとはそれを関数にするだけ
-
-```lisp
-(lambda (k)
-  (mapc #&#39;writ-line
-        (loop :for x :in list
-           :collect (if (evenp x)
-                        k))))
-```
-
-
-# 限定継続とは
----------
-
-* &#34;その後&#34;の計算を表わす概念。
-* 値が決定した後 *指定した位置* に戻るまでの計算。
-* 継続がトップレベルまで戻るのに対して限定継続途中で止まる。それだけ。
-* 部分継続などの言い方もある
-  + 英語もpart contとdelimited contで分かれる
-
-
-# 限定継続とは
--------------
-先の例を`loop`までの限定継続にすると
-
-```lisp
-(mapc #&#39;writ-line
-      (loop :for x :in list
-         :collect (if (evenp x)
-                      (foo x))))
-```
-
-
-# 限定継続とは
--------------
-先の例を`loop`までの限定継続にすると
-
-```lisp
-(loop :for x :in list
-           :collect (if (evenp x)
-                        □))
-```
-
-
-# 限定継続とは
--------------
-
-```lisp
-(lambda (k)
-  (loop :for x :in list
-     :collect (if (evenp x)
-                  k)))
-```
-
-# 限定継続の挙動
----------------
-普通のやつ
-
-```lisp
-(with-call/cc
-  (+ 1 (call/cc
-        (lambda (k)
-          (funcall k 2)))))
-```
-
-これは
-
-```lisp
-(+ 1 2)
-```
-
-と等価
-
-# 限定継続の挙動
----------------
-今度は継続を呼ばないでみる
-
-```lisp
-(with-call/cc
-  (+ 1 (call/cc (lambda (k) 2))))
-```
-
-これは
-
-```lisp
-2
-```
-
-と等価
-
-# 限定継続の挙動
----------------
-もうちょっと呼ばない例  
-(`(let/cc k ...)` = `(call/cc (lambda (k) ...))`)
-
-```lisp
-(with-call/cc
-  (write-line &#34;hello&#34;)
-  (let/cc k 1)
-  (write-line &#34;world&#34;))
-```
-
-は
-
-```lisp
-(progn
-  (write-line &#34;hello&#34;)
-  1)
-```
-
-と等価
-
-
-# 限定継続の使い方の話
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# 限定継続の使い方の話
----------------------
-
-* グリーンスレッド
-* コールバックを綺麗に書き換える
-* 非決定性計算
-* etc...
-
-
-## グリーンスレッド
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-
-## グリーンスレッド
------------------
-
-* またの名をコルーチン
-* またの名を強調スレッド
-
-
-
-## グリーンスレッド
------------------
-
-```lisp
-(let (c)
-  (setf c (with-call/cc
-            (write-line &#34;in thread A 1&#34;)
-            (let/cc k k)
-            (write-line &#34;in thread A 2&#34;)
-            (let/cc k k)
-            (write-line &#34;in thread A 3&#34;)))
-  (write-line &#34;in main thread 1&#34;)
-  (setq c (funcall c))
-  (write-line &#34;in main thread 2&#34;)
-  (setq c (funcall c))
-  (write-line &#34;in main thread 3&#34;))
-```
-
-## グリーンスレッド
------------------
-実行結果
-
-```
-in thread A 1
-in main thread 1
-in thread A 2
-in main thread 2
-in thread A 2
-in main thread 3
-
-```
-
-
-## コールバックの書き換え
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-## コールバックの書き換え
-----------------------
-本当はこう書きたい
-
-```lisp
-(with-event-loop
-    (format t &#34;Hello, ~a!~%&#34; (async-read stream)))
-```
-
-## コールバックの書き換え
-----------------------
-しかしライブラリがコールバック関数を要求してくる
-
-```lisp
-(with-event-loop
-    (async-read stream (lambda (line)
-                         (format t &#34;Hello, ~a!~%&#34; line))))
-```
-
-## コールバックの書き換え
------------------------
-コールバック = 限定継続（後述）なのでこうしてやれば良い。
-
-```lisp
-(with-event-loop
-    (with-call/cc
-      (format t &#34;Hello, ~a!~%&#34;
-              (call/cc (lambda (k))
-                       (async-read stream k)))))
-```
-
-## 非決定性計算
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-## 非決定性計算
--------------
-### ベースアイディア
-
-* 継続を関数として取り出した後同じ処理を何回も実行出来るんじゃね？
-
-
-## 非決定性計算
--------------
-### ベースアイディア
-複数回呼び出してみる
-
-```lisp
-(let (c)
-  (setf c (with-call/cc
-            (+ 1 (* 2 (- 3 (let/cc k k))))))
-  (list (funcall c 1)
-        (funcall c 2)
-        (funcall c 3)))
-```
-
-
-## 非決定性計算
--------------
-### ベースアイディア
-普通の1引数関数として使ってみる
-
-```lisp
-(let (c)
-  (setf c (with-call/cc
-            (+ 1 (* 2 (- 3 (let/cc k k))))))
-  (mapcar c (list 1 2 3)))
-```
-
-## 非決定性計算
--------------
-### ベースアイディア
-マクロでラップしてみる
-
-```lisp
-(defmacro for (&amp;body expr)
-  `(with-call/cc ,@expr))
-(defmacro in (m)
-  `(let/cc k (apply #&#39;append (mapcar k ,m))))
-(defun yield (x) (list x))
-(defun unit () nil)
-```
-
-
-## 非決定性計算
--------------
-使ってみる
-
-```lisp
-(for
-  (let ((x (in &#39;(1 2 3)))
-        (y (in &#39;(a b c))))
-    (yield (cons x y))))
-```
-
-```
-((1 . A) (1 . B) (1 . C) (2 . A) (2 . B) (2 . C) (3 . A) (3 . B) (3 . C))
-```
-
-
-# 限定継続の実装の話
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# 限定継続の実装の話
--------------------
-
-* 継続は0~1引数関数として取り出せるのであった。
-  + 実は機械的に取り出せる
-* 継続は全ての式に暗黙に存在するのであった
-  + 全ての式を継続を明示的に使うようにも出来る
-
-
-# CPS変換
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# CPS変換
----------
-
-* 全ての関数の引数を1つ増やして、そこで継続を受け取る
-* 値を返す時は暗黙のreturnを使うのではなく明示的に継続を呼ぶ
-* 関数を呼ぶ時は必ず継続を渡す。呼び出し元には返ってこない（自然と末尾再帰になる）
-
-
-# CPS変換
----------
-例えば
-
-```lisp
-(with-call/cc
-  (foo (call/cc
-        (lambda (k)
-          (funcall k 2)))))
-```
-
-は、取り出された継続が
-
-```lisp
-(lambda (k) (foo k))
-```
-
-。
-
-
-# CPS変換
----------
-よって
-
-```lisp
-((lambda (k) (foo k)) 2)
-```
-
-と変換される
-
-
-# CPS変換
----------
-再帰関数だと少し面倒
-
-```lisp
-(defun fact (n)
-  (if (&lt;= n)
-      1
-      (* n (fact (- n 1))))))
-
-```
-
-が
-
-```lisp
-(defun fact (n c)
-  (if (&lt;= n)
-      (c 1)
-      (fact (- n 1) (lambda (v) (* n v)))))
-```
-
-となる
-
-
-# CPS変換
----------
-
-* CPS変換を行なうことでいつでも継続を値として使える
-
-
-# 限定継続の実装の話
--------------------
-
-* CPS変換を裏で行なっている
-* 自動で出来るのでマクロで変換をしている
-  + 組み込み関数は変更出来ないので特別扱い
-  + スペシャルフォームも気をつける必要がある
-* `lambda`が乱立するのでパフォーマンスは酷い。
-
-
-# まとめ
--------
-
-* cl-contというライブラリがあって、限定継続が扱える
-* 限定継続は処理を中断したり再開したり繰り返したりに使える
-* 裏ではえげつないことをやっている
-* パフォーマンスが必要なところでは使っちゃダメ
-
-
-# 参考
-------
-* [picrin/partcont.scm at master · picrin-scheme/picrin](https://github.com/picrin-scheme/picrin)
-* [cl-cont | Quickdocs](http://quickdocs.org/cl-cont/)
-* [コルーチンをCommon Lispで簡単に定義 - さくらんぼのlambda日記](http://lambdasakura.hatenablog.com/entry/20111026/1319598590)
-* [継続渡しスタイル - Wikipedia](http://ja.wikipedia.org/wiki/%E7%B6%99%E7%B6%9A%E6%B8%A1%E3%81%97%E3%82%B9%E3%82%BF%E3%82%A4%E3%83%AB)
-* [M.Hiroi&#39;s Home Page / お気楽 Scheme プログラミング入門](http://www.geocities.jp/m_hiroi/func/abcscm20.html)
-&lt;/script&gt;
-&lt;/section&gt;
 </description>
     </item>
     
