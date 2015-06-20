@@ -6,8 +6,267 @@
     <description>Recent content in Shell Script on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Wed, 19 Feb 2014 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Wed, 17 Jun 2015 22:12:25 +0900</lastBuildDate>
     <atom:link href="http://KeenS.github.io/categories/shell-script/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Shell Scriptを書くときのテクニック10選</title>
+      <link>http://keens.github.io/blog/2015/06/17/shell_scriptwokakutokinikiwotsuketaikoto</link>
+      <pubDate>Wed, 17 Jun 2015 22:12:25 +0900</pubDate>
+      
+      <guid>http://keens.github.io/blog/2015/06/17/shell_scriptwokakutokinikiwotsuketaikoto</guid>
+      <description>
+
+&lt;p&gt;κeenです。LLで書かれた動作のもっさりしてるコマンドラインツールよりシェルスクリプトが好きです。&lt;/p&gt;
+
+&lt;p&gt;しかしシェルスクリプトを書く時にはハマり所も多いです。ということでハマりそうなところと対処法を共有しますね。&lt;/p&gt;
+
+&lt;h1 id=&#34;1-変数は基本クォート:5e57d8f93a32720e126e1053ccd91901&#34;&gt;1. 変数は基本クォート&lt;/h1&gt;
+
+&lt;p&gt;変数には空白が入り得ます（特にパス名とか）。あるいは空である可能性もあります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;mv file1 file2 $target_dir
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;で&lt;code&gt;$target_dir&lt;/code&gt;が空だった時は&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;mv file1 file2
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;となってしまいます。file2が上書きされますね。恐ろしい。&lt;/p&gt;
+
+&lt;p&gt;クォートで括っておけば&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;mv file1 file2 &amp;quot;$target_dir&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;mv file1 file2 &amp;quot;&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;となり辺なディレクトリに書き込もうとしてエラーになります。まだマシですね。&lt;/p&gt;
+
+&lt;p&gt;基本、と書いたのはクォートしたくない場合もあるからです。例えばこんな時ですね。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;items=&amp;quot;foo bar baz&amp;quot;
+for item in $items
+do
+    echo &amp;quot;$item&amp;quot;
+done
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;変数展開の後にトークン分割が行なわれるので空白で区切れば複数のトークンを1つの変数に入れられます。&lt;/p&gt;
+
+&lt;h1 id=&#34;2-eオプションをつけよう:5e57d8f93a32720e126e1053ccd91901&#34;&gt;2. -eオプションをつけよう&lt;/h1&gt;
+
+&lt;p&gt;シェルには例外がありません。何かが失敗しても走り続けます。これは時に迷惑な挙動です。しかし &lt;code&gt;-e&lt;/code&gt;オプションをつけると0以外の終了ステータスが出た瞬間スクリプトが止まるようになります。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;-e&lt;/code&gt;オプションを有効にするには&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;#!/bin/sh
+set -e
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;とすれば良いです。0以外のステータスで終了し得るコマンドの例外ハンドル的なことをしたければ&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;trying_command || true
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;とすれば確実に0で終了します。&lt;/p&gt;
+
+&lt;p&gt;また、スクリプトの途中で&lt;code&gt;-e&lt;/code&gt;を切り替えたければ&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;#!/bin/sh
+set -e
+# -eが有効
+set +e
+# -eが無効
+set -e
+# -eが有効
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;のように&lt;code&gt;set -e&lt;/code&gt;と&lt;code&gt;set +e&lt;/code&gt;で制御出来ます。&lt;/p&gt;
+
+&lt;h1 id=&#34;3-カレントディレクトリはスクリプトを起動した場所:5e57d8f93a32720e126e1053ccd91901&#34;&gt;3. カレントディレクトリはスクリプトを起動した場所&lt;/h1&gt;
+
+&lt;p&gt;例えば ~/Shell/hoge.shにこう書いたとします。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;#!/bin/sh
+cat ./hoge.sh
+pwd
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;それを実行するとこうなります&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cd ~/Shell
+$ sh hoge.sh
+#!/bin/sh
+cat ./hoge.sh
+pwd
+/home/kim/Shell
+$ cd ../
+$ sh Shell/hoge.sh
+hoge.sh: no such file or directory
+/home/kim
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;なのでシェルスクリプト内での相対パスは基本的に信用出来ません。&lt;/p&gt;
+
+&lt;p&gt;スクリプトの相対でパスを指定したいならこうしましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;#!/bin/sh
+ROOT=&amp;quot;$(cd $(dirname $0); pwd)&amp;quot;
+cat &amp;quot;$ROOT/hoge.sh&amp;quot;
+pwd
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;$(cd $(dirname $0); pwd)&lt;/code&gt; がキモです。 $0には起動スクリプトが入ってます。 &lt;code&gt;$ ./hoge.sh&lt;/code&gt;と起動したなら &lt;code&gt;./hoge.sh&lt;/code&gt;が、 &lt;code&gt;$ ../hoge.sh&lt;/code&gt; なら &lt;code&gt;../hoge.sh&lt;/code&gt;が。そのスクリプトがあるディレクトリに移動(&lt;code&gt;cd $(dirname $0)&lt;/code&gt;) して&lt;code&gt;pwd&lt;/code&gt;するとスクリプトのあるディレクトリの絶対パスがとれます。&lt;/p&gt;
+
+&lt;p&gt;因みにこのイディオムはスクリプトにリンクを張られると困ります。 &lt;code&gt;readlink(1)&lt;/code&gt; を使う流儀もあるのですがreadlinkがMacとLinuxで全然違い、互換性を保てないのでおすすめしません。&lt;/p&gt;
+
+&lt;h1 id=&#34;4-sudo-command-fileでパーミッションエラー:5e57d8f93a32720e126e1053ccd91901&#34;&gt;4. sudo command &amp;gt;&amp;gt; fileでパーミッションエラー&lt;/h1&gt;
+
+&lt;p&gt;&lt;code&gt;&amp;gt;&amp;gt;&lt;/code&gt; (&lt;code&gt;&amp;gt;&lt;/code&gt;) を使った時にファイルに書き込んでるのは &lt;code&gt;command&lt;/code&gt;ではなくてシェルなのでシェルのアクセス権限でパーミッションエラーが出ます。sudoして書き込みたいなら&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;sudo command &amp;gt; file&lt;/code&gt; ではなく&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ command | sudo tee file
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;を、&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;sudo command &amp;gt;&amp;gt; file&lt;/code&gt; ではなく&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ command | sudo tee -a file
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;を使いましょう。&lt;/p&gt;
+
+&lt;p&gt;関連して、&lt;code&gt;echo&lt;/code&gt;は外部コマンドではなくシェルの組込みコマンドなのでsudoに渡すことが出来ません。これもファイルに書き込む目的ならechoとsudo teeをパイプで繋ぎましょう。&lt;/p&gt;
+
+&lt;h1 id=&#34;5-sudoのパスワードを渡せない:5e57d8f93a32720e126e1053ccd91901&#34;&gt;5. sudoのパスワードを渡せない&lt;/h1&gt;
+
+&lt;p&gt;スクリプト内でsudoを扱うのは少しテクニックが必要になります。sudoに-Sを付けると標準入力からパスワードを読むようになります。かといってソースにベタ書きする訳にはいきません。
+ということで、こうなります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;printf &amp;quot;password: &amp;quot;
+read password
+echo &amp;quot;$password&amp;quot; | sudo -S command
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ユーザにパスワードを要求し、メモリに保存。必要な時にsudoに渡すという流れです。&lt;/p&gt;
+
+&lt;p&gt;シェルに依ってはreadに-sをつけることでエコーバックしなくなるのでディスプレイにパスワードが流れてくることはありません。未確認ですがdash(Debian系の/bin/sh)では出来なくてB shell(BSD系の/bin/sh)やBash、Zshなどの拡張POSIXシェルだと出来そうです。&lt;/p&gt;
+
+&lt;p&gt;余談ですが改行なしの印字に&lt;code&gt;echo -n&lt;/code&gt;は使えません。&lt;code&gt;-n&lt;/code&gt; シェルによってはオプションを認識しないので。printf(1)はPOSIXにあるのでポータブルに使えます。&lt;/p&gt;
+
+&lt;p&gt;因みにパスワードが初期化されてないならユーザに訊く、というのはこういう関数を実装すれば良さそうです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;password(){
+    if ! ${password+:} false
+    then
+        printf &amp;quot;password: &amp;quot;
+        read -s password
+    fi
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;6-sudoのパスワードを渡しつつ標準出力も渡したい:5e57d8f93a32720e126e1053ccd91901&#34;&gt;6. sudoのパスワードを渡しつつ標準出力も渡したい&lt;/h1&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;{ echo &amp;quot;$password&amp;quot; ; cat } | sudo -S command
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;しましょう。&lt;/p&gt;
+
+&lt;h1 id=&#34;7-リモートでスクリプトを実行したい:5e57d8f93a32720e126e1053ccd91901&#34;&gt;7. リモートでスクリプトを実行したい&lt;/h1&gt;
+
+&lt;p&gt;一旦scpでスクリプトを送ってから実行？そんな面倒なことしたくありません。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;ssh user@remote &amp;lt;&amp;lt;SHELL
+#  some script
+SHELL
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;で実行出来ます。これはログインシェルで実行します。ログインシェル如何に関わらずshで実行したいなら(ログインシェルがcshとかnologinとかは割とありえる)&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;ssh user@remote sh &amp;lt;&amp;lt;SHELL
+#  some script
+SHELL
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;としましょう。&lt;/p&gt;
+
+&lt;h1 id=&#34;8-リモートでsudoのパスワードを渡したい:5e57d8f93a32720e126e1053ccd91901&#34;&gt;8. リモートでsudoのパスワードを渡したい&lt;/h1&gt;
+
+&lt;p&gt;先のテクニックがそのまま使えます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;printf &amp;quot;password: &amp;quot;
+read password
+ssh user@remote sh &amp;lt;&amp;lt;SHELL
+echo &amp;quot;$password&amp;quot; | sudo -S command
+SHELL
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;クォート無しのヒアドキュメントのシェル変数の展開はローカルで行なわれるのでローカルにある変数がそのまま参照出来ます。&lt;/p&gt;
+
+&lt;h1 id=&#34;9-リモートにローカルに置いてあるファイルを送りたい:5e57d8f93a32720e126e1053ccd91901&#34;&gt;9. リモートにローカルに置いてあるファイルを送りたい&lt;/h1&gt;
+
+&lt;p&gt;scpでも良いですがroot loginを許可してないと設定ファイルを/etcに置けないなどと不都合が生じます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;ssh user@remote sh &amp;lt;&amp;lt;SHELL
+cat &amp;lt;&amp;lt;&#39;EOF&#39; &amp;gt;&amp;gt; some_remote_file
+$(cat local_file)
+EOF
+SHELL
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これは少し解説が必要でしょうか。&lt;/p&gt;
+
+&lt;p&gt;まず、先程も出てきた&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;ssh user@remote sh &amp;lt;&amp;lt;SHELL
+SHELL
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ですが普通のヒアドキュメントなので中の変数やコマンド置換を展開します。ということでリモートで実行されるのは&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;cat &amp;lt;&amp;lt;&#39;EOF&#39; &amp;gt;&amp;gt; some_remote_file
+# the content of
+# local_file
+EOF
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;となります。そしてcatのヒアドキュメントはクォート付きなのでlocal_fileの中身がさらに変数展開されることはありません。&lt;/p&gt;
+
+&lt;p&gt;勿論、root権限で書き込みたかったら先程までのテクニックを組み合わせて&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;ssh user@remote sh &amp;lt;&amp;lt;SHELL
+{ echo &amp;quot;$password&amp;quot; ; cat &amp;lt;&amp;lt;&#39;EOF&#39; } | sudo -S tee  some_remote_file
+$(cat local_file)
+EOF
+SHELL
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;として下さい.&lt;/p&gt;
+
+&lt;h1 id=&#34;10-リモートにあるファイルを編集したい:5e57d8f93a32720e126e1053ccd91901&#34;&gt;10. リモートにあるファイルを編集したい&lt;/h1&gt;
+
+&lt;p&gt;sed(1)を使いましょう。あるいは、sedだと辛いならローカルでファイルを編集、diffをとってpatch(1)を使いましょう。diffの送り方はもう分かりますね。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;ssh user@remote sh &amp;lt;&amp;lt;SHELL
+cat &amp;lt;&amp;lt;&#39;EOF&#39; |  patch
+$(cat file.diff)
+EOF
+SHELL
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;です。&lt;/p&gt;
+
+&lt;hr /&gt;
+
+&lt;p&gt;いかがでしょうか。テクニックさえ抑えればシェルスクリプトは料理人だか板前だか知りませんが流行に流されるツールにも負けない力があると思います。動作も速い。
+みなさんシェルスクリプト書きましょうね。&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>Shell Scriptでオプションをパースするときの必勝法</title>
