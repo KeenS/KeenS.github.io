@@ -1,7 +1,7 @@
 ---
 categories: [Lisp, Common Lisp, SBCL, Common Lisp処理系拡張]
 date: 2015-06-20T18:30:52+09:00
-description: null
+description: "Lisp Meet Up #29での発表資料"
 draft: true
 title: Common Lisp処理系拡張の探求 SBCLのマルチスレッドサポート
 ---
@@ -49,27 +49,16 @@ Lisp Meet Up #29
 
 * スレッド
   + スレッド内エラー
-* アトミック操作
-  + CAS
+* アトミック操作<!-- .element: class="fragment highlight-red" data-fragment-index="1" -->
+  + CAS<!-- .element: class="fragment highlight-red" data-fragment-index="1" -->
 * 排他制御（ロック）
 * セマフォ
 * コンディションヴァリアル
 * バリア
-* キュー
-* メールボックス
-* ゲート
-* frlock
-
-
-# 今回見るやつ
----------------
-
-* アトミック操作
-  * CASプロトコル
-* キュー
-* メールボックス
-* ゲート
-* frlock
+* キュー<!-- .element: class="fragment highlight-red" data-fragment-index="1" -->
+* メールボックス<!-- .element: class="fragment highlight-red" data-fragment-index="1" -->
+* ゲート<!-- .element: class="fragment highlight-red" data-fragment-index="1" -->
+* frlock<!-- .element: class="fragment highlight-red" data-fragment-index="1" -->
 
 
 # アトミック操作
@@ -172,5 +161,14 @@ Lisp Meet Up #29
 * またの名をRead-Write Lock
 * Read Lockは多重に取れる。Write Lockは1つしか取れない。
 * 基本操作は`frlock-read`と`frlock-write`
+* 普通のlockと違って複数のReadが速くなる
+
+
+# まとめ
+--------
+
+* SBCLのマルチスレッドサポートはbordeaux-threadsよりもリッチ
+* 処理系の独自サポート面白い
+* 処理系に依存してしまってもいいんじゃないだろうか
 </script>
 </section>
