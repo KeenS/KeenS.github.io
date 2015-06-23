@@ -6,8 +6,184 @@
     <description>Recent content in Common Lisp on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Sun, 26 Apr 2015 21:09:07 +0900</lastBuildDate>
+    <lastBuildDate>Sat, 20 Jun 2015 18:30:52 +0900</lastBuildDate>
     <atom:link href="http://KeenS.github.io/categories/common-lisp/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Common Lisp処理系拡張の探求 SBCLのマルチスレッドサポート</title>
+      <link>http://keens.github.io/slide/Common_Lispshorikeikakuchounotankyuu_SBCLnomaruchisureddosapo_to/</link>
+      <pubDate>Sat, 20 Jun 2015 18:30:52 +0900</pubDate>
+      
+      <guid>http://keens.github.io/slide/Common_Lispshorikeikakuchounotankyuu_SBCLnomaruchisureddosapo_to/</guid>
+      <description>&lt;section data-markdown
+    data-separator=&#34;\n\n&#34;
+    data-vertical=&#34;\n\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+&lt;script type=&#34;text/template&#34;&gt;
+### Common Lisp 処理系拡張の探求
+SBCLのマルチスレッドサポート
+
+----------------------
+Lisp Meet Up #29
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# About Me
+---------
+![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
+
+ + κeen
+ + [@blackenedgold](https://twitter.com/blackenedgold)
+ + Github: [KeenS](https://github.com/KeenS)
+ + 渋谷のエンジニア
+ + Lisp, ML, Shell Scriptあたりを書きます
+
+# CLのマルチスレッド
+----------------------------
+## [bordeaux-threads](https://trac.common-lisp.net/bordeaux-threads/wiki/ApiDocumentation)
+* 色々な処理系のマルチスレッドサポートの抽象レイヤー
+* デファクトスタンダード
+  + スレッド
+  + ロック
+  + コンディションヴァリアル
+
+
+# SBLCのマルチスレッド
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+
+# SBLCのマルチスレッド
+----------------------------
+
+* スレッド
+  + スレッド内エラー
+* アトミック操作&lt;!-- .element: class=&#34;fragment highlight-red&#34; data-fragment-index=&#34;1&#34; --&gt;
+  + CAS&lt;!-- .element: class=&#34;fragment highlight-red&#34; data-fragment-index=&#34;1&#34; --&gt;
+* 排他制御（ロック）
+* セマフォ
+* コンディションヴァリアル
+* バリア
+* キュー&lt;!-- .element: class=&#34;fragment highlight-red&#34; data-fragment-index=&#34;1&#34; --&gt;
+* メールボックス&lt;!-- .element: class=&#34;fragment highlight-red&#34; data-fragment-index=&#34;1&#34; --&gt;
+* ゲート&lt;!-- .element: class=&#34;fragment highlight-red&#34; data-fragment-index=&#34;1&#34; --&gt;
+* frlock&lt;!-- .element: class=&#34;fragment highlight-red&#34; data-fragment-index=&#34;1&#34; --&gt;
+
+
+# アトミック操作
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# アトミック操作
+----------------
+複雑な動作は同じデータに並行に動かすと壊れうる
+
+```
+        [var = 1]
+[incf]      |      [decf]
+ [1]&lt;-------|
+  |         |------&gt;[1]
+ [2]---&gt;[var = 2]    |
+            |        | 
+        [var = 0]&lt;--[0]
+```
+
+# アトミック操作
+----------------
+
+* `atomic-{incf, decf}`
+  + 動作出来る場所が限られている
+* `atomic-{pop, push, update}`
+  + CASプロトコルを実装していればどこでも
+
+
+# CASプロトコル
+---------------
+* compare and swap
+* アトミック操作の基本中の基本
+  + ハードウェアレベルのサポート
+* ざっくり言うと並行版setf
+* `(cas place old new env)`
+  + もし`place`が`old`に等しければ`new`を代入
+* `(defun (cas foo) (old new))`
+  + `cas`版の`setf`定義
+* 他にも`setf`相当の機能は揃ってる
+
+# CASプロトコル
+---------------
+
+```lisp
+(defvar *foo* nil)
+
+(defun (cas foo) (old new)
+  (cas (symbol-value &#39;*foo*) old new))
+```
+
+
+# キュー
+--------
+
+* 普通のキュー
+* スレッドセーフ
+* `enqueue`, `dequeue`が基本操作
+* `dequeue`が多値で、ブロックしない
+  + 空なら第二値がnilになる
+
+
+# メールボックス
+---------------
+
+* キューとほぼ同じ
+* スレッドセーフ
+* `send-message`, `recieve-message`が基本操作
+* `recieve-message`はブロックする
+  + タイムアウトも設定出来る
+* `recieve-message-no-hangはdequeue`と同じ挙動
+* `recieve-pending-messages`もある
+
+
+# ゲート
+--------
+
+* 複数のスレッドが1つのイベントを待つ時に使う
+* `wait-on-gate`, `open-gate`, `close-gate`が基本操作
+
+
+
+```
+[gate (closed)]  [T1] [T2] [T3]
+     |            |    |    |
+     |     wait   |    |    |
+     |&lt;----------------+----+
+     |            |    .    .
+     |     open   |    .    .
+[gate (opened)]&lt;--+    .    .
+     +----------------&gt;+---&gt;+
+         go            |    |
+                       V    V
+```
+
+
+# frlock
+--------
+
+* Fast Read Lock
+* またの名をRead-Write Lock
+* Read Lockは多重に取れる。Write Lockは1つしか取れない。
+* 基本操作は`frlock-read`と`frlock-write`
+* 普通のlockと違って複数のReadが速くなる
+
+
+# まとめ
+--------
+
+* SBCLのマルチスレッドサポートはbordeaux-threadsよりもリッチ
+* 処理系の独自サポート面白い
+* 処理系に依存してしまってもいいんじゃないだろうか
+&lt;/script&gt;
+&lt;/section&gt;
+</description>
+    </item>
     
     <item>
       <title>Common Lispで限定継続と遊ぶ</title>
@@ -2724,228 +2900,6 @@ exec cl --  &#34;$0&#34; &#34;$@&#34;
 * [shelly](https://github.com/fukamachi/shelly) : CIMを使うCLのコマンドラインインターフェース
 * [lsp](https://github.com/snmsts/lsp) : CIMのC実装
 * [qlot](https://github.com/fukamachi/qlot) : `ql`よりリッチなquicklispラッパ
-
-&lt;span style=&#34;font-size:600%&#34;&gt;以上&lt;/span&gt;  
-何か質問あればどうぞ
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-&lt;/script&gt;
-&lt;/section&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>授業で半年間moclを使ってみた</title>
-      <link>http://keens.github.io/slide/shibuya-dot-lisp-tt-number-8/</link>
-      <pubDate>Thu, 28 Aug 2014 00:00:00 +0000</pubDate>
-      
-      <guid>http://keens.github.io/slide/shibuya-dot-lisp-tt-number-8/</guid>
-      <description>&lt;section data-markdown
-    data-separator=&#34;\n\n&#34;
-    data-vertical=&#34;\n\n&#34;
-    data-notes=&#34;^Note:&#34;&gt;
-&lt;script type=&#34;text/template&#34;&gt;
-
-
-# 授業で半年間moclを使ってみた
-&lt;hr /&gt;
-
-Shibuya.lisp TT #8  
-&lt;br&gt;
-κeen(@blackenedgold)  
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-## 自己紹介
-&lt;hr /&gt;
-
- + κeen
- + 東大数学科の4年生
- + ソーシャルアカウントは上のアイコン達から。
- + Lisp, Ruby, OCaml, Shell Scriptあたりを書きます
-
- 一年前
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-## [計算数学II](http://ks.ms.u-tokyo.ac.jp/)
-![計算数学IIのホームページ](/images/shibuya_lisp_TT8/calculation_math.png)
-
-自分でテーマを決めて半年間取り組む
-
-チーム[人造エイリアン](https://sites.google.com/site/2013ks2/home)
-![チーム人造エイリアン](/images/shibuya_lisp_TT8/android_alien.png)
-
-## Common Lisp でAndroid?
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-
-## [mocl](https://wukix.com/mocl)
-![mocl home](/images/shibuya_lisp_TT8/mocl.png)
-
-## What is mocl
-&lt;hr /&gt;
-
-* iOS, Androidで動くCommon Lisp処理系
-* LLVMをバックエンドに使う
-* Networking, Unicode, CLOS, and More. Run Countless CL Libraries.
-
-## 買ってもらった(・ω・)v
-![mocl home](/images/shibuya_lisp_TT8/mocl_ut.png)
-
-## 注意
-&lt;hr /&gt;
-
-私が触ったのは1つ前のバージョンです。
-
-一部5月のアップデートで改善されています。
-
-## How it Works
-&lt;hr \&gt;
-
-&lt;embed src=&#34;http://KeenS.github.io/images/shibuya_lisp_TT8/mocl_flowchart.svg&#34; type=&#34;image/svg+xml&#34; height=&#34;500px&#34; /&gt;
-
-## コードサンプル
-&lt;hr \&gt;
-
-授業で私が作ったオセロのAIのコード
-
-```java
-public BoardCanvas(Context context,int width, int height,int color ){
-    ...
-    CL.cl_init();
-    CL.init_game(3 - color);
-    ...
-}
-   
-void nextHand(){
-    String[] coord = CL.next().split(&#34; &#34;);
-    CL.jput(Integer.parseInt(coord[0]), Integer.parseInt(coord[1]) , color);
-    ...
-}
-```
-
-## コードサンプル
-
-```lisp
-(declaim (call-in next))
-(defun next ()
-  (let ((dummy (make-board))
-        (max most-negative-fixnum)
-	    (x) (y) (score))
-    ...
-    ))
-(declaim (call-in init-game))
-(defun init-game (color)
-  (setf *board* (make-board))
-  (setf *ai* color))
-(declaim (call-in jput))
-(defun jput (x y color)
-  (put *board* x y color))
-```
-
-
-## ライブラリについて
-&lt;hr /&gt;
-
-* ASDFが使える
-* `MOCL_HOME/systems/`以下に配置
-* quicklispでインストールしたやつは`MOCL_HOME/systems/`にひたすら`ln -s`
-* 大抵のライブラリは動かない
-
-例えば`cl-annot`を使って
-
-```lisp
-(declaim (call-in jput))
-(defun jput (x y color)
-  (put *board* x y color))
-```
-を
-
-```lisp
-@call-in
-(defun jput (x y color)
-  (put *board* x y color))
-```
-としたい
-
-私のときはCFFIを始め、ironclad、cl-annotなど、  
-使おうとしたライブラリは全て動かなかった
-
-現在の状態は不明
-
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-## 作業フロー(Android)
-&lt;hr /&gt;
-
-&lt;ol&gt;
-&lt;li&gt;CLのコードを書いてSBCLで動かす&lt;/li&gt;
-&lt;li&gt;ある程度動いたらmoclでAndroid用のコードを生成&lt;/li&gt;
-&lt;li&gt;原因不明のエラーが出るので1に戻る&lt;/li&gt;
-&lt;li&gt;コンパイルが通れば生成されたCをコンパイル&lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;ol start=&#34;5&#34;&gt;
-&lt;li&gt;JavaからCLを呼び出すコードを書く&lt;/li&gt;
-&lt;li&gt;アプリをコンパイル&lt;/li&gt;
-&lt;li&gt;実機/エミュレータに転送&lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-&lt;ol start=&#34;8&#34;&gt;
-&lt;li&gt;動かす&lt;/li&gt;
-&lt;li&gt;動かない&lt;/li&gt;
-&lt;li&gt;ひたすらlogcat眺める&lt;/li&gt;
-&lt;li&gt;1に戻る&lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-### ここがつらい
-&lt;hr /&gt;
-
-* 作業が煩雑
-* 例外のスタックトレースがJNIのせいで追いづらい
-* logを出すには`rt:format`という関数のみ使える(ログレベルを設定出来ない)
-
-※ 今はREPLが端末で動くので環境は良くなっています。
-
-## 制限など
-&lt;hr /&gt;
-
-* Java/Obj-CからCLを呼ぶことしか出来ない
-  + プラットフォームのライブラリも呼べない
-* やりとり出来るのは文字列、数値、真偽値のみ
-  + 裏でタスクを回すworker的な役割or純粋関数的な役割のみ
-
-※ 今はCLからObj-Cを呼ぶことが出来ます。
-
-## 成果物
-&lt;hr /&gt;
-
-* [コード(抜粋)](https://gist.github.com/KeenS/15e7bb35519818c88c13)
-* [最終発表スライド](http://www.slideshare.net/blackenedgold/ss-30373688)
-* [デモ動画](http://www.slideshare.net/blackenedgold/ss-30373688)
-
-## おまけ
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-## 5月のアップデート内容
-&lt;hr /&gt;
-
-* OS Xアプリケーション対応
-* 端末内でREPLが動く
-* FFI強化
-* Lisp内Obj-C構文
-* iOSとOS XでのネイティブSSL対応
-* ARM64サポート
-* ドキュメントの改善
-* 多くのバグフィクス
 
 &lt;span style=&#34;font-size:600%&#34;&gt;以上&lt;/span&gt;  
 何か質問あればどうぞ
