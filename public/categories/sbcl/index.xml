@@ -6,8 +6,184 @@
     <description>Recent content in Sbcl on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Tue, 02 Dec 2014 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Sat, 20 Jun 2015 18:30:52 +0900</lastBuildDate>
     <atom:link href="http://KeenS.github.io/categories/sbcl/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Common Lisp処理系拡張の探求 SBCLのマルチスレッドサポート</title>
+      <link>http://keens.github.io/slide/Common_Lispshorikeikakuchounotankyuu_SBCLnomaruchisureddosapo_to/</link>
+      <pubDate>Sat, 20 Jun 2015 18:30:52 +0900</pubDate>
+      
+      <guid>http://keens.github.io/slide/Common_Lispshorikeikakuchounotankyuu_SBCLnomaruchisureddosapo_to/</guid>
+      <description>&lt;section data-markdown
+    data-separator=&#34;\n\n&#34;
+    data-vertical=&#34;\n\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+&lt;script type=&#34;text/template&#34;&gt;
+### Common Lisp 処理系拡張の探求
+SBCLのマルチスレッドサポート
+
+----------------------
+Lisp Meet Up #29
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# About Me
+---------
+![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
+
+ + κeen
+ + [@blackenedgold](https://twitter.com/blackenedgold)
+ + Github: [KeenS](https://github.com/KeenS)
+ + 渋谷のエンジニア
+ + Lisp, ML, Shell Scriptあたりを書きます
+
+# CLのマルチスレッド
+----------------------------
+## [bordeaux-threads](https://trac.common-lisp.net/bordeaux-threads/wiki/ApiDocumentation)
+* 色々な処理系のマルチスレッドサポートの抽象レイヤー
+* デファクトスタンダード
+  + スレッド
+  + ロック
+  + コンディションヴァリアル
+
+
+# SBLCのマルチスレッド
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+
+# SBLCのマルチスレッド
+----------------------------
+
+* スレッド
+  + スレッド内エラー
+* アトミック操作&lt;!-- .element: class=&#34;fragment highlight-red&#34; data-fragment-index=&#34;1&#34; --&gt;
+  + CAS&lt;!-- .element: class=&#34;fragment highlight-red&#34; data-fragment-index=&#34;1&#34; --&gt;
+* 排他制御（ロック）
+* セマフォ
+* コンディションヴァリアル
+* バリア
+* キュー&lt;!-- .element: class=&#34;fragment highlight-red&#34; data-fragment-index=&#34;1&#34; --&gt;
+* メールボックス&lt;!-- .element: class=&#34;fragment highlight-red&#34; data-fragment-index=&#34;1&#34; --&gt;
+* ゲート&lt;!-- .element: class=&#34;fragment highlight-red&#34; data-fragment-index=&#34;1&#34; --&gt;
+* frlock&lt;!-- .element: class=&#34;fragment highlight-red&#34; data-fragment-index=&#34;1&#34; --&gt;
+
+
+# アトミック操作
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# アトミック操作
+----------------
+複雑な動作は同じデータに並行に動かすと壊れうる
+
+```
+        [var = 1]
+[incf]      |      [decf]
+ [1]&lt;-------|
+  |         |------&gt;[1]
+ [2]---&gt;[var = 2]    |
+            |        | 
+        [var = 0]&lt;--[0]
+```
+
+# アトミック操作
+----------------
+
+* `atomic-{incf, decf}`
+  + 動作出来る場所が限られている
+* `atomic-{pop, push, update}`
+  + CASプロトコルを実装していればどこでも
+
+
+# CASプロトコル
+---------------
+* compare and swap
+* アトミック操作の基本中の基本
+  + ハードウェアレベルのサポート
+* ざっくり言うと並行版setf
+* `(cas place old new env)`
+  + もし`place`が`old`に等しければ`new`を代入
+* `(defun (cas foo) (old new))`
+  + `cas`版の`setf`定義
+* 他にも`setf`相当の機能は揃ってる
+
+# CASプロトコル
+---------------
+
+```lisp
+(defvar *foo* nil)
+
+(defun (cas foo) (old new)
+  (cas (symbol-value &#39;*foo*) old new))
+```
+
+
+# キュー
+--------
+
+* 普通のキュー
+* スレッドセーフ
+* `enqueue`, `dequeue`が基本操作
+* `dequeue`が多値で、ブロックしない
+  + 空なら第二値がnilになる
+
+
+# メールボックス
+---------------
+
+* キューとほぼ同じ
+* スレッドセーフ
+* `send-message`, `recieve-message`が基本操作
+* `recieve-message`はブロックする
+  + タイムアウトも設定出来る
+* `recieve-message-no-hangはdequeue`と同じ挙動
+* `recieve-pending-messages`もある
+
+
+# ゲート
+--------
+
+* 複数のスレッドが1つのイベントを待つ時に使う
+* `wait-on-gate`, `open-gate`, `close-gate`が基本操作
+
+
+
+```
+[gate (closed)]  [T1] [T2] [T3]
+     |            |    |    |
+     |     wait   |    |    |
+     |&lt;----------------+----+
+     |            |    .    .
+     |     open   |    .    .
+[gate (opened)]&lt;--+    .    .
+     +----------------&gt;+---&gt;+
+         go            |    |
+                       V    V
+```
+
+
+# frlock
+--------
+
+* Fast Read Lock
+* またの名をRead-Write Lock
+* Read Lockは多重に取れる。Write Lockは1つしか取れない。
+* 基本操作は`frlock-read`と`frlock-write`
+* 普通のlockと違って複数のReadが速くなる
+
+
+# まとめ
+--------
+
+* SBCLのマルチスレッドサポートはbordeaux-threadsよりもリッチ
+* 処理系の独自サポート面白い
+* 処理系に依存してしまってもいいんじゃないだろうか
+&lt;/script&gt;
+&lt;/section&gt;
+</description>
+    </item>
     
     <item>
       <title>VOPで遊ぶ</title>
