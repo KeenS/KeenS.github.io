@@ -2,7 +2,6 @@
 categories: [Lisp, Common Lisp, SBCL, Common Lisp処理系拡張]
 date: 2015-06-20T18:30:52+09:00
 description: "Lisp Meet Up #29での発表資料"
-draft: true
 title: Common Lisp処理系拡張の探求 SBCLのマルチスレッドサポート
 ---
 
