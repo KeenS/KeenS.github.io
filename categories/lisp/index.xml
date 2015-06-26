@@ -6,8 +6,74 @@
     <description>Recent content in Lisp on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Sat, 20 Jun 2015 18:30:52 +0900</lastBuildDate>
+    <lastBuildDate>Fri, 26 Jun 2015 23:24:44 +0900</lastBuildDate>
     <atom:link href="http://KeenS.github.io/categories/lisp/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>あなたの知らないShebang</title>
+      <link>http://keens.github.io/blog/2015/06/26/anatanoshiranaishebang</link>
+      <pubDate>Fri, 26 Jun 2015 23:24:44 +0900</pubDate>
+      
+      <guid>http://keens.github.io/blog/2015/06/26/anatanoshiranaishebang</guid>
+      <description>&lt;p&gt;κeenです。最近は何故かBlack君って呼ばれます。Shebangの書き方にはいくつかあって、それを利用したふと面白い方法を思い付いたので共有を。&lt;/p&gt;
+
+&lt;p&gt;さて、ご存知Shebangといえば&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;#!/bin/sh
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;のようにファイルの1行目が&lt;code&gt;#!&lt;/code&gt;から始まっているとシェルがそれ以降の文字列を実行可能ファイルのパス名として捜して実行してくれるものですが、実は&lt;code&gt;#!&lt;/code&gt;は唯一のフォーマットではありません。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;#!&lt;/code&gt;がデファクトになる前なのかそもそもシェルにコメントがなかった時代のものなのかは知りませんが昔は&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;: /bin/sh
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と&lt;code&gt;:&lt;/code&gt;で始めていたらしいです。因みに&lt;code&gt;:&lt;/code&gt;は「何もしないコマンド」です。実質的にコメントとして扱ったり副作用のある変数展開だけを行なったりプログラマティックコメントアウトだったりの用途で使われてます。&lt;/p&gt;
+
+&lt;p&gt;さて、シェルは全て文字列なのでクォートしてもしなくても構いません。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;&amp;quot;:&amp;quot; &amp;quot;/bin/sh&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;としてもちゃんと動いてくれます。なぜわざわざクォートするかというと&lt;a href=&#34;http://keens.github.io/blog/2014/12/08/ge-tochu-li-xi-potaburunacommon-lispshi-xing-ke-neng-huairuwozuo-ru/&#34;&gt;割と処理系ポータブルなCommon Lisp実行可能ファイルを作る | κeenのHappy Hacκing Blog&lt;/a&gt;のように別の言語のスクリプトとして実行される時に文字列リテラルになってくれると単純に無視されるので互換性が高まるのです。&lt;/p&gt;
+
+&lt;p&gt;ということで完全版ポータブルなCommon Lisp実行可能ファイルはこうなります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;&amp;quot;:&amp;quot; &amp;quot;/bin/sh&amp;quot;
+
+#|
+run_if_exists(){
+ command -v $1 &amp;gt; /dev/null 2&amp;gt;&amp;amp;1 &amp;amp;&amp;amp; exec &amp;quot;$@&amp;quot;
+}
+ run_if_exists cl &amp;quot;$0&amp;quot; &amp;quot;$@&amp;quot;
+ run_if_exists sbcl --noinform --no-sysinit --no-userinit --script &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
+ run_if_exists clisp -norc --quiet --silent -on-error exit  &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
+ run_if_exists ecl -norc -q -shell &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
+ run_if_exists mkcl -norc -q -shell &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
+ run_if_exists alisp -qq -#! &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
+ run_if_exists ccl --no-init --quiet --batch --load &amp;quot;$0&amp;quot;  --eval &#39;(quit)&#39; -- &amp;quot;$@&amp;quot;
+ run_if_exists abcl --noinform --noinit --nosystem --batch --load &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
+ run_if_exists lisp -quiet -noinit -batch -load &amp;quot;$0&amp;quot; -eval &#39;(quit)&#39; -- &amp;quot;$@&amp;quot;
+ echo &amp;quot;No lisp implementation found&amp;quot;
+ exit 1
+|#
+
+(write-line (lisp-implementation-type))
+(force-output)
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;abclとcclが利用可能になりました。あとCIMも捜すようにしました。roswellは作者に訊いて下さい。&lt;/p&gt;
+
+&lt;p&gt;ちなみに、shebangの解釈はシェルに依存するのですが、B Shell, csh, tcsh, dash, Bash, zshで動作確認しました。古い機能なので新しいシェルほど切り捨てている可能性があったのですがBashやzshが大丈夫だったので良かったです。
+一応非推奨な気がしますがこれしか方法がないので仕方ないですね。&lt;/p&gt;
+
+&lt;p&gt;ということでみなさんスクリプト書きましょう。&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>Common Lisp処理系拡張の探求 SBCLのマルチスレッドサポート</title>
@@ -3027,405 +3093,6 @@ zsh: segmentation fault (core dumped)  /usr/local/clasp/bin/clasp_boehm_o
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;はい。解散。因みに50分くらいは動いてた。&lt;/p&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>VOPで遊ぶ</title>
-      <link>http://keens.github.io/blog/2014/12/02/vopdeyou-bu</link>
-      <pubDate>Tue, 02 Dec 2014 00:00:00 +0000</pubDate>
-      
-      <guid>http://keens.github.io/blog/2014/12/02/vopdeyou-bu</guid>
-      <description>
-
-&lt;p&gt;(:meta&lt;br /&gt;
- ((:this &amp;ldquo;&lt;a href=&#34;http://qiita.com/advent-calendar/2014/lisp&#34;&gt;Lisp Advent Calendar 2014&lt;/a&gt;の3日目の記事&amp;rdquo;)&lt;br /&gt;
-  (:prev (:author &amp;ldquo;tk_riple&amp;rdquo; :title &lt;a href=&#34;http://compassoftime.blogspot.jp/2014/12/r7rs.html&#34;&gt;&amp;ldquo;時の羅針盤＠blog: R7RSポータブルライブラリを書く際の落とし穴&amp;rdquo;&lt;/a&gt;))&lt;br /&gt;
-  (:next (:author &amp;ldquo;nobkz&amp;rdquo; :tite &amp;ldquo;&lt;a href=&#34;http://qiita.com/nobkz/items/68ee2adbc13caf3eec6f&#34;&gt;Shenの基礎その1 基本的な型 - Qiita&lt;/a&gt;&amp;rdquo;))))&lt;/p&gt;
-
-&lt;p&gt;κeenです。さっきまでVOPで遊んでたので当初の予定を変更してVOPの話をします。&lt;/p&gt;
-
-&lt;h1 id=&#34;vopとは何か:3d713dfef9193402cbf3ea064dc287c5&#34;&gt;VOPとは何か&lt;/h1&gt;
-
-&lt;p&gt;SBCLやCMU CLで使われているネイティブコードを吐くための機構、要はインラインアセンブラです。&lt;/p&gt;
-
-&lt;h1 id=&#34;vopとはどんなものか:3d713dfef9193402cbf3ea064dc287c5&#34;&gt;VOPとはどんなものか&lt;/h1&gt;
-
-&lt;p&gt;とりあえずコードをば。x86-64用です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(in-package :cl-user)
-(defpackage vop-sample
-  (:use :cl :sb-ext :sb-c))
-(in-package :vop-sample)
-
-(defknown add (fixnum fixnum)          ; addのftypeを宣言
-    fixnum
-    (movable                            ; 副作用がない
-     flushable                          ; デッドコードとして除去してよい
-     foldable                           ; 定数畳み込みをしてよい
-     always-translatable)               ; 必ずアセンブラコードになる
-  :overwrite-fndb-silently t)           ; 関数上書きのエラーを出さない
-
-
-(in-package &amp;quot;SB-VM&amp;quot;)
-(define-vop (vop-sample::add)          ; VOP名
-  (:translate vop-sample::add)         ; 関数名
-  (:policy :fast-safe)                  ; declare optimize的な
-  (:args (x :scs (signed-reg))          ; 引数宣言。後述
-         (y :scs (signed-reg)))
-  (:arg-types fixnum fixnum)            ; 引数の型宣言
-  (:results (r :scs (signed-reg)))      ; 返り値宣言。後述
-  (:result-types fixnum)                ; 返り値の型宣言
-  (:generator 4                         ; 翻訳するときのコスト
-              (move r x)                ; 返り値レジスタにxを移動
-              (inst add r y)))          ; 返り値レジスタにyを足し込む
-(in-package :vop-sample)
-
-(defun add (x y)                        ; 安全なバージョンでラップする
-  (add x y))
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ちょっとおまじないが多いですね。&lt;/p&gt;
-
-&lt;p&gt;すこし解説すると引数は基本レジスタ渡しで、レジスタが足りなければスタックも使います。で、レジスタやスタックの値には型があります。それがストレージクラス(sc)です。この場合、x、y、rは&lt;code&gt;signed-reg&lt;/code&gt;と宣言されてますね。符号付きレジスタです。&lt;code&gt;:scs&lt;/code&gt;の最後のsは複数形のsです。今回は1つしか指定してませんが複数指定することも可能なのです。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;move&lt;/code&gt;というのはアセンブラ命令ではなく、マクロかなんかです（適当）。VOPなのかな？どのストレージクラスからどのストレージクラスに移動するかを認知して適切な命令を吐きます。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;inst&lt;/code&gt;が付いてるのがアセンブラですね。&lt;/p&gt;
-
-&lt;p&gt;このコード、xとrが等しいときに最適化出来るのですがそれはまあおいといて、こいつをディスアセンブルしてみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;VOP-SAMPLE&amp;gt; (disassemble #&#39;add)
-; disassembly for ADD
-; Size: 43 bytes. Origin: #x1005C26416
-; 16:       488BD3           MOV RDX, RBX                     ; no-arg-parsing entry point
-; 19:       48D1FA           SAR RDX, 1
-; 1C:       488BF9           MOV RDI, RCX
-; 1F:       48D1FF           SAR RDI, 1
-; 22:       4801FA           ADD RDX, RDI
-; 25:       48D1E2           SHL RDX, 1
-; 28:       488BE5           MOV RSP, RBP
-; 2B:       F8               CLC
-; 2C:       5D               POP RBP
-; 2D:       C3               RET
-; 2E:       CC0A             BREAK 10                         ; error trap
-; 30:       02               BYTE #X02
-; 31:       19               BYTE #X19                        ; INVALID-ARG-COUNT-ERROR
-; 32:       9A               BYTE #X9A                        ; RCX
-; 33:       CC0A             BREAK 10                         ; error trap
-; 35:       04               BYTE #X04
-; 36:       08               BYTE #X08                        ; OBJECT-NOT-FIXNUM-ERROR
-; 37:       FE1B01           BYTE #XFE, #X1B, #X01            ; RDX
-; 3A:       CC0A             BREAK 10                         ; error trap
-; 3C:       04               BYTE #X04
-; 3D:       08               BYTE #X08                        ; OBJECT-NOT-FIXNUM-ERROR
-; 3E:       FE9B03           BYTE #XFE, #X9B, #X03            ; RDI
-NIL
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;主要な部分はここです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;; 19:       48D1FA           SAR RDX, 1
-; 1C:       488BF9           MOV RDI, RCX
-; 1F:       48D1FF           SAR RDI, 1
-; 22:       4801FA           ADD RDX, RDI
-; 25:       48D1E2           SHL RDX, 1
-; 28:       488BE5           MOV RSP, RBP
-; 2B:       F8               CLC
-; 2C:       5D               POP RBP
-; 2D:       C3               RET
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;ADD&lt;/code&gt;の他に無駄な命令がいくつかありますね。&lt;/p&gt;
-
-&lt;p&gt;SBCLはintの下位1bitをGCのときのタグとして使ってるのでアセンブラに渡す前に算術右シフト(&lt;code&gt;SAR&lt;/code&gt;)して渡してます。
-そして返るときはまた左シフト(&lt;code&gt;SHL&lt;/code&gt;)してます。&lt;/p&gt;
-
-&lt;p&gt;その後の&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;; 28:       488BE5           MOV RSP, RBP
-; 2B:       F8               CLC
-; 2C:       5D               POP RBP
-; 2D:       C3               RET
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;は関数から返るときのイディオム(スタックポインタを復元してフラグをクリアして呼び出し元に戻る)です。&lt;/p&gt;
-
-&lt;p&gt;余談ですがLispマシンなどのタグマシンは下位ビットにあるタグを無視して計算出来るのでシフトが不要になります。なので速いんですね。&lt;/p&gt;
-
-&lt;h1 id=&#34;シフトをなくす:3d713dfef9193402cbf3ea064dc287c5&#34;&gt;シフトをなくす&lt;/h1&gt;
-
-&lt;p&gt;さっきは&lt;code&gt;signed-reg&lt;/code&gt;を指定しました。つまり「（アセンブラの）intをくれ」と要求した訳です。
-intの下位1bitは0なので足し算する分には別にシフトされなくても問題ありませんよね。シフトを殺しましょう。&lt;/p&gt;
-
-&lt;p&gt;さっきのコードの下にこれを足します。&lt;code&gt;add&lt;/code&gt;は再定義しないと反映されないようでした。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(in-package &amp;quot;SB-VM&amp;quot;)
-(define-vop (vop-sample::add/v2)        ; vop名は異なる
-  (:translate vop-sample::add)          ; 関数名は同じ
-  (:policy :fast-safe)
-  (:args (x :scs (any-reg))             ; any-regになってる
-         (y :scs (any-reg)))            ; any-regになってる
-  (:arg-types fixnum fixnum)
-  (:results (r :scs (any-reg)))         ; any-regになってる
-  (:result-types fixnum)
-  (:generator 3                         ; コストをさっきより低くすると優先して使ってくれる
-              (move r x)
-              (inst add r y)))
-
-(in-package :vop-sample)
-
-(defun add (x y)
-  (add x y))
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;んで、ディスアセンブルしてみると&lt;/p&gt;
-
-&lt;p&gt;VOP-SAMPLE&amp;gt; (disassemble #&amp;lsquo;add)&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;; disassembly for ADD
-; Size: 31 bytes. Origin: #x1004C2AB83
-; 83:       488BD1           MOV RDX, RCX                     ; no-arg-parsing entry point
-; 86:       4801FA           ADD RDX, RDI
-; 89:       488BE5           MOV RSP, RBP
-; 8C:       F8               CLC
-; 8D:       5D               POP RBP
-; 8E:       C3               RET
-; 8F:       CC0A             BREAK 10                         ; error trap
-; 91:       02               BYTE #X02
-; 92:       19               BYTE #X19                        ; INVALID-ARG-COUNT-ERROR
-; 93:       9A               BYTE #X9A                        ; RCX
-; 94:       CC0A             BREAK 10                         ; error trap
-; 96:       04               BYTE #X04
-; 97:       08               BYTE #X08                        ; OBJECT-NOT-FIXNUM-ERROR
-; 98:       FE1B01           BYTE #XFE, #X1B, #X01            ; RDX
-; 9B:       CC0A             BREAK 10                         ; error trap
-; 9D:       04               BYTE #X04
-; 9E:       08               BYTE #X08                        ; OBJECT-NOT-FIXNUM-ERROR
-; 9F:       FE9B03           BYTE #XFE, #X9B, #X03            ; RDI
-NIL
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;はい。見事にSARとSHLが消えましたね。&lt;/p&gt;
-
-&lt;h1 id=&#34;もう少し複雑な型を扱う:3d713dfef9193402cbf3ea064dc287c5&#34;&gt;もう少し複雑な型を扱う&lt;/h1&gt;
-
-&lt;p&gt;アセンブラですし&lt;code&gt;(simple-array (unsigned-byte 8) (*))&lt;/code&gt;(以下octets)を扱いたいですよね。とりあえず難しいことは考えずにoctetsの0番目の要素にアクセスしてみましょう。とはいっても&lt;code&gt;simple-array&lt;/code&gt;は長さや要素の型の情報も持っていることが予想されるので少しデータを読み飛ばさないといけませんね。&lt;/p&gt;
-
-&lt;p&gt;その辺の計算が分からなかったのでsbclのソースからそれっぽいものを参考にしました。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(defknown access-simple-array-0 ((simple-array (unsigned-byte 8) (*)))
-    (unsigned-byte 8)
-    (movable flushable always-translatable)
-  :overwrite-fndb-silently t)
-(in-package &amp;quot;SB-VM&amp;quot;)
-(define-vop (vop-sample::access-simple-array-0)
-  (:translate vop-sample::access-simple-array-0)
-  (:policy :fast-safe)
-  (:args (x :scs (descriptor-reg)))
-  (:arg-types *)
-  (:results (r :scs (unsigned-reg)))
-  (:result-types unsigned-num)
-  (:generator 4
-              (inst movzx r 
-               (make-ea :byte :base x
-                        :disp (- (* vector-data-offset n-word-bytes)
-                               other-pointer-lowtag)))))
-
-(in-package :vop-sample)
-(defvar *octets* (make-array 4
-                             :element-type &#39;(unsigned-byte 8)
-                             :initial-contents &#39;(10 11 12 13)))
-
-(defun access-simple-array-0 (x)
-  (access-simple-array-0 x))
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;こんな感じになります。境界チェックとかはやってませんが許して下さい。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;descriptor-reg&lt;/code&gt;というのがポインタが入ってるレジスタっぽいです。&lt;code&gt;movzx&lt;/code&gt;は8bitの値を64bitのレジスタに符号拡張しながらロードする命令です。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;make-ea&lt;/code&gt;というのがアドレッシングですね。&lt;code&gt;x&lt;/code&gt;レジスタを起点として&lt;code&gt;(- (* vector-data-offset n-word-bytes) other-pointer-lowtag)&lt;/code&gt;バイト(？ワード？)先のメモリ1byteを指します。&lt;/p&gt;
-
-&lt;p&gt;ディスアセンブルしてみましょう。みなさんもう慣れてきたと思うので主要部だけ抜き出します。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;; 65:       0FB65101         MOVZX EDX, BYTE PTR [RCX+1]      ; no-arg-parsing entry point
-; 69:       48D1E2           SHL RDX, 1
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;短いですね。この&lt;code&gt;BYTE PTR [RCX+1]&lt;/code&gt;が&lt;code&gt;make-ea&lt;/code&gt;した値に対応します。&lt;code&gt;RCX&lt;/code&gt;は&lt;code&gt;x&lt;/code&gt;で&lt;code&gt;(- (* vector-data-offset n-word-bytes) other-pointer-lowtag)&lt;/code&gt;の結果が1に現れてるんでしょう。補足しておくと、&lt;code&gt;EDX&lt;/code&gt;と&lt;code&gt;RDX&lt;/code&gt;は同じ場所を指します。32bitとして扱うときはE、64bitとして扱うときはRで指します。&lt;/p&gt;
-
-&lt;p&gt;さて、私はx86のアドレッシングモードなんて全然知らないのですがコードを見る限りもうちょっと複雑なアドレッシングが出来るようです。&lt;/p&gt;
-
-&lt;p&gt;配列のn番目にアクセスするコードが良い例のようです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(defknown access-simple-array-n ((simple-array (unsigned-byte 8) (*)) (unsigned-byte 64))
-    (unsigned-byte 8)
-    (movable flushable always-translatable)
-  :overwrite-fndb-silently t)
-(in-package &amp;quot;SB-VM&amp;quot;)
-(define-vop (vop-sample::access-simple-array-n)
-  (:translate vop-sample::access-simple-array-n)
-  (:policy :fast-safe)
-  (:args (x :scs (descriptor-reg))
-         (i :scs (unsigned-reg)))
-  (:arg-types * unsigned-num)
-  (:results (r :scs (unsigned-reg)))
-  (:result-types unsigned-num)
-  (:generator 4
-              (inst movzx r 
-               (make-ea :byte :base x
-                        :scale 1
-                        :index i
-                        :disp (- (* vector-data-offset n-word-bytes)
-                               other-pointer-lowtag)))))
-
-(in-package :vop-sample)
-(defun access-simple-array-n (x i)
-  (access-simple-array-n x i))
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;新たに引数&lt;code&gt;i&lt;/code&gt;をとるようになったのと&lt;code&gt;make-ea&lt;/code&gt;の引数に&lt;code&gt;:scale 1 :index i&lt;/code&gt;が加わってます。&lt;/p&gt;
-
-&lt;p&gt;ディスアセンブルしてみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;; 98:       0FB6543901       MOVZX EDX, BYTE PTR [RCX+RDI+1]  ; no-arg-parsing entry point
-; 9D:       48D1E2           SHL RDX, 1
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;アドレッシングに&lt;code&gt;+RDI&lt;/code&gt;が加わりましたね。どうして&lt;code&gt;i&lt;/code&gt;(&lt;code&gt;RDI&lt;/code&gt;)を&lt;code&gt;RAS&lt;/code&gt;しなくていいのか気になりますがまあ、とりあえず正常に動いてるようです。&lt;/p&gt;
-
-&lt;p&gt;おわかりかと思いますがアドレッシングが&lt;code&gt;x&lt;/code&gt;をベースにして今までの定数オフセット+新たにレジスタで指定したオフセットになってます。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;make-ea&lt;/code&gt;に渡した&lt;code&gt;:index&lt;/code&gt;は何か分かるとしても&lt;code&gt;:scale&lt;/code&gt;が気になりますよね。&lt;code&gt;scale&lt;/code&gt;を2にしてディスアセンブルしてみます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;; 58:       0FB6547901       MOVZX EDX, BYTE PTR [RCX+RDI*2+1]  ; no-arg-parsing entry point
-; 5D:       48D1E2           SHL RDX, 1
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;はい。インデックスを定数倍するようですね。&lt;/p&gt;
-
-&lt;h1 id=&#34;sseにチャレンジ:3d713dfef9193402cbf3ea064dc287c5&#34;&gt;SSEにチャレンジ&lt;/h1&gt;
-
-&lt;p&gt;インテルアーキテクチャにあるSSEとはStreaming SIMD Extensionsの略です。じゃあSIMDは何かというとSimple Instruction Mulitple Dataの略で、1命令で複数のデータを処理出来ます。&lt;/p&gt;
-
-&lt;p&gt;この「複数のデータ」というのは64bit2つや32bit4つなどを128bitにまとめて渡します。128bitの値なんてどうやって作るんだよって感じですがsbcl-1.1.8から入った&lt;code&gt;sb-ext:%make-simd-pack-*&lt;/code&gt;が存在します。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;VOP-SAMPLE&amp;gt; (%make-simd-pack-ub32 1 2 3 4)
-#&amp;lt;SIMD-PACK  01 00 00 00  02 00 00 00  03 00 00 00  04 00 00 00&amp;gt;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;こんな感じです。x86_64がリトルエンディアンだったのを思い出させる表記ですね。ub32の他にub64、single、doubleが存在します。&lt;/p&gt;
-
-&lt;p&gt;ストレージクラスも&lt;code&gt;*-sse-reg&lt;/code&gt;というものがあるのでこれを使いましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(defknown simd-add ((simd-pack (unsigned-byte 64)) (simd-pack (unsigned-byte 64)))
-    (simd-pack (unsigned-byte 32))
-    (movable flushable always-translatable)
-  :overwrite-fndb-silently t)
-(in-package &amp;quot;SB-VM&amp;quot;)
-(define-vop (vop-sample::simd-add)
-  (:translate vop-sample::simd-add)
-  (:policy :fast-safe)
-  (:args (x :scs (int-sse-reg))
-         (y :scs (int-sse-reg)))
-  (:arg-types simd-pack-int simd-pack-int)
-  (:results (r :scs (int-sse-reg)))
-  (:result-types simd-pack-int)
-  (:generator 4
-              (move r x)
-              (inst padddw r y)))
-
-(in-package :vop-sample)
-(defun simd-add (x y)
-  (simd-add x y))
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;はい。こんな感じですね。&lt;code&gt;paddw&lt;/code&gt;はparallel add wordですかね。これをディスアセンブルすると思ったより大きな命令になったので全部貼っときますね。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;VOP-SAMPLE&amp;gt; (disassemble #&#39;simd-add)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;; disassembly for SIMD-ADD
-; Size: 108 bytes. Origin: #x1006D64A21
-; 21:       660F6FC2         MOVDQA XMM0, XMM2                ; no-arg-parsing entry point
-; 25:       660FFDC1         PADDW XMM0, XMM1
-; 29:       49896C2440       MOV [R12+64], RBP                ; thread.pseudo-atomic-bits
-; 2E:       4D8B5C2418       MOV R11, [R12+24]                ; thread.alloc-region
-; 33:       498D5320         LEA RDX, [R11+32]
-; 37:       493B542420       CMP RDX, [R12+32]
-; 3C:       7740             JNBE L2
-; 3E:       4989542418       MOV [R12+24], RDX                ; thread.alloc-region
-; 43:       498D530F         LEA RDX, [R11+15]
-; 47: L0:   48C742F165030000 MOV QWORD PTR [RDX-15], 869
-; 4F:       48C742F900000000 MOV QWORD PTR [RDX-7], 0
-; 57:       660F7F4201       MOVDQA [RDX+1], XMM0
-; 5C:       49316C2440       XOR [R12+64], RBP                ; thread.pseudo-atomic-bits
-; 61:       7402             JEQ L1
-; 63:       cc09             break 9                          ; pending interrupt trap
-; 65: l1:   488be5           mov rsp, rbp
-; 68:       f8               clc
-; 69:       5d               pop rbp
-; 6a:       c3               ret
-; 6b:       cc0a             break 10                         ; error trap
-; 6d:       02               byte #x02
-; 6e:       19               byte #x19                        ; invalid-arg-count-error
-; 6f:       9a               byte #x9a                        ; rcx
-; 70:       cc0a             break 10                         ; error trap
-; 72:       04               byte #x04
-; 73:       32               byte #x32                        ; object-not-simd-pack-error
-; 74:       fe1b01           byte #xfe, #x1b, #x01            ; rdx
-; 77:       cc0a             break 10                         ; error trap
-; 79:       04               byte #x04
-; 7a:       32               byte #x32                        ; object-not-simd-pack-error
-; 7b:       fe9b03           byte #xfe, #x9b, #x03            ; rdi
-; 7e: l2:   6a20             push 32
-; 80:       bac0854200       mov edx, 4359616                 ; alloc_tramp
-; 85:       ffd2             call rdx
-; 87:       5a               pop rdx
-; 88:       80ca0f           or dl, 15
-; 8b:       ebba             jmp l0
-nil
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;なにやってるのやら。&lt;/p&gt;
-
-&lt;h1 id=&#34;出来なかったこと:3d713dfef9193402cbf3ea064dc287c5&#34;&gt;出来なかったこと&lt;/h1&gt;
-
-&lt;p&gt;&lt;code&gt;PCMPESTRI&lt;/code&gt;を使ってみたかったのですが扱いがトリッキーなので断念しました。具体的に言うと操作する値を格納するレジスタがEAXとECX固定なようなのです。
-&lt;code&gt;:temporary&lt;/code&gt;節で内部で使うレジスタも要求出来るようなのですが名指しでもらえるんですかね。&lt;/p&gt;
-
-&lt;p&gt;SSEの使い方とsimple-arrayから要素の配列を取り出す方法までは示したので誰かやって下さい。&lt;/p&gt;
-
-&lt;p&gt;参考資料いっぱい置いときますね。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://www.pvk.ca/Blog/2014/08/16/how-to-define-new-intrinsics-in-sbcl/&#34;&gt;How to Define New Intrinsics in SBCL - Paul Khuong mostly on Lisp&lt;/a&gt;
-: VOPの使い方。最初の方に出てきたaddの最適化のやつとかも出てくる。(en)&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://pvk.ca/Blog/Lisp/hacking_SSE_intrinsics-part_1.html&#34;&gt;Hacking SSE Intrinsics in SBCL (part 1) - Paul Khuong mostly on Lisp&lt;/a&gt;
-: SBCLのsimd-packの具体的解説(en)&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://www.pvk.ca/Blog/2013/06/05/fresh-in-sbcl-1-dot-1-8-sse-intrinsics/&#34;&gt;Fresh in SBCL 1.1.8: SSE Intrinsics! - Paul Khuong mostly on Lisp&lt;/a&gt;
-: SBCLでVOPとSSEを使ってマンデルブロ集合を計算する(en)&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://software.intel.com/en-us/node/514244&#34;&gt;Packed Compare Intrinsics&lt;/a&gt;
-: IntelのPCMPESTRIとかのマニュアル(en)&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://msdn.microsoft.com/en-us/library/bb531465.aspx&#34;&gt;_mm_cmpestri&lt;/a&gt;
-: MicrosoftのPCMPESTRIのマニュアル。こっちの方が分かりやすい(en)&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://homepage1.nifty.com/herumi/prog/intel-opt.html&#34;&gt;Intel optimization&lt;/a&gt;
-: PCMPISTRIを使った&lt;code&gt;strlen&lt;/code&gt;の実装例(ja)&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://blog.kazuhooku.com/2014/12/improving-parser-performance-using-sse.html&#34;&gt;Kazuho&amp;rsquo;s Weblog: Improving Parser Performance using SSE Instructions (in case of PicoHTTPParser)&lt;/a&gt;
-: PCMPESTRIを使ってHTTPパーサーを高速化した話。これをやりたかった。(en)&lt;/p&gt;
-
-&lt;h1 id=&#34;おわりに:3d713dfef9193402cbf3ea064dc287c5&#34;&gt;おわりに&lt;/h1&gt;
-
-&lt;p&gt;おつかれ様でした。たまには低レベルなことをやっても良いんじゃないでしょうか。&lt;/p&gt;
-
-&lt;p&gt;明日はnobkzさんで、Shenについてです。&lt;/p&gt;
 </description>
     </item>
     
