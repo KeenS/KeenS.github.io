@@ -5,13 +5,13 @@
         <meta http-equiv="content-type" content="text/html; charset=utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
 
-        <title>Shell Script | κeenのHappy Hacκing Blog</title>
+        <title>あなたの知らないShebang | κeenのHappy Hacκing Blog</title>
         <link rel="stylesheet" href='http://fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css' />
         <link rel="stylesheet" href="http://keens.github.io//libraries/normalize.3.0.1.css" />
         <link rel="stylesheet" href="http://keens.github.io//css/liquorice.css" />
         <link rel="shortcut icon" href="http://KeenS.github.io/favicon.ico" />
         <link rel="apple-touch-icon-precomposed" href="http://KeenS.github.io/apple-touch-icon-144-precomposed.png" sizes="144x144" />
-        <link rel="alternate" href="http://KeenS.github.io/categories/shell-script/index.xml" type="application/rss+xml" title="κeenのHappy Hacκing Blog" />
+        <link rel="alternate" href="" type="application/rss+xml" title="κeenのHappy Hacκing Blog" />
         
         <script>
          (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
@@ -75,15 +75,17 @@
 </header>
 
 
+
+
+
+
     <div class="container">
         <div class="row">
             <div class="sixteen columns">
-                <h1>Shell Script</h1>
-                <ul class="li-article-list">
-                    
-                    <li>
-                            <h4><a href="http://keens.github.io/blog/2015/06/26/anatanoshiranaishebang">あなたの知らないShebang</a></h4>
-                            <div class="li-article-meta">
+                <article class="li-article">
+                    <header class="li-article-header">
+                        <h1 class="li-article-title">あなたの知らないShebang</h1>
+                        <div class="li-article-meta">
     <time class="li-article-date">2015-06-26</time>
     <ul class="li-article-tag">
     
@@ -107,45 +109,93 @@
 
 </div>
 
-                        </li>
-                    
-                    <li>
-                            <h4><a href="http://keens.github.io/blog/2015/06/17/shell_scriptwokakutokinikiwotsuketaikoto">Shell Scriptを書くときのテクニック10選</a></h4>
-                            <div class="li-article-meta">
-    <time class="li-article-date">2015-06-17</time>
-    <ul class="li-article-tag">
-    
-        <li>
-            <a href="http://KeenS.github.io/categories/shell-script">Shell Script</a>
-        </li>
-    
-</ul>
+                    </header>
+                    <section>
+                        <p>κeenです。最近は何故かBlack君って呼ばれます。Shebangの書き方にはいくつかあって、それを利用したふと面白い方法を思い付いたので共有を。</p>
 
+<p>さて、ご存知Shebangといえば</p>
+
+<pre><code class="language-sh">#!/bin/sh
+...
+</code></pre>
+
+<p>のようにファイルの1行目が<code>#!</code>から始まっているとシェルがそれ以降の文字列を実行可能ファイルのパス名として捜して実行してくれるものですが、実は<code>#!</code>は唯一のフォーマットではありません。</p>
+
+<p><code>#!</code>がデファクトになる前なのかそもそもシェルにコメントがなかった時代のものなのかは知りませんが昔は</p>
+
+<pre><code class="language-sh">: /bin/sh
+...
+</code></pre>
+
+<p>と<code>:</code>で始めていたらしいです。因みに<code>:</code>は「何もしないコマンド」です。実質的にコメントとして扱ったり副作用のある変数展開だけを行なったりプログラマティックコメントアウトだったりの用途で使われてます。</p>
+
+<p>さて、シェルは全て文字列なのでクォートしてもしなくても構いません。</p>
+
+<pre><code class="language-sh">&quot;:&quot; &quot;/bin/sh&quot;
+</code></pre>
+
+<p>としてもちゃんと動いてくれます。なぜわざわざクォートするかというと<a href="http://keens.github.io/blog/2014/12/08/ge-tochu-li-xi-potaburunacommon-lispshi-xing-ke-neng-huairuwozuo-ru/">割と処理系ポータブルなCommon Lisp実行可能ファイルを作る | κeenのHappy Hacκing Blog</a>のように別の言語のスクリプトとして実行される時に文字列リテラルになってくれると単純に無視されるので互換性が高まるのです。</p>
+
+<p>ということで完全版ポータブルなCommon Lisp実行可能ファイルはこうなります。</p>
+
+<pre><code class="language-lisp">&quot;:&quot; &quot;/bin/sh&quot;
+
+#|
+run_if_exists(){
+ command -v $1 &gt; /dev/null 2&gt;&amp;1 &amp;&amp; exec &quot;$@&quot;
+}
+ run_if_exists cl &quot;$0&quot; &quot;$@&quot;
+ run_if_exists sbcl --noinform --no-sysinit --no-userinit --script &quot;$0&quot; -- &quot;$@&quot;
+ run_if_exists clisp -norc --quiet --silent -on-error exit  &quot;$0&quot; -- &quot;$@&quot;
+ run_if_exists ecl -norc -q -shell &quot;$0&quot; -- &quot;$@&quot;
+ run_if_exists mkcl -norc -q -shell &quot;$0&quot; -- &quot;$@&quot;
+ run_if_exists alisp -qq -#! &quot;$0&quot; -- &quot;$@&quot;
+ run_if_exists ccl --no-init --quiet --batch --load &quot;$0&quot;  --eval '(quit)' -- &quot;$@&quot;
+ run_if_exists abcl --noinform --noinit --nosystem --batch --load &quot;$0&quot; -- &quot;$@&quot;
+ run_if_exists lisp -quiet -noinit -batch -load &quot;$0&quot; -eval '(quit)' -- &quot;$@&quot;
+ echo &quot;No lisp implementation found&quot;
+ exit 1
+|#
+
+(write-line (lisp-implementation-type))
+(force-output)
+
+</code></pre>
+
+<p>abclとcclが利用可能になりました。あとCIMも捜すようにしました。roswellは作者に訊いて下さい。</p>
+
+<p>ちなみに、shebangの解釈はシェルに依存するのですが、B Shell, csh, tcsh, dash, Bash, zshで動作確認しました。古い機能なので新しいシェルほど切り捨てている可能性があったのですがBashやzshが大丈夫だったので良かったです。
+一応非推奨な気がしますがこれしか方法がないので仕方ないですね。</p>
+
+<p>ということでみなさんスクリプト書きましょう。</p>
+
+                    </section>
+                </article>
+            </div>
+        </div>
+
+        <div class="row li-author">
+    <div class="sixteen columns">
+        Written by <strong>κeen</strong>
+    </div>
 </div>
 
-                        </li>
-                    
-                    <li>
-                            <h4><a href="http://keens.github.io/blog/2014/02/19/option-parse-for-shell">Shell Scriptでオプションをパースするときの必勝法</a></h4>
-                            <div class="li-article-meta">
-    <time class="li-article-date">2014-02-19</time>
-    <ul class="li-article-tag">
-    
-        <li>
-            <a href="http://KeenS.github.io/categories/command-line">Command Line</a>
-        </li>
-    
-        <li>
-            <a href="http://KeenS.github.io/categories/shell-script">Shell Script</a>
-        </li>
-    
-</ul>
 
-</div>
-
-                        </li>
+        <div class="row li-pagination">
+            <div class="eight columns">
+                <div class="li-pagination-previous">
                     
-                </ul>
+                        &nbsp;
+                    
+                </div>
+            </div>
+            <div class="eight columns">
+                <div class="li-pagination-next">
+                    
+                        Older article<br />
+                        <a href="http://keens.github.io/slide/Clojureojisan/"> Clojureおじさん</a>
+                    
+                </div>
             </div>
         </div>
     </div>
