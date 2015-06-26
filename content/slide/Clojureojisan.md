@@ -1,7 +1,6 @@
 ---
 categories: [Clojure, FRESH勉強会]
 date: 2015-06-22T22:53:39+09:00
-draft: true
 description: "Clojureおじさん"
 title: Clojureおじさん
 ---
@@ -15,6 +14,7 @@ title: Clojureおじさん
 ----------------------
 サイバーエージント新卒  
 第5回 Fresh勉強会
+
 <!-- .slide: class="center" -->
 
 # About Me
@@ -45,7 +45,7 @@ title: Clojureおじさん
 ```clojure
 (println "Hello, World")
 ```
-
+<!-- .slide: class="center" -->
 
 # JVM
 ------
@@ -66,6 +66,7 @@ title: Clojureおじさん
 ```clojure
 (Math/random)
 ```
+<!-- .slide: class="center" -->
 
 
 # Immutable
@@ -85,6 +86,7 @@ title: Clojureおじさん
 ```clojure
 (filter odd? (map #(+ 1 %) '(1 2 3)))
 ```
+<!-- .slide: class="center" -->
 
 
 # 遅延シーケンス
@@ -94,6 +96,7 @@ title: Clojureおじさん
 (def natural_number (iterate inc 1))
 (take 5 natural_number) ;=> (1 2 3 4 5)
 ```
+<!-- .slide: class="center" -->
 
 
 # リスト内包表記
@@ -104,6 +107,8 @@ title: Clojureおじさん
 ;=> (1 4 9 16 25)
 ```
 
+<!-- .slide: class="center" -->
+
 
 #並列処理に強い
 ---------------
@@ -112,7 +117,9 @@ title: Clojureおじさん
   + Clojureの関数は全てCallableでRunnablea
 
 ```clojure
-(.start (Thread. (fn [] (Thread/sleep 1000) (println 'foo))))
+(.start (Thread. (fn [] 
+                   (Thread/sleep 1000)
+                   (println 'foo))))
 ```
 
 
@@ -127,8 +134,44 @@ title: Clojureおじさん
 -------------
 
 ```clojure
-(go)
+(require '[clojure.core.async :as async :refer :all])
+(let [c (chan)]
+  (go (>! c "hello"))
+  (assert (= "hello" (<!! (go (<! c)))))
+  (close! c))
 ```
-Goroutine/gochannel
+
+```clojure
+(require '[clojure.core.async :as async :refer :all])
+(let [c (chan)]
+  (thread (>!! c "hello"))
+  (assert (= "hello" (<!! c)))
+  (close! c))
+```
+<!-- .slide: class="center" -->
+
+
+# 今回紹介し切れなかったの
+-------------------------
+
+* マクロ
+* メタデータ
+* protocolとかの多態性
+* ClojureScript/Om
+* Typed Clojure
+
+
+# まとめ
+--------
+
+* Clojureを使えばJavaが使える
+* Clojureを使えばPythonのリスト内包表記が使える
+* Clojureを使えばGoのgoroutine/gochannelが使える
+
+
+
+<span style="font-size:200%;">Why not start Clojure?</span>
+<!-- .slide: class="center" -->
+
 </script>
 </section>
