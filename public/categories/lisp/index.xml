@@ -6,8 +6,189 @@
     <description>Recent content in Lisp on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Fri, 26 Jun 2015 23:24:44 +0900</lastBuildDate>
+    <lastBuildDate>Sat, 04 Jul 2015 15:34:46 +0900</lastBuildDate>
     <atom:link href="http://KeenS.github.io/categories/lisp/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>マクロについて整理してみる</title>
+      <link>http://keens.github.io/blog/2015/07/04/makuronitsuiteseirishitemiru</link>
+      <pubDate>Sat, 04 Jul 2015 15:34:46 +0900</pubDate>
+      
+      <guid>http://keens.github.io/blog/2015/07/04/makuronitsuiteseirishitemiru</guid>
+      <description>
+
+&lt;p&gt;何故Lisperがマクロについて語るのか。Lisperと議論してみても満足のいく答を得た人はそんなにいないと思う。
+それはLisper自身便利とは思っていても何が便利なのかを意識してなくて他人に上手く説明出来ないからじゃないかと思った。
+ちょっと思いついた範囲でまとめてみる。&lt;/p&gt;
+
+&lt;p&gt;最近ではマクロシステムを持つ言語は珍しくない。Rust, Scala, Template Haskell, Mirahなどなど。最初にCommon Lispのマクロと他の言語のマクロとの違いを少し考えてみたい。&lt;/p&gt;
+
+&lt;h1 id=&#34;unless:791da514bc52e2606dbc134b8c6e6cf7&#34;&gt;Unless&lt;/h1&gt;
+
+&lt;p&gt;まず、unlessをマクロで書くことを考えてみたい。単純にifにnotをつければいい。&lt;/p&gt;
+
+&lt;p&gt;Common Lispではこうなる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(if (not foo-p)
+    bar)
+
+(defmacro unless (cond then)
+  `(if (not ,cond)
+       ,then))
+
+(unless foo-p
+  bar)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Rustだとこうなるだろうか。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;
+if ! isFoo {
+    bar;
+}
+
+macro_rules! unless {
+    ($cond:expr, $then:stmt) =&amp;gt; {{
+        if ! $cond {
+            $then
+        }
+    }};
+}
+
+unless!(isFoo, {
+    bar;
+})
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;あるいはmirahだとこうなる。unlessが予約語なので_unlessにした。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;if ! isFoo
+  bar
+end
+
+macro def _unless(cond, block:Block)
+  quote{
+    if ! `cond`
+      `block.body`
+    end
+  }
+end
+
+_unless isFoo do
+  bar
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ちなみにCだとこう出来る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-C&#34;&gt;if(! is_foo)
+  bar;
+
+#define unless(cond) if(!(cond))
+
+unless(is_foo)
+  bar;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;さて、上のマクロたちを見比べて欲しい。Common LispのマクロとCのマクロは違和感なく新たな制御構造を作れたのに対してRustとMirahはマクロ呼び出しが剥き出しになっている。&lt;/p&gt;
+
+&lt;p&gt;ここで注意して欲しいのはCはともかくCommon Lisp、Rust、Mirahのマクロは全て引数に必要な構文木をとってそのまま用意したテンプレートにあてはめているだけだ。やっていることに違いはない。
+何が違うかというとマクロ呼び出しの構文が制御構造の構文と同じか違うかという点だけだ。私の知る範囲ではそのような構文をした言語はLispしかない。だから「Lispの」マクロなのだ。&lt;/p&gt;
+
+&lt;p&gt;もう一つ。どのマクロ定義も十分直感的に読めたと思う。この範囲なら &lt;strong&gt;S式だからマクロが簡単になるということはない&lt;/strong&gt; と思う。別にS式でなくてもquasiquoteがあれば十分読み易いマクロが書ける。&lt;/p&gt;
+
+&lt;h1 id=&#34;case:791da514bc52e2606dbc134b8c6e6cf7&#34;&gt;Case&lt;/h1&gt;
+
+&lt;p&gt;caseを生成することを考えよう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(defun fun1 (x)
+  (let ((y (case x
+             ((:foo) (hoge &amp;quot;foo&amp;quot;))
+             ((:bar) (hoge &amp;quot;bar!&amp;quot;)))))
+    ...))
+
+
+(defun fun2 (x)
+ (let ((y (case x
+            ((:foo) (hoge &amp;quot;foo&amp;quot;))
+            ((:baz) (hoge &amp;quot;baz!&amp;quot;)))))
+   ...))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;のように似たような、しかし微妙に違うcaseが必要になったような時に必要だろう。この時、&lt;code&gt;&#39;(:foo (hoge &amp;quot;foo&amp;quot;) :bar (hoge &amp;quot;bar!&amp;quot;))&lt;/code&gt;のようにリテラルでそのまま書いてしまっては抽象化する意味がなくなる。例えばハッシュテーブルにKey-Valueペアを入れて必要な時に入れたり削除したりすればよい。そのようなマクロはこう書ける。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(defmacro case-table (key hash)
+  `(case ,key
+     ,@(loop
+          :for k :being :the :hash-key :of hash :using (hash-value v)
+          :collect `((,k) ,v))))
+
+(defparameter *table*)
+(setf (gethash :foo *table*) &#39;(hoge &amp;quot;foo&amp;quot;))
+(setf (gethash :bar *table*) &#39;(hoge &amp;quot;bar!&amp;quot;))
+
+(defun fun1 (x)
+  (let ((y (case-table x #.*table*)))
+    ...))
+
+(remhash :bar *table*)
+(setf (gethash :baz &#39;(hoge &amp;quot;baz!&amp;quot;)))
+
+
+(defun fun2 (x)
+  (let ((y (case-table x #.*table*)))
+    ...))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ハッシュテーブルを受け取ってリストを返す普通のloopマクロの力をマクロ展開時にも使える。また、ハッシュテーブルには&lt;code&gt;&#39;(hoge &amp;quot;foo&amp;quot;)&lt;/code&gt;などのただのリストを突っ込んだがそれをそのままASTとしても使っている。
+Common Lispのマクロのもう1つの良いところはマクロの展開時にもCommon Lispの機能がフルで使えるところであり、マクロの引数に受け取るのが構文木でありデータ構造でもあるS式なところだ。ここでは &lt;strong&gt;S式の同図像性が重要なファクターになっている&lt;/strong&gt; 。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;(case-table x #.*table*)&lt;/code&gt; で使っている &lt;code&gt;#.&lt;/code&gt; は &lt;em&gt;リードマクロ&lt;/em&gt; といってマクロ展開(コンパイル時)より前(リード時、構文解析時)に動作するマクロだ。このリードマクロはeval-when-readといってリード時に
+値を評価する。その結果、&lt;code&gt;case-table&lt;/code&gt;に渡るのが &lt;code&gt;&#39;*table*&lt;/code&gt;というシンボルでなく&lt;code&gt;*table*&lt;/code&gt;に束縛されているハッシュテーブルになる。因みに &lt;em&gt;コンパイラマクロ&lt;/em&gt; というマクロ展開が終わった後に動作するマクロもある。&lt;/p&gt;
+
+&lt;p&gt;マクロ1つではなくマクロの前後に動作するマクロもあってこそ初めて柔軟性を手にしている。あまりその点は議論されてないのではないだろうか。&lt;/p&gt;
+
+&lt;h1 id=&#34;common-lispの設計:791da514bc52e2606dbc134b8c6e6cf7&#34;&gt;Common Lispの設計&lt;/h1&gt;
+
+&lt;p&gt;さて、各々言語には予約語や~構文というものがあると思う。メソッド定義構文など。Common Lispにもスペシャルフォームという名前で&lt;a href=&#34;http://www.lispworks.com/documentation/HyperSpec/Body/03_ababa.htm&#34;&gt;25&lt;/a&gt;個存在する。
+驚くべきことに、ここまでに出てきたCommon Lispのコードにはスペシャルフォームは3つしか出てこない。ifとletとquoteだ。setfやloop、defun、defmacro、case、defparameterなんかはマクロで出来ている。&lt;/p&gt;
+
+&lt;p&gt;defunまでマクロで出来ているということはユーザがその気になれば関数定義の構文に手を入れたりも出来るということだ。
+普通、そんなことをしたら阿鼻叫喚だがCommon Lispなら安全に出来る。マクロもシンボルに束縛されているので新たにマクロで上書きしたシンボルを名前空間にインポートしなければ今まで通りのdefunやloopが使える。&lt;/p&gt;
+
+&lt;p&gt;もう1つ、普段使うものがマクロで出来ているということはマクロを被せてない機能は相当低レベルだということだ。マクロさえ書けば全く新しい言語機能を追加出来るということであり、あるいは&lt;a href=&#34;http://cl21.org/&#34;&gt;全く新しい言語も作れてしまう&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;このような設計はマクロで制御構造までも作れるから出来るのだ。関数定義構文をマクロで定義している言語はLisp以外に私は知らない。&lt;/p&gt;
+
+&lt;h1 id=&#34;メタプログラミングとcommon-lisp:791da514bc52e2606dbc134b8c6e6cf7&#34;&gt;メタプログラミングとCommon Lisp&lt;/h1&gt;
+
+&lt;p&gt;ところで、マクロに限らないメタプログラミングについて考えてみたい。メタプログラミングとは、プログラムを書くプログラムを書くことだ。プログラムはテキスト形式のソースコードから実行形式に至るまでの間に様々な中間形式から中間形式に変換される。メタプログラミングはそのどこかの形式を生成することと同義になる。通常、処理系内部で使う形式は変なことをされると困るのであまり外部に公開したくない。メタプログラミングを許すとしても構文解析などのフロントエンドに近い部分になるだろう。&lt;/p&gt;
+
+&lt;p&gt;例えばyaccやlexのようなソースコードジェネレータ、rubyやDのような文字列ベースのメタプログラミングは公開APIであるところのパーサだけを使っているので安全性は高い。しかし文字列だけだと構造がないので書く側はつらい。一応、Common Lispにもread関数とeval関数があるのでCommon Lispのソースコード文字列を吐いてreadしてevalすれば文字列メタプログラミングは出来る。特に嬉しくないのでやらないが。&lt;/p&gt;
+
+&lt;p&gt;次はトークンベースのメタプログラミングがある。Cのプリプロセッサなど。Common Lispでもリードマクロで可能だ。例えば正規表現リテラルを作ったりとかの例がある。&lt;/p&gt;
+
+&lt;p&gt;次はASTベースのメタプログラミングがある。マクロだ。これは今まで見てきた。&lt;/p&gt;
+
+&lt;p&gt;これより先はメタプログラミングとはあまり言わない気がする。JITと呼ぶのではないか。Common Lispにもeval関数やcompile関数があるからそういうことも出来る。正規表現ライブラリなんかが使っている。&lt;/p&gt;
+
+&lt;p&gt;私が言いたいのはCommon Lispにはメタプログラミングの機構が一杯あるということではない。read, eval, compile…。気付いたかもしれないが、LispはLisp自身で出来ている。
+Lispを書くとき、Lispを書いてるかもしれないしLispを構成するLispを書いているかもしれない。いくらでもメタプログラミングが出来るということだ。&lt;/p&gt;
+
+&lt;h1 id=&#34;まとめ:791da514bc52e2606dbc134b8c6e6cf7&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;p&gt;何やらCommon Lisp賛美歌になってしまったが一応まとめておく。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;簡単なマクロ定義ならS式である必要はない&lt;/li&gt;
+&lt;li&gt;複雑なマクロ定義ならS式であると書き易い。恐らく他の構文でも書けないことはない。&lt;/li&gt;
+&lt;li&gt;マクロ呼び出し構文はS式でないと重大な違いがある。&lt;/li&gt;
+&lt;li&gt;マクロ以外にもリードマクロやパッケージなど他の言語機能があってこそマクロが活きる。&lt;/li&gt;
+&lt;li&gt;言語機能だけでなくマクロを前提とした設計も重要である。&lt;/li&gt;
+&lt;li&gt;LispはS式で出来ている以前にLispで出来ている。&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
     
     <item>
       <title>あなたの知らないShebang</title>
@@ -3042,96 +3223,6 @@ Hello, Wold
 &lt;p&gt;とかしたかったんですけど間に合いませんでした。&lt;/p&gt;
 
 &lt;p&gt;ソリューションなりモジュールなりのシステムが出来たらまたトライします&lt;/p&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>claspがアップデートされたよ</title>
-      <link>http://keens.github.io/blog/2014/12/06/claspgaatupudetosaretayo</link>
-      <pubDate>Sat, 06 Dec 2014 00:00:00 +0000</pubDate>
-      
-      <guid>http://keens.github.io/blog/2014/12/06/claspgaatupudetosaretayo</guid>
-      <description>
-
-&lt;p&gt;このエントリーは&lt;a href=&#34;http://qiita.com/advent-calendar/2014/lisp&#34;&gt;Lisp Advent Calendar 2014&lt;/a&gt;6日目の記事です。&lt;br /&gt;
-前: nobkzさんで &lt;a href=&#34;http://qiita.com/nobkz/items/2be2b6806237d8ea6e21&#34;&gt;lfe - (lisp (flavored (erlang)))について基本その1 - Qiita&lt;/a&gt;&lt;br /&gt;
-後: 私で &lt;a href=&#34;http://KeenS.github.io/blog/2014/12/07/h2onipicrinworong-kasu/&#34;&gt;H2Oにpicrinを溶かす | κeenのHappy Hacκing Blog&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;κeenです。アドベントカレンダーめっちゃ書いてますね。&lt;/p&gt;
-
-&lt;h1 id=&#34;clasp:77e635c8bfc030775f1dbb8efa5b9863&#34;&gt;Clasp!&lt;/h1&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/drmeister/clasp&#34;&gt;clasp&lt;/a&gt;のmasterに色々マージされました。リリースノートには、&lt;/p&gt;
-
-&lt;p&gt;&lt;quote&gt;&lt;pre&gt;
-Clasp version 0.11
-* Added ASDF support.
-This is still alpha. Compile the ASDF module using (core:compile-asdf).
-After that you can load the module using (load &amp;ldquo;sys:kernel;asdf;build;asdf.bundle&amp;rdquo;).
-It takes between 15-30 seconds to load (this is why I&amp;rsquo;m integrating Cleavir).
-* Added the :CLASP &lt;em&gt;feature&lt;/em&gt; and removed the :ECL &lt;em&gt;feature&lt;/em&gt;.
-Clasp will continue to mimic the underlying ECL functionality so that
-Common Lisp code that supports ECL can be made to support Clasp by converting
-#+ecl to #+(or ecl clasp) and #-ecl to #-(or ecl clasp)
-* Added code to generate object files directly from Clasp.
-The LLVM bitcode compiler &amp;ldquo;llc&amp;rdquo; no longer needs to be in the PATH
-for Clasp to generate object files from Common Lisp source.
-The &amp;ldquo;ld&amp;rdquo; linker does need to be accessible.
-&lt;/pre&gt;&lt;/quote&gt;&lt;/p&gt;
-
-&lt;p&gt;とあります。ASDFが使える！リリースノートには書いてませんがslimeサポートもmasterにコミットされてます。あとコミット読んだら最適化もされてるような…。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://KeenS.github.io/slide/clasp.html&#34;&gt;以前&lt;/a&gt;二十数秒掛かっていた&lt;code&gt;(fib 29)&lt;/code&gt;ですが、今回はなんと&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ /usr/local/clasp/bin/clasp_boehm_o
-Starting Clasp 0.11 ... loading image... it takes a few seconds
-Top level.
-&amp;gt; (load &amp;quot;fib.lisp&amp;quot;)
-1346269
-real time : 34.294 secs
-run time  : 38.844 secs
-T
-&amp;gt; (compile-file &amp;quot;fib.lisp&amp;quot;)
-
-#P&amp;quot;/home/kim/Lisp/fib.bc&amp;quot;
-NIL
-NIL
-&amp;gt; (load &amp;quot;fib.bc&amp;quot;)
-1346269
-real time : 21.355 secs
-run time  : 25.785 secs
-T
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;うわぁ。遅くなってる。&lt;/p&gt;
-
-&lt;p&gt;因みに.bcファイルはLLVMの中間ファイルなのでClaspとは独立に&lt;code&gt;opt -f -O3 fib.bc &amp;gt; fib.opt.bc&lt;/code&gt;で最適化出来ます。それをやると&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ opt -f -O3 fib.bc &amp;gt; fib.opt.bc
-$ /usr/local/clasp/bin/clasp_boehm_o
-Starting Clasp 0.11 ... loading image... it takes a few seconds
-Top level.
-&amp;gt; (load &amp;quot;fib.opt.bc&amp;quot;)
-1346269
-real time : 34.981 secs
-run time  : 37.986 secs
-T
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;あれ？遅くなった。&lt;/p&gt;
-
-&lt;p&gt;mpsはまだコンパイル中だから待ってね&lt;/p&gt;
-
-&lt;h1 id=&#34;asdfを使ってみる:77e635c8bfc030775f1dbb8efa5b9863&#34;&gt;ASDFを使ってみる&lt;/h1&gt;
-
-&lt;pre&gt;&lt;code&gt;$ /usr/local/clasp/bin/clasp_boehm_o
-Starting Clasp 0.11 ... loading image... it takes a few seconds
-Top level.
-&amp;gt; (time (core:compile-asdf))
-zsh: segmentation fault (core dumped)  /usr/local/clasp/bin/clasp_boehm_o
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;はい。解散。因みに50分くらいは動いてた。&lt;/p&gt;
 </description>
     </item>
     

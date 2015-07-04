@@ -6,8 +6,189 @@
     <description>Recent content in Common Lisp on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Fri, 26 Jun 2015 23:24:44 +0900</lastBuildDate>
+    <lastBuildDate>Sat, 04 Jul 2015 15:34:46 +0900</lastBuildDate>
     <atom:link href="http://KeenS.github.io/categories/common-lisp/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>マクロについて整理してみる</title>
+      <link>http://keens.github.io/blog/2015/07/04/makuronitsuiteseirishitemiru</link>
+      <pubDate>Sat, 04 Jul 2015 15:34:46 +0900</pubDate>
+      
+      <guid>http://keens.github.io/blog/2015/07/04/makuronitsuiteseirishitemiru</guid>
+      <description>
+
+&lt;p&gt;何故Lisperがマクロについて語るのか。Lisperと議論してみても満足のいく答を得た人はそんなにいないと思う。
+それはLisper自身便利とは思っていても何が便利なのかを意識してなくて他人に上手く説明出来ないからじゃないかと思った。
+ちょっと思いついた範囲でまとめてみる。&lt;/p&gt;
+
+&lt;p&gt;最近ではマクロシステムを持つ言語は珍しくない。Rust, Scala, Template Haskell, Mirahなどなど。最初にCommon Lispのマクロと他の言語のマクロとの違いを少し考えてみたい。&lt;/p&gt;
+
+&lt;h1 id=&#34;unless:791da514bc52e2606dbc134b8c6e6cf7&#34;&gt;Unless&lt;/h1&gt;
+
+&lt;p&gt;まず、unlessをマクロで書くことを考えてみたい。単純にifにnotをつければいい。&lt;/p&gt;
+
+&lt;p&gt;Common Lispではこうなる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(if (not foo-p)
+    bar)
+
+(defmacro unless (cond then)
+  `(if (not ,cond)
+       ,then))
+
+(unless foo-p
+  bar)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Rustだとこうなるだろうか。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;
+if ! isFoo {
+    bar;
+}
+
+macro_rules! unless {
+    ($cond:expr, $then:stmt) =&amp;gt; {{
+        if ! $cond {
+            $then
+        }
+    }};
+}
+
+unless!(isFoo, {
+    bar;
+})
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;あるいはmirahだとこうなる。unlessが予約語なので_unlessにした。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;if ! isFoo
+  bar
+end
+
+macro def _unless(cond, block:Block)
+  quote{
+    if ! `cond`
+      `block.body`
+    end
+  }
+end
+
+_unless isFoo do
+  bar
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ちなみにCだとこう出来る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-C&#34;&gt;if(! is_foo)
+  bar;
+
+#define unless(cond) if(!(cond))
+
+unless(is_foo)
+  bar;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;さて、上のマクロたちを見比べて欲しい。Common LispのマクロとCのマクロは違和感なく新たな制御構造を作れたのに対してRustとMirahはマクロ呼び出しが剥き出しになっている。&lt;/p&gt;
+
+&lt;p&gt;ここで注意して欲しいのはCはともかくCommon Lisp、Rust、Mirahのマクロは全て引数に必要な構文木をとってそのまま用意したテンプレートにあてはめているだけだ。やっていることに違いはない。
+何が違うかというとマクロ呼び出しの構文が制御構造の構文と同じか違うかという点だけだ。私の知る範囲ではそのような構文をした言語はLispしかない。だから「Lispの」マクロなのだ。&lt;/p&gt;
+
+&lt;p&gt;もう一つ。どのマクロ定義も十分直感的に読めたと思う。この範囲なら &lt;strong&gt;S式だからマクロが簡単になるということはない&lt;/strong&gt; と思う。別にS式でなくてもquasiquoteがあれば十分読み易いマクロが書ける。&lt;/p&gt;
+
+&lt;h1 id=&#34;case:791da514bc52e2606dbc134b8c6e6cf7&#34;&gt;Case&lt;/h1&gt;
+
+&lt;p&gt;caseを生成することを考えよう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(defun fun1 (x)
+  (let ((y (case x
+             ((:foo) (hoge &amp;quot;foo&amp;quot;))
+             ((:bar) (hoge &amp;quot;bar!&amp;quot;)))))
+    ...))
+
+
+(defun fun2 (x)
+ (let ((y (case x
+            ((:foo) (hoge &amp;quot;foo&amp;quot;))
+            ((:baz) (hoge &amp;quot;baz!&amp;quot;)))))
+   ...))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;のように似たような、しかし微妙に違うcaseが必要になったような時に必要だろう。この時、&lt;code&gt;&#39;(:foo (hoge &amp;quot;foo&amp;quot;) :bar (hoge &amp;quot;bar!&amp;quot;))&lt;/code&gt;のようにリテラルでそのまま書いてしまっては抽象化する意味がなくなる。例えばハッシュテーブルにKey-Valueペアを入れて必要な時に入れたり削除したりすればよい。そのようなマクロはこう書ける。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(defmacro case-table (key hash)
+  `(case ,key
+     ,@(loop
+          :for k :being :the :hash-key :of hash :using (hash-value v)
+          :collect `((,k) ,v))))
+
+(defparameter *table*)
+(setf (gethash :foo *table*) &#39;(hoge &amp;quot;foo&amp;quot;))
+(setf (gethash :bar *table*) &#39;(hoge &amp;quot;bar!&amp;quot;))
+
+(defun fun1 (x)
+  (let ((y (case-table x #.*table*)))
+    ...))
+
+(remhash :bar *table*)
+(setf (gethash :baz &#39;(hoge &amp;quot;baz!&amp;quot;)))
+
+
+(defun fun2 (x)
+  (let ((y (case-table x #.*table*)))
+    ...))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ハッシュテーブルを受け取ってリストを返す普通のloopマクロの力をマクロ展開時にも使える。また、ハッシュテーブルには&lt;code&gt;&#39;(hoge &amp;quot;foo&amp;quot;)&lt;/code&gt;などのただのリストを突っ込んだがそれをそのままASTとしても使っている。
+Common Lispのマクロのもう1つの良いところはマクロの展開時にもCommon Lispの機能がフルで使えるところであり、マクロの引数に受け取るのが構文木でありデータ構造でもあるS式なところだ。ここでは &lt;strong&gt;S式の同図像性が重要なファクターになっている&lt;/strong&gt; 。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;(case-table x #.*table*)&lt;/code&gt; で使っている &lt;code&gt;#.&lt;/code&gt; は &lt;em&gt;リードマクロ&lt;/em&gt; といってマクロ展開(コンパイル時)より前(リード時、構文解析時)に動作するマクロだ。このリードマクロはeval-when-readといってリード時に
+値を評価する。その結果、&lt;code&gt;case-table&lt;/code&gt;に渡るのが &lt;code&gt;&#39;*table*&lt;/code&gt;というシンボルでなく&lt;code&gt;*table*&lt;/code&gt;に束縛されているハッシュテーブルになる。因みに &lt;em&gt;コンパイラマクロ&lt;/em&gt; というマクロ展開が終わった後に動作するマクロもある。&lt;/p&gt;
+
+&lt;p&gt;マクロ1つではなくマクロの前後に動作するマクロもあってこそ初めて柔軟性を手にしている。あまりその点は議論されてないのではないだろうか。&lt;/p&gt;
+
+&lt;h1 id=&#34;common-lispの設計:791da514bc52e2606dbc134b8c6e6cf7&#34;&gt;Common Lispの設計&lt;/h1&gt;
+
+&lt;p&gt;さて、各々言語には予約語や~構文というものがあると思う。メソッド定義構文など。Common Lispにもスペシャルフォームという名前で&lt;a href=&#34;http://www.lispworks.com/documentation/HyperSpec/Body/03_ababa.htm&#34;&gt;25&lt;/a&gt;個存在する。
+驚くべきことに、ここまでに出てきたCommon Lispのコードにはスペシャルフォームは3つしか出てこない。ifとletとquoteだ。setfやloop、defun、defmacro、case、defparameterなんかはマクロで出来ている。&lt;/p&gt;
+
+&lt;p&gt;defunまでマクロで出来ているということはユーザがその気になれば関数定義の構文に手を入れたりも出来るということだ。
+普通、そんなことをしたら阿鼻叫喚だがCommon Lispなら安全に出来る。マクロもシンボルに束縛されているので新たにマクロで上書きしたシンボルを名前空間にインポートしなければ今まで通りのdefunやloopが使える。&lt;/p&gt;
+
+&lt;p&gt;もう1つ、普段使うものがマクロで出来ているということはマクロを被せてない機能は相当低レベルだということだ。マクロさえ書けば全く新しい言語機能を追加出来るということであり、あるいは&lt;a href=&#34;http://cl21.org/&#34;&gt;全く新しい言語も作れてしまう&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;このような設計はマクロで制御構造までも作れるから出来るのだ。関数定義構文をマクロで定義している言語はLisp以外に私は知らない。&lt;/p&gt;
+
+&lt;h1 id=&#34;メタプログラミングとcommon-lisp:791da514bc52e2606dbc134b8c6e6cf7&#34;&gt;メタプログラミングとCommon Lisp&lt;/h1&gt;
+
+&lt;p&gt;ところで、マクロに限らないメタプログラミングについて考えてみたい。メタプログラミングとは、プログラムを書くプログラムを書くことだ。プログラムはテキスト形式のソースコードから実行形式に至るまでの間に様々な中間形式から中間形式に変換される。メタプログラミングはそのどこかの形式を生成することと同義になる。通常、処理系内部で使う形式は変なことをされると困るのであまり外部に公開したくない。メタプログラミングを許すとしても構文解析などのフロントエンドに近い部分になるだろう。&lt;/p&gt;
+
+&lt;p&gt;例えばyaccやlexのようなソースコードジェネレータ、rubyやDのような文字列ベースのメタプログラミングは公開APIであるところのパーサだけを使っているので安全性は高い。しかし文字列だけだと構造がないので書く側はつらい。一応、Common Lispにもread関数とeval関数があるのでCommon Lispのソースコード文字列を吐いてreadしてevalすれば文字列メタプログラミングは出来る。特に嬉しくないのでやらないが。&lt;/p&gt;
+
+&lt;p&gt;次はトークンベースのメタプログラミングがある。Cのプリプロセッサなど。Common Lispでもリードマクロで可能だ。例えば正規表現リテラルを作ったりとかの例がある。&lt;/p&gt;
+
+&lt;p&gt;次はASTベースのメタプログラミングがある。マクロだ。これは今まで見てきた。&lt;/p&gt;
+
+&lt;p&gt;これより先はメタプログラミングとはあまり言わない気がする。JITと呼ぶのではないか。Common Lispにもeval関数やcompile関数があるからそういうことも出来る。正規表現ライブラリなんかが使っている。&lt;/p&gt;
+
+&lt;p&gt;私が言いたいのはCommon Lispにはメタプログラミングの機構が一杯あるということではない。read, eval, compile…。気付いたかもしれないが、LispはLisp自身で出来ている。
+Lispを書くとき、Lispを書いてるかもしれないしLispを構成するLispを書いているかもしれない。いくらでもメタプログラミングが出来るということだ。&lt;/p&gt;
+
+&lt;h1 id=&#34;まとめ:791da514bc52e2606dbc134b8c6e6cf7&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;p&gt;何やらCommon Lisp賛美歌になってしまったが一応まとめておく。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;簡単なマクロ定義ならS式である必要はない&lt;/li&gt;
+&lt;li&gt;複雑なマクロ定義ならS式であると書き易い。恐らく他の構文でも書けないことはない。&lt;/li&gt;
+&lt;li&gt;マクロ呼び出し構文はS式でないと重大な違いがある。&lt;/li&gt;
+&lt;li&gt;マクロ以外にもリードマクロやパッケージなど他の言語機能があってこそマクロが活きる。&lt;/li&gt;
+&lt;li&gt;言語機能だけでなくマクロを前提とした設計も重要である。&lt;/li&gt;
+&lt;li&gt;LispはS式で出来ている以前にLispで出来ている。&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
     
     <item>
       <title>あなたの知らないShebang</title>
@@ -2655,143 +2836,6 @@ Common Lispをやる上では必ず必要になるので、英語ですが必ず
 #lispmeetup の情報は&lt;a href=&#34;https://atnd.org/users/51173&#34;&gt;ここ&lt;/a&gt;から入手するのが良いかな？あとは&lt;a href=&#34;https://twitter.com/shibuya_lisp&#34;&gt;Twitterアカウント&lt;/a&gt;もあります。Ustream配信もしてます。&lt;/li&gt;
 &lt;li&gt;IRCの#lisp-ja@irc.freenode.orgと#common-lisp-ja@irc.freenode.orgにコミュニティがあります。常に誰かがいる訳ではないのですがちょくちょく見てる人はいるので発言してみると反応があるかもしれません。今もこの投稿に対して反応があってCIMとredditの項目を追加しました。&lt;/li&gt;
 &lt;/ul&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>Shibuya.lisp Tech Talk #8を運営&amp;LTしてきました</title>
-      <link>http://keens.github.io/blog/2014/09/16/lisp-tech-talk-8</link>
-      <pubDate>Tue, 16 Sep 2014 00:00:00 +0000</pubDate>
-      
-      <guid>http://keens.github.io/blog/2014/09/16/lisp-tech-talk-8</guid>
-      <description>
-
-&lt;p&gt;κeenです。レポートに追われ試験があり合宿に行きで2週間以上空きましたが8/30にShibuya.lisp TT #8の運営をしつつLT枠での参加もしてきたので報告です。何かそこそこ大きなイベントの運営をされる方の参考になれば。&lt;/p&gt;
-
-&lt;h1 id=&#34;キックオフミーティング:49552f9ec6ef052f69ae99492e3fa9e0&#34;&gt;キックオフミーティング&lt;/h1&gt;
-
-&lt;p&gt;キックオフミーティングが6月にありました。集まったのは5人。potix2(@potix2)さん、chikuさん、深町(@nitro_idiot)さんかにたん(@kazh98)、私。Shibuya.lispの運営はもうちょい居る筈なんですけど引く手数多のLisper達はきっと忙しいんでしょうね。&lt;/p&gt;
-
-&lt;p&gt;Shibuya.lisp TTを開催するかを含めて話し合いました。開催されるとなれば3年振りです。&lt;/p&gt;
-
-&lt;p&gt;一番の懸案事項はTTをする人がいるかでした。招待講演のアテを話し合ったりTT枠とLT枠のバランスを話し合ったりして開催可能だろうと判断しました。その場で予想参加人数、タイムテーブルや役割分担、TT枠やLT枠が応募多寡になったときの対応、懇親会をどうするかなどを話し合いました。&lt;/p&gt;
-
-&lt;p&gt;やっぱりその時点では会場が決まってないので不確定要素が多く、「会場次第」が多かったかと思います。そのときの予想や要求を元に会場の条件を絞った訳ですが。&lt;/p&gt;
-
-&lt;p&gt;必要と判断された役職は、&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;懇親会&lt;/li&gt;
-&lt;li&gt;司会&lt;/li&gt;
-&lt;li&gt;誘導&lt;/li&gt;
-&lt;li&gt;照明&lt;/li&gt;
-&lt;li&gt;マイク&lt;/li&gt;
-&lt;li&gt;受付&lt;/li&gt;
-&lt;li&gt;会計&lt;/li&gt;
-&lt;li&gt;広報&lt;/li&gt;
-&lt;li&gt;動画&lt;/li&gt;
-&lt;li&gt;タイムキーパ&lt;/li&gt;
-&lt;li&gt;コーヒーのケータリングとかお茶とかお菓子の準備&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;でした。5人だとどうしても人数が足りないので運営手伝いも募集することになりました。&lt;/p&gt;
-
-&lt;h1 id=&#34;会場決定:49552f9ec6ef052f69ae99492e3fa9e0&#34;&gt;会場決定&lt;/h1&gt;
-
-&lt;p&gt;mixi様より(鈴木さん経由で)会場を提供頂きました。スクリーン2枚、飲食OK、懇親会もその場でOK、ハンディカムの貸し出しありの至れり尽せりです。鈴木さんありがとう御座います。&lt;/p&gt;
-
-&lt;h1 id=&#34;広報:49552f9ec6ef052f69ae99492e3fa9e0&#34;&gt;広報&lt;/h1&gt;
-
-&lt;p&gt;広報担当のかにたんがTwitterやMeet Upで宣伝したりchikuさんがTokyo.cljに参加して宣伝したりで広報活動を行なってきました。結果、60人の枠がほぼ埋まる(キャンセル含めれば超過)程度の人数が集りました。かにたんありがとう。&lt;/p&gt;
-
-&lt;p&gt;懸案事項だったTTの発表者は早々に埋まり、むしろ応募多寡だろうと予想されたLT枠が半分しか埋まらなくて焦りました。&lt;/p&gt;
-
-&lt;h1 id=&#34;ビデオ:49552f9ec6ef052f69ae99492e3fa9e0&#34;&gt;ビデオ&lt;/h1&gt;
-
-&lt;p&gt;映像に詳しいTOYOZUMIさんに相談したところ、発表者の映像出力をキャプチャする手段があるとのことなので&lt;/p&gt;
-
-&lt;ol&gt;
-&lt;li&gt;特殊機器による映像出力のキャプチャ&lt;/li&gt;
-&lt;li&gt;ハンディカムによる発表者の録画&lt;/li&gt;
-&lt;li&gt;WebカメラによるUstream配信&lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;p&gt;の3つを行ない、3.はリアルタイムに、1.、2.を合成したものを録画映像として配信することになりました。一応私がビデオ担当でしたが一人では無理なのでchikuさんやかにたんと一緒に予行演習を行ないました。&lt;/p&gt;
-
-&lt;p&gt;扱いの分からぬ機器に悪戦苦闘し、一応動かすことは出来たものの不安が残るので、上手く動いたシナリオと動かなかったシナリオを用意しました。&lt;/p&gt;
-
-&lt;h1 id=&#34;その他:49552f9ec6ef052f69ae99492e3fa9e0&#34;&gt;その他&lt;/h1&gt;
-
-&lt;p&gt;懇親会の手配やら会計やらがどうだったかは分かりません。何も気にすることが無い程スムーズに進んでたんでしょう。potix2さんと深町さんありがとうございます。&lt;/p&gt;
-
-&lt;h1 id=&#34;当日:49552f9ec6ef052f69ae99492e3fa9e0&#34;&gt;当日&lt;/h1&gt;
-
-&lt;h2 id=&#34;準備:49552f9ec6ef052f69ae99492e3fa9e0&#34;&gt;準備&lt;/h2&gt;
-
-&lt;p&gt;chikuさんと一緒に渋谷駅に集合し、ケータリングのコーヒーを持って会場入り。そのまま鈴木さんにお世話になりつつ会場設営。当初は私は会場設営はほどほどに、ビデオ関係の準備をしてる筈でしたが人が少ないのでそのまま設営をやってました。&lt;/p&gt;
-
-&lt;p&gt;さらにThunderboltケーブルが不足ということでビックカメラまでダッシュ。雪駄+合宿で痛めた足で走るんじゃなかった。結局Thunderboltを買ってきても機器を上手く扱うことが出来ず、失敗した方のシナリオでオペレーションしてました。&lt;/p&gt;
-
-&lt;p&gt;映像配信に関しては私のLinuxではUstream配信出来ないだとかWebカメラがスライドから遠くて見えないだとかがありましたが、全体は滞りなく進行。&lt;/p&gt;
-
-&lt;h2 id=&#34;talk:49552f9ec6ef052f69ae99492e3fa9e0&#34;&gt;Talk&lt;/h2&gt;
-
-&lt;p&gt;TalkはLT枠は飛び入りが4人あり、結局良い感じに埋まりました。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;特別講演
-
-&lt;ol&gt;
-&lt;li&gt;笹川様 : 好きい夢の話 (&lt;a href=&#34;https://drive.google.com/file/d/0B_H0_8eqWuVAY25lWGdiTGE5RmM/edit?usp=sharing&#34;&gt;ビデオ&lt;/a&gt;)&lt;/li&gt;
-&lt;/ol&gt;&lt;/li&gt;
-&lt;li&gt;TT
-
-&lt;ol&gt;
-&lt;li&gt;athosさん : genuine-hilighterの話 (&lt;a href=&#34;https://drive.google.com/file/d/0B_H0_8eqWuVAZmJPaWpTMHZRUmc/edit?usp=sharing&#34;&gt;ビデオ&lt;/a&gt;)&lt;/li&gt;
-&lt;li&gt;深町さん : cl21の話 (&lt;a href=&#34;https://drive.google.com/file/d/0B_H0_8eqWuVAcV91QXRzSC1JVXc/edit?usp=sharing&#34;&gt;ビデオ&lt;/a&gt;)&lt;/li&gt;
-&lt;li&gt;豊住さん : 自作画像処理ライブラリの話 (&lt;a href=&#34;https://drive.google.com/file/d/0B_H0_8eqWuVATE5nZ0Z4V3Zwdms/edit?usp=sharing&#34;&gt;ビデオ&lt;/a&gt;)&lt;/li&gt;
-&lt;li&gt;横田さん : 型宣言と最適化の話 (&lt;a href=&#34;https://drive.google.com/file/d/0B_H0_8eqWuVAYzhqZ2J5T0VKTXc/edit?usp=sharing&#34;&gt;ビデオ&lt;/a&gt;)&lt;/li&gt;
-&lt;/ol&gt;&lt;/li&gt;
-&lt;li&gt;LT (&lt;a href=&#34;https://drive.google.com/file/d/0B_H0_8eqWuVAaGNLTGpTWWh0ZFU/edit?usp=sharing&#34;&gt;ビデオ 1~4&lt;/a&gt;、&lt;a href=&#34;https://drive.google.com/file/d/0B_H0_8eqWuVAR21Pc2M4bmdpdlU/edit?usp=sharing&#34;&gt;ビデオ 4~9&lt;/a&gt;)
-
-&lt;ol&gt;
-&lt;li&gt;のぶかずさん : Shenの話&lt;/li&gt;
-&lt;li&gt;κeen : moclの話&lt;/li&gt;
-&lt;li&gt;かにたん : 床下LispとLisp Meet Upの話&lt;/li&gt;
-&lt;li&gt;すてぃべあさん : EROSの話&lt;/li&gt;
-&lt;li&gt;ねこはるさん : Clojureの型推論器の話&lt;/li&gt;
-&lt;li&gt;Takagiさん: cl-cudaの話&lt;/li&gt;
-&lt;li&gt;あんちべさん : Incanterの話&lt;/li&gt;
-&lt;li&gt;TAKUFUKUSHIMAさん : Omの話&lt;/li&gt;
-&lt;li&gt;zick_minohさん : 42の言語でLisp処理系を書いた話&lt;/li&gt;
-&lt;/ol&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;と様々な内容に分かれて行われました。私の発表スライドは&lt;a href=&#34;http://KeenS.github.io/slide/shibuya-dot-lisp-tt-number-8.html&#34;&gt;ここ&lt;/a&gt;にあります。&lt;/p&gt;
-
-&lt;h2 id=&#34;懇親会:49552f9ec6ef052f69ae99492e3fa9e0&#34;&gt;懇親会&lt;/h2&gt;
-
-&lt;p&gt;箸が足りない、ケータリングのボットを返却し忘れるなどとトラブルはあったものの概ね問題なく進みました。出されたのはアルコール、ソフトドリンク、寿司、ピザです。&lt;/p&gt;
-
-&lt;p&gt;だいたい言語毎に島が出来てたようです。私は撮影したビデオを取り込みつつ色々な島に入っていきました。Common Lisperでcl21コミッタでScheme実装者でClojureワナビーなのでどこにも入れて良いですね。ただ、前日スライドの微調整などであまり寝てなかったのでちょいちょい居眠りしてました。&lt;/p&gt;
-
-&lt;p&gt;片付けが終って外に出るとみなさんが待ってて下さったのでぞろぞろ帰りました。TOYOZUMIさんが2次会にカラオケに行こうと皆さん誘ってました。私は行こうかと思ったのですがカラオケはジェネレーションギャップがあるとつらいので大人しく帰りました。&lt;/p&gt;
-
-&lt;h1 id=&#34;後日:49552f9ec6ef052f69ae99492e3fa9e0&#34;&gt;後日&lt;/h1&gt;
-
-&lt;p&gt;返し忘れたケータリングのポットは後日chikuさんが返してくれました。&lt;/p&gt;
-
-&lt;p&gt;録画した動画はちょいと梃摺りました。まず、長い動画なので動画サイズが4GBのところで切れてます。なのでその2つを結合し、さらにあまりにサイズが大きいので画質を落とす作業が必要でした。&lt;/p&gt;
-
-&lt;p&gt;変換はavconv(ffmpegのフォーク。Ubuntuだとこれしか入らない)で行なったのですが、MPEG4をダイレクトには結合出来ないらしことに気付くまで何度も失敗しました(1つの動画の変換に4時間とか掛かるんですよ？しかもその間CPUは100%に張り付いてるのでPC使えない)。レポートやら試験やらの合間に行なったのでそれだけで数日使いました。最終的にはmpegtsなるフォーマットに変換してcatで結合すれば良いことが分かり、
-    (MP4 + MP4) -&amp;gt; (mpegts + mpegts) -&amp;gt; mpegts -&amp;gt; MP4 -&amp;gt; MP4(low quality)
-の手順を踏んで最終動画を得ました。それでも1トークあたり1GBくらいのサイズがあります。もうちょい画質落としても良かったのかな。&lt;/p&gt;
-
-&lt;p&gt;で、今アップロード中ですが私のポンコツWiMAXルータは高負荷に耐えられず1動画数時間掛かってます。その間全くネットが使えません。はぁ。&lt;/p&gt;
-
-&lt;p&gt;実は今回の運営は私も含めTech Talk初参加の人がそれなりに居たのですがなんとか乗り切れましたね。講演をして下さった笹川様、会場を提供して下さったmixi様と鈴木さん、運営の手伝いをして下さった方々、ありがとう御座いました。そして運営のみなさん、発表者のみなさんお疲れ様でした。&lt;/p&gt;
-
-&lt;p&gt;次回もTT開催出来ると良いですね。&lt;/p&gt;
 </description>
     </item>
     
