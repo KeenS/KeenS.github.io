@@ -4,7 +4,6 @@ date: 2015-08-08T04:16:50+09:00
 description: "PEGと構文解析に関するアレコレの勉強会 Vol.1 あるいは構文解析手法勉強会
 での発表資料。PEG以外の構文解析にまつわる話。
 "
-draft: true
 title: 構文解析にまつわる小話たち
 ---
 
@@ -290,7 +289,13 @@ Note: Lispだと+は関数、andはマクロ、setqはスペシャルフォー�
   + 言語の文法に合わせたプリンタ
   + 拡張性持たせると厄介
 * かといって正規表現はやめましょうね
+
+# DSLパーサジェネレータ
+----------------------
 
+<blockquote class="twitter-tweet" lang="ja"><p lang="ja" dir="ltr">PEGが正規表現と違って辛いところは言語組み込みじゃないのとワンライナーに向かないことなんだよな… <a href="https://twitter.com/hashtag/peg_study?src=hash">#peg_study</a></p>&mdash; わかめ@TypeScriptカッコガチ (@vvakame) <a href="https://twitter.com/vvakame/status/629881217320550401">2015, 8月 8</a></blockquote> 
+
+<!-- .slide: class="center" -->
 
 # DSLパーサジェネレータ
 ----------------------
@@ -405,6 +410,22 @@ each do {}
 * エラーがあってもセミコロンまで読み飛ばせば回復出来る
   + CやJavaは結構コンパイラが教えてくれる
 * そういう言語設計も大事
+
+
+# テスト
+
+<!-- .slide: class="center" -->
+
+# テスト
+-------
+
+* ASTのテストは案外難しい
+  + 微妙な仕様変更で結果が変わる
+  + でも言語の動作には関係なかったり
+
+1. あきらめる
+2. 不屈の精神でテストを直し続ける
+3. 木に対するクエリ言語を使う
 
 
 # 拡張方法
