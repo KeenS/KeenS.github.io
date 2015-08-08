@@ -1,11 +1,11 @@
 ---
 categories: [構文解析]
-date: 2015-07-01T04:16:50+09:00
+date: 2015-08-08T04:16:50+09:00
 description: "PEGと構文解析に関するアレコレの勉強会 Vol.1 あるいは構文解析手法勉強会
 での発表資料。PEG以外の構文解析にまつわる話。
 "
 draft: true
-title: 構文解析アレコレ
+title: 構文解析にまつわる小話たち
 ---
 
 <section data-markdown
@@ -14,7 +14,7 @@ title: 構文解析アレコレ
     data-notes="^Note:">
 <script type="text/template">
 
-# 構文解析アレコレ
+# 構文解析にまつわる小話たち
 ----------------------
 [#peg_study](https://twitter.com/search?q=%23peg_study&src=typd&vertical=default&f=tweets)
 
@@ -39,6 +39,7 @@ title: 構文解析アレコレ
 -------------------------
 
 * プログラム言語を使っているなら既にパーサはある
+  + 文法も定義されてる
 * 目の前のパーサを使え
   + パーサAPIがある言語もある(Lispとか)
 * そうでなくても内部DSLを考えろ
@@ -94,6 +95,7 @@ Note: Lispだと+は関数、andはマクロ、setqはスペシャルフォー�
 # LexerとParserを分ける意味
 --------------------------
 
+* (上向き構文解析だと分けないとつらい)
 * 役割の分担
   + 困難は分割せよ
 * 文字列をシンボル化して比較が高速に
@@ -102,11 +104,6 @@ Note: Lispだと+は関数、andはマクロ、setqはスペシャルフォー�
 
 
 <blockquote class="twitter-tweet" align="center" lang="ja"><p lang="ja" dir="ltr">字句解析器手づくりの簡単さに対して構文解析器手づくりはわりと人を殺しにかかる</p>&mdash; gfn (@bd_gfngfn) <a href="https://twitter.com/bd_gfngfn/status/578908166785671168">2015, 3月 20</a></blockquote>
-
-<!-- .slide: class="center" -->
-
-
-<blockquote class="twitter-tweet" align="center"  lang="ja"><p lang="ja" dir="ltr">構文解析難し過ぎて酒飲んでる <a href="http://t.co/obf4utBcih">pic.twitter.com/obf4utBcih</a></p>&mdash; ろんだ (@fetburner) <a href="https://twitter.com/fetburner/status/606820143868411906">2015, 6月 5</a></blockquote>
 
 <!-- .slide: class="center" -->
 
@@ -221,7 +218,7 @@ Note: Lispだと+は関数、andはマクロ、setqはスペシャルフォー�
 
 * LispはLL
 * Java 1.0はLALR
-  + 今はLRではないらしい
+  + 今はLALRではないらしい
 * PrologはLALRだった気がする
 
 
@@ -255,6 +252,7 @@ Note: Lispだと+は関数、andはマクロ、setqはスペシャルフォー�
 * 関数の仮引数の数と実引数の数の一致
 * 変数の使用の前に変数宣言
 * 要は構文解析で出来ることには限界がある。
+
 
 # パーサの実際
 
@@ -291,6 +289,7 @@ Note: Lispだと+は関数、andはマクロ、setqはスペシャルフォー�
 * そもそも作るのにもコストが高い
   + 言語の文法に合わせたプリンタ
   + 拡張性持たせると厄介
+* かといって正規表現はやめましょうね
 
 
 # DSLパーサジェネレータ
