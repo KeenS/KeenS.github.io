@@ -6,8 +6,519 @@
     <description>Recent content in Slides on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Mon, 22 Jun 2015 22:53:39 +0900</lastBuildDate>
+    <lastBuildDate>Sat, 08 Aug 2015 04:16:50 +0900</lastBuildDate>
     <atom:link href="http://KeenS.github.io/slide/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>構文解析にまつわる小話たち</title>
+      <link>http://keens.github.io/slide/koubunkaisekiarekore/</link>
+      <pubDate>Sat, 08 Aug 2015 04:16:50 +0900</pubDate>
+      
+      <guid>http://keens.github.io/slide/koubunkaisekiarekore/</guid>
+      <description>&lt;section data-markdown
+    data-separator=&#34;\n\n&#34;
+    data-vertical=&#34;\n\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+&lt;script type=&#34;text/template&#34;&gt;
+
+# 構文解析にまつわる小話たち
+----------------------
+[#peg_study](https://twitter.com/search?q=%23peg_study&amp;src=typd&amp;vertical=default&amp;f=tweets)
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# About Me
+---------
+![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
+
+ + κeen
+ + [@blackenedgold](https://twitter.com/blackenedgold)
+ + Github: [KeenS](https://github.com/KeenS)
+ + サイバエージェントの新卒エンジニア
+ + Lisp, ML, Shell Scriptあたりを書きます
+
+
+# ウォームアップ
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# 構文解析はバッドノウハウ
+-------------------------
+
+* プログラム言語を使っているなら既にパーサはある
+  + 文法も定義されてる
+* 目の前のパーサを使え
+  + パーサAPIがある言語もある(Lispとか)
+* そうでなくても内部DSLを考えろ
+  + 内部DSLで解決出来ないときだけ構文解析
+
+# 本質はAST
+-----------
+
+* 結局はASTになればどんな文法でも同じ
+* 文法はただの外皮、欲しいのはAST
+* シンタックスシュガーは飾り
+  + DRY出来るなら別
+* S式を使え
+  + ASTをそのまま書き下せる
+
+
+# AST First
+-----------
+
+* 最初にASTを考える。そして文法を考える
+* 何が欲しいのかイメージし易くなる
+* 構文解析はAST生成の自動化。普段してないことを自動化するのは愚か。
+* 早めに間違いに気付ける
+  + `+`は二項演算子。じゃあ `&amp;&amp;` は？ `=` は？
+
+Note: Lispだと+は関数、andはマクロ、setqはスペシャルフォーム
+
+
+# 構文解析の流れ
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# 構文解析の流れ
+---------------
+
+1. Lexer generaterからlexerを作る
+  + Lexとか
+2. Parser generaterからparserを作る
+  + yaccとか
+  + BNFという記法
+3. ソースファイルをlexerで処理してトークン化する
+4. トークン列をparserで処理してASTを作る
+
+
+
+```
+         [Lexer]        [parser]
+[Source]-------&gt;[Tokens]------&gt;[AST]
+```
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# LexerとParserを分ける意味
+--------------------------
+
+* (上向き構文解析だと分けないとつらい)
+* 役割の分担
+  + 困難は分割せよ
+* 文字列をシンボル化して比較が高速に
+* 思考のフレームワークとして
+
+
+
+&lt;blockquote class=&#34;twitter-tweet&#34; align=&#34;center&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;字句解析器手づくりの簡単さに対して構文解析器手づくりはわりと人を殺しにかかる&lt;/p&gt;&amp;mdash; gfn (@bd_gfngfn) &lt;a href=&#34;https://twitter.com/bd_gfngfn/status/578908166785671168&#34;&gt;2015, 3月 20&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+
+# 正規表現の使いどころ
+---------------------
+
+* 高速な実装がある
+* 部品化しにくい
+* 括弧の対応とか入れ子構造(`if .. then .. else`とか)は扱えない
+  + perlの正規表現は厳密には正規表現ではない
+* 構文解析には向かない
+  + 「マッチ」は出来ても「抜き出し」は面倒
+* Lexerには向いてる
+  + トークン自体末端の部品なので部品化する必要がない
+
+&lt;blockquote class=&#34;twitter-tweet&#34; align=&#34;center&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;依存型のある言語でlexとか作ったら出てくるトークンの型変数に正規表現出てくるのかな&lt;/p&gt;&amp;mdash; eld-r-esh-2 (@eldesh) &lt;a href=&#34;https://twitter.com/eldesh/status/597772476244885505&#34;&gt;2015, 5月 11&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+&lt;blockquote class=&#34;twitter-tweet&#34; align=&#34;center&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;「bnf = (大雑把に言って)正規表現+括弧の対応」というのはchomsky–schützenbergerの定理という結構マニアックな定理(ドラゴンブックには載ってないと思う)をさらに僕なりに超訳したものなのであまり知られてないと思います．&lt;/p&gt;&amp;mdash; ryoma sin&amp;#39;ya (@sinya8282) &lt;a href=&#34;https://twitter.com/sinya8282/status/597465565654024192&#34;&gt;2015, 5月 10&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+
+# 構文クラス
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# 構文クラス
+------------
+
+* 学術的だが知っておくと幸せになれる
+* 文脈自由文法を解析するためのものを話す
+  + 多くのプログラム言語は文脈自由文法
+  + 正規言語 ⊂ 文脈自由文法
+* 大きく分けると上向き構文解析と下向き構文解析
+* 詳しくは[ドラゴンブック](http://www.amazon.co.jp/%e3%82%b3%e3%83%b3%e3%83%91%e3%82%a4%e3%83%a9%e2%80%95%e5%8e%9f%e7%90%86%e3%83%bb%e6%8a%80%e6%b3%95%e3%83%bb%e3%83%84%e3%83%bc%e3%83%ab-information-computing-a-v-%e3%82%a8%e3%82%a4%e3%83%9b/dp/478191229x)参照
+
+
+# LL(1)
+----
+
+* 下向き
+  + 再帰降下パーサ
+* 定義した言語しか厳密に受け取らない
+* 線形線形時間でパース可能
+* 手書きに向く
+* パーサーコンビネータとかも
+
+
+# LR(1)
+----
+
+* 上向き
+  + トークンをくっつけて構文要素に、構文要素をくっつけてさらに上の構文要素に…
+* LL(n)⊂LR(n)
+* LRそのものの解析は難しくて、いくつかサブクラスがある
+  + 単純LR (SLR):  貧弱
+  + 先読みLR (LALR): パーサジェネレータでよく使われる
+  + 正準LR: 計算コストが高い。メモリ喰う
+* 事前計算のコスト（面倒くささ）が高い
+  + パーサジェネレータ
+
+
+# LRパーサジェネレータ
+-----
+
+* 基本はBNF(Backus-Naur-Form)
+* いくつか方式がある
+  + 演算子順位解析も合わせる
+    - EmacsのSMIEとか
+  + BNFだけでやる
+    - 別の言語も受理する可能性がある ドラゴンブック 上 p. 247
+    - 普通は問題にならない
+
+
+# LRの限界とか
+-------------
+
+* `-`の単項演算子と二項演算子の衝突
+  1. SMLみたいに諦める(単項の`-`を`~`で表す)
+  2. Lexerで区別する
+* 左再帰で無限ループ
+  + 手動でどうにか出来る
+  + 自動でどうにかしてくれるジェネレータもある
+* BNFの書き方によっては文法があいまいになる
+  + `if .. then .. if .. then .. else ..` とか
+  + 自動ではどうにもできないので気をつけるしかない
+
+
+# BNFとパーサージェネレータの良さ
+------------
+
+* BNFは言語を定義する。
+  + 言語仕様にも使われる
+* 要は「仕様からプログラムを生成する」
+* 宣言的
+
+
+# 複数文法のサポートとグローバル変数の衝突
+---------------------------------------
+
+* 複数の文法をサポートしたい時がある
+  + 独自記法と互換記法とか
+* 雑なパーサジェネレータ/コンビネータを使っているとグローバル変数が衝突する
+  + パーサライブラリの作者は配慮して下さい。
+
+
+# 言語仕様の配慮
+---------------
+
+* LispはLL
+* Java 1.0はLALR
+  + 今はLALRではないらしい
+* PrologはLALRだった気がする
+
+
+# 非文脈自由文法
+----------------
+
+* 文脈を持つ（雑）
+* ひねりなくパーサージェネレータ使っただけじゃ解析出来ない言語のこと。
+
+
+## sedのs///
+-----------
+
+* 実は `s|||`のように区切文字は何でもいい
+  + パスネームの置換に便利
+* 対応関係が文脈で変わるので非文脈自由
+
+
+## Markdown
+-----------
+
+* 元々のperlの実装は正規表現
+  + 再帰を使っているので正規言語ではなく文脈自由文法
+* GFMなどのTable記法はカラム数という文脈があるので非文脈自由
+* Table記法をサポートする時は覚悟を持って。
+
+
+# その他
+--------
+
+* 関数の仮引数の数と実引数の数の一致
+* 変数の使用の前に変数宣言
+* 要は構文解析で出来ることには限界がある。
+
+
+# パーサの実際
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# 速度と手軽さ
+--------------
+
+* 外部DSLやコンフィグファイルだとパーサの速度は必要ない
+  + メインループで使われないので起動時間にしか影響しない。
+  + むしろ手軽に作れた方がいい
+* HTTPだとかメインループで使うものはどうやってでも速くしたい
+  + 労力は惜しまない
+
+# 手書きとジェネレータとコンビネータ
+----------------------------------
+
+* 速度が必要ならジェネレータ
+* LLでないならジェネレータ
+* 手軽さが欲しいならコンビネータ
+* 色々手を加えたいなら手書き…かも
+
+
+&lt;blockquote class=&#34;twitter-tweet&#34; align=&#34;center&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;パーサ手書きするのダサイよなぁ。クラスが分からなくなる。&lt;/p&gt;&amp;mdash; ELD-R-ESH-2 (@eldesh) &lt;a href=&#34;https://twitter.com/eldesh/status/597751470834855938&#34;&gt;2015, 5月 11&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# ジェネレータの扱いにくさ
+--------------------------
+
+* あんまり人気ない気がする
+* 2回も前処理必要なのダサいよね
+* 新たな文法覚える必要がある
+* そもそも作るのにもコストが高い
+  + 言語の文法に合わせたプリンタ
+  + 拡張性持たせると厄介
+* かといって正規表現はやめましょうね
+
+# DSLパーサジェネレータ
+----------------------
+
+&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;PEGが正規表現と違って辛いところは言語組み込みじゃないのとワンライナーに向かないことなんだよな… &lt;a href=&#34;https://twitter.com/hashtag/peg_study?src=hash&#34;&gt;#peg_study&lt;/a&gt;&lt;/p&gt;&amp;mdash; わかめ@TypeScriptカッコガチ (@vvakame) &lt;a href=&#34;https://twitter.com/vvakame/status/629881217320550401&#34;&gt;2015, 8月 8&lt;/a&gt;&lt;/blockquote&gt; 
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# DSLパーサジェネレータ
+----------------------
+
+* あったらそれなりに人気出そう
+* メタプログラミングが出来る必要がある
+* Common Lisp
+  + 作者自身作ってる途中でジェネレータとコンビネータを勘違いする
+  + ドキュメントでジェネレータといってるのに実際はコンビネータだったりする
+* D
+  + なんか作ってる人いるらしい
+
+
+# 複雑性と分かりやすさ
+---------------------
+
+&lt;blockquote class=&#34;twitter-tweet&#34; align=&#34;center&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;オーバーエンジニアリングを「あいつは力に溺れた」と言い変えていくといいと思う&lt;/p&gt;&amp;mdash; イカid:mizchi0x (@mizchi) &lt;a href=&#34;https://twitter.com/mizchi/status/565662999063838720&#34;&gt;2015, 2月 12&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+
+# 複雑性と分かりやすさ
+---------------------
+* パーサが複雑な文法に対応出来ても人間が追い付かない
+* 周辺のサポートも必要になるのでやっぱりシンプルな方が良い。
+  + LRよりLL
+  + S式とかシンプルの極み
+  + [Clojureシンタックスハイライター開発から考えるこれからのlispに必要なもの](http://www.slideshare.net/sohta/clojurelisp?ref=http://athos.hatenablog.com/entry/2015/07/29/222535)
+* 「出来る」と「した方がいい」は別の話
+
+
+&lt;blockquote class=&#34;twitter-tweet&#34; align=&#34;center&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;S式はどう考えても読み易い……&lt;/p&gt;&amp;mdash; Ocamlアイドル (@no_maddo) &lt;a href=&#34;https://twitter.com/no_maddo/status/590528791677546496&#34;&gt;2015, 4月 21&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+
+&lt;blockquote class=&#34;twitter-tweet&#34; align=&#34;center&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;}]))みたいなのを書いてると、括弧が一種類の言語、いいなぁ、と思ったりします。&lt;/p&gt;&amp;mdash; mzp (@mzp) &lt;a href=&#34;https://twitter.com/mzp/status/587941717451481088&#34;&gt;2015, 4月 14&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# ソースロケーション保持法
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+
+# ソースロケーション保持法
+-------------------------
+
+* エラーメッセージを出すためにはソースロケーションを保持する必要がある
+* flymakeの情報: ファイル名、開始行/列 終了行/列 エラーメッセージ
+  + 最悪これがあればどうにかなる
+  + 「分かりやすい」メッセージはツールに任せる
+* 字句解析だけでなく意味解析、さらにはつまるところコンパイルが終わるまで保存する必要がある
+  + トークンやASTにメンバが増える
+  + オブジェクト指向のカプセル化って素晴らしい
+
+
+# 1. インクルード
+----------------------
+
+* トークンのデータに入れてしまうパターン
+* `datatype token = Plus of int * int | Symbol of int * int * string` ...
+* OOPなら自然だが函数型だとパターンマッチがつらくなる
+
+
+# 2. ラップ
+--------
+
+* ロケーションのレコードでトークンをラップする
+* `{start:int, end: int, token: token}`
+* パターンマッチは少し楽になる
+  + 多相レコードがないとそもそもレコードつらいけどな！！
+* MLtonがやってるらしい
+
+
+# 3. テーブル
+-------------
+
+* ロケーションテーブルを持って、トークンにはテーブルへのキーだけ持たせる
+* トークンが軽くなるので速そう
+* でも面倒そう
+
+
+# エラー処理
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# エラーメッセージ
+------------------------
+
+* 一応ロケーションがとれればエラー箇所は出せる。
+* メッセージの親切さはツールとヒューリスティックと根気
+* clangとか頑張ってる
+
+```
+ERROR: expected tEnd before &#39;&lt;EOF&gt;&#39;
+each do {}
+          ^
+```
+
+
+# エラー回復
+-------------
+
+* シンタックスハイライターは壊れた文法も解析しないといけない
+* 1回のコンパイルでできるだけ多くのエラーメッセージを出したい
+* シンタックスエラーから回復したい
+
+
+# Cの易しさ
+-----------
+
+* エラーがあってもセミコロンまで読み飛ばせば回復出来る
+  + CやJavaは結構コンパイラが教えてくれる
+* そういう言語設計も大事
+
+
+# テスト
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# テスト
+-------
+
+* ASTのテストは案外難しい
+  + 微妙な仕様変更で結果が変わる
+  + でも言語の動作には関係なかったり
+
+1. あきらめる
+2. 不屈の精神でテストを直し続ける
+3. 木に対するクエリ言語を使う
+
+
+# 拡張方法
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# リードマクロ
+--------------
+
+* トークンレベルの拡張
+* 特定の「文字」がきた時にユーザ定義関数を使ってパースする
+* リテラルをユーザが定義することが出来る
+  + 正規表現リテラルとか
+  + [Common Lispの正規表現](http://weitz.de/cl-interpol/)
+
+
+# マクロ
+--------
+
+* ASTレベルの拡張
+* LispとかScalaとかRustとか
+  + Lispは自由度が高い
+  + 関数マクロはないよりマシ程度
+* ~衛生性~
+* [マクロについて整理してみる | κeenのHappy Hacκing Blog](http://keens.github.io/blog/2015/07/04/makuronitsuiteseirishitemiru/)
+
+
+## Cのマクロ
+------------
+
+* プリプロセッサなのでコンパイラの拡張ではない
+* プリプロセッサ自体レキサを持つ
+  + パーサとレキサを分ける意味
+* ASTに関知しないのでやりたい放題
+
+
+# 中置演算子
+-----------
+
+* 新しい中置演算子と優先順位を定義できる言語は多い
+  + Haskell, SML, Prolog…
+* パーサをその場で書き換えるのは難しいので後で処理する
+  + [\[コンパイラ\]\[Haskell\]\[OCaml\] Haskellのinfixの仕組み - mad日記](http://d.hatena.ne.jp/MaD/touch/20090108)
+* シンタックスのプラグインをセマンティクスに入れてるのでちょっと無茶
+
+
+# 中置演算子
+-----------
+
+* 人間が同時に覚えられるのは3つまで
+  + 優先順位がいくつもあっても覚えられない
+  + 優先度40とか900とか無理。
+* 本質はAST
+  + 文法に問題を抱えるくらいならS式を使え
+
+
+# Coq
+-----
+
+Coqは謎のテクノロジーにより `Notation`を使えば新しい文法を定義出来る
+
+```coq
+Notation &#34;&#39;SKIP&#39;&#34; :=
+  CSkip.
+Notation &#34;X &#39;::=&#39; a&#34; :=
+  (CAss X a) (at level 60).
+Notation &#34;c1 ; c2&#34; :=
+  (CSeq c1 c2) (at level 80, right associativity).
+Notation &#34;&#39;WHILE&#39; b &#39;DO&#39; c &#39;END&#39;&#34; :=
+  (CWhile b c) (at level 80, right associativity).
+Notation &#34;&#39;IFB&#39; e1 &#39;THEN&#39; e2 &#39;ELSE&#39; e3 &#39;FI&#39;&#34; :=
+  (CIf e1 e2 e3) (at level 80, right associativity).
+
+Definition fact_in_coq : com :=
+  Z ::= AId X;
+  Y ::= ANum 1;
+  WHILE BNot (BEq (AId Z) (ANum 0)) DO
+    Y ::= AMult (AId Y) (AId Z);
+    Z ::= AMinus (AId Z) (ANum 1)
+  END.
+```
+&lt;/script&gt;
+&lt;/section&gt;
+</description>
+    </item>
     
     <item>
       <title>Clojureおじさん</title>
@@ -3988,282 +4499,6 @@ alisp-9.0(compile)  | &lt;div class=&#34;graph&#34; style=&#34;width:calc(  0.6p
 * &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;2&#34; --&gt;時期尚早
 * &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;3&#34; --&gt;今後機能や速度改善があれば使えるようになるかも
 
-
-&lt;span style=&#34;font-size:600%&#34;&gt;以上&lt;/span&gt;  
-何か質問あればどうぞ
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-&lt;/script&gt;
-&lt;/section&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>C6H6&#43;HNO3</title>
-      <link>http://keens.github.io/slide/c6h6-plus-hno3/</link>
-      <pubDate>Fri, 24 Oct 2014 00:00:00 +0000</pubDate>
-      
-      <guid>http://keens.github.io/slide/c6h6-plus-hno3/</guid>
-      <description>&lt;section data-markdown
-    data-separator=&#34;\n\n&#34;
-    data-vertical=&#34;\n\n&#34;
-    data-notes=&#34;^Note:&#34;&gt;
-&lt;script type=&#34;text/template&#34;&gt;
-# $\mathbf{C_6H_6+HNO_3}$
-------------------------
-関数型なんたらの集い &lt;2014-10-25&gt;  
-κeen(@blackenedgold)
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# picrinについて
----------------
-![ピクリン酸の構造式](/images/picrin/picrin-structure.png)  
-化学式 $\mathbf{C_6H_3N_3O_7}$、示性式 $\mathbf{C_6H_2(OH)(NO_2)_3}$ で表される芳香族のニトロ化合物。  
-一般にはフェノールのニトロ化によって得られる。
-
-Note:
-ニトロ化に硫酸を使うことを触れる。
-
-![picrinのロゴ](/images/picrin/picrin-logo-fin01-02.png)  
-
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# About Me
-----------
-
- + κeen
- + 東大数学科の4年生
- + ソーシャルアカウントは上のアイコン達から。
- + Lisp, Ruby, ML, Shell Scriptあたりを書きます
- + [picrin](https://github.com/picrin-scheme/picrin)のコミッタです
-
-
-# picrinについて
-----------------
-
-* github: picrin-scheme/picrin
-* R7RS-small scheme 処理系
-* 速い、軽い、高機能を目指す
-* 組み込み向けを意識
-* 1年くらい開発
-* κeenがコミットし始めてから半年弱
-
-
-# picrinの プロジェクト構成
----------------------------
-コア(benz)はC、ビルドツールはCMake。
-
-```
-├── contrib (nitros)
-   .......
-├── docs
-├── etc
-├── extlib
-│   └── benz
-├── piclib
-   ....
-└── src
-```
-
-Note:
-contribとextlib/benzを強調。
-srcはほぼ空であることにも触れる。
-
-# nitrosの紹介
----------------
-
-* schemeやCで書かれている
-* picrinのコンパイル時に一緒にlibpicrinに入る
-* picrinと共にCMakeで管理されている
-
-Note:
-schemeファイルもlibpicrinにCの文字列として入ってることに触れる。
-バイトコンパイルプロジェクトにも触れる。
-nitrosも一緒にコンパイルされることを強調する。
-
-
-# nitroの紹介
----------------
-## [R7RS](https://github.com/picrin-scheme/picrin/tree/master/contrib/05.r7rs/scheme)
-
-* picrinではr7rsもただのライブラリ
-* 組み込みのときに必要なければ外せばよい
-
-Note:
-リンクを辿る必要はない。
-スライドは下に続く。
-
-
-# nitroの紹介
----------------
-## [partcont](https://github.com/picrin-scheme/picrin/blob/master/contrib/10.partcont/piclib/partcont.scm)
-
-* ただの限定継続ライブラリ
-* ねこはるさんが詳しく話すと思うのでそちらに譲ります
-
-Note:
-リンクを辿ってソースを見せる。
-
-# nitroの紹介
----------------
-## [for](https://github.com/picrin-scheme/picrin/blob/master/contrib/20.for/piclib/for.scm)
-
-* 非決定性計算ライブラリ
-* またの名をListモナド
-
-Note:
-リンクを辿ってソースを見せる。
-
-# nitroの紹介
----------------
-## [regexp](https://github.com/picrin-scheme/picrin/blob/master/contrib/10.regexp/src/regexp.c)
-
-* Unixのregexライブラリのバインディング
-* Cで書かれている
-
-Note:
-リンクを辿ってソースを見せる。
-詳細に説明する。
-
- + `regexp_t`型
- + dtor
- + GCに乗ることは強調
-
-
-# nitroの依存関係の話
----------------------
-
-* nitro同士に依存関係がある
-* forはpartcontに依存する
-* REPLはeditlineに依存する
-* etc...
-
-
-# picrinの依存関係解決法
------------------------
-
-[picrin/contrib](https://github.com/picrin-scheme/picrin/tree/master/contrib)
-
-Note:
-
-* リンクを辿る
-* ディレクトリ名が数字で始まることを説明
-* 03まできてそろそろ限界であることを説明
-
-
-どう見ても&lt;span style=&#34;font-size:150%&#34;&gt;手動(ディレクトリ名)ソート&lt;/span&gt;ですね。  
-本当にありがとうございました。
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-
-
-* さすがにどうにかしたい
-* 依存関係解決ツールが欲しい
-* なんかmrubyのmrbgemとかみたいにしたら楽しいんじゃね？
-* 個々のnitroを別プロジェクトにも出来る!
-
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# sulfuricプロジェクト
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# sulfuricプロジェクト
----------------------
-
-* sulfuric acid = 硫酸
-* nitro定義、依存解決、ビルドコンフィグ etc...
-* 最終的にはCMakeと連携
-* 定義ファイルはschemeで書きたい
-
-Note:
-個人案なことに触れる。
-chikenのeggsやRacketのPlanetにも触れる。
-
-
-# sulfuricプロジェクト
----------------------
-
-* あれ？R7RSってnitroじゃね？
-* そもそもschemeをビルドするためにschemeを書く…？
-* てかCMakeとの連携どうするよ
-
-Note:
-進捗はまだinitial commitすら出来てない。
-書いてる内に大きくなっていったことも説明。
-最初は他のschemeでビルドする案やフェノールでビルドする案も話す。
-solutionディレクトリに入れたいよねーも話す。
-フェノールの合成にベンゼンスルホン酸が使われる
-
-
-# picrinにコミットしよう
------------------------
-
-* picrinはまだ若い
-  + ちょろっと覗くだけでコミット出来るところが見付かる
-* 開発者全員日本人
-
-
-# コミットはとっても簡単
-------------
-
-1. [issue](https://github.com/picrin-scheme/picrin/issues)を覗く
-2. 簡単そうなのをサクっと実装
-3. PR
-
-Note:
-イシューの中から
-
-  + \#224 feature request: data structures
-  + \#210 Add MQTT support
-
-を見せる
-
-
-# Q. なぜpicrin?
-------------
-
-
-# A. picrinの独自拡張
------------------
-
-* [ドキュメント](http://picrin.readthedocs.org/en/latest/)に色々書いてある
-* C拡張の書き方も書いてある
-
-Note:
-arrayとdictionaryに触れる。
-マクロに触れる
-C APIの項目があることにも触れる。
-
-# picrinのマクロ
-----------------
-
-* `syntax-rules` (R7RS)
-* `sc-macro-transformer`
-* `rsc-macro-transformer`
-* `ir-macro-transformer`
-* `er-macro-transformer`
-* `define-macro` (Common Lisp)
-
-参考: [様々な Hygienic Macro - 月の塵](http://d.hatena.ne.jp/leque/20080528/p1)
-
-
-# picrinにコミットしよう
------------------------
-
-* issueに上がってなくても大歓迎
-* Schemeの練習に
-* 「便利なライブラリ書いたけどどこ置いたら良いの」
-
-
-
-# picrinにコミットしよう
-
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
 
 &lt;span style=&#34;font-size:600%&#34;&gt;以上&lt;/span&gt;  
 何か質問あればどうぞ
