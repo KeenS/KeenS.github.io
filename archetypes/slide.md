@@ -20,7 +20,7 @@ description:
  + κeen
  + [@blackenedgold](https://twitter.com/blackenedgold)
  + Github: [KeenS](https://github.com/KeenS)
- + 渋谷のエンジニア
+ + サイバーエージェントのエンジニア
  + Lisp, ML, Shell Scriptあたりを書きます
 
 </script>
