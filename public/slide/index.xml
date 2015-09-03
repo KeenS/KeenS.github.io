@@ -6,8 +6,216 @@
     <description>Recent content in Slides on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Fri, 14 Aug 2015 00:55:37 +0900</lastBuildDate>
+    <lastBuildDate>Fri, 04 Sep 2015 06:45:19 +0900</lastBuildDate>
     <atom:link href="http://KeenS.github.io/slide/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>SMLでPNGデコーダを作ろうとして分かったこと</title>
+      <link>http://keens.github.io/slide/SMLdePNGdeko_dawotsukuroutoshitewakattakoto/</link>
+      <pubDate>Fri, 04 Sep 2015 06:45:19 +0900</pubDate>
+      
+      <guid>http://keens.github.io/slide/SMLdePNGdeko_dawotsukuroutoshitewakattakoto/</guid>
+      <description>&lt;section data-markdown
+    data-separator=&#34;\n\n&#34;
+    data-vertical=&#34;\n\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+&lt;script type=&#34;text/template&#34;&gt;
+# SMLでPNGデコーダを作ろうとして分かったこと
+------------------------------------------
+サイバーエージェント アドテクスタジオ  
+エンジニア月初会
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# About Me
+----------
+![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
+
+ + κeen
+ + [@blackenedgold](https://twitter.com/blackenedgold)
+ + Github: [KeenS](https://github.com/KeenS)
+ + AMoAdの新卒
+ + Lisp, ML, Shell Scriptあたりを書きます
+
+
+&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;うーむ。画像フォーマットの扱い一回くらい書いてみないとなーと思ってたけどやっぱり既存なんだよなー。Common LispかSMLあたりならフロンティアになれそう。&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/639303085240643584&#34;&gt;2015, 9月 3&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+&lt;blockquote class=&#34;twitter-tweet&#34; data-conversation=&#34;none&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;&lt;a href=&#34;https://twitter.com/blackenedgold&#34;&gt;@blackenedgold&lt;/a&gt; 仕様を理解するためにデコーダから実装するのがオススメです&lt;/p&gt;&amp;mdash; ELD-R-ESH-2 (@eldesh) &lt;a href=&#34;https://twitter.com/eldesh/status/639304790766305281&#34;&gt;2015, 9月 3&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;&lt;a href=&#34;https://twitter.com/blackenedgold&#34;&gt;@blackenedgold&lt;/a&gt; そんな詳しいわけではないんですが、jpegかpngがおすすめです。webpは動画コーデック由来で難しいと思います。tiffは画像コンテナみたいな立ち位置なので画像フォーマット感がないかなと。&lt;/p&gt;&amp;mdash; ELD-R-ESH-2 (@eldesh) &lt;a href=&#34;https://twitter.com/eldesh/status/639307400244137984&#34;&gt;2015, 9月 3&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+明日の朝までに  
+&lt;span style=&#39;font-size:150%;&#39;&gt;SMLでpngデコーダを実装しよう&lt;/span&gt;
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+
+# Standard ML
+-------------
+
+* ML系の函数型言語
+* 文法はOCamlよりF#に似てる（というかF#が似せてきた）
+* 結構書き易い
+* 仕様は SML&#39;90とSML&#39;97がある
+* 仕様で言語のformal semanticsが定められてたりする
+* 要は研究向き
+  + **ライブラリほぼなし**
+  + **コミュニティほぼなし**
+
+
+&lt;span style=&#39;font-size:250%;&#39;&gt;＞　無理ゲー　＜&lt;/span&gt;
+
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# 一応フォーマットを調べる
+------------------------
+
+
+```
++-----------------+
+|     Chunk       | 画像はChunkの集合。
+++---------------++ Chunk自体は簡単なフォーマット
+|| length | name ||
+|+---------------+|
+||    data       ||
+||    ...        ||
+|+---------------+|
+||    CRC        ||
+++---------------++
+|    Chunk        |
+|    ...          |
+```
+
+
+&lt;span style=&#39;font-size:250%;&#39;&gt;
+意外と単純？
+&lt;/span&gt;
+
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# とりあえず書いてみる
+---------------------
+
+```sml
+structure PNG = struct
+    fun readChunk data i = ...
+end
+```
+
+
+# 案外苦戦
+------------
+* 型が厳密なので型の行き来が面倒
+  + 8bit &lt;-&gt; 32bit
+  + 符号付き &lt;-&gt; 符号無し
+  + byte &lt;-&gt; char
+
+```sml
+val op &lt;&lt; = Word.&lt;&lt;
+val op &gt;&gt; = Word.&gt;&gt;
+
+fun nameToWord name = CharVector.foldl (fn(c, acc) =&gt; &lt;&lt;(acc, 0w8) + (Word.fromInt (ord c))) 0w0 name
+```
+
+
+&lt;span style=&#39;font-size:250%;&#39;&gt;
+3時間後
+&lt;/span&gt;
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;さて、メインのデータ抜き出すところまでは行ったけど次復号だ。&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/639501771430211584&#34;&gt;2015, 9月 3&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# 今更PNGについて
+----------------
+
+* GIFの特許問題を回避するために作られたフォーマット
+  + LZ77がマズいらしい
+* **可逆圧縮アルゴリズムを使う** &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;1&#34;--&gt;
+  + **アルゴリズムは1つとは限らない** &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;2&#34;--&gt;
+  + 但し仕様で指定されているのはzlibのみ &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;2&#34;--&gt;
+* フィルタを噛ませることでプログレッシブな表示も可能
+
+
+# SMLのZLibライブラリ
+--------------------
+
+* ない &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;1&#34;--&gt;
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+&lt;span style=&#39;font-size:250%;&#39;&gt;
+zlib……実装するか
+&lt;/span&gt;
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# ZLib
+------
+
+* RFC-1950
+* zipやpngで使われるフォーマット
+* ZLib自体は圧縮データのコンテナで **圧縮アルゴリズム自体は1つとは限らない**  &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;1&#34;--&gt;
+  + 但し仕様で指定されているのはdeflateのみ &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;2&#34;--&gt;
+
+
+# SMLのDeflateライブラリ
+--------------------
+
+* ない &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;1&#34;--&gt;
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+&lt;span style=&#39;font-size:250%;&#39;&gt;
+deflate…実装するか
+&lt;/span&gt;
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# Deflate
+---------
+
+* RFC-1951
+* ハフマン符号の変種の可逆圧縮アルゴリズム
+  + **3種類の符号化方式を自由に使ってよい** &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;1&#34;--&gt;
+
+
+
+&lt;span style=&#39;font-size:250%;&#39;&gt;(心)ボキッ&lt;/span&gt;
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+
+# 学んだこと
+-----------
+
+* PNGは一晩でデコーダを書ける程柔じゃない
+  + 事前調査も大事
+* 書き易い言語でもコミュニティが大事
+* 1晩でLTの準備はつらい
+
+
+# 付録
+------
+
+* [今回のコード](https://github.com/KeenS/sml-png)
+* [SMLのパッケージマネージャ](https://github.com/standardml/smackage)
+* [PNG](http://www.w3.org/TR/2003/REC-PNG-20031110/)
+* [RFC-1950 ZLIB](https://www.ietf.org/rfc/rfc1950.txt)
+* [RFC-1951 DEFLATE](https://www.ietf.org/rfc/rfc1950.txt)
+&lt;/script&gt;
+&lt;/section&gt;
+</description>
+    </item>
     
     <item>
       <title>Method Drawでお手軽LGTM生成</title>
@@ -3970,305 +4178,6 @@ Template flies like an arrow
   + メモリアロケーションをあまりしない
   + ユーザー側の速度まで考慮した
   + 柔軟
-&lt;/script&gt;
-&lt;/section&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>Semantic S式</title>
-      <link>http://keens.github.io/slide/semantic-sshi/</link>
-      <pubDate>Thu, 27 Nov 2014 00:00:00 +0000</pubDate>
-      
-      <guid>http://keens.github.io/slide/semantic-sshi/</guid>
-      <description>&lt;section data-markdown
-    data-separator=&#34;\n\n&#34;
-    data-vertical=&#34;\n\n&#34;
-    data-notes=&#34;^Note:&#34;&gt;
-&lt;script type=&#34;text/template&#34;&gt;
-
-# Semantic S式
----
-2014-11-27  
-κeen(@blackenedgold)
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-
-# About Me
-----------
-![κeenのアイコン](/images/icon.png)
-
- + κeen
- + 東大数学科の4年生
- + ソーシャルアカウントは上のアイコン達から。
- + Lisp, Ruby, OCaml, Shell Scriptあたりを書きます
-
-# Semantic Web とは
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# [Semantic Web](http://ja.wikipedia.org/wiki/%E3%82%BB%E3%83%9E%E3%83%B3%E3%83%86%E3%82%A3%E3%83%83%E3%82%AF%E3%83%BB%E3%82%A6%E3%82%A7%E3%83%96)
-----------------
-
-* W3C のティム・バーナーズ＝リーが提唱
-* 文章の見た目を記述するんじゃなくて構造を記述しよう
-* そうすると機械がクローリングするの楽になるよね
-
-
-# Semantic S式とは
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# Semantic S式
---------------
-
-* Shibuya.lispのκeenが提唱 (昨日思い付いた)
-* S式の見た目じゃなくて構造で括弧をつけよう
-* そうするとコーディングが楽になるよね
-
-
-# 良いところ
-------------
-
-1. 意味が分かり易い
-2. パースし易い
-3. 編集が楽になる
-4. 壊れにくい
-
-
-# 1. 意味が分かり易い
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# 1. 意味が分かり易い
---------------------
-## 例1
-
-* Clojure
-
-  ```clojure
-  (let [a 1
-        b 2]
-    ...)
-  ```
-
-* Common Lisp
-
-  ```lisp
-  (let ((a 1)
-        (b 2))
-    ....)
-  ```
-どっちが分かり易い？
-
-# 1. 意味が分かり易い
---------------------
-## 例1
-（日本語にしてみる（イメージ））
-
-* Clojure  
-  aを1bを2とする
-* Common Lisp
-  &lt;table border=&#34;1&#34;&gt;&lt;tr&gt;&lt;td&gt;`a`&lt;/td&gt;&lt;td&gt;1&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;`b`&lt;/td&gt;&lt;td&gt;2&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
-  とする
-
-
-# 1. 意味が分かり易い
---------------------
-## 例2
-何をしてる？
-
-```lisp
-(destructuring-bind (a b)
-    (some-function)
-  ...)
-```
-
-# 1. 意味が分かり易い
---------------------
-## 例2
-何をしてる？
-
-```lisp
-(destructuring-bind ((a b)
-    (some-function))
-  ...)
-```
-
-# 1. 意味が分かり易い
---------------------
-## 例3
-これの返り値は？
-
-```lisp
-(getf &#39;(:hoge :foo :huga :baz :piyo :pon :chun) :pon)
-```
-
-# 1. 意味が分かり易い
---------------------
-## 例3
-これの返り値は？
-
-```lisp
-(assoc :pon &#39;((:hoge :foo) (:huga :baz) (:piyo :pon) (:chun)))
-```
-
-# 2. パースし易い
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# 2. パースし易い
-----------------
-## 例
-
-* Clojure
-
-  ```clojure
-  (let [a 1
-        b 2]
-    ...)
-  ```
-
-* Common Lisp
-
-  ```lisp
-  (let ((a 1)
-        (b 2))
-    ....)
-  ```
-どっちが実装し易い？
-
-# 2. パースし易い
-----------------
-
-* Common Lispの方は意味で分割してある
-* 括弧は無くてもパースは出来る
-* 機械にパースし易い≒人間にパースし易い
-
-
-# 3. 編集が楽になる
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# 3. 編集が楽になる
-------------------
-## 前提
-* エディタに文/式/トークン(Lispの場合は全てS式)単位の編集機能がある
-   + S式単位でカーソル移動
-   + S式単位の削除/カット
-   + S式単位のスワップ
-   + etc....
-
-# 3. 編集が楽になる
-------------------
-## 例（偶によくある）
-この`c`の束縛を上のletに持っていきたいときどうする？
-
-```lisp
-(let ((a 1)
-      (b 2))
-  ....
-  (let ((c 3)
-        (d 4))
-    ...))
-```
-
-# 3. 編集が楽になる
-------------------
-## 例（偶によくある）
-
-* 意味で括弧をつけていれば1カット移動1ペースト
-* Clojure方式だと2カット移動1ペースト
-* `c`だけじゃなくて`d`も、と考えると…
-
-# 4. 壊れにくい
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# 4. 壊れにくい
----------------
-## 例
-ageの計算が壊れているとする
-
-```lisp
-(:name &#34;κeen&#34;
- :age  (year-of-time-interval (date- (today) (date 1992 5 17)))
- :place &#34;Shibuya&#34;)
-```
-
-
-# 4. 壊れにくい
----------------
-## 例
-コメントアウトしてみる（壊れた）
-
-```lisp
-(:name &#34;κeen&#34;
- :age  ;(year-of-time-interval (date- (today) (date 1992 5 17)))
- :place &#34;Shibuya&#34;)
-```
-
-# 4. 壊れにくい
----------------
-## 例
-ageの計算が壊れているとする
-
-```lisp
-((:name &#34;κeen&#34;)
- (:age  (year-of-time-interval (date- (today) (date 1992 5 17))))
- (:place &#34;Shibuya&#34;))
-```
-
-# 4. 壊れにくい
----------------
-## 例
-(エディタサポートあり)
-
-コメントアウトしてみる（壊れない）
-
-```lisp
-((:name &#34;κeen&#34;)
- (:age  ;(year-of-time-interval (date- (today) (date 1992 5 17)))
- )
- (:place &#34;Shibuya&#34;))
-```
-
-# ここまでのまとめ
------------------
-* 構造が文脈に依存していると
-  + 人間に分りづらい
-  + プログラムに分りづらい
-  + エディタに分りづらい
-  + 壊れやすい
-
-# Q. When Semantic?
-------------------------------
-## A. 言語を設計するとき &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;1&#34; --&gt;
-
-* つまりマクロを書くとき &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;2&#34; --&gt;
-
-# Q. When Semantic?
-------------------------------
-## A. 言語を設計するとき
-
-* マクロを書くときそれなりのDSLを設計する
-* プログラム上は必須ではない括弧もあった方が良いときもある
-
-
-# まとめ
---------
-
-* 括弧が少ない方が書き易いとは限らない
-  + 「書く」だけなら速くてもwrite onlyになってしまうかも&lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;1&#34; --&gt;
-* プログラムの意味を考えながら括弧つけよう
-  + Lisperはどうせ括弧は見えない&lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;2&#34; --&gt;
-
-&lt;span style=&#34;font-size:600%&#34;&gt;以上&lt;/span&gt;  
-何か質問あればどうぞ
-
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
 &lt;/script&gt;
 &lt;/section&gt;
 </description>
