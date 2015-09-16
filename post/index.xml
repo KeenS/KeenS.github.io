@@ -6,8 +6,87 @@
     <description>Recent content in Posts on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Sun, 05 Jul 2015 14:18:37 +0900</lastBuildDate>
+    <lastBuildDate>Wed, 16 Sep 2015 21:55:25 +0900</lastBuildDate>
     <atom:link href="http://KeenS.github.io/post/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>xhyveでFreeBSD guestを動かす</title>
+      <link>http://keens.github.io/blog/2015/09/16/xhyvedefreebsd_guestwougokasu</link>
+      <pubDate>Wed, 16 Sep 2015 21:55:25 +0900</pubDate>
+      
+      <guid>http://keens.github.io/blog/2015/09/16/xhyvedefreebsd_guestwougokasu</guid>
+      <description>
+
+&lt;p&gt;久しぶりですね。κeenです。最近はMacでもまともな仮想環境が整ってきたのでFreeBSDでも動かすかーといって試したやつを共有します。&lt;/p&gt;
+
+&lt;p&gt;大部分は&lt;a href=&#34;http://blog.holidayworking.org/entry/2015/06/27/xhyve_%E3%81%A7_FreeBSD_%E3%82%92%E5%8B%95%E3%81%8B%E3%81%97%E3%81%A6%E3%81%BF%E3%81%9F&#34;&gt;ここ&lt;/a&gt;を参考にしてますが、ちゃんと動きます。&lt;/p&gt;
+
+&lt;h1 id=&#34;xhyveとは:4a68f71d07908fb1bb9329656bb2afc9&#34;&gt;xhyveとは&lt;/h1&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://www.pagetable.com/?p=831&#34;&gt;xhyve – Lightweight Virtualization on OS X Based on bhyve | pagetable.com&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;FreeBSDのBHyVeをMac OS Xに移植したものです。Intel CPUの仮想化フレームワークを使うことで仮想化の実装が（比較的）が楽になるからやろうぜってプロジェクトです。
+カーネルレベルでのサポートが必要になりますがyosemiteからHyervisor.frameworkが入っているのでそれが使えます。&lt;/p&gt;
+
+&lt;p&gt;因みに開発はそんなに活発ではないです。&lt;/p&gt;
+
+&lt;h1 id=&#34;動かす:4a68f71d07908fb1bb9329656bb2afc9&#34;&gt;動かす&lt;/h1&gt;
+
+&lt;h2 id=&#34;xhyveの準備:4a68f71d07908fb1bb9329656bb2afc9&#34;&gt;xhyveの準備&lt;/h2&gt;
+
+&lt;p&gt;FreeBSDのサポートは既にマージされているのでcloneしてきてそのまま使えます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;git clone git@github.com:mist64/xhyve.git
+cd xhyve
+make
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;FreeBSDのイメージの入手
+イメージは現在10.2が出ているので&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;fetch http://ftp.freebsd.org/pub/FreeBSD/releases/VM-IMAGES/10.2-RELEASE/amd64/Latest/FreeBSD-10.2-RELEASE-amd64.raw.xz
+unxz FreeBSD-10.2-RELEASE-amd64.raw.xz
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;で入手出来ます。&lt;/p&gt;
+
+&lt;h2 id=&#34;起動スクリプトの準備:4a68f71d07908fb1bb9329656bb2afc9&#34;&gt;起動スクリプトの準備&lt;/h2&gt;
+
+&lt;p&gt;参照ブログのままだとハードディスクが読めないのでIMG_HDDにもイメージを指定します。&lt;/p&gt;
+
+&lt;p&gt;名前は何でも良いのですが&lt;code&gt;freebsd.sh&lt;/code&gt;として保存し、&lt;code&gt;chmod +x freebsd.sh&lt;/code&gt;します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;#!/bin/sh
+
+USERBOOT=&amp;quot;test/userboot.so&amp;quot;
+BOOTVOLUME=&amp;quot;FreeBSD-10.2-RELEASE-amd64.raw&amp;quot;
+KERNELENV=&amp;quot;&amp;quot;
+
+MEM=&amp;quot;-m 1G&amp;quot;
+#SMP=&amp;quot;-c 2&amp;quot;
+#NET=&amp;quot;-s 2:0,virtio-net&amp;quot;
+#IMG_CD=&amp;quot;-s 3,ahci-cd,/somepath/somefile.iso&amp;quot;
+IMG_HDD=&amp;quot;-s 4,virtio-blk,$BOOTVOLUME&amp;quot;
+PCI_DEV=&amp;quot;-s 0:0,hostbridge -s 31,lpc&amp;quot;
+LPC_DEV=&amp;quot;-l com1,stdio&amp;quot;
+#UUID=&amp;quot;-U deadbeef-dead-dead-dead-deaddeafbeef&amp;quot;
+
+build/xhyve -A $MEM $SMP $PCI_DEV $LPC_DEV $NET $IMG_CD $IMG_HDD $UUID -f fbsd,$USERBOOT,$BOOTVOLUME,&amp;quot;$KERNELENV&amp;quot;
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;起動:4a68f71d07908fb1bb9329656bb2afc9&#34;&gt;起動&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;./freebsd.sh
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;で起動します。&lt;/p&gt;
+
+&lt;h1 id=&#34;その他:4a68f71d07908fb1bb9329656bb2afc9&#34;&gt;その他&lt;/h1&gt;
+
+&lt;p&gt;FreeBSDのイメージを一杯作りたい人はダウンロードしてきたやつを&lt;code&gt;cp&lt;/code&gt;して使うと良いと思います。&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>ファイル削除コマンド色々</title>
@@ -2533,43 +2612,6 @@ $ make -j4 install
 &lt;h1 id=&#34;まとめ:d4eee8946023292eeefbfeb9ba252a7c&#34;&gt;まとめ&lt;/h1&gt;
 
 &lt;p&gt;誰かhomebrewにして。&lt;/p&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>SMLSharpを使ってSMLのon-the-flyエラーチェック</title>
-      <link>http://keens.github.io/blog/2015/04/23/smlsharpwotsukattesmlnoon-the-flyerrorchekkingu</link>
-      <pubDate>Thu, 23 Apr 2015 23:01:17 +0900</pubDate>
-      
-      <guid>http://keens.github.io/blog/2015/04/23/smlsharpwotsukattesmlnoon-the-flyerrorchekkingu</guid>
-      <description>
-
-&lt;p&gt;κeenです。最近SMLを結構書いてるのですが中置演算子が乱立する言語はLisperにはつらくて、しょっちゅうコンパイルエラーを出します。
-そこでSML#をflymakeで動かしてOn The Flyにエラーチェックをします。&lt;/p&gt;
-
-&lt;p&gt;なぜSML#かというと &lt;code&gt;-ftypecheck-only&lt;/code&gt; オプションがあって、シンタックスと型エラーのチェックだけを行なえるからです。&lt;/p&gt;
-
-&lt;p&gt;色々試したのですが設定はこれだけで済みました。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;(eval-after-load &#39;flymake
-  &#39;(progn 
-    (add-to-list &#39;flymake-allowed-file-name-masks &#39;(&amp;quot;.+\\.sml$&amp;quot;
-                                                    (lambda ()
-                                                      (list &amp;quot;/usr/local/bin/smlsharp&amp;quot; (list &amp;quot;-ftypecheck-only&amp;quot; (buffer-file-name))))
-                                                    (lambda () nil)))
-    (add-to-list &#39;flymake-err-line-patterns &#39;(&amp;quot;^\\([^: ]*\\):\\([0-9]+\\)\\.\\([0-9]+\\)-[0-9]+\\.[0-9]+ \\(Error\\|Warning\\):&amp;quot;
-                                              1 2 3 4))))
-(add-hook &#39;sml-mode-hook #&#39;flymake-mode)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;&amp;quot;/usr/local/bin/smlsharp&amp;quot;&lt;/code&gt; のところは各自書き換えて下さい。尚、SML#はエラーメッセージを複数行に跨って出すのですがそれがflymakeと相性が悪いのでエラーメッセージの取得は諦めました。&lt;/p&gt;
-
-&lt;p&gt;多くの場合、 &lt;code&gt;flymake-simple&lt;/code&gt; という枠組みの中で設定を書くのですがテンポラリファイルを作る構造がどうしてもインターフェースファイルと相性が悪かったので生のflymakeを使ってます。
-というかflymakeは元々 &lt;code&gt;-ftypecheck-only&lt;/code&gt; みたいなのを前提に作られてたのに実際にコンパイル走らせないとエラーメッセージ取得出来ない言語が多過ぎてフレームワークが出来たのでこれが本来の使い方です。&lt;/p&gt;
-
-&lt;h1 id=&#34;おまけ:311ce9d5e51e732b1928a84bcceb27a3&#34;&gt;おまけ&lt;/h1&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/nrnrnr/SML-Lint&#34;&gt;SML-Lint&lt;/a&gt;というものがあって、スタイルワーニングを出してくれます。ただ、これはパッチを当てないと使えなかったりスタイルワーニングのみしか出さなかったりするので気が向いた時に紹介します&lt;/p&gt;
 </description>
     </item>
     
