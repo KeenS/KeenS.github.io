@@ -5,13 +5,13 @@
         <meta http-equiv="content-type" content="text/html; charset=utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
 
-        <title>Cli | κeenのHappy Hacκing Blog</title>
+        <title>REST APIのテストにはwgetが便利かもしれない | κeenのHappy Hacκing Blog</title>
         <link rel="stylesheet" href='http://fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css' />
         <link rel="stylesheet" href="http://keens.github.io//libraries/normalize.3.0.1.css" />
         <link rel="stylesheet" href="http://keens.github.io//css/liquorice.css" />
         <link rel="shortcut icon" href="http://KeenS.github.io/favicon.ico" />
         <link rel="apple-touch-icon-precomposed" href="http://KeenS.github.io/apple-touch-icon-144-precomposed.png" sizes="144x144" />
-        <link rel="alternate" href="http://KeenS.github.io/categories/cli/index.xml" type="application/rss+xml" title="κeenのHappy Hacκing Blog" />
+        <link rel="alternate" href="" type="application/rss+xml" title="κeenのHappy Hacκing Blog" />
         
         <script>
          (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
@@ -75,15 +75,17 @@
 </header>
 
 
+
+
+
+
     <div class="container">
         <div class="row">
             <div class="sixteen columns">
-                <h1>Cli</h1>
-                <ul class="li-article-list">
-                    
-                    <li>
-                            <h4><a href="http://keens.github.io/blog/2015/10/20/apinotesutonihawgetgabenrikamoshirenai">REST APIのテストにはwgetが便利かもしれない</a></h4>
-                            <div class="li-article-meta">
+                <article class="li-article">
+                    <header class="li-article-header">
+                        <h1 class="li-article-title">REST APIのテストにはwgetが便利かもしれない</h1>
+                        <div class="li-article-meta">
     <time class="li-article-date">2015-10-20</time>
     <ul class="li-article-tag">
     
@@ -95,33 +97,101 @@
 
 </div>
 
-                        </li>
-                    
-                    <li>
-                            <h4><a href="http://keens.github.io/blog/2015/10/05/dd_depcnohikkoshiwoshitarakidoushinakatta">ddでPCの引っ越しをしたら起動しなかった</a></h4>
-                            <div class="li-article-meta">
-    <time class="li-article-date">2015-10-05</time>
-    <ul class="li-article-tag">
-    
-        <li>
-            <a href="http://KeenS.github.io/categories/cli">CLI</a>
-        </li>
-    
-        <li>
-            <a href="http://KeenS.github.io/categories/bios">BIOS</a>
-        </li>
-    
-        <li>
-            <a href="http://KeenS.github.io/categories/uefi">UEFI</a>
-        </li>
-    
-</ul>
+                    </header>
+                    <section>
+                        
 
+<p>寝れずに悶々としていたので書いてみる。REST APIを叩くときはデフォルトで結果を標準出力に吐くcURLがよく使われるがテストにはwgetが向いてるかもしれない。</p>
+
+<p>理由は簡単。exit statusだ。シェルのテストをする時は<a href="https://github.com/kward/shunit2">shunit2</a>を使うことになるかと思うが、exit statusでテストをしたくなる。
+cURLはHTTPサーバーがエラーステータスを返してもexit status 0で終了するのに対してwgetは所定の値を返す。</p>
+
+<pre><code>EXIT STATUS
+       Wget may return one of several error codes if it encounters problems.
+
+       0   No problems occurred.
+
+       1   Generic error code.
+
+       2   Parse error---for instance, when parsing command-line options, the .wgetrc or .netrc...
+
+       3   File I/O error.
+
+       4   Network failure.
+
+       5   SSL verification failure.
+
+       6   Username/password authentication failure.
+
+       7   Protocol errors.
+
+       8   Server issued an error response.
+</code></pre>
+
+<p>少し試してみよう。</p>
+
+<pre><code>$ curl -sL google.com/teapot &gt; /dev/null
+$ echo $?
+0
+$ wget -qO /dev/null google.com/teapot
+$ echo $?
+8
+</code></pre>
+
+<p>ちゃんと違いが出ている。余談だが <code>wget -O /dev/null</code>は便利なので覚えておくと幸せになれる。</p>
+
+<h1 id="おまけ:67650a6fc4fa81318fe87d2796b2dbeb">おまけ</h1>
+
+<p>HTTPのエラーを全部1つのステータスに纏めるのはちょっと乱暴な気がする。wgetはHTTP以外のプロトコルにも対応してるのでまあ仕方がないのだろうが。
+ということで任意のHTTPレスポンスを抜き出してみる。</p>
+
+<pre><code>$ curl -sIL google.com/teapot | grep -E '^HTTP/[0-9](\.[0-9])? [0-9]{3}'
+HTTP/1.1 301 Moved Permanently
+HTTP/1.1 418 I'm a Teapot
+</code></pre>
+
+<p>本当にstatusだけ抜き出したかったらこうだ。</p>
+
+<pre><code>$ curl -sIL google.com/teapot | grep -E '^HTTP/[0-9](\.[0-9])? [0-9]{3}' | grep -o -E '[0-9]{3}'
+301
+418
+</code></pre>
+
+<p>複数回HTTPリクエストを飛ばしているので複数statusが返ってくるのは諦めよう。最後のやつだけ欲しければ <code>tail -n 1</code>すればいい。</p>
+
+<p>HTTPの仕様を読まずに書いたのでバージョンのマッチの部分が冗長かもしれないがとりあえず動く。というかcURLを使った。</p>
+
+<h1 id="まとめ:67650a6fc4fa81318fe87d2796b2dbeb">まとめ</h1>
+
+<p>cURL使おう。</p>
+
+                    </section>
+                </article>
+            </div>
+        </div>
+
+        <div class="row li-author">
+    <div class="sixteen columns">
+        Written by <strong>κeen</strong>
+    </div>
 </div>
 
-                        </li>
+
+        <div class="row li-pagination">
+            <div class="eight columns">
+                <div class="li-pagination-previous">
                     
-                </ul>
+                        &nbsp;
+                    
+                </div>
+            </div>
+            <div class="eight columns">
+                <div class="li-pagination-next">
+                    
+                        Older article<br />
+                        <a href="http://keens.github.io/slide/Internal_of_b11d/"> Internal of b11d</a>
+                    
+                </div>
             </div>
         </div>
     </div>
