@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+    <head>
+        
+        <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <title>ClojureでDSPを作った話 | κeenのHappy Hacκing Blog</title>
+        <link rel="stylesheet" href="http://keens.github.io//reveal.js/css/reveal.min.css">
+        <link rel='stylesheet' href='http://fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css'>
+        <link rel="stylesheet" href="http://keens.github.io//libraries/normalize.3.0.1.css" />
+        <link rel="stylesheet" href="http://keens.github.io//css/liquorice.css" />
+        <link rel="stylesheet" href="http://keens.github.io//highlight.js/styles/xcode.css">
+        <link href="http://keens.github.io//css/cleanveal.css" media="screen, projection" rel="stylesheet" type="text/css">
+        <link rel="shortcut icon" href="http://KeenS.github.io/favicon.ico" />
+        <link rel="apple-touch-icon-precomposed" href="http://KeenS.github.io/apple-touch-icon-144-precomposed.png" sizes="144x144" />
+        <link rel="alternate" href="" type="application/rss+xml" title="κeenのHappy Hacκing Blog" />
+        
+        <script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+        <script>
+         if( window.location.search.match( /print-pdf/gi ) ) {
+             var link = document.createElement( 'link' );
+             link.rel = 'stylesheet';
+             link.type = 'text/css';
+             link.href = 'http:\/\/keens.github.io\//reveal.js/css/print/pdf.css';
+             document.getElementsByTagName( 'head' )[0].appendChild( link );
+         }
+        </script>
+        
+        <script>
+         (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+             (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+                                  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+         })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+         ga('create', 'UA-43779888-1', 'auto');
+         ga('send', 'pageview');
+
+        </script>
+        
+        
+    </head>
+    <body class="li-body">
+
+<header class="li-page-header">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-brand li-left">
+                <a href="http://keens.github.io//">κeenのHappy Hacκing Blog</a> | Lispエイリアンの狂想曲</div>
+                <div class="li-menu li-right">
+                    <span class="li-menu-icon" onclick="javascript:toggle('menu');">&#9776;</span>
+                    <ul id="menu2" class="li-menu-items">
+                        
+                            <li><a href="http://KeenS.github.io/about"> About </a></li>
+                        
+                            <li><a href="http://KeenS.github.io/post/"> Blog </a></li>
+                        
+                            <li><a href="http://KeenS.github.io/slide/"> Slide </a></li>
+                        
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="sixteen columns">
+                <ul id="menu" class="li-menu-items li-menu-mobile">
+                    
+                        <li><a href="http://KeenS.github.io/about"> About </a></li>
+                    
+                        <li><a href="http://KeenS.github.io/post/"> Blog </a></li>
+                    
+                        <li><a href="http://KeenS.github.io/slide/"> Slide </a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+
+
+<div class="container" style="height: calc(100% - 94px)">
+    <div class="row" style="height: 100%">
+        <div class="sixteen columns" style="height: 100%">
+            <article class="li-article" style="height: 100%">
+                <header class="li-article-header" style="position:fixed">
+                    <h1 class="li-article-title">ClojureでDSPを作った話</h1>
+                    <div class="li-article-meta">
+    <time class="li-article-date">2015-10-27</time>
+    <ul class="li-article-tag">
+    
+        <li>
+            <a href="http://KeenS.github.io/categories/clojure">Clojure</a>
+        </li>
+    
+        <li>
+            <a href="http://KeenS.github.io/categories/adtech">AdTech</a>
+        </li>
+    
+</ul>
+
+</div>
+
+                </header>
+                <div class="reveal">
+                    <div class="slides">
+                        <section data-markdown
+    data-separator="\n\n"
+    data-vertical="\n\n"
+    data-notes="^Note:">
+<script type="text/template">
+# ClojureでDSPを作った話
+----------------------
+Lisp Meet Up #3
+<!-- .slide: class="center" -->
+
+# About Me
+---------
+![κeenのアイコン](/images/icon.png) <!-- .element: style="position:absolute;right:0;z-index:-1" -->
+
+ + κeen
+ + [@blackenedgold](https://twitter.com/blackenedgold)
+ + Github: [KeenS](https://github.com/KeenS)
+ + サイバーエージェントのエンジニア
+ + Lisp, ML, Shell Scriptあたりを書きます
+
+
+# DSPとは
+--------
+
+* Demand Side Platform
+* 広告主から広告を集めて広告の表示権を競り落し、適切な広告を出す
+  0. 広告主を集めて
+  1. 競りの通知を受け取って
+  2. 一番コスパが良さそうな広告を選んで
+  3. 入札して
+  4. 落札通知を受け取る
+  5. 落札したら広告を出す
+
+
+ 
+# ひとりDSP
+----------
+
+* AdTech Studioの新卒研修
+* 2ヶ月間、業務時間の20%を使ってDSPを作る
+  + 実質8営業日
+* 業務ロジックを理解することが目的
+* 最後に新卒の作ったDSP同士で競争、利益が得点になる
+* 他には最終発表での得点も
+* **研修なので好きにやっていい**
+  + Clojureで書くことに
+* サーバーの他は広告主データと学習用データが与えられる
+
+
+
+<iframe src="//www.slideshare.net/slideshow/embed_code/key/92I5tQt6q6IjII" width="425" height="355" frameborder="0" marginwidth="0" marginheight="0" scrolling="no" style="border:1px solid #CCC; border-width:1px; margin-bottom:5px; max-width: 100%;" allowfullscreen> </iframe> <div style="margin-bottom:5px"> <strong> <a href="//www.slideshare.net/prir/ss-35918532" title="日本におけるアドテク市場とサイバーエージェントのアドテク事業について" target="_blank">日本におけるアドテク市場とサイバーエージェントのアドテク事業について</a> </strong> from <strong><a href="//www.slideshare.net/prir" target="_blank">CyberAgent, Inc.</a></strong> </div>
+
+
+# 作るもの
+---------
+
+* 競りの通知を受け取って入札するJSON REST API
+* 落札の通知を受け取るJSON REST API
+  + 割とシンプル
+* 「一番コスパが良さそうな広告を選ぶ」部分は色々と工夫する
+* 今回は広告を出すところまではやらない
+* クリック情報は落札通知に入ってる
+
+
+# b11dについて
+-------------
+
+* 今回作ったDSP
+* [KeenS/b11d](https://github.com/KeenS/b11d)
+* Clojure製
+* 5日くらいで作った
+* あまりゴテゴテしない方針
+  + 今回パフォーマンスは無視していい
+  + Clojureに慣れてないので学習コストも抑えたい
+* NginXとAppとMySQL構成+α
+* DBは綺麗に設計したい
+* 1リクエスト毎にDBを引きにいく素敵仕様
+
+
+# WAP
+-----
+
+* Compojure
+* Sinatra likeなやつ
+* ringの上に乗っかてる
+* かなりシンプルな部類だがJSON REST API程度ならこれで十分
+* ringミドルウェアのでJSON部分も抽象化
+* 学習コストが低いので気軽に始められる
+
+
+# JSONライブラリ
+--------------
+
+* ring.middleware.json/wrap-json-{body, response}
+  + JSON->マップとマップ->JSON
+  + bodyの方はキーがStringになるのが微妙
+    - セキュリティ的に仕方ない
+  + Content-Typeを指定しないと動かない罠
+* cheshire
+  + 事前データをインポートするのに使った
+  + ringのJSONミドルウェアの依存なのでそのまま使った
+  + 自然で使い易いAPI
+
+
+# データベース接続
+----------------
+
+* java.jdbc
+* JDBCのClojure向けラッパ?
+* DataSourceを自分で渡すのでコネクションプールも簡単
+* SQL手書きしたら良い感じにマップを返してくれる
+* Storeはカラムと値の対応を手書き
+* 便利マクロもいくつか
+
+
+# データベース接続
+----------------
+
+* eager loading面倒問題
+  + 入れ子オブジェクトを保存する方も面倒だった
+  + ORMの便利さを実感。
+* bulk insert難しい問題
+  + 実行時可変長引数難しい
+* ORMはXXXを使うかJavaのやつをそのまま使う?
+* JavaはXMLさえ我慢すれば割と良い奴揃ってる
+* しかしレスポンスはマップで欲しいかも
+
+
+# 運用
+-----
+
+* warに固めてTomcat vs スタンドアロンなfat jar
+* 今回はfat jarを選択
+* スタンドアロンだとsupervisordとかでの管理が楽
+* Tomcatの運用経験がない
+* Jetty中々優秀らしい
+* jstatを使ってMackerelでメトリクス取った
+
+
+# 非同期化
+---------
+
+* core.async/goで手軽に非同期
+* DBへの書き込みを非同期にした
+* DB書き込みでエラーが出ても500にならない恐怖
+* 最初の方で支払いを記録出来てなくて予算管理が死亡
+  + 予算管理失敗ペナルティで、大分点数引かれたらしい
+* goroutineでの例外処理どうやるんだろう。
+
+
+# 開発環境
+---------
+
+* nREPL + Emacs + CIDER
+* 補完の設定上手くいかなかった
+* 諸々地味に不便
+* 起動遅い
+* Emacs側からnREPL立ち上げたい
+* サーバーのライブリロード欲しい
+* 正解が欲しい
+
+
+
+# その他Clojureについて
+---------------------
+
+* コンスのCarを取るのに`hd`か`head`か`car`か分かんなかった
+  + 結局どれでもなくて`first`だった
+* 引数のパターンマッチが便利
+  + JSON REST APIだとリクエストに何を期待してるのか分かりづらい
+  + パターンマッチがドキュメントになる
+* やっぱJavaのライブラリ使えるの便利
+
+
+# 落穂拾い
+---------
+
+* デプロイにはシェルスクリプト
+  + お家芸
+* 「一番コスパが良さそうな広告を選んで入札」で統計か機械学習が必要
+  + 1回表示した時の収益の期待値を計算する
+* 今回は事前データの統計を使った
+  + 理想的には機械学習。時間変化についていける
+* In Appでオンライン学習出来るライブラリが思ったよりない
+  + 分散処理向けの大袈裟なのが多い
+  + Weka? liblinear-java?
+* 後で考えたらIncanter使えばよかった
+
+
+# まとめ
+-------
+
+* 給料貰いながらLisp書いた
+* ClojureでDSP作った
+* Clojureで機械学習したかったけど間に合わなかった
+
+
+# 参考
+------
+
+* [Internal of b11d | κeenのHappy Hacκing Blog](http://keens.github.io/slide/Internal_of_b11d/)
+
+</script>
+</section>
+
+                    </div>
+                </div>
+            </article>
+        </div>
+    </div>
+
+    <div class="row li-author">
+    <div class="sixteen columns">
+        Written by <strong>κeen</strong>
+    </div>
+</div>
+
+
+</div>
+<footer class="li-page-footer">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-page-footer-legal">
+                    &copy; 2015. All rights reserved. 
+                </div>
+                <div class="li-page-footer-theme">
+                    <span class=""><a href="http://github.com/eliasson/liquorice/">liquorice</a> is a theme for <a href="http://hugo.spf13.com">hugo</a></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<script src="http://keens.github.io//reveal.js/lib/js/head.min.js"></script>
+<script src="http://keens.github.io//reveal.js/js/reveal.min.js"></script>
+
+<script>
+
+ 
+ 
+ Reveal.initialize({
+     controls: true,
+     progress: true,
+     history: false,
+     center: false,
+     slideNumber: true,
+
+     
+     transition: Reveal.getQueryHash().transition || 'none', 
+
+     
+     
+     
+
+     
+     math: {
+         mathjax: 'http://cdn.mathjax.org/mathjax/latest/MathJax.js',
+         config: 'TeX-AMS_HTML-full'  ,
+         tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] }
+     },
+     dependencies: [
+	 { src: 'http:\/\/keens.github.io\//reveal.js/lib/js/classList.js', condition: function() { return !document.body.classList; } },
+	 { src: 'http:\/\/keens.github.io\//reveal.js/plugin/markdown/marked.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+	 { src: 'http:\/\/keens.github.io\//reveal.js/plugin/markdown/markdown.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+	 { src: 'http:\/\/keens.github.io\//highlight.js/highlight.min.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } },
+	 { src: 'http:\/\/keens.github.io\//reveal.js/plugin/zoom-js/zoom.js', async: true, condition: function() { return !!document.body.classList; } },
+	 { src: 'http:\/\/keens.github.io\//reveal.js/plugin/notes/notes.js', async: true, condition: function() { return !!document.body.classList; } },
+         { src: 'http:\/\/keens.github.io\//reveal.js/plugin/math/math.js', async: true }
+     ]
+ });
+
+</script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+"://platform.twitter.com/widgets.js";fjs.parentNode.insertBefore(js,fjs);}}(document,"script","twitter-wjs");</script>
+    <script type="text/javascript">
+    <!--
+    function toggle(id) {
+        var e = document.getElementById(id);
+        e.style.display == 'block' ? e.style.display = 'none' : e.style.display = 'block';
+    }
+    
+    </script>
+    <script type="text/javascript">
+    <!--
+        var _gaq = _gaq || [];
+        _gaq.push(['_setAccount', ""]);
+        _gaq.push(['_trackPageview']);
+
+        (function() {
+        var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+        ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+        var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+        })();
+    -->
+    </script>
+    </body>
+</html>
+
