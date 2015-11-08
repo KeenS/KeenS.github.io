@@ -6,8 +6,205 @@
     <description>Recent content in Posts on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Tue, 20 Oct 2015 00:30:42 +0900</lastBuildDate>
+    <lastBuildDate>Sun, 08 Nov 2015 21:40:14 +0900</lastBuildDate>
     <atom:link href="http://KeenS.github.io/post/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>一時ファイルの作り方</title>
+      <link>http://keens.github.io/blog/2015/11/08/ichijifairunotsukurikata</link>
+      <pubDate>Sun, 08 Nov 2015 21:40:14 +0900</pubDate>
+      
+      <guid>http://keens.github.io/blog/2015/11/08/ichijifairunotsukurikata</guid>
+      <description>
+
+&lt;p&gt;Rustに&lt;a href=&#34;https://github.com/Stebalien/tempfile&#34;&gt;tempfile&lt;/a&gt;というライブラリがある。その名の通りテンポラリファイルを作るライブラリだ。
+必要に迫られてそのライブラリにPRを送ろうとして実装を読んだのだが普段あまり意識しなかったテンポラリファイルの作り方を知ったのでちょっと解説してみる。&lt;/p&gt;
+
+&lt;p&gt;Rustはほぼそのままの使い心地でCのライブラリを呼べるのでCが分かる人になら伝わると思う。&lt;/p&gt;
+
+&lt;p&gt;ライブラリの構成として、src/*.rsにOS非依存なコードやユーザ向けのAPIがあり、src/imp/{windows,unix}.rsにOS依存なコードがある。
+私はWindowsの実装には興味ないし詳しくもないのでunix向けの実装だけを見る。&lt;/p&gt;
+
+&lt;p&gt;imp以下を見る前にこのライブライが提供するAPIを解説しておくと、大きく分けて&lt;code&gt;TempFile&lt;/code&gt;と&lt;code&gt;NamedTempFile&lt;/code&gt;がある。無名、Namedどちらにもデフォルトの一時ファイルディレクトリ下に一時ファイルを作るAPIと指定したディレクトリ以下に作るAPIとがある。
+&lt;code&gt;TempFile&lt;/code&gt;が作るファイルは完全に匿名で、ファイルシステムに残らない。I/Oが出来るストリームだけを返す。定期的に/tmp以下を削除するジョブが走っていたとしても安全だし、他のプロセスに中身を読まれる危険性もない。
+一方&lt;code&gt;NamedTempFile&lt;/code&gt;の方は予測不可能なファイル名でファイルを作るものの、ファイルシステムに残るので安全ではない。しかしファイル名を要求する関数や外部プロセスと協調する時に使える。&lt;/p&gt;
+
+&lt;p&gt;それぞれで実装を見ていく。&lt;/p&gt;
+
+&lt;h1 id=&#34;tempfile:047d25333d01b489b97d09f703fb9afe&#34;&gt;TempFile&lt;/h1&gt;
+
+&lt;p&gt;これはLinuxとその他で実装が分かれる。ユーザーAPI側でテンポラリファイルを作るディレクトリの指定は吸収しているのでこちらではただ指定されたディレクトリ下にテンポラリファイルを作ればいい。&lt;/p&gt;
+
+&lt;h2 id=&#34;linux:047d25333d01b489b97d09f703fb9afe&#34;&gt;Linux&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;#[cfg(target_os = &amp;quot;linux&amp;quot;)]
+pub fn create(dir: &amp;amp;Path) -&amp;gt; io::Result&amp;lt;File&amp;gt; {
+    const O_TMPFILE: libc::c_int = 0o20200000;
+    match unsafe {
+        libc::open(try!(cstr(dir)).as_ptr(), O_CLOEXEC | O_EXCL | O_TMPFILE | O_RDWR, 0o600)
+    } {
+        -1 =&amp;gt; create_unix(dir),
+        fd =&amp;gt; Ok(unsafe { FromRawFd::from_raw_fd(fd) }),
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Linux 3.11から&lt;code&gt;O_TMPFILE&lt;/code&gt;が入ったので実装は直接的だ。&lt;code&gt;O_TMPFILE&lt;/code&gt;はテンポラリファイル向けにファイルシステムに名前が登録されない匿名のファイルを作る。Lispのgensymに似ている。
+O_EXCLでリンクによる別名での参照を回避し、Linux 2.6.23以後で入ったO_CLOEXECで&lt;code&gt;exec(2)&lt;/code&gt;した時にfdを閉じるようにする。そうすれば関係のないプログラムからファイルが参照されるのを防げる。&lt;/p&gt;
+
+&lt;p&gt;このライブラリコールが成功すればそのままFileを返す。&lt;/p&gt;
+
+&lt;p&gt;Linux 3.11未満やO_TMPFILEをサポートしないファイルシステムだったら失敗し、-1が返るのでLinuxに依存しない汎用の&lt;code&gt;create_unix&lt;/code&gt;にフォールバックする。&lt;/p&gt;
+
+&lt;h2 id=&#34;unix:047d25333d01b489b97d09f703fb9afe&#34;&gt;Unix&lt;/h2&gt;
+
+&lt;p&gt;Unix向けの実装は恐らくPOSIX互換なシステムなら全てで動く。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;#[cfg(not(target_os = &amp;quot;linux&amp;quot;))]
+pub fn create(dir: &amp;amp;Path) -&amp;gt; io::Result&amp;lt;File&amp;gt; {
+    create_unix(dir)
+}
+
+fn create_unix(dir: &amp;amp;Path) -&amp;gt; io::Result&amp;lt;File&amp;gt; {
+    for _ in 0..::NUM_RETRIES {
+        let tmp_path = dir.join(&amp;amp;tmpname());
+        return match create_named(&amp;amp;tmp_path) {
+            Ok(file) =&amp;gt; {
+                // I should probably tell the user this failed but the temporary file creation
+                // didn&#39;t really fail...
+                let _ = fs::remove_file(tmp_path);
+                Ok(file)
+            },
+            Err(ref e) if e.kind() == io::ErrorKind::AlreadyExists =&amp;gt; continue,
+            Err(e) =&amp;gt; Err(e),
+        }
+    }
+    Err(io::Error::new(io::ErrorKind::AlreadyExists,
+                       &amp;quot;too many temporary directories already exist&amp;quot;))
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;汎用の&lt;code&gt;create_unix&lt;/code&gt;では完全に無名のテンポラリファイルを作るのを諦めて、一旦ランダム生成な名前のファイルを作って開き、成功したらそのファイルを削除する。
+1つでも開いてるプロセスがある時に削除されるとUnixのファイルはそのプロセスからは見れるが他のプロセスからは見れない状態になるので色々便利に使われている。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;create_named&lt;/code&gt;は後程見るとして、ランダム生成なファイル名だと稀に既に存在するファイル名と被る可能性があるので何度かリトライしている。
+リトライ回数はsrc/lib.rsで定義されていて、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;const NUM_RETRIES: u32 = 1 &amp;lt;&amp;lt; 31;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;となっている。思ったよりえけつない回数リトライしている。もちろん、ファイル名が被った以外の理由でファイル生成が失敗したのならリトライに意味はないので大人しくreturnしている。&lt;/p&gt;
+
+&lt;p&gt;で、&lt;code&gt;create_named&lt;/code&gt;だが&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub fn create_named(path: &amp;amp;Path) -&amp;gt; io::Result&amp;lt;File&amp;gt; {
+    match unsafe {
+        libc::open(try!(cstr(&amp;amp;path)).as_ptr(), O_CLOEXEC | O_EXCL | O_RDWR | O_CREAT, 0o600)
+    } {
+        -1 =&amp;gt; Err(io::Error::last_os_error()),
+        fd =&amp;gt; Ok(unsafe { FromRawFd::from_raw_fd(fd) }),
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;となっている。単に&lt;code&gt;create&lt;/code&gt;のフラグの&lt;code&gt;O_TMPFILE&lt;/code&gt;が&lt;code&gt;O_CREAT&lt;/code&gt;になっただけ。&lt;/p&gt;
+
+&lt;h1 id=&#34;namedtempfile:047d25333d01b489b97d09f703fb9afe&#34;&gt;NamedTempFile&lt;/h1&gt;
+
+&lt;p&gt;こちらはユーザーAPIの中から直接OS互換用コードを呼んでいる。src/named.rsに実装がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    /// Create a new temporary file in the specified directory.
+    pub fn new_in&amp;lt;P: AsRef&amp;lt;Path&amp;gt;&amp;gt;(dir: P) -&amp;gt; io::Result&amp;lt;NamedTempFile&amp;gt; {
+        for _ in 0..::NUM_RETRIES {
+            let path = dir.as_ref().join(&amp;amp;util::tmpname());
+            return match imp::create_named(&amp;amp;path) {
+                Ok(file) =&amp;gt; Ok(NamedTempFile(Some(NamedTempFileInner { path: path, file: file, }))),
+                Err(ref e) if e.kind() == io::ErrorKind::AlreadyExists =&amp;gt; continue,
+                Err(e) =&amp;gt; Err(e),
+            }
+        }
+        Err(io::Error::new(io::ErrorKind::AlreadyExists,
+                           &amp;quot;too many temporary directories already exist&amp;quot;))
+    }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;返り値をユーザAPI向けにラップしている以外は無名の一時ファイルと変わらない。余談だがここで使われているファイル名にユーザが干渉することが出来ず、完全にランダムなファイル名になっている。
+ファイルの末尾(例えば拡張子)や先頭(例えばapp_nameなどの識別子)を挟めない。私が今作業してるパッチはその辺をもう少し自由にするものだ。&lt;/p&gt;
+
+&lt;p&gt;閑話休題。似たような実装が2つもあるのは気になるので一応windows向けの実装も読んでみる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;const ACCESS: DWORD     = winapi::FILE_GENERIC_READ
+                        | winapi::FILE_GENERIC_WRITE;
+const SHARE_MODE: DWORD = winapi::FILE_SHARE_DELETE
+                        | winapi::FILE_SHARE_READ
+                        | winapi::FILE_SHARE_WRITE;
+const FLAGS: DWORD      = winapi::FILE_ATTRIBUTE_HIDDEN
+                        | winapi::FILE_ATTRIBUTE_TEMPORARY;
+
+
+fn to_utf16(s: &amp;amp;Path) -&amp;gt; Vec&amp;lt;u16&amp;gt; {
+    s.as_os_str().encode_wide().chain(Some(0).into_iter()).collect()
+}
+
+fn win_create(path: &amp;amp;Path,
+                     access: DWORD,
+                     share_mode: DWORD,
+                     disp: DWORD,
+                     flags: DWORD) -&amp;gt; io::Result&amp;lt;File&amp;gt; {
+
+    let path = to_utf16(path);
+    let handle = unsafe {
+        CreateFileW(
+            path.as_ptr(),
+            access,
+            share_mode,
+            0 as *mut _,
+            disp,
+            flags,
+            ptr::null_mut())
+    };
+    if handle == winapi::INVALID_HANDLE_VALUE {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(unsafe { File::from_raw_handle(handle as RawHandle) })
+    }
+}
+
+pub fn create_named(path: &amp;amp;Path) -&amp;gt; io::Result&amp;lt;File&amp;gt; {
+    win_create(path, ACCESS, SHARE_MODE, winapi::CREATE_NEW, FLAGS)
+}
+
+pub fn create(dir: &amp;amp;Path) -&amp;gt; io::Result&amp;lt;File&amp;gt; {
+    for _ in 0..::NUM_RETRIES {
+        return match win_create(
+            &amp;amp;dir.join(&amp;amp;tmpname()),
+            ACCESS,
+            SHARE_MODE,
+            winapi::CREATE_NEW,
+            FLAGS | winapi::FILE_FLAG_DELETE_ON_CLOSE)
+        {
+            Ok(f) =&amp;gt; Ok(f),
+            Err(ref e) if e.kind() == io::ErrorKind::AlreadyExists =&amp;gt; continue,
+            Err(e) =&amp;gt; Err(e),
+        };
+    }
+    Err(io::Error::new(io::ErrorKind::AlreadyExists,
+                       &amp;quot;too many temporary directories already exist&amp;quot;))
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Windows向けの実装は必ずファイル名を指定する必要があり、リトライが必要そう？&lt;code&gt;NamedTempFile&lt;/code&gt;を作るには(理論的に)どの実装でもリトライが必要だからユーザAPI側で纏めたのかな？&lt;/p&gt;
+
+&lt;h1 id=&#34;まとめ:047d25333d01b489b97d09f703fb9afe&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;テンポラリファイルを作るならまずは&lt;code&gt;O_TMPFILE&lt;/code&gt;を試す&lt;/li&gt;
+&lt;li&gt;ダメならランダム生成なファイル名で成功するまでリトライ、成功したら即座にファイルを削除&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;作業中のコードをpushし忘れて土日に進捗出来なかったのでまたお茶を濁すはめになった。&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>REST APIのテストにはwgetが便利かもしれない</title>
@@ -2414,266 +2611,6 @@ val _ = Benchmark.benchset &amp;quot;fib 24&amp;quot; 10 [
 無用コード除去に引っ掛からなかったどころか最適化ルーチンを引っ掻き回したんじゃないかと思います。&lt;/p&gt;
 
 &lt;p&gt;このコード、私の手元の環境でしかテストしてないのでC89なら須くサポートするOnigmoにマージされるかは分かりませんがマージされると嬉しいですね。&lt;/p&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>幽霊型を知った</title>
-      <link>http://keens.github.io/blog/2015/05/24/yuureikatawoshitta</link>
-      <pubDate>Sun, 24 May 2015 22:38:47 +0900</pubDate>
-      
-      <guid>http://keens.github.io/blog/2015/05/24/yuureikatawoshitta</guid>
-      <description>
-
-&lt;p&gt;κeenです。かねてより気になっていた幽霊型(Phantom Type)について知ったのでアウトプット。
-&lt;a href=&#34;http://www.cs.rit.edu/~mtf/research/phantom-subtyping/jfp06/jfp06.pdf&#34;&gt;このPDF&lt;/a&gt;がベースになって
-ます。&lt;/p&gt;
-
-&lt;p&gt;余談ですが英語がファントム・タイプと中々中二な名前なので和訳も幻影型とかそういう方向に走って欲かったな。&lt;/p&gt;
-
-&lt;p&gt;「幽霊型」で調べると真っ先に&lt;a href=&#34;https://kagamilove0707.github.io/programming/2014/02/20/about-phantom-type/&#34;&gt;このサイト&lt;/a&gt;が出てくるのですが、ミスリーディングと言われていました。
-別に間違ったことを書いている訳ではないのですが、幽霊型の応用例なのでこれこそが幽霊型だと思ってしまうと少し視野が狭くなってしまうようです。&lt;/p&gt;
-
-&lt;h1 id=&#34;モチベーション:b3b6b3048912aac849c4ef033d362a0c&#34;&gt;モチベーション&lt;/h1&gt;
-
-&lt;p&gt;ブーリアンと整数と条件分岐と足し算と比較が出来るミニ言語を考えてみます。自動で型変換は行わない(つまりintとboolの比較などは出来ない)言語とします。こんな感じでしょうか。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;datatype exp
-  = Int of int
-  | Bool of bool
-  | If of exp * exp * exp
-  | Plus of exp * exp
-  | Equal of exp * exp
-
-fun mkInt x = Int x
-fun mkBool x = Bool x
-fun mkIf cnd thn els = If(cnd, thn, els)
-fun mkPlus x y = Plus(x, y)
-fun mkEqual x y = Equal(x, y)
-
-exception Type
-
-fun evalIf cnd thn els =
-  case eval cnd of
-      Bool x =&amp;gt; if x then eval thn else eval els
-    | _ =&amp;gt; raise Type
-
-fun evalPlus x y =
-  case (eval x, eval y) of
-      (Int x&#39;, Int y&#39;) =&amp;gt; Int(x&#39; + y&#39;)
-    | _  =&amp;gt; raise Type
-
-fun evalEqual x y =
-  case (eval x, eval y) of
-      (Int x&#39;, Int y&#39;) =&amp;gt; Bool(x&#39; = y&#39;)
-    | (Bool x&#39;, Bool y&#39;) =&amp;gt; Bool(x&#39; = y&#39;)
-    | _  =&amp;gt; raise Type
-
-fun eval exp =
-  case exp of
-      If(cnd, thn, els) =&amp;gt; evalIf cnd thn els
-    | Plus(x, y) =&amp;gt; evalPlus x y
-    | Equal(x, y) =&amp;gt; evalEqual x y
-    | e =&amp;gt; e
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;さて、この定義に従うと次のような自明に間違ったプログラムもコンパイルを通ってしまいます&lt;sup class=&#34;footnote-ref&#34; id=&#34;fnref:b3b6b3048912aac849c4ef033d362a0c:1&#34;&gt;&lt;a rel=&#34;footnote&#34; href=&#34;#fn:b3b6b3048912aac849c4ef033d362a0c:1&#34;&gt;1&lt;/a&gt;&lt;/sup&gt;。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;mkEqual (mkInt 1) (mkBool false)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;勿論、評価するとエラーになります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;eval (mkEqual (mkInt 1) (mkBool false));
-
-uncaught exception Type
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;こういうものを極力コンパイル時に発見出来ないかとうのがモチベーションです。因みにこのモチベーションは変な型変換を行わない言語なら動的型付き言語でも同じで、SBCLで&lt;code&gt;(+ 1 t)&lt;/code&gt;を評価するとちゃんとコンパイルエラーになります。&lt;/p&gt;
-
-&lt;h1 id=&#34;問題の分析:b3b6b3048912aac849c4ef033d362a0c&#34;&gt;問題の分析&lt;/h1&gt;
-
-&lt;p&gt;今回、&lt;code&gt;Int&lt;/code&gt;だとか&lt;code&gt;Bool&lt;/code&gt;だとかの型情報をタグ、つまり値として持たせました。しかしコンパイル時に値にはアクセス出来ません。コンパイル時にアクセスできるのは型です。ということでメタデータとして型を付与しましょう。&lt;/p&gt;
-
-&lt;h1 id=&#34;幽霊型:b3b6b3048912aac849c4ef033d362a0c&#34;&gt;幽霊型&lt;/h1&gt;
-
-&lt;p&gt;メタデータとして型を付けたのが幽霊型です。名前的に&lt;code&gt;&#39;a texp&lt;/code&gt;ではなく&lt;code&gt;&#39;a&lt;/code&gt;の部分が幽霊型なんですかね。&lt;/p&gt;
-
-&lt;p&gt;使い方は割と分かりやすくて、&lt;code&gt;datatype&lt;/code&gt;に余計な型をつけます。この&lt;code&gt;&#39;a&lt;/code&gt;は使われていませんがメタデータなのでそういうもんです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;datatype &#39;a texp = E of exp
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;次に、&lt;code&gt;mkXxx&lt;/code&gt; にも型を付けます。&lt;/p&gt;
-
-&lt;p&gt;まず、&lt;code&gt;mkInt&lt;/code&gt;なら返り値はIntなので&lt;code&gt;&#39;a&lt;/code&gt;の部分にその情報を詰め込みます。今回は&lt;code&gt;int&lt;/code&gt;が宜しいようです。
-毎回&lt;code&gt;E&lt;/code&gt;がつくのが面倒ですが我慢して下さい。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;fun mkInt x: int texp = E (Int x)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;mkBool&lt;/code&gt;も同じです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;fun mkBool x: bool texp = E (Bool x)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;次は&lt;code&gt;mkIf&lt;/code&gt;ですが、condにはBool型、thenとelseには同じ型が来て欲しいです。そして返り値というかこのIfを
-evalした型はthenやelseと同じ型なのでこのような型になります。Ifに渡す為に一旦&lt;code&gt;E&lt;/code&gt;を剥がしてます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;fun mkIf (E cnd: &#39;b texp) (E thn: &#39;a texp) (E els: &#39;a texp): &#39;a texp = E (If(cnd, thn, els))
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;同じように考えたら&lt;code&gt;mkPlus&lt;/code&gt;や&lt;code&gt;mkEqual&lt;/code&gt;も型付け出来ます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;fun mkPlus (E x: int texp) (E y: int texp): int texp = E (Plus(x, y))
-fun mkEqual (E x: &#39;a texp) (E y: &#39;a texp): bool texp = E (Equal(x, y))
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これ以後は変更ありません。一応修正後のプログラムを載せると、&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;datatype exp
-  = Int of int
-  | Bool of bool
-  | If of exp * exp * exp
-  | Plus of exp * exp
-  | Equal of exp * exp
-
-datatype &#39;a texp = E of exp
-
-fun mkInt x: int texp = E (Int x)
-fun mkBool x: bool texp = E (Bool x)
-fun mkIf (E cnd: &#39;b texp) (E thn: &#39;a texp) (E els: &#39;a texp): &#39;a texp = E (If(cnd, thn, els))
-fun mkPlus (E x: int texp) (E y: int texp): int texp = E (Plus(x, y))
-fun mkEqual (E x: &#39;a texp) (E y: &#39;a texp): bool texp = E (Equal(x, y))
-
-exception Type
-
-fun evalIf cnd thn els =
-  case eval&#39; cnd of
-      Bool x =&amp;gt; if x then eval&#39; thn else eval&#39; els
-    | _ =&amp;gt; raise Type
-
-and evalPlus x y =
-    case (eval&#39; x, eval&#39; y) of
-        (Int x&#39;, Int y&#39;) =&amp;gt; Int(x&#39; + y&#39;)
-      | _  =&amp;gt; raise Type
-
-and evalEqual x y =
-    case (eval&#39; x, eval&#39; y) of
-        (Int x&#39;, Int y&#39;) =&amp;gt; Bool(x&#39; = y&#39;)
-      | (Bool x&#39;, Bool y&#39;) =&amp;gt; Bool(x&#39; = y&#39;)
-      | _  =&amp;gt; raise Type
-
-and eval&#39; exp =
-    case exp of
-        If(cnd, thn, els) =&amp;gt; evalIf cnd thn els
-      | Plus(x, y) =&amp;gt; evalPlus x y
-      | Equal(x, y) =&amp;gt; evalEqual x y
-      | e =&amp;gt; e
-
-fun eval (E x) = eval&#39; x
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;となります。ユーザインターフェースレベルでの変更はありません。
-さて、ということで先の式をもう一度評価してみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;mkEqual (mkInt 1) (mkBool false);
-stdIn:1.2-1.34 Error: operator and operand don&#39;t agree [tycon mismatch]
-  operator domain: int texp
-  operand:         bool texp
-  in expression:
-    (mkEqual (mkInt 1)) (mkBool false)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ちゃんとエラーが出ました。楽しいですね。&lt;/p&gt;
-
-&lt;h1 id=&#34;発展1-任意の型:b3b6b3048912aac849c4ef033d362a0c&#34;&gt;発展1 - 任意の型&lt;/h1&gt;
-
-&lt;p&gt;任意の型を作る手段としてタグ1つ、引数無しのタグ付き共用体を使う方法があります。それを使った技が先のPDFに載ってます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;datatype tcp = TCP
-datatype udp = UDP
-datatype &#39;a safe_socket = W of Word32.word
-
-fun mkTCP ....
-fun mkUDP ....
-fun sendTCP ...
-fun sendUPD ...
-fun close ...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のように型安全に、そして&lt;code&gt;close&lt;/code&gt;のように可能なものはジェネリックにプログラムを書くことが出来ます。&lt;/p&gt;
-
-&lt;h1 id=&#34;発展2-サブタイプ:b3b6b3048912aac849c4ef033d362a0c&#34;&gt;発展2 - サブタイプ&lt;/h1&gt;
-
-&lt;p&gt;次のようにヒエラルキーがある場合の話です。面倒なので言語を縮小しますね。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;datatype num
-  = Int of int
-  | Real of real
-
-datatype exp
-  = Num of num
-  | Bool of bool
-  | Plus of exp * exp
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;この場合、こうなります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;datatype num
-  = Int of int
-  | Real of real
-
-datatype exp
-  = Num of num
-  | Bool of bool
-  | Plus of exp * exp
-
-datatype &#39;a tnum = N
-datatype &#39;a texp = E of exp
-
-exception Type
-
-fun mkInt x: (int tnum texp) = E (Num  (Int x))
-fun mkReal x: (real tnum texp) = E (Num (Real x))
-fun mkBool x: (bool texp) = E (Bool x)
-
-
-fun mkPlus (E x: &#39;a tnum texp) (E y: &#39;a tnum texp): &#39;a tnum texp =
-  case (x, y) of
-      (Num (Int x&#39;), Num (Int y&#39;)) =&amp;gt; E (Num (Int (x&#39; + y&#39;)))
-    | (Num (Real x&#39;), Num (Real y&#39;)) =&amp;gt; E (Num (Real (x&#39; + y&#39;)))
-    | _ =&amp;gt; raise Type  
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;疲れてきたので説明省略しますが型パラメータを入れ子にしたら上手い具合にサブタイプの親子関係を表せるよねって話です。&lt;/p&gt;
-
-&lt;h1 id=&#34;まとめ:b3b6b3048912aac849c4ef033d362a0c&#34;&gt;まとめ&lt;/h1&gt;
-
-&lt;p&gt;幽霊型を使うと値レベルの話を一部型レベルに持ち上げれる（ってことで良いのかな？）&lt;/p&gt;
-
-&lt;h1 id=&#34;最後に:b3b6b3048912aac849c4ef033d362a0c&#34;&gt;最後に&lt;/h1&gt;
-
-&lt;p&gt;どうしても&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;datatype &#39;a texp = E of exp
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;としている所の&lt;code&gt;E&lt;/code&gt;が気になりますね。型システム上必要っぽい(&lt;code&gt;type &#39;a texp = exp&lt;/code&gt;としてもダメだった)ので必要なコストだとは思うのですが
-少くとも内部的にはゼロオーバーヘッドであって欲しいです。最適化で消せそうですが実際に消してる処理系はどれほどあるのでしょう。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;type &#39;a texp = exp&lt;/code&gt;でダメだった(型がミスマッチしてるのにコンパイルが通ってしまった)のも気になります。smlの&lt;code&gt;type&lt;/code&gt;ってただのエイリアスなんでしたっけ？&lt;/p&gt;
-
-&lt;p&gt;若干のモヤモヤは残るものの一応幽霊型について知りました。&lt;/p&gt;
-&lt;div class=&#34;footnotes&#34;&gt;
-
-&lt;hr /&gt;
-
-&lt;ol&gt;
-&lt;li id=&#34;fn:b3b6b3048912aac849c4ef033d362a0c:1&#34;&gt;因みにこのコードをSML#のREPLで評価すると返ってこなくなります。&lt;a href=&#34;https://github.com/smlsharp/smlsharp/issues/24&#34;&gt;イシュー&lt;/a&gt;に上がってます。
- &lt;a class=&#34;footnote-return&#34; href=&#34;#fnref:b3b6b3048912aac849c4ef033d362a0c:1&#34;&gt;&lt;sup&gt;[return]&lt;/sup&gt;&lt;/a&gt;&lt;/li&gt;
-&lt;/ol&gt;
-&lt;/div&gt;
 </description>
     </item>
     

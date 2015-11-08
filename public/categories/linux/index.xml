@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Linux on κeenのHappy Hacκing Blog</title>
+    <link>http://KeenS.github.io/categories/linux/</link>
+    <description>Recent content in Linux on κeenのHappy Hacκing Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en-us</language>
+    <lastBuildDate>Sun, 08 Nov 2015 21:40:14 +0900</lastBuildDate>
+    <atom:link href="http://KeenS.github.io/categories/linux/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>一時ファイルの作り方</title>
+      <link>http://keens.github.io/blog/2015/11/08/ichijifairunotsukurikata</link>
+      <pubDate>Sun, 08 Nov 2015 21:40:14 +0900</pubDate>
+      
+      <guid>http://keens.github.io/blog/2015/11/08/ichijifairunotsukurikata</guid>
+      <description>
+
+&lt;p&gt;Rustに&lt;a href=&#34;https://github.com/Stebalien/tempfile&#34;&gt;tempfile&lt;/a&gt;というライブラリがある。その名の通りテンポラリファイルを作るライブラリだ。
+必要に迫られてそのライブラリにPRを送ろうとして実装を読んだのだが普段あまり意識しなかったテンポラリファイルの作り方を知ったのでちょっと解説してみる。&lt;/p&gt;
+
+&lt;p&gt;Rustはほぼそのままの使い心地でCのライブラリを呼べるのでCが分かる人になら伝わると思う。&lt;/p&gt;
+
+&lt;p&gt;ライブラリの構成として、src/*.rsにOS非依存なコードやユーザ向けのAPIがあり、src/imp/{windows,unix}.rsにOS依存なコードがある。
+私はWindowsの実装には興味ないし詳しくもないのでunix向けの実装だけを見る。&lt;/p&gt;
+
+&lt;p&gt;imp以下を見る前にこのライブライが提供するAPIを解説しておくと、大きく分けて&lt;code&gt;TempFile&lt;/code&gt;と&lt;code&gt;NamedTempFile&lt;/code&gt;がある。無名、Namedどちらにもデフォルトの一時ファイルディレクトリ下に一時ファイルを作るAPIと指定したディレクトリ以下に作るAPIとがある。
+&lt;code&gt;TempFile&lt;/code&gt;が作るファイルは完全に匿名で、ファイルシステムに残らない。I/Oが出来るストリームだけを返す。定期的に/tmp以下を削除するジョブが走っていたとしても安全だし、他のプロセスに中身を読まれる危険性もない。
+一方&lt;code&gt;NamedTempFile&lt;/code&gt;の方は予測不可能なファイル名でファイルを作るものの、ファイルシステムに残るので安全ではない。しかしファイル名を要求する関数や外部プロセスと協調する時に使える。&lt;/p&gt;
+
+&lt;p&gt;それぞれで実装を見ていく。&lt;/p&gt;
+
+&lt;h1 id=&#34;tempfile:047d25333d01b489b97d09f703fb9afe&#34;&gt;TempFile&lt;/h1&gt;
+
+&lt;p&gt;これはLinuxとその他で実装が分かれる。ユーザーAPI側でテンポラリファイルを作るディレクトリの指定は吸収しているのでこちらではただ指定されたディレクトリ下にテンポラリファイルを作ればいい。&lt;/p&gt;
+
+&lt;h2 id=&#34;linux:047d25333d01b489b97d09f703fb9afe&#34;&gt;Linux&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;#[cfg(target_os = &amp;quot;linux&amp;quot;)]
+pub fn create(dir: &amp;amp;Path) -&amp;gt; io::Result&amp;lt;File&amp;gt; {
+    const O_TMPFILE: libc::c_int = 0o20200000;
+    match unsafe {
+        libc::open(try!(cstr(dir)).as_ptr(), O_CLOEXEC | O_EXCL | O_TMPFILE | O_RDWR, 0o600)
+    } {
+        -1 =&amp;gt; create_unix(dir),
+        fd =&amp;gt; Ok(unsafe { FromRawFd::from_raw_fd(fd) }),
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Linux 3.11から&lt;code&gt;O_TMPFILE&lt;/code&gt;が入ったので実装は直接的だ。&lt;code&gt;O_TMPFILE&lt;/code&gt;はテンポラリファイル向けにファイルシステムに名前が登録されない匿名のファイルを作る。Lispのgensymに似ている。
+O_EXCLでリンクによる別名での参照を回避し、Linux 2.6.23以後で入ったO_CLOEXECで&lt;code&gt;exec(2)&lt;/code&gt;した時にfdを閉じるようにする。そうすれば関係のないプログラムからファイルが参照されるのを防げる。&lt;/p&gt;
+
+&lt;p&gt;このライブラリコールが成功すればそのままFileを返す。&lt;/p&gt;
+
+&lt;p&gt;Linux 3.11未満やO_TMPFILEをサポートしないファイルシステムだったら失敗し、-1が返るのでLinuxに依存しない汎用の&lt;code&gt;create_unix&lt;/code&gt;にフォールバックする。&lt;/p&gt;
+
+&lt;h2 id=&#34;unix:047d25333d01b489b97d09f703fb9afe&#34;&gt;Unix&lt;/h2&gt;
+
+&lt;p&gt;Unix向けの実装は恐らくPOSIX互換なシステムなら全てで動く。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;#[cfg(not(target_os = &amp;quot;linux&amp;quot;))]
+pub fn create(dir: &amp;amp;Path) -&amp;gt; io::Result&amp;lt;File&amp;gt; {
+    create_unix(dir)
+}
+
+fn create_unix(dir: &amp;amp;Path) -&amp;gt; io::Result&amp;lt;File&amp;gt; {
+    for _ in 0..::NUM_RETRIES {
+        let tmp_path = dir.join(&amp;amp;tmpname());
+        return match create_named(&amp;amp;tmp_path) {
+            Ok(file) =&amp;gt; {
+                // I should probably tell the user this failed but the temporary file creation
+                // didn&#39;t really fail...
+                let _ = fs::remove_file(tmp_path);
+                Ok(file)
+            },
+            Err(ref e) if e.kind() == io::ErrorKind::AlreadyExists =&amp;gt; continue,
+            Err(e) =&amp;gt; Err(e),
+        }
+    }
+    Err(io::Error::new(io::ErrorKind::AlreadyExists,
+                       &amp;quot;too many temporary directories already exist&amp;quot;))
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;汎用の&lt;code&gt;create_unix&lt;/code&gt;では完全に無名のテンポラリファイルを作るのを諦めて、一旦ランダム生成な名前のファイルを作って開き、成功したらそのファイルを削除する。
+1つでも開いてるプロセスがある時に削除されるとUnixのファイルはそのプロセスからは見れるが他のプロセスからは見れない状態になるので色々便利に使われている。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;create_named&lt;/code&gt;は後程見るとして、ランダム生成なファイル名だと稀に既に存在するファイル名と被る可能性があるので何度かリトライしている。
+リトライ回数はsrc/lib.rsで定義されていて、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;const NUM_RETRIES: u32 = 1 &amp;lt;&amp;lt; 31;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;となっている。思ったよりえけつない回数リトライしている。もちろん、ファイル名が被った以外の理由でファイル生成が失敗したのならリトライに意味はないので大人しくreturnしている。&lt;/p&gt;
+
+&lt;p&gt;で、&lt;code&gt;create_named&lt;/code&gt;だが&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub fn create_named(path: &amp;amp;Path) -&amp;gt; io::Result&amp;lt;File&amp;gt; {
+    match unsafe {
+        libc::open(try!(cstr(&amp;amp;path)).as_ptr(), O_CLOEXEC | O_EXCL | O_RDWR | O_CREAT, 0o600)
+    } {
+        -1 =&amp;gt; Err(io::Error::last_os_error()),
+        fd =&amp;gt; Ok(unsafe { FromRawFd::from_raw_fd(fd) }),
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;となっている。単に&lt;code&gt;create&lt;/code&gt;のフラグの&lt;code&gt;O_TMPFILE&lt;/code&gt;が&lt;code&gt;O_CREAT&lt;/code&gt;になっただけ。&lt;/p&gt;
+
+&lt;h1 id=&#34;namedtempfile:047d25333d01b489b97d09f703fb9afe&#34;&gt;NamedTempFile&lt;/h1&gt;
+
+&lt;p&gt;こちらはユーザーAPIの中から直接OS互換用コードを呼んでいる。src/named.rsに実装がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    /// Create a new temporary file in the specified directory.
+    pub fn new_in&amp;lt;P: AsRef&amp;lt;Path&amp;gt;&amp;gt;(dir: P) -&amp;gt; io::Result&amp;lt;NamedTempFile&amp;gt; {
+        for _ in 0..::NUM_RETRIES {
+            let path = dir.as_ref().join(&amp;amp;util::tmpname());
+            return match imp::create_named(&amp;amp;path) {
+                Ok(file) =&amp;gt; Ok(NamedTempFile(Some(NamedTempFileInner { path: path, file: file, }))),
+                Err(ref e) if e.kind() == io::ErrorKind::AlreadyExists =&amp;gt; continue,
+                Err(e) =&amp;gt; Err(e),
+            }
+        }
+        Err(io::Error::new(io::ErrorKind::AlreadyExists,
+                           &amp;quot;too many temporary directories already exist&amp;quot;))
+    }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;返り値をユーザAPI向けにラップしている以外は無名の一時ファイルと変わらない。余談だがここで使われているファイル名にユーザが干渉することが出来ず、完全にランダムなファイル名になっている。
+ファイルの末尾(例えば拡張子)や先頭(例えばapp_nameなどの識別子)を挟めない。私が今作業してるパッチはその辺をもう少し自由にするものだ。&lt;/p&gt;
+
+&lt;p&gt;閑話休題。似たような実装が2つもあるのは気になるので一応windows向けの実装も読んでみる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;const ACCESS: DWORD     = winapi::FILE_GENERIC_READ
+                        | winapi::FILE_GENERIC_WRITE;
+const SHARE_MODE: DWORD = winapi::FILE_SHARE_DELETE
+                        | winapi::FILE_SHARE_READ
+                        | winapi::FILE_SHARE_WRITE;
+const FLAGS: DWORD      = winapi::FILE_ATTRIBUTE_HIDDEN
+                        | winapi::FILE_ATTRIBUTE_TEMPORARY;
+
+
+fn to_utf16(s: &amp;amp;Path) -&amp;gt; Vec&amp;lt;u16&amp;gt; {
+    s.as_os_str().encode_wide().chain(Some(0).into_iter()).collect()
+}
+
+fn win_create(path: &amp;amp;Path,
+                     access: DWORD,
+                     share_mode: DWORD,
+                     disp: DWORD,
+                     flags: DWORD) -&amp;gt; io::Result&amp;lt;File&amp;gt; {
+
+    let path = to_utf16(path);
+    let handle = unsafe {
+        CreateFileW(
+            path.as_ptr(),
+            access,
+            share_mode,
+            0 as *mut _,
+            disp,
+            flags,
+            ptr::null_mut())
+    };
+    if handle == winapi::INVALID_HANDLE_VALUE {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(unsafe { File::from_raw_handle(handle as RawHandle) })
+    }
+}
+
+pub fn create_named(path: &amp;amp;Path) -&amp;gt; io::Result&amp;lt;File&amp;gt; {
+    win_create(path, ACCESS, SHARE_MODE, winapi::CREATE_NEW, FLAGS)
+}
+
+pub fn create(dir: &amp;amp;Path) -&amp;gt; io::Result&amp;lt;File&amp;gt; {
+    for _ in 0..::NUM_RETRIES {
+        return match win_create(
+            &amp;amp;dir.join(&amp;amp;tmpname()),
+            ACCESS,
+            SHARE_MODE,
+            winapi::CREATE_NEW,
+            FLAGS | winapi::FILE_FLAG_DELETE_ON_CLOSE)
+        {
+            Ok(f) =&amp;gt; Ok(f),
+            Err(ref e) if e.kind() == io::ErrorKind::AlreadyExists =&amp;gt; continue,
+            Err(e) =&amp;gt; Err(e),
+        };
+    }
+    Err(io::Error::new(io::ErrorKind::AlreadyExists,
+                       &amp;quot;too many temporary directories already exist&amp;quot;))
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Windows向けの実装は必ずファイル名を指定する必要があり、リトライが必要そう？&lt;code&gt;NamedTempFile&lt;/code&gt;を作るには(理論的に)どの実装でもリトライが必要だからユーザAPI側で纏めたのかな？&lt;/p&gt;
+
+&lt;h1 id=&#34;まとめ:047d25333d01b489b97d09f703fb9afe&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;テンポラリファイルを作るならまずは&lt;code&gt;O_TMPFILE&lt;/code&gt;を試す&lt;/li&gt;
+&lt;li&gt;ダメならランダム生成なファイル名で成功するまでリトライ、成功したら即座にファイルを削除&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;作業中のコードをpushし忘れて土日に進捗出来なかったのでまたお茶を濁すはめになった。&lt;/p&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>
