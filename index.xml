@@ -6,8 +6,523 @@
     <description>Recent content on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Sun, 08 Nov 2015 21:40:14 +0900</lastBuildDate>
+    <lastBuildDate>Sat, 14 Nov 2015 23:57:43 +0900</lastBuildDate>
     <atom:link href="http://KeenS.github.io/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Rustで小さなツールを作ってみる(前編)</title>
+      <link>http://keens.github.io/blog/2015/11/14/rustdechiisanatsu_ruwotsukuttemiru</link>
+      <pubDate>Sat, 14 Nov 2015 23:57:43 +0900</pubDate>
+      
+      <guid>http://keens.github.io/blog/2015/11/14/rustdechiisanatsu_ruwotsukuttemiru</guid>
+      <description>
+
+&lt;p&gt;この記事は&lt;a href=&#34;http://qiita.com/advent-calendar/2015/rust-lang&#34;&gt;Rust Advent Calendar 2015&lt;/a&gt; 1日目の記事です。&lt;br /&gt;
+次 &lt;a href=&#34;http://KeenS.github.io/blog/2015/11/29/rustdechiisanatsu_ruwotsukuttemiru_kouhen_/&#34;&gt;Rustで小さなツールを作ってみる(後編)&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;κeenです。Rust Advent Calendar初日ということで軽い話から。
+小さなツールって何だよって感じですが手元にIRCの生ログが大量にあるのでそれをDBにインポートしてみましょう。
+あまりRustに向いた仕事じゃなさそうですが手始めとして。&lt;/p&gt;
+
+&lt;p&gt;前編でログのパースを、後編でDBへのインポートをやります。&lt;/p&gt;
+
+&lt;p&gt;IRCの生ログは&lt;a href=&#34;http://www.clovery.jp/tiarra/&#34;&gt;tiarra&lt;/a&gt;が吐いたものです。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;#emacs@freenode&lt;/code&gt;のように&lt;code&gt;チャネル名@サーバ名&lt;/code&gt;のディレクトリに入っていて、ファイル名は&lt;code&gt;YYYY-mm-dd.txt&lt;/code&gt;で、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;13:43:24 &amp;lt;#emacs@freenode:codingquark&amp;gt; Such key generation, much wow.
+13:43:59 ! Vejeta` (Ping timeout: 264 seconds)
+13:44:30 + jcazevedo (jcazevedo!~jcazevedo@a94-132-141-99.cpe.netcabo.pt) to #emacs@freenode
+13:45:30 + quazimodo (quazimodo!~quazimodo@155.143.14.28) to #emacs@freenode
+13:45:32 ! Hugehead_ (Read error: Connection reset by peer)
+13:48:48 + favadi (favadi!~textual@113.190.4.106) to #emacs@freenode
+13:51:06 wizzo -&amp;gt; bitchimightbe
+13:52:23 bitchimightbe -&amp;gt; wizzo
+13:53:05 - frost3772 from #emacs@freenode (&amp;quot;ERC (IRC client for Emacs 24.5.1)&amp;quot;)
+13:56:37 ! chandan (Quit: WeeChat 1.2)
+13:56:38 ! plunderous (Read error: Connection res
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;のような形式で入ってます。先頭に&lt;code&gt;&amp;lt;&lt;/code&gt;が付いてるのが発言、&lt;code&gt;!&lt;/code&gt;がついてるのがなんかメッセージ(多分quitとかkillとか)、&lt;code&gt;+&lt;/code&gt;がjoin、&lt;code&gt;-&lt;/code&gt;がpart、無しがnickとかnoticeですかね。他にもログ取ってるircコマンドはあるのですが&lt;code&gt;!&lt;/code&gt;に内包されてそうですね(tiarraのマニュアルに載ってそうですが見るの面倒)&lt;/p&gt;
+
+&lt;p&gt;因みにログ全体は&lt;code&gt;~/log&lt;/code&gt;に置いてあります。&lt;/p&gt;
+
+&lt;p&gt;一応treeするとこんな感じ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;.
+├── #emacs@freenode
+│   ├── 2014-04-11.txt
+│   ├── 2014-04-12.txt
+│   ├── 2014-04-13.txt
+..  ..
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;2014-04-11から2015-11-01までの間ロギングしてます。&lt;/p&gt;
+
+&lt;h1 id=&#34;ディレクトリリスティングまで:a7315be0136fc976c0c4320441efd799&#34;&gt;ディレクトリリスティングまで&lt;/h1&gt;
+
+&lt;p&gt;まずは&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cargo new irc_log --bin
+$ cd irc_log
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そして&lt;code&gt;src/main.rs&lt;/code&gt;を開いて&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::fs;
+
+fn main() {
+    let paths = fs::read_dir(&amp;quot;/home/kim/log&amp;quot;).unwrap();
+    for path in paths {
+        let path = path.unwrap().path();
+        println!(&amp;quot;{}&amp;quot;, path.to_string_lossy().to_string());
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と書きましょう。path path煩いですね。OSの返す文字列(Cの文字列)とRustの文字列の違いだとか一旦&lt;code&gt;Path&lt;/code&gt;で抽象化してるだとかで文字列を抜き出すのは一苦労です。&lt;/p&gt;
+
+&lt;p&gt;さて、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cargo run
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;でディレクトリ名が出てくればOK。&lt;/p&gt;
+
+&lt;h1 id=&#34;ファイル名リスティング:a7315be0136fc976c0c4320441efd799&#34;&gt;ファイル名リスティング&lt;/h1&gt;
+
+&lt;p&gt;mainを&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::fs;
+
+fn main() {
+    let paths = fs::read_dir(&amp;quot;/home/kim/log&amp;quot;).unwrap();
+    for path in paths {
+        let path = path.unwrap().path();
+        on_channel_dir(&amp;amp;path);
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と置き換えてチャネルのディレクトリでの作業は&lt;code&gt;on_channel_dir&lt;/code&gt;でやりましょう。&lt;/p&gt;
+
+&lt;h2 id=&#34;チャネル名とサーバ名の抜き出し:a7315be0136fc976c0c4320441efd799&#34;&gt;チャネル名とサーバ名の抜き出し&lt;/h2&gt;
+
+&lt;p&gt;ディレクトリ名が&lt;code&gt;チャネル名@サーバ名&lt;/code&gt; の 形をしているので @の前後を抜き出せば良さそうです。&lt;/p&gt;
+
+&lt;p&gt;src/main.rsの先頭に&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::path::Path;
+use std::str::from_utf8;
+use std::os::unix::prelude::OsStrExt;
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;を追記して、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn on_channel_dir(path: &amp;amp;Path) {
+    let dirname = from_utf8(path.file_name().unwrap().as_bytes()).unwrap().to_string();
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;でとりあえず&lt;code&gt;/&lt;/code&gt;の付かないディレクトリ名を取れそうです。難しい。やはりOSの返す文字列の扱いは面倒ですね。
+しかし一旦Rustの文字列になってしまえばこちらのもの。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let at = match dirname.find(&#39;@&#39;) {
+        Some(i) =&amp;gt; i,
+        None =&amp;gt; return
+    };
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;で&lt;code&gt;@&lt;/code&gt;の位置を取得出来ます。&lt;code&gt;@&lt;/code&gt;がなかったらreturnして無視しておきましょう（実際そういう名前のディレクトリがあるのですが今回の集計の対象外なので）。&lt;/p&gt;
+
+&lt;p&gt;あとは部分文字列を取るだけ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let channel = &amp;amp;dirname[..at];
+    let server = &amp;amp;dirname[at+1..];
+    println!(&amp;quot;{} at {}&amp;quot;, channel, server);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;ファイルリスティング:a7315be0136fc976c0c4320441efd799&#34;&gt;ファイルリスティング&lt;/h2&gt;
+
+&lt;p&gt;これは先程と同じですね。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let logs = fs::read_dir(path).unwrap();
+    for log in logs {
+        let log = log.unwrap().path();
+        println!(&amp;quot;{}&amp;quot;, log.to_string_lossy().to_string());
+    };
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;で、&lt;code&gt;on_channel_dir&lt;/code&gt;全体はこうです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn on_channel_dir(path: &amp;amp;Path) {
+    let dirname = from_utf8(path.file_name().unwrap().as_bytes()).unwrap().to_string();
+    let at = match dirname.find(&#39;@&#39;) {
+        Some(i) =&amp;gt; i,
+        None =&amp;gt; return
+    };
+    let channel = &amp;amp;dirname[..at];
+    let server = &amp;amp;dirname[at+1..];
+    println!(&amp;quot;{} at {}&amp;quot;, channel, server);
+    let logs = fs::read_dir(path).unwrap();
+    for log in logs {
+        let log = log.unwrap().path();
+        println!(&amp;quot;{}&amp;quot;, log.to_string_lossy().to_string());
+    };
+    
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;ファイルのパース:a7315be0136fc976c0c4320441efd799&#34;&gt;ファイルのパース&lt;/h1&gt;
+
+&lt;p&gt;次にまた&lt;code&gt;println!&lt;/code&gt;の部分を&lt;code&gt;on_log&lt;/code&gt;としてファイルをパースしていきましょう。&lt;/p&gt;
+
+&lt;h2 id=&#34;日付の抜き出し:a7315be0136fc976c0c4320441efd799&#34;&gt;日付の抜き出し&lt;/h2&gt;
+
+&lt;p&gt;先程と似てますので飛ばし気味にいきます。&lt;/p&gt;
+
+&lt;p&gt;簡単にやっても良いのですがお作法として日付ライブラリを使ってパースしましょう。
+&lt;code&gt;Cargo.toml&lt;/code&gt;に以下を追記。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-toml&#34;&gt;[dependencies]
+time = &amp;quot;*&amp;quot;
+log = &amp;quot;0.3.3&amp;quot;
+env_logger = &amp;quot;0.3.2&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;本当はバージョンも指定した方が良いのですが書き捨てのコードなのでまあ、良いでしょう。因みにtimeライブラリ自体扱いづらいとか色々問題があるのですがそれは後のAdvent Calendarに譲りましょう。しれっとloggerも導入します。printfデバッグにlogger便利!&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;cargo update
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;してdependenciesをインストールします。因みに&lt;code&gt;log&lt;/code&gt;がlogger facadで&lt;code&gt;env_logger&lt;/code&gt;がloggerの実装です。使い方は後程。&lt;/p&gt;
+
+&lt;p&gt;またsrc/main.rsの先頭に&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;#[macro_use]
+extern crate log;
+extern crate env_logger;
+extern crate time;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;を追記。&lt;/p&gt;
+
+&lt;p&gt;そして&lt;code&gt;on_log&lt;/code&gt;です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn on_log(log: &amp;amp;Path) {
+    let datestr = from_utf8(log.file_stem().unwrap().as_bytes()).unwrap().to_string();
+    let date = time::strptime(&amp;amp;datestr, &amp;quot;%Y-%m-%d&amp;quot;).urwrap();
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;今回は失敗しないことが分かってるので全部&lt;code&gt;unwrap&lt;/code&gt;してます。本当は&lt;code&gt;try!&lt;/code&gt;を使って上流に委ねた方がいいのですが今回は面倒なのでこうしちゃってます。正しいエラーハンドリングはtrplの&lt;a href=&#34;https://doc.rust-lang.org/book/error-handling.html&#34;&gt;Error Handling&lt;/a&gt;を読みましょう。&lt;/p&gt;
+
+&lt;h2 id=&#34;ファイルの読み出し:a7315be0136fc976c0c4320441efd799&#34;&gt;ファイルの読み出し&lt;/h2&gt;
+
+&lt;h3 id=&#34;開く:a7315be0136fc976c0c4320441efd799&#34;&gt;開く&lt;/h3&gt;
+
+&lt;p&gt;コードをいきなり載せると&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let file = match fs::File::open(log) {
+        Ok(f) =&amp;gt; f,
+        Err(e) =&amp;gt; {
+            error!(&amp;quot;could not open {}; skipping.&amp;quot;, log.display());
+            return;
+        }
+    };
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;です。これはエラーハンドリングします。1つのファイルに失敗しても次があるので。ここで使ってる&lt;code&gt;error!&lt;/code&gt;がloggerのマクロです。&lt;/p&gt;
+
+&lt;h2 id=&#34;行毎の読み出し:a7315be0136fc976c0c4320441efd799&#34;&gt;行毎の読み出し&lt;/h2&gt;
+
+&lt;p&gt;行毎の読み出しはバッファーリーダーが必要です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::io::BufReader;
+use std::io::BufRead;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;をsrc/main.rsの先頭部分に追記しましょう。因みに&lt;code&gt;BufRead&lt;/code&gt;がトレイトで、&lt;code&gt;BufReader&lt;/code&gt;が実装です。実装が必要なのは良いとして、トレイトまで必要なのはトレイトで定義された関数を呼び出すのにトレイトのインポートが必要だからですね。&lt;/p&gt;
+
+&lt;p&gt;さてさて、行の読み出しを進めます。先程オープンしたファイルを&lt;code&gt;BufReader&lt;/code&gt;で包んでやればOKです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let br = BufReader::new(&amp;amp;file);
+    for line in br.lines() {
+        let line = match line {
+            Ok(l) =&amp;gt; l,
+            Err(e) =&amp;gt; {
+                warn!(&amp;quot;ignoring error {}&amp;quot;, e);
+                continue;
+            }
+        };
+        ....
+    }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;行の読み出し結果もResultで返ってくるんですね。これも失敗したら読み飛ばせばいいので&lt;code&gt;urwrap&lt;/code&gt;せずに扱います。&lt;/p&gt;
+
+&lt;h2 id=&#34;行のパース:a7315be0136fc976c0c4320441efd799&#34;&gt;行のパース&lt;/h2&gt;
+
+&lt;h3 id=&#34;ガード:a7315be0136fc976c0c4320441efd799&#34;&gt;ガード&lt;/h3&gt;
+
+&lt;p&gt;先頭部分の時間をパースする時に部分文字列を抜き出しますが、変な行だと10文字もなかったりするので一旦ガードを付けておきましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        if line.len() &amp;lt; 10 {
+            warn!(&amp;quot;ignoring line {}&amp;quot;, line);
+            continue;
+        }
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;時間のパース:a7315be0136fc976c0c4320441efd799&#34;&gt;時間のパース&lt;/h3&gt;
+
+&lt;p&gt;これはファイル名の時とほぼ同じ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        let time = match time::strptime(&amp;amp;line[0..8], &amp;quot;%H:%M:%S&amp;quot;) {
+            Ok(t) =&amp;gt; t,
+            Err(e) =&amp;gt; {
+                warn!(&amp;quot;Parse error {}; ignoring&amp;quot;, e);
+                continue;
+
+            }
+        };
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;今度は変な行が紛れてそうな（実際、ログファイルにはよくある）のでエラーは無視します。&lt;/p&gt;
+
+&lt;h3 id=&#34;メッセージのパース:a7315be0136fc976c0c4320441efd799&#34;&gt;メッセージのパース&lt;/h3&gt;
+
+&lt;p&gt;0-8文字目に時間があって、1スペース挟むので9文字目からがメッセージですね。そして先頭の文字で判断出来るのでした。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        let msg = &amp;amp;line[9..];
+        match &amp;amp;msg[0..1] {
+            &amp;quot;!&amp;quot; =&amp;gt; println!(&amp;quot;sysmsg {}&amp;quot;, &amp;amp;msg[1..]),
+            &amp;quot;+&amp;quot; =&amp;gt; println!(&amp;quot;join {}&amp;quot;, &amp;amp;msg[1..]),
+            &amp;quot;-&amp;quot; =&amp;gt; println!(&amp;quot;part {}&amp;quot;, &amp;amp;msg[1..]),
+            &amp;quot;&amp;lt;&amp;quot; =&amp;gt; match msg.find(&#39;&amp;gt;&#39;).map(|e| (&amp;amp;msg[1..e], &amp;amp;msg[e+1..])) {
+                Some((user, body)) =&amp;gt; println!(&amp;quot;user: {} body: {}&amp;quot;, user, body),
+                None =&amp;gt; ()
+            },
+            _ =&amp;gt; println!(&amp;quot;info {}&amp;quot;, &amp;amp;msg[1..]),
+        }
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;で判断出来そうです。パースした後の話は後回し。&lt;/p&gt;
+
+&lt;h1 id=&#34;ソース全体:a7315be0136fc976c0c4320441efd799&#34;&gt;ソース全体&lt;/h1&gt;
+
+&lt;p&gt;ソースの断片が続いたので一旦ここまでの全体像を出します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;#[macro_use]
+extern crate log;
+extern crate env_logger;
+extern crate time;
+use std::str::from_utf8;
+use std::io::BufReader;
+use std::io::BufRead;
+use std::fs;
+use std::path::Path;
+use std::os::unix::prelude::OsStrExt;
+
+
+fn on_log(log: &amp;amp;Path) {
+    let datestr = from_utf8(log.file_stem().unwrap().as_bytes()).unwrap().to_string();
+    let date = time::strptime(&amp;amp;datestr, &amp;quot;%Y-%m-%d&amp;quot;);
+    let file = match fs::File::open(log) {
+        Ok(f) =&amp;gt; f,
+        Err(e) =&amp;gt; {
+            error!(&amp;quot;could not open {}; skipping.&amp;quot;, log.display());
+            return;
+        }
+    };
+    let br = BufReader::new(&amp;amp;file);
+    for line in br.lines() {
+        let line = match line {
+            Ok(l) =&amp;gt; l,
+            Err(e) =&amp;gt; {
+                warn!(&amp;quot;ignoring error {}&amp;quot;, e);
+                continue;
+            }
+        };
+        if line.len() &amp;lt; 10 {
+            warn!(&amp;quot;ignoring line {}&amp;quot;, line);
+            continue;
+        }
+        let time = match time::strptime(&amp;amp;line[0..8], &amp;quot;%H:%M:%S&amp;quot;) {
+            Ok(t) =&amp;gt; t,
+            Err(e) =&amp;gt; {
+                warn!(&amp;quot;Parse error {}; ignoring&amp;quot;, e);
+                continue;
+
+            }
+        };
+        let msg = &amp;amp;line[9..];
+        match &amp;amp;msg[0..1] {
+            &amp;quot;!&amp;quot; =&amp;gt; println!(&amp;quot;sysmsg {}&amp;quot;, &amp;amp;msg[1..]),
+            &amp;quot;+&amp;quot; =&amp;gt; println!(&amp;quot;join {}&amp;quot;, &amp;amp;msg[1..]),
+            &amp;quot;-&amp;quot; =&amp;gt; println!(&amp;quot;part {}&amp;quot;, &amp;amp;msg[1..]),
+            &amp;quot;&amp;lt;&amp;quot; =&amp;gt; match msg.find(&#39;&amp;gt;&#39;).map(|e| (&amp;amp;msg[1..e], &amp;amp;msg[e+1..])) {
+                Some((user, body)) =&amp;gt; println!(&amp;quot;user: {} body: {}&amp;quot;, user, body),
+                None =&amp;gt; ()
+            },
+            _ =&amp;gt; println!(&amp;quot;info {}&amp;quot;, &amp;amp;msg[1..]),
+        }
+    }
+}
+
+fn on_channel_dir(path: &amp;amp;Path) {
+    let dirname = from_utf8(path.file_name().unwrap().as_bytes()).unwrap().to_string();
+    let at = match dirname.find(&#39;@&#39;) {
+        Some(i) =&amp;gt; i,
+        None =&amp;gt; return
+    };
+    let channel = &amp;amp;dirname[..at];
+    let server = &amp;amp;dirname[at+1..];
+    println!(&amp;quot;{} at {}&amp;quot;, channel, server);
+    let logs = fs::read_dir(path).unwrap();
+    for log in logs {
+        on_log(&amp;amp;log.unwrap().path());
+    };
+}
+
+
+fn main(){
+    env_logger::init().unwrap();
+    let paths = fs::read_dir(&amp;quot;/home/kim/log&amp;quot;).unwrap();
+    for path in paths {
+        let path = path.unwrap().path();
+        on_channel_dir(&amp;amp;path);
+    }
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;実はmainの先頭で&lt;code&gt;env_logger::init().unwrap();&lt;/code&gt;でロガーの初期化してました。忘れてましたね。ごめんなさい。&lt;/p&gt;
+
+&lt;p&gt;さて、これで一旦走らせてみましょう。動く筈です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cargo run
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;動いてるようですが、遅い。出力が多くてターミナル側がボトルネックのようです。&lt;/p&gt;
+
+&lt;h1 id=&#34;パニックハンドルとチューニング:a7315be0136fc976c0c4320441efd799&#34;&gt;パニックハンドルとチューニング&lt;/h1&gt;
+
+&lt;p&gt;一旦メッセージを出力をやめて様子見してみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;            &amp;quot;!&amp;quot; =&amp;gt; (),
+            &amp;quot;+&amp;quot; =&amp;gt; (),
+            &amp;quot;-&amp;quot; =&amp;gt; (),
+            &amp;quot;&amp;lt;&amp;quot; =&amp;gt; (),
+            _ =&amp;gt; (),
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;それでもまだ遅い上に謎のパニックが出てます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;thread &#39;/home/kim/log/#lisp@freenode&#39; panicked at &#39;index 0 and/or 8 in ` ;ZZZz;…,` do not lie on character boundary&#39;, ../src/libcore/str/mod.rs:1311
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ログを見てみましょう。env_loggerは環境変数からログレベルを渡してあげるとログを出します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ RUST_LOG=Trace cargo run
+...
+WARN:irc_log: ignoring error stream did not contain valid UTF-8
+WARN:irc_log: ignoring error stream did not contain valid UTF-8
+WARN:irc_log: ignoring error stream did not contain valid UTF-8
+WARN:irc_log: ignoring error stream did not contain valid UTF-8
+WARN:irc_log: ignoring error stream did not contain valid UTF-8
+WARN:irc_log: ignoring error stream did not contain valid UTF-8
+WARN:irc_log: ignoring error stream did not contain valid UTF-8
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;意外と変な行が一杯あるのですね。しかしこれらはちゃんとエラーハンドリングしてるので問題ありません。&lt;/p&gt;
+
+&lt;p&gt;各所で&lt;code&gt;unwrap&lt;/code&gt;してるせいな気もしますが、&lt;code&gt;urwrap&lt;/code&gt;のせいならそういうメッセージが出るので違います。&lt;/p&gt;
+
+&lt;p&gt;実はこれ、非UTF-8のバイト列でrustの標準ライブラリが内部でパニックを出してます。
+これの扱いも後のAdvent Calendarに譲るとして、ワークアラウンドを捜しましょう。rust1.4時点ではパニックをハンドルする手段はありません。&lt;/p&gt;
+
+&lt;p&gt;パニックメッセージの先頭に&lt;code&gt;thread&lt;/code&gt;とついてるのでthreadで包めば良さそうです。&lt;/p&gt;
+
+&lt;h2 id=&#34;thread:a7315be0136fc976c0c4320441efd799&#34;&gt;Thread&lt;/h2&gt;
+
+&lt;p&gt;まずはthreadをインポートします。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::thread::Builder;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そしてon_channel_logを少し弄りましょう。無効なバイト列を含むファイルをざっくり切る感じで。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    for log in logs {
+        on_log(&amp;amp;log.unwrap().path());
+    };
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;としていた部分を&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let threads = logs.map(|log| {
+        let log = log.unwrap().path();
+        let pathname = log.to_string_lossy().to_string();
+        Builder::new().name(pathname).spawn(move|| on_log(&amp;amp;log))
+    }).collect::&amp;lt;Vec&amp;lt;_&amp;gt;&amp;gt;();
+    for thread in threads {
+        let _ = thread.unwrap().join();
+    }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;とします。一見複雑ですが、ファイル毎にスレッドを作って全部をvectorにして集めてそれぞれjoinを待ってるだけです。
+そしてスレッド名を処理するファイル名にしたいのでスレッドビルダを使っています。&lt;/p&gt;
+
+&lt;p&gt;さて、これで走らせてみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ time cargo run
+...
+#lisp at freenode
+thread &#39;/home/kim/log/#lisp@freenode/2014-08-18.txt&#39; panicked at &#39;index 0 and/or 8 in ` ;ZZZz;…,` do not lie on character boundary&#39;, ../src/libcore/str/mod.rs:1311
+#emacs at freenode
+...
+cargo run  327.21s user 8.71s system 630% cpu 53.289 total
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;lispチャネルの1ファイルだけに変なバイト列があることが分かりました。&lt;/p&gt;
+
+&lt;p&gt;そしてパフォーマンスですが、とりあえず&lt;code&gt;top&lt;/code&gt;で見る限りCPUは最大770%使ってくれてます（8コアマシン）。ファイル毎にスレッド作ってるので若干リソースの食い合いが発生してますがこれだけ並列度があればスレッドプールを使うまでもないでしょう。&lt;/p&gt;
+
+&lt;h2 id=&#34;さらなるチューニング:a7315be0136fc976c0c4320441efd799&#34;&gt;さらなるチューニング…？&lt;/h2&gt;
+
+&lt;p&gt;しかしそれでもまだ遅いですね。ちょこっと書いては走らせるのサイクルを回すには耐えられません。&lt;/p&gt;
+
+&lt;p&gt;そういえばログ全体のファイルサイズを確認してなかった。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ du -h
+...
+774M   .
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;意外と小さい。まだチューニングの余地はありそうです。メモリアロケーションを減らしましょうか、それとも時間のパースを手書きでやりましょうか。&lt;/p&gt;
+
+&lt;p&gt;いいえ。もっと簡単に速くする方法があります。&lt;code&gt;--release&lt;/code&gt;をつけて実行すればOKです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cargo run --release
+...
+...
+cargo run --release  3.63s user 5.44s system 203% cpu 4.453 total
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;(/ 53.289 4.453);=&amp;gt; 11.966988547046935&lt;/code&gt; 。12倍速くなりました。1ディレクトリ700以上のファイルがあってそれぞれにスレッドを作っているのでそろそろそのオーバーヘッドが効いてきてますね。&lt;/p&gt;
+
+&lt;p&gt;スレッドプールを試してみたい気もしますがひとまずこれで置いておきましょう。&lt;/p&gt;
+
+&lt;p&gt;次は後編、DBへのインポートです。&lt;/p&gt;
+
+&lt;p&gt;蛇足ですが行のパースのところは正規表現でも出来ましたね。そっちの方が好きな方は試してみて下さい。&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>一時ファイルの作り方</title>
@@ -2260,111 +2775,6 @@ Lispを書くとき、Lispを書いてるかもしれないしLispを構成す�
 &lt;li&gt;言語機能だけでなくマクロを前提とした設計も重要である。&lt;/li&gt;
 &lt;li&gt;LispはS式で出来ている以前にLispで出来ている。&lt;/li&gt;
 &lt;/ul&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>あなたの知らないShebang</title>
-      <link>http://keens.github.io/blog/2015/06/26/anatanoshiranaishebang</link>
-      <pubDate>Fri, 26 Jun 2015 23:24:44 +0900</pubDate>
-      
-      <guid>http://keens.github.io/blog/2015/06/26/anatanoshiranaishebang</guid>
-      <description>
-
-&lt;p&gt;κeenです。最近は何故かBlack君って呼ばれます。Shebangの書き方にはいくつかあって、それを利用したふと面白い方法を思い付いたので共有を。&lt;/p&gt;
-
-&lt;p&gt;さて、ご存知Shebangといえば&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;#!/bin/sh
-...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のようにファイルの1行目が&lt;code&gt;#!&lt;/code&gt;から始まっているとシェルがそれ以降の文字列を実行可能ファイルのパス名として捜して実行してくれるものですが、実は&lt;code&gt;#!&lt;/code&gt;は唯一のフォーマットではありません。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;#!&lt;/code&gt;がデファクトになる前なのかそもそもシェルにコメントがなかった時代のものなのかは知りませんが昔は&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;: /bin/sh
-...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;と&lt;code&gt;:&lt;/code&gt;で始めていたらしいです。因みに&lt;code&gt;:&lt;/code&gt;は「何もしないコマンド」です。実質的にコメントとして扱ったり副作用のある変数展開だけを行なったりプログラマティックコメントアウトだったりの用途で使われてます。&lt;/p&gt;
-
-&lt;p&gt;さて、シェルは全て文字列なのでクォートしてもしなくても構いません。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;&amp;quot;:&amp;quot; &amp;quot;/bin/sh&amp;quot;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;としてもちゃんと動いてくれます。なぜわざわざクォートするかというと&lt;a href=&#34;http://keens.github.io/blog/2014/12/08/ge-tochu-li-xi-potaburunacommon-lispshi-xing-ke-neng-huairuwozuo-ru/&#34;&gt;割と処理系ポータブルなCommon Lisp実行可能ファイルを作る | κeenのHappy Hacκing Blog&lt;/a&gt;のように別の言語のスクリプトとして実行される時に文字列リテラルになってくれると単純に無視されるので互換性が高まるのです。&lt;/p&gt;
-
-&lt;p&gt;ということで完全版ポータブルなCommon Lisp実行可能ファイルはこうなります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;&amp;quot;:&amp;quot; &amp;quot;/bin/sh&amp;quot;
-
-#|
-run_if_exists(){
- command -v $1 &amp;gt; /dev/null 2&amp;gt;&amp;amp;1 &amp;amp;&amp;amp; exec &amp;quot;$@&amp;quot;
-}
- run_if_exists cl &amp;quot;$0&amp;quot; &amp;quot;$@&amp;quot;
- run_if_exists sbcl --noinform --no-sysinit --no-userinit --script &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
- run_if_exists clisp -norc --quiet --silent -on-error exit  &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
- run_if_exists ecl -norc -q -shell &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
- run_if_exists mkcl -norc -q -shell &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
- run_if_exists alisp -qq -#! &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
- run_if_exists ccl --no-init --quiet --batch --load &amp;quot;$0&amp;quot;  --eval &#39;(quit)&#39; -- &amp;quot;$@&amp;quot;
- run_if_exists abcl --noinform --noinit --nosystem --batch --load &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
- run_if_exists lisp -quiet -noinit -batch -load &amp;quot;$0&amp;quot; -eval &#39;(quit)&#39; -- &amp;quot;$@&amp;quot;
- echo &amp;quot;No lisp implementation found&amp;quot;
- exit 1
-|#
-
-(write-line (lisp-implementation-type))
-(force-output)
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;abclとcclが利用可能になりました。あとCIMも捜すようにしました。roswellは作者に訊いて下さい。&lt;/p&gt;
-
-&lt;p&gt;ちなみに、shebangの解釈はシェルに依存するのですが、B Shell, csh, tcsh, dash, Bash, zshで動作確認しました。古い機能なので新しいシェルほど切り捨てている可能性があったのですがBashやzshが大丈夫だったので良かったです。
-一応非推奨な気がしますがこれしか方法がないので仕方ないですね。&lt;/p&gt;
-
-&lt;p&gt;ということでみなさんスクリプト書きましょう。&lt;/p&gt;
-
-&lt;h1 id=&#34;追記:97aff0076544159c37193ad080a89d0a&#34;&gt;追記&lt;/h1&gt;
-
-&lt;blockquote class=&#34;twitter-tweet&#34; data-conversation=&#34;none&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;&lt;a href=&#34;https://twitter.com/blackenedgold&#34;&gt;@blackenedgold&lt;/a&gt; shebangの解釈はシェルじゃなくてOSのexec()がやります。で、#!や認識できるバイナリ以外は、exec()がエラーを返した後でシェルがファイルを見て、テキストファイルならシェルスクリプトとして実行ってやってます。なので先頭が:の場合は(続&lt;/p&gt;&amp;mdash; Kilo Kawai (@anohana) &lt;a href=&#34;https://twitter.com/anohana/status/614551978526445570&#34;&gt;2015, 6月 26&lt;/a&gt;&lt;/blockquote&gt;
-
-&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-conversation=&#34;none&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;&lt;a href=&#34;https://twitter.com/blackenedgold&#34;&gt;@blackenedgold&lt;/a&gt; shebangとしてではなく、シェルがシェルスクリプトとして読んでるだけなので、その後に/bin/shとか書いてあっても関係ないはず (シェルによってはそこも見るかもしれませんが)&lt;/p&gt;&amp;mdash; Kilo Kawai (@anohana) &lt;a href=&#34;https://twitter.com/anohana/status/614552151759589376&#34;&gt;2015, 6月 26&lt;/a&gt;&lt;/blockquote&gt;
-&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
-
-&lt;p&gt;ということで実験してみたところ、先頭の&lt;code&gt;&amp;quot;:&amp;quot; &amp;quot;/bin/sh&amp;quot;&lt;/code&gt;はどのシェルも読み飛ばす模様(つまり、&lt;code&gt;&amp;quot;:&amp;quot; &amp;quot;/usr/bin/ruby&amp;quot;&lt;/code&gt;と書いてもrubyが実行される訳ではない)。&lt;/p&gt;
-
-&lt;p&gt;で、先程の 完全版から&lt;code&gt;&amp;quot;:&amp;quot; &amp;quot;/bin/sh&amp;quot;&lt;/code&gt;を取り除いて&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;#|
-run_if_exists(){
- command -v $1 &amp;gt; /dev/null 2&amp;gt;&amp;amp;1 &amp;amp;&amp;amp; exec &amp;quot;$@&amp;quot;
-}
- run_if_exists cl &amp;quot;$0&amp;quot; &amp;quot;$@&amp;quot;
- run_if_exists sbcl --noinform --no-sysinit --no-userinit --script &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
- run_if_exists clisp -norc --quiet --silent -on-error exit  &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
- run_if_exists ecl -norc -q -shell &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
- run_if_exists mkcl -norc -q -shell &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
- run_if_exists alisp -qq -#! &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
- run_if_exists ccl --no-init --quiet --batch --load &amp;quot;$0&amp;quot;  --eval &#39;(quit)&#39; -- &amp;quot;$@&amp;quot;
- run_if_exists abcl --noinform --noinit --nosystem --batch --load &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
- run_if_exists lisp -quiet -noinit -batch -load &amp;quot;$0&amp;quot; -eval &#39;(quit)&#39; -- &amp;quot;$@&amp;quot;
- echo &amp;quot;No lisp implementation found&amp;quot;
- exit 1
-|#
-
-(write-line (lisp-implementation-type))
-(force-output)
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;としても動いたのでこれが最終版ということになります。&lt;/p&gt;
-
-&lt;p&gt;大学の講究でMINIX本やったどころかexecのところ自分の担当だったのに恥かしい。&lt;/p&gt;
 </description>
     </item>
     
