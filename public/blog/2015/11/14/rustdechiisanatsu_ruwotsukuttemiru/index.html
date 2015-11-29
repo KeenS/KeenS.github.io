@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+    <head>
+        
+        <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+
+        <title>Rustで小さなツールを作ってみる(前編) | κeenのHappy Hacκing Blog</title>
+        <link rel="stylesheet" href='http://fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css' />
+        <link rel="stylesheet" href="http://keens.github.io//libraries/normalize.3.0.1.css" />
+        <link rel="stylesheet" href="http://keens.github.io//css/liquorice.css" />
+        <link rel="shortcut icon" href="http://KeenS.github.io/favicon.ico" />
+        <link rel="apple-touch-icon-precomposed" href="http://KeenS.github.io/apple-touch-icon-144-precomposed.png" sizes="144x144" />
+        <link rel="alternate" href="" type="application/rss+xml" title="κeenのHappy Hacκing Blog" />
+        
+        <script>
+         (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+             (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+                                  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+         })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+         ga('create', 'UA-43779888-1', 'auto');
+         ga('send', 'pageview');
+
+        </script>
+        
+        <link rel="stylesheet" href="http://keens.github.io//highlight.js/styles/xcode.css" />
+<script src="http://keens.github.io//highlight.js/highlight.min.js"></script>
+<script>hljs.initHighlightingOnLoad();</script>
+<script type="text/x-mathjax-config">
+ MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
+</script>
+<script type="text/javascript"
+        src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML">
+</script>
+<meta http-equiv="X-UA-Compatible" CONTENT="IE=EmulateIE7" />
+
+    </head>
+    <body class="li-body">
+
+<header class="li-page-header">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-brand li-left">
+                <a href="http://keens.github.io//">κeenのHappy Hacκing Blog</a> | Lispエイリアンの狂想曲</div>
+                <div class="li-menu li-right">
+                    <span class="li-menu-icon" onclick="javascript:toggle('menu');">&#9776;</span>
+                    <ul id="menu2" class="li-menu-items">
+                        
+                            <li><a href="http://KeenS.github.io/about"> About </a></li>
+                        
+                            <li><a href="http://KeenS.github.io/post/"> Blog </a></li>
+                        
+                            <li><a href="http://KeenS.github.io/slide/"> Slide </a></li>
+                        
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="sixteen columns">
+                <ul id="menu" class="li-menu-items li-menu-mobile">
+                    
+                        <li><a href="http://KeenS.github.io/about"> About </a></li>
+                    
+                        <li><a href="http://KeenS.github.io/post/"> Blog </a></li>
+                    
+                        <li><a href="http://KeenS.github.io/slide/"> Slide </a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+
+
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <article class="li-article">
+                    <header class="li-article-header">
+                        <h1 class="li-article-title">Rustで小さなツールを作ってみる(前編)</h1>
+                        <div class="li-article-meta">
+    <time class="li-article-date">2015-11-14</time>
+    <ul class="li-article-tag">
+    
+        <li>
+            <a href="http://KeenS.github.io/categories/rust">Rust</a>
+        </li>
+    
+        <li>
+            <a href="http://KeenS.github.io/categories/advent-calendar">Advent Calendar</a>
+        </li>
+    
+        <li>
+            <a href="http://KeenS.github.io/categories/advent-calendar-2015">Advent Calendar 2015</a>
+        </li>
+    
+</ul>
+
+</div>
+
+                    </header>
+                    <section>
+                        
+
+<p>この記事は<a href="http://qiita.com/advent-calendar/2015/rust-lang">Rust Advent Calendar 2015</a> 1日目の記事です。<br />
+次 <a href="http://KeenS.github.io/blog/2015/11/29/rustdechiisanatsu_ruwotsukuttemiru_kouhen_/">Rustで小さなツールを作ってみる(後編)</a></p>
+
+<p>κeenです。Rust Advent Calendar初日ということで軽い話から。
+小さなツールって何だよって感じですが手元にIRCの生ログが大量にあるのでそれをDBにインポートしてみましょう。
+あまりRustに向いた仕事じゃなさそうですが手始めとして。</p>
+
+<p>前編でログのパースを、後編でDBへのインポートをやります。</p>
+
+<p>IRCの生ログは<a href="http://www.clovery.jp/tiarra/">tiarra</a>が吐いたものです。</p>
+
+<p><code>#emacs@freenode</code>のように<code>チャネル名@サーバ名</code>のディレクトリに入っていて、ファイル名は<code>YYYY-mm-dd.txt</code>で、</p>
+
+<pre><code>13:43:24 &lt;#emacs@freenode:codingquark&gt; Such key generation, much wow.
+13:43:59 ! Vejeta` (Ping timeout: 264 seconds)
+13:44:30 + jcazevedo (jcazevedo!~jcazevedo@a94-132-141-99.cpe.netcabo.pt) to #emacs@freenode
+13:45:30 + quazimodo (quazimodo!~quazimodo@155.143.14.28) to #emacs@freenode
+13:45:32 ! Hugehead_ (Read error: Connection reset by peer)
+13:48:48 + favadi (favadi!~textual@113.190.4.106) to #emacs@freenode
+13:51:06 wizzo -&gt; bitchimightbe
+13:52:23 bitchimightbe -&gt; wizzo
+13:53:05 - frost3772 from #emacs@freenode (&quot;ERC (IRC client for Emacs 24.5.1)&quot;)
+13:56:37 ! chandan (Quit: WeeChat 1.2)
+13:56:38 ! plunderous (Read error: Connection res
+</code></pre>
+
+<p>のような形式で入ってます。先頭に<code>&lt;</code>が付いてるのが発言、<code>!</code>がついてるのがなんかメッセージ(多分quitとかkillとか)、<code>+</code>がjoin、<code>-</code>がpart、無しがnickとかnoticeですかね。他にもログ取ってるircコマンドはあるのですが<code>!</code>に内包されてそうですね(tiarraのマニュアルに載ってそうですが見るの面倒)</p>
+
+<p>因みにログ全体は<code>~/log</code>に置いてあります。</p>
+
+<p>一応treeするとこんな感じ。</p>
+
+<pre><code>.
+├── #emacs@freenode
+│   ├── 2014-04-11.txt
+│   ├── 2014-04-12.txt
+│   ├── 2014-04-13.txt
+..  ..
+</code></pre>
+
+<p>2014-04-11から2015-11-01までの間ロギングしてます。</p>
+
+<h1 id="ディレクトリリスティングまで:a7315be0136fc976c0c4320441efd799">ディレクトリリスティングまで</h1>
+
+<p>まずは</p>
+
+<pre><code>$ cargo new irc_log --bin
+$ cd irc_log
+</code></pre>
+
+<p>そして<code>src/main.rs</code>を開いて</p>
+
+<pre><code class="language-rust">use std::fs;
+
+fn main() {
+    let paths = fs::read_dir(&quot;/home/kim/log&quot;).unwrap();
+    for path in paths {
+        let path = path.unwrap().path();
+        println!(&quot;{}&quot;, path.to_string_lossy().to_string());
+    }
+}
+</code></pre>
+
+<p>と書きましょう。path path煩いですね。OSの返す文字列(Cの文字列)とRustの文字列の違いだとか一旦<code>Path</code>で抽象化してるだとかで文字列を抜き出すのは一苦労です。</p>
+
+<p>さて、</p>
+
+<pre><code>$ cargo run
+</code></pre>
+
+<p>でディレクトリ名が出てくればOK。</p>
+
+<h1 id="ファイル名リスティング:a7315be0136fc976c0c4320441efd799">ファイル名リスティング</h1>
+
+<p>mainを</p>
+
+<pre><code class="language-rust">use std::fs;
+
+fn main() {
+    let paths = fs::read_dir(&quot;/home/kim/log&quot;).unwrap();
+    for path in paths {
+        let path = path.unwrap().path();
+        on_channel_dir(&amp;path);
+    }
+}
+</code></pre>
+
+<p>と置き換えてチャネルのディレクトリでの作業は<code>on_channel_dir</code>でやりましょう。</p>
+
+<h2 id="チャネル名とサーバ名の抜き出し:a7315be0136fc976c0c4320441efd799">チャネル名とサーバ名の抜き出し</h2>
+
+<p>ディレクトリ名が<code>チャネル名@サーバ名</code> の 形をしているので @の前後を抜き出せば良さそうです。</p>
+
+<p>src/main.rsの先頭に</p>
+
+<pre><code class="language-rust">use std::path::Path;
+use std::str::from_utf8;
+use std::os::unix::prelude::OsStrExt;
+
+</code></pre>
+
+<p>を追記して、</p>
+
+<pre><code class="language-rust">fn on_channel_dir(path: &amp;Path) {
+    let dirname = from_utf8(path.file_name().unwrap().as_bytes()).unwrap().to_string();
+}
+</code></pre>
+
+<p>でとりあえず<code>/</code>の付かないディレクトリ名を取れそうです。難しい。やはりOSの返す文字列の扱いは面倒ですね。
+しかし一旦Rustの文字列になってしまえばこちらのもの。</p>
+
+<pre><code class="language-rust">    let at = match dirname.find('@') {
+        Some(i) =&gt; i,
+        None =&gt; return
+    };
+</code></pre>
+
+<p>で<code>@</code>の位置を取得出来ます。<code>@</code>がなかったらreturnして無視しておきましょう（実際そういう名前のディレクトリがあるのですが今回の集計の対象外なので）。</p>
+
+<p>あとは部分文字列を取るだけ。</p>
+
+<pre><code class="language-rust">    let channel = &amp;dirname[..at];
+    let server = &amp;dirname[at+1..];
+    println!(&quot;{} at {}&quot;, channel, server);
+</code></pre>
+
+<h2 id="ファイルリスティング:a7315be0136fc976c0c4320441efd799">ファイルリスティング</h2>
+
+<p>これは先程と同じですね。</p>
+
+<pre><code class="language-rust">    let logs = fs::read_dir(path).unwrap();
+    for log in logs {
+        let log = log.unwrap().path();
+        println!(&quot;{}&quot;, log.to_string_lossy().to_string());
+    };
+</code></pre>
+
+<p>で、<code>on_channel_dir</code>全体はこうです。</p>
+
+<pre><code class="language-rust">fn on_channel_dir(path: &amp;Path) {
+    let dirname = from_utf8(path.file_name().unwrap().as_bytes()).unwrap().to_string();
+    let at = match dirname.find('@') {
+        Some(i) =&gt; i,
+        None =&gt; return
+    };
+    let channel = &amp;dirname[..at];
+    let server = &amp;dirname[at+1..];
+    println!(&quot;{} at {}&quot;, channel, server);
+    let logs = fs::read_dir(path).unwrap();
+    for log in logs {
+        let log = log.unwrap().path();
+        println!(&quot;{}&quot;, log.to_string_lossy().to_string());
+    };
+    
+}
+</code></pre>
+
+<h1 id="ファイルのパース:a7315be0136fc976c0c4320441efd799">ファイルのパース</h1>
+
+<p>次にまた<code>println!</code>の部分を<code>on_log</code>としてファイルをパースしていきましょう。</p>
+
+<h2 id="日付の抜き出し:a7315be0136fc976c0c4320441efd799">日付の抜き出し</h2>
+
+<p>先程と似てますので飛ばし気味にいきます。</p>
+
+<p>簡単にやっても良いのですがお作法として日付ライブラリを使ってパースしましょう。
+<code>Cargo.toml</code>に以下を追記。</p>
+
+<pre><code class="language-toml">[dependencies]
+time = &quot;*&quot;
+log = &quot;0.3.3&quot;
+env_logger = &quot;0.3.2&quot;
+</code></pre>
+
+<p>本当はバージョンも指定した方が良いのですが書き捨てのコードなのでまあ、良いでしょう。因みにtimeライブラリ自体扱いづらいとか色々問題があるのですがそれは後のAdvent Calendarに譲りましょう。しれっとloggerも導入します。printfデバッグにlogger便利!</p>
+
+<pre><code>cargo update
+</code></pre>
+
+<p>してdependenciesをインストールします。因みに<code>log</code>がlogger facadで<code>env_logger</code>がloggerの実装です。使い方は後程。</p>
+
+<p>またsrc/main.rsの先頭に</p>
+
+<pre><code class="language-rust">#[macro_use]
+extern crate log;
+extern crate env_logger;
+extern crate time;
+</code></pre>
+
+<p>を追記。</p>
+
+<p>そして<code>on_log</code>です。</p>
+
+<pre><code class="language-rust">fn on_log(log: &amp;Path) {
+    let datestr = from_utf8(log.file_stem().unwrap().as_bytes()).unwrap().to_string();
+    let date = time::strptime(&amp;datestr, &quot;%Y-%m-%d&quot;).urwrap();
+}
+</code></pre>
+
+<p>今回は失敗しないことが分かってるので全部<code>unwrap</code>してます。本当は<code>try!</code>を使って上流に委ねた方がいいのですが今回は面倒なのでこうしちゃってます。正しいエラーハンドリングはtrplの<a href="https://doc.rust-lang.org/book/error-handling.html">Error Handling</a>を読みましょう。</p>
+
+<h2 id="ファイルの読み出し:a7315be0136fc976c0c4320441efd799">ファイルの読み出し</h2>
+
+<h3 id="開く:a7315be0136fc976c0c4320441efd799">開く</h3>
+
+<p>コードをいきなり載せると</p>
+
+<pre><code class="language-rust">    let file = match fs::File::open(log) {
+        Ok(f) =&gt; f,
+        Err(e) =&gt; {
+            error!(&quot;could not open {}; skipping.&quot;, log.display());
+            return;
+        }
+    };
+</code></pre>
+
+<p>です。これはエラーハンドリングします。1つのファイルに失敗しても次があるので。ここで使ってる<code>error!</code>がloggerのマクロです。</p>
+
+<h2 id="行毎の読み出し:a7315be0136fc976c0c4320441efd799">行毎の読み出し</h2>
+
+<p>行毎の読み出しはバッファーリーダーが必要です。</p>
+
+<pre><code class="language-rust">use std::io::BufReader;
+use std::io::BufRead;
+</code></pre>
+
+<p>をsrc/main.rsの先頭部分に追記しましょう。因みに<code>BufRead</code>がトレイトで、<code>BufReader</code>が実装です。実装が必要なのは良いとして、トレイトまで必要なのはトレイトで定義された関数を呼び出すのにトレイトのインポートが必要だからですね。</p>
+
+<p>さてさて、行の読み出しを進めます。先程オープンしたファイルを<code>BufReader</code>で包んでやればOKです。</p>
+
+<pre><code class="language-rust">    let br = BufReader::new(&amp;file);
+    for line in br.lines() {
+        let line = match line {
+            Ok(l) =&gt; l,
+            Err(e) =&gt; {
+                warn!(&quot;ignoring error {}&quot;, e);
+                continue;
+            }
+        };
+        ....
+    }
+</code></pre>
+
+<p>行の読み出し結果もResultで返ってくるんですね。これも失敗したら読み飛ばせばいいので<code>urwrap</code>せずに扱います。</p>
+
+<h2 id="行のパース:a7315be0136fc976c0c4320441efd799">行のパース</h2>
+
+<h3 id="ガード:a7315be0136fc976c0c4320441efd799">ガード</h3>
+
+<p>先頭部分の時間をパースする時に部分文字列を抜き出しますが、変な行だと10文字もなかったりするので一旦ガードを付けておきましょう。</p>
+
+<pre><code class="language-rust">        if line.len() &lt; 10 {
+            warn!(&quot;ignoring line {}&quot;, line);
+            continue;
+        }
+
+</code></pre>
+
+<h3 id="時間のパース:a7315be0136fc976c0c4320441efd799">時間のパース</h3>
+
+<p>これはファイル名の時とほぼ同じ。</p>
+
+<pre><code class="language-rust">        let time = match time::strptime(&amp;line[0..8], &quot;%H:%M:%S&quot;) {
+            Ok(t) =&gt; t,
+            Err(e) =&gt; {
+                warn!(&quot;Parse error {}; ignoring&quot;, e);
+                continue;
+
+            }
+        };
+</code></pre>
+
+<p>今度は変な行が紛れてそうな（実際、ログファイルにはよくある）のでエラーは無視します。</p>
+
+<h3 id="メッセージのパース:a7315be0136fc976c0c4320441efd799">メッセージのパース</h3>
+
+<p>0-8文字目に時間があって、1スペース挟むので9文字目からがメッセージですね。そして先頭の文字で判断出来るのでした。</p>
+
+<pre><code class="language-rust">        let msg = &amp;line[9..];
+        match &amp;msg[0..1] {
+            &quot;!&quot; =&gt; println!(&quot;sysmsg {}&quot;, &amp;msg[1..]),
+            &quot;+&quot; =&gt; println!(&quot;join {}&quot;, &amp;msg[1..]),
+            &quot;-&quot; =&gt; println!(&quot;part {}&quot;, &amp;msg[1..]),
+            &quot;&lt;&quot; =&gt; match msg.find('&gt;').map(|e| (&amp;msg[1..e], &amp;msg[e+1..])) {
+                Some((user, body)) =&gt; println!(&quot;user: {} body: {}&quot;, user, body),
+                None =&gt; ()
+            },
+            _ =&gt; println!(&quot;info {}&quot;, &amp;msg[1..]),
+        }
+
+</code></pre>
+
+<p>で判断出来そうです。パースした後の話は後回し。</p>
+
+<h1 id="ソース全体:a7315be0136fc976c0c4320441efd799">ソース全体</h1>
+
+<p>ソースの断片が続いたので一旦ここまでの全体像を出します。</p>
+
+<pre><code class="language-rust">#[macro_use]
+extern crate log;
+extern crate env_logger;
+extern crate time;
+use std::str::from_utf8;
+use std::io::BufReader;
+use std::io::BufRead;
+use std::fs;
+use std::path::Path;
+use std::os::unix::prelude::OsStrExt;
+
+
+fn on_log(log: &amp;Path) {
+    let datestr = from_utf8(log.file_stem().unwrap().as_bytes()).unwrap().to_string();
+    let date = time::strptime(&amp;datestr, &quot;%Y-%m-%d&quot;);
+    let file = match fs::File::open(log) {
+        Ok(f) =&gt; f,
+        Err(e) =&gt; {
+            error!(&quot;could not open {}; skipping.&quot;, log.display());
+            return;
+        }
+    };
+    let br = BufReader::new(&amp;file);
+    for line in br.lines() {
+        let line = match line {
+            Ok(l) =&gt; l,
+            Err(e) =&gt; {
+                warn!(&quot;ignoring error {}&quot;, e);
+                continue;
+            }
+        };
+        if line.len() &lt; 10 {
+            warn!(&quot;ignoring line {}&quot;, line);
+            continue;
+        }
+        let time = match time::strptime(&amp;line[0..8], &quot;%H:%M:%S&quot;) {
+            Ok(t) =&gt; t,
+            Err(e) =&gt; {
+                warn!(&quot;Parse error {}; ignoring&quot;, e);
+                continue;
+
+            }
+        };
+        let msg = &amp;line[9..];
+        match &amp;msg[0..1] {
+            &quot;!&quot; =&gt; println!(&quot;sysmsg {}&quot;, &amp;msg[1..]),
+            &quot;+&quot; =&gt; println!(&quot;join {}&quot;, &amp;msg[1..]),
+            &quot;-&quot; =&gt; println!(&quot;part {}&quot;, &amp;msg[1..]),
+            &quot;&lt;&quot; =&gt; match msg.find('&gt;').map(|e| (&amp;msg[1..e], &amp;msg[e+1..])) {
+                Some((user, body)) =&gt; println!(&quot;user: {} body: {}&quot;, user, body),
+                None =&gt; ()
+            },
+            _ =&gt; println!(&quot;info {}&quot;, &amp;msg[1..]),
+        }
+    }
+}
+
+fn on_channel_dir(path: &amp;Path) {
+    let dirname = from_utf8(path.file_name().unwrap().as_bytes()).unwrap().to_string();
+    let at = match dirname.find('@') {
+        Some(i) =&gt; i,
+        None =&gt; return
+    };
+    let channel = &amp;dirname[..at];
+    let server = &amp;dirname[at+1..];
+    println!(&quot;{} at {}&quot;, channel, server);
+    let logs = fs::read_dir(path).unwrap();
+    for log in logs {
+        on_log(&amp;log.unwrap().path());
+    };
+}
+
+
+fn main(){
+    env_logger::init().unwrap();
+    let paths = fs::read_dir(&quot;/home/kim/log&quot;).unwrap();
+    for path in paths {
+        let path = path.unwrap().path();
+        on_channel_dir(&amp;path);
+    }
+}
+
+</code></pre>
+
+<p>実はmainの先頭で<code>env_logger::init().unwrap();</code>でロガーの初期化してました。忘れてましたね。ごめんなさい。</p>
+
+<p>さて、これで一旦走らせてみましょう。動く筈です。</p>
+
+<pre><code>$ cargo run
+</code></pre>
+
+<p>動いてるようですが、遅い。出力が多くてターミナル側がボトルネックのようです。</p>
+
+<h1 id="パニックハンドルとチューニング:a7315be0136fc976c0c4320441efd799">パニックハンドルとチューニング</h1>
+
+<p>一旦メッセージを出力をやめて様子見してみましょう。</p>
+
+<pre><code class="language-rust">            &quot;!&quot; =&gt; (),
+            &quot;+&quot; =&gt; (),
+            &quot;-&quot; =&gt; (),
+            &quot;&lt;&quot; =&gt; (),
+            _ =&gt; (),
+
+</code></pre>
+
+<p>それでもまだ遅い上に謎のパニックが出てます。</p>
+
+<pre><code>thread '/home/kim/log/#lisp@freenode' panicked at 'index 0 and/or 8 in ` ;ZZZz;…,` do not lie on character boundary', ../src/libcore/str/mod.rs:1311
+</code></pre>
+
+<p>ログを見てみましょう。env_loggerは環境変数からログレベルを渡してあげるとログを出します。</p>
+
+<pre><code>$ RUST_LOG=Trace cargo run
+...
+WARN:irc_log: ignoring error stream did not contain valid UTF-8
+WARN:irc_log: ignoring error stream did not contain valid UTF-8
+WARN:irc_log: ignoring error stream did not contain valid UTF-8
+WARN:irc_log: ignoring error stream did not contain valid UTF-8
+WARN:irc_log: ignoring error stream did not contain valid UTF-8
+WARN:irc_log: ignoring error stream did not contain valid UTF-8
+WARN:irc_log: ignoring error stream did not contain valid UTF-8
+...
+</code></pre>
+
+<p>意外と変な行が一杯あるのですね。しかしこれらはちゃんとエラーハンドリングしてるので問題ありません。</p>
+
+<p>各所で<code>unwrap</code>してるせいな気もしますが、<code>urwrap</code>のせいならそういうメッセージが出るので違います。</p>
+
+<p>実はこれ、非UTF-8のバイト列でrustの標準ライブラリが内部でパニックを出してます。
+これの扱いも後のAdvent Calendarに譲るとして、ワークアラウンドを捜しましょう。rust1.4時点ではパニックをハンドルする手段はありません。</p>
+
+<p>パニックメッセージの先頭に<code>thread</code>とついてるのでthreadで包めば良さそうです。</p>
+
+<h2 id="thread:a7315be0136fc976c0c4320441efd799">Thread</h2>
+
+<p>まずはthreadをインポートします。</p>
+
+<pre><code class="language-rust">use std::thread::Builder;
+</code></pre>
+
+<p>そしてon_channel_logを少し弄りましょう。無効なバイト列を含むファイルをざっくり切る感じで。</p>
+
+<pre><code class="language-rust">    for log in logs {
+        on_log(&amp;log.unwrap().path());
+    };
+
+</code></pre>
+
+<p>としていた部分を</p>
+
+<pre><code class="language-rust">    let threads = logs.map(|log| {
+        let log = log.unwrap().path();
+        let pathname = log.to_string_lossy().to_string();
+        Builder::new().name(pathname).spawn(move|| on_log(&amp;log))
+    }).collect::&lt;Vec&lt;_&gt;&gt;();
+    for thread in threads {
+        let _ = thread.unwrap().join();
+    }
+</code></pre>
+
+<p>とします。一見複雑ですが、ファイル毎にスレッドを作って全部をvectorにして集めてそれぞれjoinを待ってるだけです。
+そしてスレッド名を処理するファイル名にしたいのでスレッドビルダを使っています。</p>
+
+<p>さて、これで走らせてみましょう。</p>
+
+<pre><code>$ time cargo run
+...
+#lisp at freenode
+thread '/home/kim/log/#lisp@freenode/2014-08-18.txt' panicked at 'index 0 and/or 8 in ` ;ZZZz;…,` do not lie on character boundary', ../src/libcore/str/mod.rs:1311
+#emacs at freenode
+...
+cargo run  327.21s user 8.71s system 630% cpu 53.289 total
+</code></pre>
+
+<p>lispチャネルの1ファイルだけに変なバイト列があることが分かりました。</p>
+
+<p>そしてパフォーマンスですが、とりあえず<code>top</code>で見る限りCPUは最大770%使ってくれてます（8コアマシン）。ファイル毎にスレッド作ってるので若干リソースの食い合いが発生してますがこれだけ並列度があればスレッドプールを使うまでもないでしょう。</p>
+
+<h2 id="さらなるチューニング:a7315be0136fc976c0c4320441efd799">さらなるチューニング…？</h2>
+
+<p>しかしそれでもまだ遅いですね。ちょこっと書いては走らせるのサイクルを回すには耐えられません。</p>
+
+<p>そういえばログ全体のファイルサイズを確認してなかった。</p>
+
+<pre><code>$ du -h
+...
+774M   .
+</code></pre>
+
+<p>意外と小さい。まだチューニングの余地はありそうです。メモリアロケーションを減らしましょうか、それとも時間のパースを手書きでやりましょうか。</p>
+
+<p>いいえ。もっと簡単に速くする方法があります。<code>--release</code>をつけて実行すればOKです。</p>
+
+<pre><code>$ cargo run --release
+...
+...
+cargo run --release  3.63s user 5.44s system 203% cpu 4.453 total
+</code></pre>
+
+<p><code>(/ 53.289 4.453);=&gt; 11.966988547046935</code> 。12倍速くなりました。1ディレクトリ700以上のファイルがあってそれぞれにスレッドを作っているのでそろそろそのオーバーヘッドが効いてきてますね。</p>
+
+<p>スレッドプールを試してみたい気もしますがひとまずこれで置いておきましょう。</p>
+
+<p>次は後編、DBへのインポートです。</p>
+
+<p>蛇足ですが行のパースのところは正規表現でも出来ましたね。そっちの方が好きな方は試してみて下さい。</p>
+
+                    </section>
+                </article>
+            </div>
+        </div>
+
+        <div class="row li-author">
+    <div class="sixteen columns">
+        Written by <strong>κeen</strong>
+    </div>
+</div>
+
+
+        <div class="row li-pagination">
+            <div class="eight columns">
+                <div class="li-pagination-previous">
+                    
+                        &nbsp;
+                    
+                </div>
+            </div>
+            <div class="eight columns">
+                <div class="li-pagination-next">
+                    
+                        Older article<br />
+                        <a href="http://keens.github.io/blog/2015/11/08/ichijifairunotsukurikata"> 一時ファイルの作り方</a>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+<footer class="li-page-footer">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-page-footer-legal">
+                    &copy; 2015. All rights reserved. 
+                </div>
+                <div class="li-page-footer-theme">
+                    <span class=""><a href="https://github.com/eliasson/liquorice/">liquorice</a> is a theme for <a href="http://hugo.spf13.com">hugo</a></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+
+    <script type="text/javascript">
+    <!--
+    function toggle(id) {
+        var e = document.getElementById(id);
+        e.style.display == 'block' ? e.style.display = 'none' : e.style.display = 'block';
+    }
+    
+    </script>
+    <script type="text/javascript">
+    <!--
+        var _gaq = _gaq || [];
+        _gaq.push(['_setAccount', ""]);
+        _gaq.push(['_trackPageview']);
+
+        (function() {
+        var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+        ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+        var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+        })();
+    -->
+    </script>
+    </body>
+</html>
+
