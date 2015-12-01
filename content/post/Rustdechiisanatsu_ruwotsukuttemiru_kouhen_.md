@@ -1,7 +1,6 @@
 ---
 categories: [Rust, Advent Calendar, Advent Calendar 2015]
 date: 2015-11-29T13:54:39+09:00
-draft: true
 title: Rustで小さなツールを作ってみる(後編)
 ---
 
@@ -18,14 +17,15 @@ title: Rustで小さなツールを作ってみる(後編)
 # 要件
 今回は簡単なのでORMは要らない気がしますが、サンプルということでORMも使いましょう。さらに、サンプルということでクエリビルダも使いましょう。
 
-…と思ったのですが中々良いライブラリがありませんでした。ドキュメントもろくにないまま放置されてるdeuteriumと開発途中でまだpostgresしかサポートされていないrustorm/codegentaくらいしかないようです。うぅ。
+…と思ったのですが中々良いライブラリがありませんでした。ドキュメントもろくにないまま放置されてる[deuterium](https://github.com/deuterium-orm/deuterium)と開発途中でまだpostgresしかサポートされていない[rustorm](https://github.com/ivanceras/rustorm)/[codegenta](https://github.com/ivanceras/codegenta)くらいしかないようです。うぅ。
+最近話題になった[diesel](https://github.com/sgrif/diesel)もまだ若すぎるようです。
 
 ということでシンプルなDBIを使います。そろそろ牡蠣の美味しい季節ですしSQL生書きしましょう。当たると怖いですが。で、テスト用にsqlite3を、（今回は使いませんが）本番用（？）にMySQLを使える奴を捜しましょう。
 
 # ライブラリ捜し
 まずは[crates.io](https://crates.io)を捜します。"sqlite"で捜せばいいでしょうか。
 
-MySQLとSQLite3をサポートしているライブラリ…r2d2がそれのようです。
+MySQLとSQLite3をサポートしているライブラリ…[r2d2](https://github.com/sfackler/r2d2)がそれのようです。
 コネクションプールのライブラリなので何か違う気がしますが、mysqlもsqlite3も扱えて、結果コネクションを抽象化してくれるので大体大丈夫です。
 
 蛇足ですが、名前はJavaにc3p0というコネクションプールがあるのでそこから来ているのでしょう。
@@ -397,7 +397,7 @@ thread '/home/kim/log/#lisp-ja@freenode/2015-04-08.txt' panicked at 'called `Res
 * DBを扱った
 * sqlite3に並列書き込みはつらい
 
-ボツ案も含めれば私個人はスレッドプールやチャネルも扱いましたが関係ないですね。
+ボツ案も含めれば私個人はORMやスレッドプール、チャネルも扱いましたが関係ないですね。
 
 こういう簡単なツールでも思ったより色々な機能を触れるのでみなさん試してみてはいかがでしょうか。
 
