@@ -6,8 +6,392 @@
     <description>Recent content in Posts on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Sat, 14 Nov 2015 23:57:43 +0900</lastBuildDate>
+    <lastBuildDate>Sun, 29 Nov 2015 13:54:39 +0900</lastBuildDate>
     <atom:link href="http://KeenS.github.io/post/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Rustで小さなツールを作ってみる(後編)</title>
+      <link>http://keens.github.io/blog/2015/11/29/rustdechiisanatsu_ruwotsukuttemiru_kouhen_</link>
+      <pubDate>Sun, 29 Nov 2015 13:54:39 +0900</pubDate>
+      
+      <guid>http://keens.github.io/blog/2015/11/29/rustdechiisanatsu_ruwotsukuttemiru_kouhen_</guid>
+      <description>
+
+&lt;p&gt;この記事は&lt;a href=&#34;http://qiita.com/advent-calendar/2015/rust-lang&#34;&gt;Rust Advent Calendar 2015&lt;/a&gt; 2日目の記事です。&lt;br /&gt;
+前 &lt;a href=&#34;http://KeenS.github.io/blog/2015/11/14/rustdechiisanatsu_ruwotsukuttemiru/&#34;&gt;Rustで小さなツールを作ってみる(前編)&lt;/a&gt;&lt;br /&gt;
+次 &lt;a href=&#34;http://KeenS.github.io/blog/2015/11/29/cargonotsukaikata/&#34;&gt;Cargoの使い方&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;κeenです。昨日の記事で作りかけだったIRCの生ログのDBへのインポートの続きです。今日はDBへのインポートをやります。&lt;/p&gt;
+
+&lt;p&gt;とはいってもRustでDBを扱った経験がないので探り探りです。&lt;/p&gt;
+
+&lt;h1 id=&#34;要件:b5100d6caeb6e32800002ace57fa8102&#34;&gt;要件&lt;/h1&gt;
+
+&lt;p&gt;今回は簡単なのでORMは要らない気がしますが、サンプルということでORMも使いましょう。さらに、サンプルということでクエリビルダも使いましょう。&lt;/p&gt;
+
+&lt;p&gt;…と思ったのですが中々良いライブラリがありませんでした。ドキュメントもろくにないまま放置されてる&lt;a href=&#34;https://github.com/deuterium-orm/deuterium&#34;&gt;deuterium&lt;/a&gt;と開発途中でまだpostgresしかサポートされていない&lt;a href=&#34;https://github.com/ivanceras/rustorm&#34;&gt;rustorm&lt;/a&gt;/&lt;a href=&#34;https://github.com/ivanceras/codegenta&#34;&gt;codegenta&lt;/a&gt;くらいしかないようです。うぅ。
+最近話題になった&lt;a href=&#34;https://github.com/sgrif/diesel&#34;&gt;diesel&lt;/a&gt;もまだ若すぎるようです。&lt;/p&gt;
+
+&lt;p&gt;ということでシンプルなDBIを使います。そろそろ牡蠣の美味しい季節ですしSQL生書きしましょう。当たると怖いですが。で、テスト用にsqlite3を、（今回は使いませんが）本番用（？）にMySQLを使える奴を捜しましょう。&lt;/p&gt;
+
+&lt;h1 id=&#34;ライブラリ捜し:b5100d6caeb6e32800002ace57fa8102&#34;&gt;ライブラリ捜し&lt;/h1&gt;
+
+&lt;p&gt;まずは&lt;a href=&#34;https://crates.io&#34;&gt;crates.io&lt;/a&gt;を捜します。&amp;rdquo;sqlite&amp;rdquo;で捜せばいいでしょうか。&lt;/p&gt;
+
+&lt;p&gt;MySQLとSQLite3をサポートしているライブラリ…&lt;a href=&#34;https://github.com/sfackler/r2d2&#34;&gt;r2d2&lt;/a&gt;がそれのようです。
+コネクションプールのライブラリなので何か違う気がしますが、mysqlもsqlite3も扱えて、結果コネクションを抽象化してくれるので大体大丈夫です。&lt;/p&gt;
+
+&lt;p&gt;蛇足ですが、名前はJavaにc3p0というコネクションプールがあるのでそこから来ているのでしょう。&lt;/p&gt;
+
+&lt;h1 id=&#34;スキーマ定義:b5100d6caeb6e32800002ace57fa8102&#34;&gt;スキーマ定義&lt;/h1&gt;
+
+&lt;p&gt;SQLiteを使い慣れないのですが大したことやってないので大丈夫でしょう。&lt;code&gt;DATETIME&lt;/code&gt; 型がないのが苦しいですね。&lt;/p&gt;
+
+&lt;p&gt;自然キーが文字列や複合キーなのでサロゲートキーを使って自然キーにUNIQUE制約をかけてますがちょっと気持悪いですね。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sql&#34;&gt;-- _*_ mode: sql; sql-product: &#39;sqlite _*_
+
+CREATE TABLE servers(
+        id   INTEGER PRIMARY KEY,
+        name  TEXT NOT NULL UNIQUE,
+        address TEXT
+        );
+m
+CREATE TABLE channels(
+        id INTEGER PRIMARY KEY,
+        server_id INTEGER REFERENCES servers(id) ON UPDATE CASCADE,
+        name TEXT NOT NULL,
+        UNIQUE(server_id, name)
+        );
+
+CREATE TABLE entries(
+        id INTEGER PRIMARY KEY,
+        channel_id INTEGER REFERENCES channels(id) ON UPDATE CASCADE,
+        user_id INTEGER REFERENCES users(i) ON UPDATE CASCADE,
+        type TEXT NOT NULL,
+        body TEXT NOT NULL,
+        created_at TEXT NOT NULL
+        );
+
+CREATE TABLE users(
+        id INTEGER PRIMARY KEY,
+        server_id INTEGER REFERENCES servers(id) ON UPDATE CASCADE,
+        name TEXT NOT NULL,
+        UNIQUE(server_id, name)
+        );
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これをetc/schema.sqlに保存します。&lt;/p&gt;
+
+&lt;h1 id=&#34;モデル定義:b5100d6caeb6e32800002ace57fa8102&#34;&gt;モデル定義&lt;/h1&gt;
+
+&lt;p&gt;折角シンプルなツールを作っているのでモデルは使わない。&lt;/p&gt;
+
+&lt;h1 id=&#34;コネクションまで:b5100d6caeb6e32800002ace57fa8102&#34;&gt;コネクションまで&lt;/h1&gt;
+
+&lt;p&gt;あらかじめ&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ sqlite test.db &amp;lt; etc/schema.sql
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;としてDBを作っておきましょう。&lt;/p&gt;
+
+&lt;p&gt;Cargo.tomlのdependenciesには&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-toml&#34;&gt;r2d2_sqlite = &amp;quot;0.0.3&amp;quot;
+r2d2 = &amp;quot;0.6.1&amp;quot;
+rusqlite = &amp;quot;0.4.0&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;を追記。&lt;/p&gt;
+
+&lt;p&gt;src/main.rsの先頭部分に&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;extern crate r2d2;
+extern crate r2d2_sqlite;
+extern crate rusqlite;
+use std::sync::Arc;
+use r2d2_sqlite::SqliteConnectionManager;
+use rusqlite::SqliteError;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;を追記しましょう。&lt;/p&gt;
+
+&lt;p&gt;そしてmainの中に次を追加。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let manager = SqliteConnectionManager::new(&amp;quot;test.db&amp;quot;).unwrap();
+    let config = r2d2::Config::builder().pool_size(16).build();
+    let pool = Arc::new(r2d2::Pool::new(config, manager).unwrap());
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これで一旦コンパイル。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cargo build
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これが通れば良いです。&lt;/p&gt;
+
+&lt;h1 id=&#34;はじめての挿入:b5100d6caeb6e32800002ace57fa8102&#34;&gt;はじめての挿入&lt;/h1&gt;
+
+&lt;p&gt;INSERTを発行してみましょう。&lt;code&gt;on_channel_dir&lt;/code&gt;の引数を変える必要があります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn on_channel_dir(path: &amp;amp;Path, pool: Arc&amp;lt;r2d2::Pool&amp;lt;SqliteConnectionManager&amp;gt;&amp;gt;) 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;併せて、呼び出しも&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        on_channel_dir(&amp;amp;path, pool.clone());
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;となります。&lt;/p&gt;
+
+&lt;p&gt;そうしたら&lt;code&gt;on_channel_dir&lt;/code&gt;の中で&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let channel = &amp;amp;dirname[..at];
+    let server = &amp;amp;dirname[at+1..];
+    println!(&amp;quot;{} at {}&amp;quot;, channel, server);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;としていた辺でまずはserversへのインサートを発行しましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let conn = pool.get().unwrap();
+    let server_id = match conn.execute(&amp;quot;INSERT INTO servers (name) VALUES ($1)&amp;quot;, &amp;amp;[&amp;amp;server]) {
+        // unique constraint failed
+        Err(SqliteError{code: 19, message:_}) =&amp;gt; conn.query_row(&amp;quot;SELECT id FROM servers WHERE name = $1&amp;quot;, &amp;amp;[&amp;amp;server], |r| r.get(0)).unwrap(),
+        Ok(_) =&amp;gt; conn.last_insert_rowid(),
+        e =&amp;gt; {e.unwrap(); return}
+    };
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;プールからコネクションを持ってきて&lt;code&gt;INSERT&lt;/code&gt;を発行します。成功するか既にUNIQUEな名前が存在していて失敗したらサーバのidを持ってきます。それ以外の失敗だったらそのままパニックしていいでしょう。&lt;/p&gt;
+
+&lt;p&gt;しかしラッパがちょっと雑すぎやしませんかね。エラーステータスくらいenumでラップして欲しかった。&lt;/p&gt;
+
+&lt;p&gt;同じくチャネルもインサートしましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let channel_id = match conn.execute(&amp;quot;INSERT INTO channels (name, server_id) VALUES ($1, $2)&amp;quot;, &amp;amp;[&amp;amp;channel, &amp;amp;server_id]) {
+        // unique constraint failed
+        Err(SqliteError{code: 19, message:_}) =&amp;gt; conn.query_row(&amp;quot;SELECT id FROM channels WHERE name = $1&amp;quot;, &amp;amp;[&amp;amp;channel], |r| r.get(0)).unwrap(),
+        Ok(_) =&amp;gt; conn.last_insert_rowid(),
+        e =&amp;gt; {e.unwrap(); return}
+
+    };
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;こういうupsertというかinsert or get_idってどうやるのが正解なんでしょう。DB力が低い…&lt;/p&gt;
+
+&lt;h1 id=&#34;エントリのインサート:b5100d6caeb6e32800002ace57fa8102&#34;&gt;エントリのインサート&lt;/h1&gt;
+
+&lt;p&gt;同じく&lt;code&gt;on_log&lt;/code&gt;の引数を増やします。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn on_log(log: &amp;amp;Path, channel_id: i64,  pool: Arc&amp;lt;r2d2::Pool&amp;lt;SqliteConnectionManager&amp;gt;&amp;gt;) {
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;呼び出し側も。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        let pool_ = pool.clone();
+        Builder::new().name(pathname).spawn(move|| on_log(&amp;amp;log, channel_id, pool_))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;move&lt;/code&gt;する前に&lt;code&gt;clone&lt;/code&gt;しないとダメですね。所有権難しい。&lt;/p&gt;
+
+&lt;p&gt;さて、今度は色々することがあります。
+まず、dateとtimeをくっつけてdatetimeにしましょう。timeがイミュータブルだったので&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        let mut time = ...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;とし、その下で&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        time.tm_mday = date.tm_mday;
+        time.tm_mon = date.tm_mon;
+        time.tm_year = date.tm_year;
+        let created_at = time.to_timespec();
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;とします。わざわざ&lt;code&gt;to_timespec&lt;/code&gt;で変換してるのは&lt;code&gt;Timespec&lt;/code&gt;だとDBライブラリが良い感じに変換してくれるからですね。&lt;/p&gt;
+
+&lt;p&gt;次にメッセージの抜き出し部分も値を返すように変更。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        let (user, type_, body) = match &amp;amp;msg[0..1] {
+            &amp;quot;!&amp;quot; =&amp;gt; (&amp;quot;server&amp;quot;, &amp;quot;sysmsg&amp;quot;, &amp;amp;msg[1..]),
+            &amp;quot;+&amp;quot; =&amp;gt; (&amp;quot;server&amp;quot;, &amp;quot;join&amp;quot;, &amp;amp;msg[1..]),
+            &amp;quot;-&amp;quot; =&amp;gt; (&amp;quot;server&amp;quot;, &amp;quot;part&amp;quot;, &amp;amp;msg[1..]),
+            &amp;quot;&amp;lt;&amp;quot; =&amp;gt; match msg.find(&#39;&amp;gt;&#39;).map(|e| (&amp;amp;msg[1..e], &amp;amp;msg[e+1..])) {
+                Some((user, body)) =&amp;gt; (user, &amp;quot;msg&amp;quot;, body),
+                None =&amp;gt; {
+                    warn!(&amp;quot;cannot parse the entry; skipping&amp;quot;);
+                    continue;
+                }
+            },
+            _ =&amp;gt; (&amp;quot;server&amp;quot;, &amp;quot;notice&amp;quot;, &amp;amp;msg[1..]),
+        };
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ここまで来たらあとはユーザとエントリをインサートするだけですね。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        let conn = pool.get().unwrap();
+        let user_id = match conn.execute(&amp;quot;INSERT INTO users (name) VALUES ($1)&amp;quot;, &amp;amp;[&amp;amp;user]) {
+            // unique constraint failed
+            Err(SqliteError{code: 19, message:_}) =&amp;gt; conn.query_row(&amp;quot;SELECT id FROM users WHERE name = $1&amp;quot;, &amp;amp;[&amp;amp;user], |r| r.get(0)).unwrap(),
+            Ok(_) =&amp;gt; conn.last_insert_rowid(),
+            e =&amp;gt; {e.unwrap(); return}
+        };
+        conn.execute(&amp;quot;INSERT INTO entries (channel_id, user_id, type, body, created_at) VALUES ($1, $2, $3, $4, $5)&amp;quot;, &amp;amp;[&amp;amp;channel_id, &amp;amp;user_id, &amp;amp;type_, &amp;amp;body, &amp;amp;created_at]);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;一旦これで走らせてみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cargo run --release
+...
+thread &#39;/home/kim/log/#hongo@utmc/2015-02-15.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
+thread &#39;/home/kim/log/#hongo@utmc/2015-08-18.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
+thread &#39;/home/kim/log/#hongo@utmc/2014-12-13.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
+thread &#39;/home/kim/log/#hongo@utmc/2015-10-13.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
+thread &#39;/home/kim/log/#hongo@utmc/2014-02-26.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
+thread &#39;/home/kim/log/#hongo@utmc/2014-05-23.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
+thread &#39;/home/kim/log/#hongo@utmc/2015-04-30.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
+thread &#39;/home/kim/log/#hongo@utmc/2013-10-18.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
+thread &#39;/home/kim/log/#hongo@utmc/2015-10-14.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
+thread &#39;/home/kim/log/#hongo@utmc/2014-01-19.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
+thread &#39;/home/kim/log/#hongo@utmc/2014-08-12.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: GetTimeout(())&#39;, ../src/libcore/result.rs:736
+thread &#39;/home/kim/log/#hongo@utmc/2014-06-03.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: GetTimeout(())&#39;, ../src/libcore/result.rs:736
+thread &#39;/home/kim/log/#hongo@utmc/2015-02-05.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: GetTimeout(())&#39;, ../src/libcore/result.rs:736
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;あちゃー。マルチスレッドでINSERTしてるのでロックが掛かってますね。SQLiteはファイルロックしか持たないので並列インサートはつらそう。&lt;/p&gt;
+
+&lt;h1 id=&#34;トランザクション:b5100d6caeb6e32800002ace57fa8102&#34;&gt;トランザクション&lt;/h1&gt;
+
+&lt;p&gt;はい、そういう時のトランザクションですよ。&lt;/p&gt;
+
+&lt;p&gt;最後のユーザやエントリーをインサートしてる部分で使ってみます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        let conn = pool.get().unwrap();
+        let trx = conn.transaction().unwrap();
+        let user_id = match conn.execute(&amp;quot;INSERT INTO users (name) VALUES ($1)&amp;quot;, &amp;amp;[&amp;amp;user]) {
+            // unique constraint failed
+            Err(SqliteError{code: 19, message:_}) =&amp;gt; conn.query_row(&amp;quot;SELECT id FROM users WHERE name = $1&amp;quot;, &amp;amp;[&amp;amp;user], |r| r.get(0)).unwrap(),
+            Ok(_) =&amp;gt; conn.last_insert_rowid(),
+            e =&amp;gt; {e.unwrap(); return}
+        };
+        trx.commit();
+        let trx = conn.transaction().unwrap();
+        conn.execute(&amp;quot;INSERT INTO entries (channel_id, user_id, type, body, created_at) VALUES ($1, $2, $3, $4, $5)&amp;quot;, &amp;amp;[&amp;amp;channel_id, &amp;amp;user_id, &amp;amp;type_, &amp;amp;body, &amp;amp;created_at]);
+        trx.commit();
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;排他制御が目的なのでトランザクションを2回取ってます。&lt;/p&gt;
+
+&lt;p&gt;これだとどうなるかというと&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;$ cargo run --release
+...
+thread &#39;/home/kim/log/#hongo@utmc/2015-02-15.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
+thread &#39;/home/kim/log/#hongo@utmc/2015-08-18.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
+thread &#39;/home/kim/log/#hongo@utmc/2014-12-13.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
+thread &#39;/home/kim/log/#hongo@utmc/2015-10-13.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
+thread &#39;/home/kim/log/#hongo@utmc/2014-02-26.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
+thread &#39;/home/kim/log/#hongo@utmc/2014-05-23.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
+thread &#39;/home/kim/log/#hongo@utmc/2015-04-30.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
+thread &#39;/home/kim/log/#hongo@utmc/2013-10-18.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
+thread &#39;/home/kim/log/#hongo@utmc/2015-10-14.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
+thread &#39;/home/kim/log/#hongo@utmc/2014-01-19.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
+thread &#39;/home/kim/log/#hongo@utmc/2014-08-12.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: GetTimeout(())&#39;, ../src/libcore/result.rs:736
+thread &#39;/home/kim/log/#hongo@utmc/2014-06-03.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: GetTimeout(())&#39;, ../src/libcore/result.rs:736
+thread &#39;/home/kim/log/#hongo@utmc/2015-02-05.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: GetTimeout(())&#39;, ../src/libcore/result.rs:736
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;エラーは減ったもののまだ出ます。&lt;/p&gt;
+
+&lt;h1 id=&#34;その他:b5100d6caeb6e32800002ace57fa8102&#34;&gt;その他&lt;/h1&gt;
+
+&lt;p&gt;他にスレッドプールを使って並列度を下げる、ワーカースレッドを使ってSQLiteへの書き込みを1スレッドにするなども試したのですが上手く行きませんでした。&lt;/p&gt;
+
+&lt;p&gt;スレッドプールについては、今回エラーハンドリングのためにスレッドを立てている訳ですが、パニックを出してスレッドが死ぬとあまり思わしくない挙動をするのでダメでした。&lt;/p&gt;
+
+&lt;p&gt;ワーカースレッドは書き込んだ後にまたchannel_idなどを受け取らないといけないのでやめました。promiseなどを使えば上手くいきそうな気もしますが色々面倒そうなので止めておきます。&lt;/p&gt;
+
+&lt;h1 id=&#34;コネクション:b5100d6caeb6e32800002ace57fa8102&#34;&gt;コネクション&lt;/h1&gt;
+
+&lt;p&gt;並列度を下げる方法はもう1つあります。&lt;/p&gt;
+
+&lt;p&gt;mainの中で&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let config = r2d2::Config::builder().pool_size(16).build();
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;としていたのを覚えていますでしょうか。これはコネクションプールに16個のコネクションを持っています。この数を落とせばなんとかならないでしょうか。&lt;/p&gt;
+
+&lt;p&gt;結論からいうとダメでした。今度は複数スレッドがコネクションを取り合ってタイムアウトが発生してしまいます。&lt;/p&gt;
+
+&lt;h1 id=&#34;並列度を下げる:b5100d6caeb6e32800002ace57fa8102&#34;&gt;並列度を下げる&lt;/h1&gt;
+
+&lt;p&gt;最後の最後、本当に並列度を下げる方法があります。スレッドを立てていた部分で&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let threads = logs.map(|log| {
+        let log = log.unwrap().path();
+        let pathname = log.to_string_lossy().to_string();
+        Builder::new().name(pathname).spawn(move|| on_log(&amp;amp;log))
+    }).collect::&amp;lt;Vec&amp;lt;_&amp;gt;&amp;gt;();
+    for thread in threads {
+        let _ = thread.unwrap().join();
+    }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;としていました。これはファイル数分並列に実行してしまいます。ここを抑えましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    for log in logs {
+        let log = log.unwrap().path();
+        let pathname = log.to_string_lossy().to_string();
+        let pool_ = pool.clone();
+        let _ = Builder::new().name(pathname).spawn(move|| on_log(&amp;amp;log, channel_id, pool_)).unwrap().join();
+    }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;spawn&lt;/code&gt;してそのまま&lt;code&gt;join&lt;/code&gt;します。こうすれば並列度を抑えつつパニックをスレッドに分離出来ます。&lt;/p&gt;
+
+&lt;p&gt;これで実行するとどうなるかというと&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cargo run --release
+...
+thread &#39;/home/kim/log/#lisp-ja@freenode/2015-04-08.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: GetTimeout(())&#39;, ../src/libcore/result.rs:736
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;いくつかタイムアウトを出します。えー。並列度1でこれならもうどうしようもないでしょう。&lt;/p&gt;
+
+&lt;h1 id=&#34;まとめ:b5100d6caeb6e32800002ace57fa8102&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;p&gt;さて、小さなツールを作るというタイトルにしては後半(執筆が)重い内容になってしまいました。というか、sqlite3の問題もしますが。&lt;/p&gt;
+
+&lt;p&gt;このブログの内容としては&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;rustでディレクトリを扱った&lt;/li&gt;
+&lt;li&gt;ファイルを扱った&lt;/li&gt;
+&lt;li&gt;文字列を扱った&lt;/li&gt;
+&lt;li&gt;日付を扱った&lt;/li&gt;
+&lt;li&gt;スレッドを扱った&lt;/li&gt;
+&lt;li&gt;ロガーライブラリを扱った&lt;/li&gt;
+&lt;li&gt;エラーハンドリングをした&lt;/li&gt;
+&lt;li&gt;パニックのハンドリングをした&lt;/li&gt;
+&lt;li&gt;DBを扱った&lt;/li&gt;
+&lt;li&gt;sqlite3に並列書き込みはつらい&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;ボツ案も含めれば私個人はORMやスレッドプール、チャネルも扱いましたが関係ないですね。&lt;/p&gt;
+
+&lt;p&gt;こういう簡単なツールでも思ったより色々な機能を触れるのでみなさん試してみてはいかがでしょうか。&lt;/p&gt;
+
+&lt;p&gt;ソースコード全体は&lt;a href=&#34;https://github.com/KeenS/irc_log&#34;&gt;ここ&lt;/a&gt;においておきます。&lt;/p&gt;
+
+&lt;p&gt;因みに本筋とは外れますが、今回のSQLiteの問題を扱うには一旦CSVファイルに書き出してからCSVインポートでバルクインサートが考えられます。
+CSVに書き出すのはちまちまやってもいいし今回のデータ量ならオンメモリ構築して一気に書き出しも出来るでしょう。あるいはSQLiteをやめてMySQLを使う。&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>Rustで小さなツールを作ってみる(前編)</title>
@@ -2554,409 +2938,6 @@ end
 &lt;p&gt;倍くらい遅くなってますね。&lt;/p&gt;
 
 &lt;p&gt;ということでみだりに境界チェックするより例外を出させといた方が速いようです。&lt;/p&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>第一級ラベルを持たない言語におけるDirect Threaded VMの実装</title>
-      <link>http://keens.github.io/blog/2015/05/29/daiikkyuuraberuwomotanaigengoniokerudirect_threaded_vmnojissou</link>
-      <pubDate>Fri, 29 May 2015 20:26:41 +0900</pubDate>
-      
-      <guid>http://keens.github.io/blog/2015/05/29/daiikkyuuraberuwomotanaigengoniokerudirect_threaded_vmnojissou</guid>
-      <description>
-
-&lt;p&gt;こんにちは。κeenです。このブログでちょくちょく出てくるDirect Threaded VMについて。
-SMLのようにgotoがない言語だとDT VMの実装出来ないよなー、と思ってた所、ふとアイディアが浮かんだのでそれについて。&lt;/p&gt;
-
-&lt;h1 id=&#34;序論:96964fcf74a77b030eea88ce12e9c90c&#34;&gt;序論&lt;/h1&gt;
-
-&lt;p&gt;DSL、例えば正規表現などの処理系を実装することを考えてみて下さい。&lt;/p&gt;
-
-&lt;p&gt;言語処理系において最も素朴な実装はインタプリタですが、速度面で不利なので一旦仮想命令にコンパイルして仮想命令実行器(VM)で実行することが一般的です。
-コンパイラのように複雑な記号処理をするプログラムはCommon LispやMLのような記号処理に強い高級言語が得意とする分野です。
-一方、ランタイムには低レベルなことが出来て処理速度の速いCommon LispやCを使いたくなるでしょう。&lt;/p&gt;
-
-&lt;p&gt;Common Lisp以外の言語ではコンパイラとランタイムを分離するのが妥当な選択肢のようですが、高級言語とcの間のブッジングが必要になり、少なからぬコストを支払う必要があります。
-また、ffiを持たない言語ではブリッジ出来ないのでランタイムもその言語で実装する必要があります。つまり、高級言語でVMを実装する必要があるケースが存在します。&lt;/p&gt;
-
-&lt;p&gt;VMの実行を高速化する技術の一つとしてDirect Threadingというものがあります。
-命令ディスパッチのループを短絡することで余計なオーバーヘッドが減り、また、命令毎にジャンプ命令を持つことで分岐予測も効きやすくなるのでVMが高速化します。
-しかしDTの実装にはgotoのラベルを第一級オブジェクトとして保存する必要があり、gccやclangのように拡張されたcコンパイラなど、限られた言語でしか実現出来ません。まあ、Common Lispなら&lt;code&gt;eval&lt;/code&gt;と&lt;code&gt;compile&lt;/code&gt;を使えばJITが出来るので不要ですが。&lt;/p&gt;
-
-&lt;p&gt;そこで、gotoのない言語でDirect Threadingを実現してみたいと思います。&lt;/p&gt;
-
-&lt;h1 id=&#34;direct-threading:96964fcf74a77b030eea88ce12e9c90c&#34;&gt;Direct Threading&lt;/h1&gt;
-
-&lt;p&gt;Direct Threaded &lt;em&gt;でない&lt;/em&gt; VMは大抵次のような構造をしています。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;loop {
-  op = fetchNextOp
-  switch(op) {
-    case op1:
-     ....
-     break
-    case op2:
-     ....
-     break
-    ....
-  }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;つまり、&lt;/p&gt;
-
-&lt;ol&gt;
-&lt;li&gt;次の命令を取得する&lt;/li&gt;
-&lt;li&gt;命令でディスパッチする&lt;/li&gt;
-&lt;li&gt;命令に対応するコードを実行する&lt;/li&gt;
-&lt;li&gt;ディスパッチを抜ける&lt;/li&gt;
-&lt;li&gt;1.に戻る&lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;p&gt;という動きをします。自然に思えるかもしれませんが、&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;命令のディスパッチはlogオーダの時間が掛かる（可能性がある）。&lt;/li&gt;
-&lt;li&gt;4. 5. のステップが不要&lt;/li&gt;
-&lt;li&gt;2. で毎回違う命令にディスパッチするので分岐予測がほぼ意味を成さない&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;という無駄があります。それを改良したのがDirect Threaded VMで、オペコードではなくgotoのラベルを使うことで&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;label = fetchNextLabel
-goto label
-label1:
-  ...
-  label = fetchNextLabel
-  goto label
-label2:
-  ...
-  label = fetchNextLabel
-  goto label
-...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;ol&gt;
-&lt;li&gt;次のラベルを取得する&lt;/li&gt;
-&lt;li&gt;ラベルにgotoする&lt;/li&gt;
-&lt;li&gt;命令に対応するコードを実行する&lt;/li&gt;
-&lt;li&gt;次のラベルを取得する&lt;/li&gt;
-&lt;li&gt;ラベルにgotoする(次の処理は3. 相当)&lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;p&gt;と、ループ内の2ステップを飛ばした他、ディスパッチもなくなるので高速になります。
-また、ラベル毎にgotoがついていて、それぞれのgotoに分岐予測があるので普通のVMに比べて分岐予測がある程度効きます。&lt;/p&gt;
-
-&lt;h1 id=&#34;第一級ラベルを持たない言語におけるdirect-threaded-vm:96964fcf74a77b030eea88ce12e9c90c&#34;&gt;第一級ラベルを持たない言語におけるDirect Threaded VM&lt;/h1&gt;
-
-&lt;p&gt;結論から言うと関数の配列を使います。ラベルの代わりに配列のインデックス、gotoの代わりに配列へのアクセスとcallを使います。
-ランダムアクセスでアドレスの取得をするために配列を、任意コードへのジャンプのために関数を使えばエミュレート出来るよねって発想です。&lt;/p&gt;
-
-&lt;h1 id=&#34;実装:96964fcf74a77b030eea88ce12e9c90c&#34;&gt;実装&lt;/h1&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/KeenS/SML-VM&#34;&gt;ソースコード全体&lt;/a&gt;はGithuに上げてます。SML/NJで動きます。SML#向けのインターフェースファイルを書いていますが何故かコンパイルが通りません。&lt;/p&gt;
-
-&lt;p&gt;次のようなASTを実行するインタプリタ、VM、Direct Threaded VMを実装しました。但し、VMとDTVMはクロージャをサポートしていません。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;datatype monoop
-  = Not
-
-datatype binop
-  = Equal
-  | GreaterThan
-  | Add
-
-datatype t
-  = Int of int
-  | Bool of bool
-  | MonoOp of monoop * t
-  | BinOp of binop * t * t
-  | Bind of t * t
-  | If of t * t * t
-  | Var of string
-  | Lambda of t list * t
-  | Call of t * t list
-  | Progn of t list
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;インタプリタはこのASTを解釈実行、VMはいくつかの中間表現を経てオペコードにコンパイルし、それを実行します。尚、最適化は行いません。&lt;/p&gt;
-
-&lt;p&gt;VMのディスパッチ部分は次のような実装になっています。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;    fun aux () = (
-        case  (Array.sub(ops, !pc)) of
-            O.Not =&amp;gt; (case pop vm of
-                         V.Bool x =&amp;gt; push vm (V.Bool (not x))
-                       | _ =&amp;gt; raise Type)
-          | O.Add =&amp;gt; (case (pop vm, pop vm) of
-                         (V.Int x, V.Int y) =&amp;gt; push vm (V.Int (x + y))
-                       | _ =&amp;gt; raise Type)
-          | O.Eq =&amp;gt; (case (pop vm, pop vm) of
-                        (V.Int x, V.Int y) =&amp;gt; push vm (V.Bool (x = y))
-                      | (V.Bool x, V.Bool y) =&amp;gt; push vm (V.Bool (x = y))
-                      | _ =&amp;gt; raise Type)
-          | O.Gt =&amp;gt; (case (pop vm, pop vm) of
-                        (V.Int x, V.Int y) =&amp;gt; push vm (V.Bool (x &amp;lt; y))
-                      | _ =&amp;gt; raise Type)
-          | O.Jump label =&amp;gt; pc := (label - 1)
-          | O.Jtrue label =&amp;gt; (case pop vm of
-                                 V.Bool true =&amp;gt; pc := (label - 1)
-                               | V.Bool false =&amp;gt; ()
-                               | _ =&amp;gt; raise Type)
-          | O.Call i =&amp;gt; (case (pop vm) of
-                            V.Lambda label =&amp;gt; (
-                             pushCi vm;
-                             fp := (!fp) - i;
-                             pc := (label - 1))
-                          | _ =&amp;gt; raise Type)
-          | O.Ret =&amp;gt; (Array.update(stack, !fp, Array.sub(stack, (!sp) - 1));
-                     popCi vm;
-                     pc := (!pc))
-          | O.Push v =&amp;gt; push vm v
-          | O.Pop =&amp;gt; (pop vm;())
-          | O.Lref i =&amp;gt; push vm (Array.sub(stack, (!fp) + i))
-          | O.Lset i =&amp;gt;  ((Array.update(stack, (!fp) + i, pop vm));
-                         push vm (V.Bool true))
-          | O.Gref i =&amp;gt; push vm (Array.sub(pool, i))
-          | O.Gset i =&amp;gt;  (Array.update(pool, i, pop vm); push vm (V.Bool true))
-          | O.Nop =&amp;gt; ()
-          | O.End =&amp;gt; raise Exit
-      ;
-        pc := (!pc) + 1;
-      aux ())
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;DT VMではこれを次のように書き換えました。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;fun next () = let
-    val () = pc := (!pc) + 1;
-    val (index, arg) = Array.sub(cops, !pc) in
-    Array.sub(opArray, index) arg
-end
-
-Array.fromList [
-            (* Not *)
-            fn _ =&amp;gt;
-                (case pop vm of
-                    V.Bool x =&amp;gt; push vm (V.Bool (not x))
-                  | _ =&amp;gt; raise Type;
-                next ()),
-            (* Add *)
-            fn _ =&amp;gt;
-                (case (pop vm, pop vm) of
-                    (V.Int x, V.Int y) =&amp;gt; push vm (V.Int (x + y))
-                  | _ =&amp;gt; raise Type;
-                 next ()),
-            (* Eq *)
-            fn _ =&amp;gt;
-                (case (pop vm, pop vm) of
-                    (V.Int x, V.Int y) =&amp;gt; push vm (V.Bool (x = y))
-                  | (V.Bool x, V.Bool y) =&amp;gt; push vm (V.Bool (x = y))
-                  | _ =&amp;gt; raise Type;
-                  next ()),
-            (* Gt *)
-            fn _ =&amp;gt;
-                (case (pop vm, pop vm) of
-                    (V.Int x, V.Int y) =&amp;gt; push vm (V.Bool (x &amp;lt; y))
-                  | _ =&amp;gt; raise Type;
-                 next ()),
-            (* Jump *)
-            fn ({int = label, ...}: oparg) =&amp;gt;
-               (pc := (label - 1);
-               next ()),
-            (* Jtrue *)
-            fn ({int = label, ...}: oparg) =&amp;gt;
-                (case pop vm of
-                    V.Bool true =&amp;gt; pc := (label - 1)
-                  | V.Bool false =&amp;gt; ()
-                  | _ =&amp;gt; raise Type;
-                next ()),
-            (* Call *)
-            fn ({int = i, ...}: oparg) =&amp;gt;
-                (case (pop vm) of
-                    V.Lambda label =&amp;gt; (
-                     pushCi vm;
-                     fp := (!fp) - i;
-                     pc := (label - 1))
-                  | _ =&amp;gt; raise Type;
-                next ()),
-            (* Ret *)
-            fn _ =&amp;gt;
-                (Array.update(stack, !fp, Array.sub(stack, (!sp) - 1));
-                 popCi vm;
-                 pc := (!pc);
-                next ()),
-            (* Push *)
-            fn ({vmvalue = v, ...}: oparg) =&amp;gt;
-               (push vm v;
-               next ()),
-            (* Pop *)
-            fn _ =&amp;gt;
-               (pop vm;
-                next ()),
-            (* Lref *)
-            fn ({int = i, ...}: oparg) =&amp;gt;
-               (push vm (Array.sub(stack, (!fp) + i));
-               next ()),
-            (* Lset *)
-            fn ({int = i, ...}: oparg) =&amp;gt;
-                ((Array.update(stack, (!fp) + i, pop vm));
-                 push vm (V.Bool true);
-                next ()),
-            (* Gref *)
-            fn ({int = i, ...}: oparg) =&amp;gt;
-               (push vm (Array.sub(pool, i));
-               next ()),
-            (* Gset *)
-            fn ({int = i, ...}: oparg) =&amp;gt;
-               (Array.update(pool, i, pop vm);
-                push vm (V.Bool true);
-               next ()),
-            (* Nop *)
-            (fn _ =&amp;gt;
-                next ()),
-            (fn _ =&amp;gt;
-                raise Exit)
-        ]
-
-fun aux () = let val (index, arg) = Array.sub(cops, !pc) in
-                 Array.sub(opArray, index) arg
-             end
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;1引数を受け取ってunitを返す関数の配列としてVMを表しています。
-1つ注意点として、前処理としてタグ付き共用体として表されている命令をタグ(配列のインデックス)と共用体に分解するのですが、SMLに共用体はないので構造体で代用しています。 &lt;code&gt;oparg&lt;/code&gt; 型がそれにあたります。&lt;/p&gt;
-
-&lt;p&gt;ディスパッチを関数&lt;code&gt;next&lt;/code&gt;に括り出していて、一見すると分岐予測に関する利点が失われるように思われますが、
-&lt;code&gt;next&lt;/code&gt;は小さいのでインライン化されるだろうと踏んでそのままにしています。実際、手動でインライン化しても速度に変化はありませんでした。&lt;/p&gt;
-
-&lt;p&gt;今回のメインの話はVMなのでインタプリタについては省略します。&lt;/p&gt;
-
-&lt;h1 id=&#34;実行速度:96964fcf74a77b030eea88ce12e9c90c&#34;&gt;実行速度&lt;/h1&gt;
-
-&lt;h2 id=&#34;予測:96964fcf74a77b030eea88ce12e9c90c&#34;&gt;予測&lt;/h2&gt;
-
-&lt;p&gt;普通のVMはディスパッチをlogオーダーの時間で行ないますがDT VMは定数オーダーの時間で行ないます。しかし配列の参照と関数呼び出しを挟むので定数倍の部分は大きくなります。
-どちらが速いでしょうか。&lt;/p&gt;
-
-&lt;h2 id=&#34;計測:96964fcf74a77b030eea88ce12e9c90c&#34;&gt;計測&lt;/h2&gt;
-
-&lt;p&gt;今回、次のようなフィボナッチ数列を計算するコードの実行速度を計測しました。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;fun fib n = (Progn [
-                Bind (Var &amp;quot;fib&amp;quot;,
-                      Lambda([Var &amp;quot;n&amp;quot;],
-                               (If (BinOp(GreaterThan,
-                                          (Int 2),
-                                          (Var &amp;quot;n&amp;quot;)),
-                                    Int(1),
-                                    BinOp(Add,
-                                          Call(Var &amp;quot;fib&amp;quot;, [BinOp(Add,
-                                                                 Var &amp;quot;n&amp;quot;,
-                                                                 Int ~1)]),
-                                          Call(Var &amp;quot;fib&amp;quot;, [BinOp(Add,
-                                                                 Var &amp;quot;n&amp;quot;,
-                                                                 Int ~2)])))))),
-                Call(Var &amp;quot;fib&amp;quot;, [Int n])])
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;コンパイラは以下のような命令列を吐きます。命令の内部表現が違うだけで命令列自体はVMとDTVMで共通です。
-繰り返しますが、最適化はしてないのでL25で次の命令にジャンプしてるだとか目に見えて無駄なコードもあります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;0	Push Lambda 7
-1	Gset 0
-2	Pop
-3	Push 35
-4	Gref 0
-5	Call 1
-6	End
-7	Push 2
-8	Lref 0
-9	Gt
-10	Jtrue 12
-11	Jump 14
-12	Push 1
-13	Jump 26
-14	Lref 0
-15	Push ~1
-16	Add
-17	Gref 0
-18	Call 1
-19	Lref 0
-20	Push ~2
-21	Add
-22	Gref 0
-23	Call 1
-24	Add
-25	Jump 26
-26	Ret
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;計測には次のようなコードを使いました。コンパイラは実行効率を無視して書いたのでベンチマークには含めていません。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val target = (AST.fib 35)
-val compiled = VM.compile target
-val dtcompiled = DTVM.compile target
-val vm = VM.new ()
-val dtvm = DTVM.new ()
-
-val _ = Benchmark.benchset &amp;quot;fib 35&amp;quot; 1 [
-        (&amp;quot;Interpreter&amp;quot;,
-         fn () =&amp;gt; (Interp.run target; ())),
-        (&amp;quot;Normal VM&amp;quot;,
-         fn () =&amp;gt; (VM.run vm compiled; ())),
-        (&amp;quot;Direct Threaded VM&amp;quot;,
-         fn () =&amp;gt; (DTVM.run dtvm dtcompiled; ()))
-    ]
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;結果:96964fcf74a77b030eea88ce12e9c90c&#34;&gt;結果&lt;/h2&gt;
-
-&lt;p&gt;Intel Core i5 M450 2.4GHz 2コア4スレッド、Ubunt 15.04、SML/NJ v110.77で実行しました。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;-------------------+---------------------------------------------------
- Interpreter       |********************************************* 47170ms
- Normal VM         |****************** 19170ms
- Direct Threaded VM|************************************************** 51460ms
--------------------+---------------------------------------------------
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ダントツで速いのがVMで、インタプリタに比べてかなりの性能向上が見られます。一方DT VMはインタプリタより遅いという結果になりました。&lt;/p&gt;
-
-&lt;h1 id=&#34;考察:96964fcf74a77b030eea88ce12e9c90c&#34;&gt;考察&lt;/h1&gt;
-
-&lt;p&gt;冷静に考えたらインタプリタは毎回関数呼び出して遅いよねってことからループで処理を済ませるのがVMなのにVMで毎回関数を呼び出してたら遅いに決まってるじゃん。
-というかこれ、Direct Threaded VMじゃないじゃん。死にたい。&lt;/p&gt;
-
-&lt;h1 id=&#34;余談:96964fcf74a77b030eea88ce12e9c90c&#34;&gt;余談&lt;/h1&gt;
-
-&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;ループ内でExceptionをhandleしてる所為だった。ループの外に出したら超速になってインタプリタの方が20倍遅くなった。&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/604235677337714689&#34;&gt;2015, 5月 29&lt;/a&gt;&lt;/blockquote&gt;
-&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
-
-&lt;p&gt;尚、このつぶやきはfibの引数を小さくして繰り返しを増やした時のものです。多分コンパイルを外に出してるので繰り返しが多いとその分のオーバーヘッドの差が効いてくるのでしょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val target = (AST.fib 24)
-val compiled = VM.compile target
-val dtcompiled = DTVM.compile target
-val vm = VM.new ()
-val dtvm = DTVM.new ()
-
-val _ = Benchmark.benchset &amp;quot;fib 24&amp;quot; 10 [
-        (&amp;quot;Interpreter&amp;quot;,
-         fn () =&amp;gt; (Interp.run target; ())),
-        (&amp;quot;Normal VM&amp;quot;,
-         fn () =&amp;gt; (VM.run vm compiled; ())),
-        (&amp;quot;Direct Threaded VM&amp;quot;,
-         fn () =&amp;gt; (DTVM.run dtvm dtcompiled; ()))
-    ]
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;-------------------+---------------------------------------------------
- Interpreter       |************************************************** 2052ms
- Normal VM         |** 104ms
- Direct Threaded VM|***** 238ms
--------------------+---------------------------------------------------
-&lt;/code&gt;&lt;/pre&gt;
 </description>
     </item>
     
