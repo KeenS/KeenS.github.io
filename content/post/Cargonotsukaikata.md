@@ -1,7 +1,6 @@
 ---
 categories: [Rust, Command Line, 小ネタ]
 date: 2015-11-29T23:25:54+09:00
-draft: true
 title: Cargoの使い方
 ---
 この記事は[Rust Advent Calendar 2015](http://qiita.com/advent-calendar/2015/rust-lang) 3日目の記事です。  
