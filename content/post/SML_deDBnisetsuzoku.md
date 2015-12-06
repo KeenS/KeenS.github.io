@@ -22,7 +22,7 @@ _sqlserver serverLocation : τ
 SML#はDB接続時にテーブルの型を要求します(上でいう型注釈の`τ`がそれです。文法的に型注釈がないといけません。)。今回の例では公式ドキュメントにある通り
 
 ``` sql
-CREATE DB mydb;
+CREATE DATABASE mydb;
 CREATE TABLE Persons (
   name text not null,
   age int not null,
@@ -143,7 +143,8 @@ unixODBCはODBCのunix実装のようです。つまりODBCドライバを持つ
 val myServer = (SQL.odbc "mydb username mypassword") : {Persons:{name: string, age: int, salary: int}}
 ```
 
-なぜ記法変えたし…。しかも必ずスペースで区切るのでクォートも出来なければ空のユーザパスワードを渡すことも出来ません。もしかしたら`"''"`としたら後側で空の文字列と扱ってくれるかもしれませんが。
+なぜ記法変えたし…。~~しかも必ずスペースで区切るのでクォートも出来なければ空のユーザパスワードを渡すことも出来ません。もしかしたら`"''"`としたら後側で空の文字列と扱ってくれるかもしれませんが。~~
+私が`String.fields`の挙動を勘違いしてました。スペースで区切って空にしておけば空パスワードを渡せます(e.g. `"mydb username "`)。あるいは空ユーザ名も(`"mydb  "`)。
 
 
 私自身ODBCに詳しくないのですが、ODBCに接続するときはData Source Nameと呼ばれるものがシステムの特定の場所に存在するので他の接続情報は必要ないみたいです。
