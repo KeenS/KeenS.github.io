@@ -6,8 +6,210 @@
     <description>Recent content in Advent Calendar on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Sat, 05 Dec 2015 22:04:25 +0900</lastBuildDate>
+    <lastBuildDate>Wed, 09 Dec 2015 22:16:50 +0900</lastBuildDate>
     <atom:link href="http://KeenS.github.io/categories/advent-calendar/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>リージョンについて</title>
+      <link>http://keens.github.io/blog/2015/12/09/ri_jonnitsuite</link>
+      <pubDate>Wed, 09 Dec 2015 22:16:50 +0900</pubDate>
+      
+      <guid>http://keens.github.io/blog/2015/12/09/ri_jonnitsuite</guid>
+      <description>
+
+&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2015/lang_dev&#34;&gt;言語実装Advent Calendar 2015&lt;/a&gt; 10日目の記事です&lt;/p&gt;
+
+&lt;p&gt;κeenです。今日はある程度gcに頼らずメモリを管理する手法、リージョンについて話そうと思います。
+リージョン推論とそのアルゴリズムまで話せればよかったのですがサーベイが間に合わず…&lt;/p&gt;
+
+&lt;h1 id=&#34;スタックベースのメモリ管理:cc7b79e9bf38410840bdd39e0a1f3096&#34;&gt;スタックベースのメモリ管理&lt;/h1&gt;
+
+&lt;p&gt;gcのない言語、例えばcでも自動で解放される類のメモリがあります。ローカル変数です。&lt;/p&gt;
+
+&lt;p&gt;ローカル変数のメモリ確保/解放戦略は単純です。ブロックの開始に確保され、ブロックの終わりに解放されます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;{
+  int x;         // &amp;lt;- xが確保される
+  {
+    int y = 2;   // &amp;lt;- yが確保される
+    {
+      int z = 3; // &amp;lt;- zが確保される
+      x = y + z;
+    }            // &amp;lt;- zが解放される
+  }              // &amp;lt;- yが解放される
+}                // &amp;lt;- xが解放される
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ブロックはネスト構造をとるのでメモリ管理はスタックがあれば十分で、概念としても実装としても非常にシンプルです。&lt;/p&gt;
+
+&lt;p&gt;しかしシンプルな一方で柔軟性に欠ける部分もあります。
+初心者の時に次のようなコードを書いてコンパイラに怒られた、あるいはバグらせたことは誰しもあるのではないでしょうか。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;{
+  int i;
+  int *x;
+  {
+    int y[5] = {1, 2, 3, 4, 5};
+    x = y + 1; 
+  }     // &amp;lt;- yに割り当てられたメモリはここで解放されるため、外のブロックにあるxで参照出来ない
+  for(i = 0; i &amp;lt; 4; ++i) {
+    printf(&amp;quot;%i\n&amp;quot;, x[i]);
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ちょっとわざとらしい例ですがこのようにブロック内で確保されたメモリが必ずブロックが終わった時に解放されるのは嬉しくないケースがあります。&lt;/p&gt;
+
+&lt;h1 id=&#34;リージョン:cc7b79e9bf38410840bdd39e0a1f3096&#34;&gt;リージョン&lt;/h1&gt;
+
+&lt;p&gt;リージョンはブロックと基本的には同じ考え方です。リージョンの開始でメモリが準備され、リージョンの終わりでメモリが解放される。そしてリージョンは入れ子構造を作る。
+リージョンとブロックの違いはリージョンには名前があることと、メモリを割り当てる時にどのリージョンに置くかを指定できることです。&lt;/p&gt;
+
+&lt;p&gt;リージョンについて説明するためにml風の小さな言語で説明しましょう。この言語にgcはありません。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ocaml&#34;&gt;let
+  x = [1, 2, 3]
+in
+  let
+    l = let
+      y = append ([4, 5], x)
+    in
+      y
+    end 
+  in
+    len l
+  end
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;スコープによるメモリ管理を考えてみましょう。&lt;code&gt;y&lt;/code&gt;について考えます。先程の考え方でいくと一番内側のスコープで作られた&lt;code&gt;y&lt;/code&gt;はスコープの外まで生きていないので&lt;code&gt;l&lt;/code&gt;に渡すのは不正です。
+これはつらいですね。代入を許さない言語だと値を返せなくなります。&lt;/p&gt;
+
+&lt;p&gt;次に、リージョンを導入してみます。リージョンを作る構文として、&lt;code&gt;letregion&lt;/code&gt;を導入します。&lt;/p&gt;
+
+&lt;p&gt;リージョン&lt;code&gt;r1&lt;/code&gt;, &lt;code&gt;r2&lt;/code&gt;を導入するには&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ocaml&#34;&gt;letregion r1, r2 in
+  ...
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と書きます。そしてリージョン&lt;code&gt;r1&lt;/code&gt;に&lt;code&gt;[1, 2, 3]&lt;/code&gt;をアロケートするには&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ocaml&#34;&gt;[1, 2, 3] at r1
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と書きます。また、関数&lt;code&gt;f&lt;/code&gt;の返り値をリージョン&lt;code&gt;r1&lt;/code&gt;にアロケートするには&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ocaml&#34;&gt;f[r1] args ...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と書きます。今回端折り気味の説明なのでこの記法の詳細は後回しにします。&lt;/p&gt;
+
+&lt;p&gt;リージョンとこの記法を導入した時に、先程の何がしたいのか分からないプログラムは次のように書けます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ocaml&#34;&gt;letregion r1, r2 in
+  let
+    x = [1, 2, 3] at r1
+  in
+    letregion r3, r4 in
+      let
+        l = let
+          letregion r5 in
+            y = append[r3] (([4, 5] at r4, x) at r5)
+          end
+        in
+          y
+        end 
+      in
+        len[r2] l
+      end
+  end
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;さて、このプログラムはちゃんと齟齬なく値を渡せていて、アロケートしたメモリも全て解放されています。
+リージョンを導入することでこのような小さなプログラムならgc無しでもメモリ管理が出来るようになりました。
+特に、このプログラムのメモリ管理は静的です。つまりメモリをアロケートする箇所と解放する箇所がコンパイル時に決定します。&lt;/p&gt;
+
+&lt;h1 id=&#34;リージョンと関数:cc7b79e9bf38410840bdd39e0a1f3096&#34;&gt;リージョンと関数&lt;/h1&gt;
+
+&lt;p&gt;先程までは値の計算だけでした。今度は関数を定義してみましょう。
+関数は返り値をどこかに返さないといけないので返り値の置き場となるリージョンを外から与える必要があります。
+ということで関数はリージョンパラメータを取ります。先程の関数を返り値のリージョンを指定する構文は厳密には関数にリージョンを渡していた訳です。&lt;/p&gt;
+
+&lt;p&gt;試しに&lt;code&gt;append&lt;/code&gt;を定義してみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ocaml&#34;&gt;letlec append[r1] p =
+  let (xs, ys) = p
+  in case xs of
+      nil =&amp;gt; ys
+    | x::xs&#39; =&amp;gt; (x::letregion r2 in
+      (append[r1] ((xs&#39;, ys) at r2))
+    end at r1)
+  end
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;この関数&lt;code&gt;append&lt;/code&gt;はリージョン&lt;code&gt;r1&lt;/code&gt;とタプル&lt;code&gt;p&lt;/code&gt;を受け取って、&lt;code&gt;r1&lt;/code&gt;にアロケートされた値を返します。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;(xs&#39;, ys)&lt;/code&gt;のように&lt;code&gt;append&lt;/code&gt;の呼び出しのためだけに作られたタプルは短命な&lt;code&gt;r2&lt;/code&gt;にアロケートしつつ、再帰呼び出しの&lt;code&gt;app&lt;/code&gt;の返り値は
+関数全体の返り値の一部になるので&lt;code&gt;r1&lt;/code&gt;にアロケートしています。&lt;/p&gt;
+
+&lt;p&gt;このように、リージョンさえなければ普通のmlと変わらないのにgcに頼らずメモリ管理が出来ています。&lt;/p&gt;
+
+&lt;h1 id=&#34;リージョン推論:cc7b79e9bf38410840bdd39e0a1f3096&#34;&gt;リージョン推論&lt;/h1&gt;
+
+&lt;p&gt;さてさて、先程リージョンなしのml言語にリージョンを導入することでメモリを静的に管理出来ました。しかしリージョンを手で指定していくのは中々つらいものがあります。ということでリージョンをコンパイラで勝手に推論してしまおうというのがリージョン推論です。&lt;/p&gt;
+
+&lt;p&gt;リージョン推論を導入することで今までgcでメモリを管理していたのをある程度静的に管理することが出来ます。
+リージョン推論のアルゴリズムは冒頭で述べたようにサーベイが間に合いませんでした。&lt;/p&gt;
+
+&lt;p&gt;sml処理系の&lt;a href=&#34;http://www.elsman.com/mlkit/&#34;&gt;ml kit&lt;/a&gt;はリージョン推論を導入することでgcをほとんど無くし、リアルタイム性に優れる処理系になりました。
+先程から「ほとんど」といっているのは既存のプログラミング言語だとリージョンを綺麗に割り当てることが出来なくてほとんどのオブジェクトがトップレベルリージョンに推論されてしまい、あまり意味がなくなってしまうからだとか。丁度動的型付き言語に型推論を入れてもほとんどobject型になってしまうのと同じような話なんですかね。&lt;/p&gt;
+
+&lt;h1 id=&#34;発展的話題:cc7b79e9bf38410840bdd39e0a1f3096&#34;&gt;発展的話題&lt;/h1&gt;
+
+&lt;h2 id=&#34;リージョンサイズ解析:cc7b79e9bf38410840bdd39e0a1f3096&#34;&gt;リージョンサイズ解析&lt;/h2&gt;
+
+&lt;p&gt;今まで、リージョンによるメモリの確保/解放については話してきましたが確保するサイズについては触れてきませんでした。
+簡単には&lt;code&gt;malloc&lt;/code&gt; &lt;code&gt;realloc&lt;/code&gt; &lt;code&gt;free&lt;/code&gt;相当の機能を考えれば済むのですが、例えばコンパイル時点で最大確保サイズが分かっているのなら
+コールスタックに載せて確保/解放を高速化することが出来ます。&lt;/p&gt;
+
+&lt;p&gt;そのコンパイル時に出来るだけリージョンの最大サイズを判明させようというのがリージョンサイズ解析です。&lt;/p&gt;
+
+&lt;h2 id=&#34;線形-アフィン型:cc7b79e9bf38410840bdd39e0a1f3096&#34;&gt;線形/アフィン型&lt;/h2&gt;
+
+&lt;p&gt;線形型は全てのリソースに対が必ず丁度1回消費されることを要求する型システムです。必ず消費されるのでメモリの解放が必ず行われることを型レベルで保障します。そして最大1回しか消費されないので他者が同じリソースを触って大惨事になるデータ競合を防ぐことが出来ます。
+しかし推論は完全には出来ず、ユーザがちょくちょく整合性が取れていることの証明を書く必要があります。&lt;a href=&#34;http://www.ats-lang.org/&#34;&gt;ATS2&lt;/a&gt;は線形型を持っており、厳密なリソース管理が出来ます。&lt;/p&gt;
+
+&lt;p&gt;アフィン型は線形型よりは少し緩い型システムで、リソースが最大でも1回しか消費されないことを要求します。メモリなどの管理は出来ませんがデータ競合を防ぐことは出来ます。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.rust-lang.org/&#34;&gt;Rust&lt;/a&gt;はアフィン型を導入してるらしいです。多分所有権回りの話なんでしょう。リージョンも導入してるらしいです。生存期間回りの話なんでしょう。&lt;/p&gt;
+
+&lt;p&gt;余談ですがリージョンとアフィン型の関係を調べようとしたら画像の特定領域に台形変換を掛ける話しかヒットしませんでした。ググラビリティ低い…&lt;/p&gt;
+
+&lt;h1 id=&#34;まとめ:cc7b79e9bf38410840bdd39e0a1f3096&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;リージョンについて話した&lt;/li&gt;
+&lt;li&gt;リージョン推論のアルゴリズムについては話さなかった&lt;/li&gt;
+&lt;li&gt;リージョン以外にもリソースを管理する方法はあるよ&lt;/li&gt;
+&lt;li&gt;みんなRust使おう。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;全然理解が追い付かないまま期限が来て半知半解で書いてるので詳しい方&lt;a href=&#34;https://twitter.com/blackenedgold&#34;&gt;κeen&lt;/a&gt;までツッコみお願いします。&lt;/p&gt;
+
+&lt;h1 id=&#34;参考文献:cc7b79e9bf38410840bdd39e0a1f3096&#34;&gt;参考文献&lt;/h1&gt;
+
+&lt;ol&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.elsman.com/mlkit/pdf/ismm98.pdf&#34;&gt;A Brief Introduction to Regions&lt;/a&gt; 今回の記事はこの論文の内容をかい摘んで書いてある。&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://melsman.github.io/mlkit/pdf/popl94.pdf&#34;&gt;Implementation of the Typed Call-by-value lambda-calculus using a Stack of Regions&lt;/a&gt; (多分)リージョンの初出論文&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://melsman.github.io/mlkit/pdf/toplas98.pdf&#34;&gt;A Region Inference Algorithm&lt;/a&gt; リージョン推論のアルゴリズム。70ページある…&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.elsman.com/mlkit/papers.html&#34;&gt;ML Kitの論文たち&lt;/a&gt; ここに色々論文ある。&lt;/li&gt;
+&lt;/ol&gt;
+</description>
+    </item>
     
     <item>
       <title>SML#でDBに接続</title>
