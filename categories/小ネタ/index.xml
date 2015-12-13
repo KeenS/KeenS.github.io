@@ -6,8 +6,231 @@
     <description>Recent content in 小ネタ on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Sun, 29 Nov 2015 23:25:54 +0900</lastBuildDate>
+    <lastBuildDate>Sun, 13 Dec 2015 17:14:18 +0900</lastBuildDate>
     <atom:link href="http://KeenS.github.io/categories/%E5%B0%8F%E3%83%8D%E3%82%BF/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Rustでの日本語の扱い</title>
+      <link>http://keens.github.io/blog/2015/12/13/rustdenonihongonoatsukai</link>
+      <pubDate>Sun, 13 Dec 2015 17:14:18 +0900</pubDate>
+      
+      <guid>http://keens.github.io/blog/2015/12/13/rustdenonihongonoatsukai</guid>
+      <description>
+
+&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2015/rust-lang&#34;&gt;Rust Advent Calendar&lt;/a&gt; 14日目の記事です&lt;br /&gt;
+前:gifnksmさんの &lt;a href=&#34;http://gifnksm.hatenablog.jp/entry/2015/12/13/204655&#34;&gt;kcovを使ってRustプログラムのカバレッジを測定する - gifnksmの雑多なメモ&lt;/a&gt;&lt;br /&gt;
+後:nacika_insさんのtimeこわい&lt;/p&gt;
+
+&lt;p&gt;κeenです。当初の予定より小ネタになってしまいましたがRustでの日本語の扱いについて書こうかと。&lt;/p&gt;
+
+&lt;p&gt;ご存じの通りRustはマルチバイト文字をサポートしていますが、その殆どがUTF-8だけです。しかし日本人にはUTF-8だけでは少し辛いものがありますのでどうにかして対応しようかと。&lt;/p&gt;
+
+&lt;p&gt;ソースコード中でもマルチバイト文字を扱えますが、UTF-8である必要があります。&lt;/p&gt;
+
+&lt;p&gt;例えば&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rs&#34;&gt;fn main() {
+  println!(&amp;quot;あああ&amp;quot;);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これをISO-2022-JPで保存してrustcに食わせても、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;error: couldn&#39;t read &amp;quot;src/main.rs&amp;quot;: stream did not contain valid UTF-8
+Could not compile `japanese`.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と無下もないエラーが出てしまいます。&lt;/p&gt;
+
+&lt;p&gt;内部エンコーディングにもUTF-8が使われているのでRustの文字列をUTF-8以外で出力するにはなんとなく変換が必要そうなのは理解出来ますが、変に出入力をラップしてる関数を使うとまた意図せぬエラーが出ます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::fs::File;
+use std::io::BufRead;
+use std::io::BufReader;
+
+fn main() {
+  let file = File::open(&amp;quot;japanese.txt&amp;quot;);
+  let br = BufReader::new(&amp;amp;file);
+  for line in br.lines() {
+    matich line {
+      Ok(l) =&amp;gt; println!(&amp;quot;Ok: {}&amp;quot;, l),
+      Err(e) =&amp;gt; println!(&amp;quot;{:?}&amp;quot;, e)
+    };
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これもまた、&lt;code&gt;stream did not contain valid UTF-8&lt;/code&gt;エラーを出します。&lt;/p&gt;
+
+&lt;p&gt;ReadもBufReadもbyte orientedって言ってるのに何故か文字列を扱えるのが若干気になりますがまあ、そういうもんなんでしょう。&lt;/p&gt;
+
+&lt;h1 id=&#34;encoding:e3d3c2e4aaee703e1a1583ece8aa80f1&#34;&gt;encoding&lt;/h1&gt;
+
+&lt;p&gt;そこで救世主となるライブラリが&lt;a href=&#34;https://github.com/lifthrasiir/rust-encoding&#34;&gt;lifthrasiir/rust-encoding&lt;/a&gt;です。文字列のエンコーディングをサポートします。
+READMEに詳しい使い方が載っているのですが、このライブラリは与えられたスライスに対して指定されたエンコーディングでエンコード/デコードします。&lt;/p&gt;
+
+&lt;p&gt;なので先の例のようにISO-2022-JPで&lt;code&gt;&amp;quot;あああ&amp;quot;&lt;/code&gt;と出力したいなら&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;extern crate encoding;
+use encoding::{Encoding, EncoderTrap};
+use encoding::all::ISO_2022_JP;
+use std::io::Stdout;
+
+fn main() {
+  let bytes = ISO_2022_JP.encode(&amp;quot;あああ&amp;quot;, EncoderTrap::Ignore);
+  Stdout.write_all(&amp;amp;bytes[..]);
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と出来るでしょう。(即興で書いてコンパイルすらしてないので本当に出来るかは分かりませんが)&lt;/p&gt;
+
+&lt;p&gt;読み取りに関しては…………。そう、このライブラリはバッファに対してしか動作せず、ストリームに使えないのです。提供してくれたら良さそうなのですが、作者の方が忙しいようです。&lt;/p&gt;
+
+&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;&lt;a href=&#34;https://twitter.com/blackenedgold&#34;&gt;@blackenedgold&lt;/a&gt; stream encoding/decodingは計画してはいるのですが、私が忙しくてなかなか作業をすることができません&amp;hellip; orz&lt;/p&gt;&amp;mdash; Kang Seonghoon (@senokay) &lt;a href=&#34;https://twitter.com/senokay/status/666516796942319616&#34;&gt;2015, 11月 17&lt;/a&gt;&lt;/blockquote&gt;
+&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
+
+&lt;p&gt;余談ですがこの方は韓国の方のようですが、日本語もある程度分かるそうです。すごいですね。&lt;/p&gt;
+
+&lt;p&gt;さて、ストリームに対して使えないと分かったなら自分で対応するまで。幸いにも我々が使っているのはRustです。新しいものを既存の仕組みに載せるのは造作もありません。
+ストリームを良い感じにデコードするには&lt;a href=&#34;https://doc.rust-lang.org/std/io/trait.Read.html&#34;&gt;std::io::Read&lt;/a&gt;を実装した何かを作れば十分です。作っていきましょう。&lt;code&gt;Read&lt;/code&gt;トレイトを実装するには最低&lt;code&gt;read&lt;/code&gt;だけ実装してしまえば十分です。&lt;/p&gt;
+
+&lt;p&gt;この&lt;code&gt;read&lt;/code&gt;ですが、ドキュメントを読むと中々制限が緩いようです。&lt;/p&gt;
+
+&lt;blockquote&gt;
+&lt;p&gt;Pull some bytes from this source into the specified buffer, returning how many bytes were read.&lt;/p&gt;
+
+&lt;p&gt;This function does not provide any guarantees about whether it blocks waiting for data, but if an object needs to block for a read but cannot it will typically signal this via an Err return value.&lt;/p&gt;
+
+&lt;p&gt;If the return value of this method is Ok(n), then it must be guaranteed that 0 &amp;lt;= n &amp;lt;= buf.len(). A nonzero n value indicates that the buffer buf has been filled in with n bytes of data from this source. If n is 0, then it can indicate one of two scenarios:&lt;/p&gt;
+
+&lt;p&gt;This reader has reached its &amp;ldquo;end of file&amp;rdquo; and will likely no longer be able to produce bytes. Note that this does not mean that the reader will always no longer be able to produce bytes.
+   The buffer specified was 0 bytes in length.&lt;/p&gt;
+
+&lt;p&gt;No guarantees are provided about the contents of buf when this function is called, implementations cannot rely on any property of the contents of buf being true. It is recommended that implementations only write data to buf instead of reading its contents.&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;です。&lt;/p&gt;
+
+&lt;blockquote&gt;
+&lt;p&gt;No guarantees are provided about the contents of buf when this function is called, implementations cannot rely on any property of the contents of buf being true.&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;「関数が呼ばれる際に&lt;code&gt;buf&lt;/code&gt;に対しては何如なる保証もなく、呼出側はバッファの内容に対して何如なる不変条件も期待してはいけません」とあります。つまり、4096 byteのバッファが与えられても1呼び出しにつき1バイトしか返さないような実装でも許容されます。
+また、非同期ベースのIOのようにキャッシュにデータがなければIOブロッキングせずにエラーだとかの挙動もありえます。非常にシステムプログラミング言語らしい仕様ですね。&lt;/p&gt;
+
+&lt;p&gt;今から作ろうとしているデコーディングストリームも読み出したバイト列がデコード後に何バイトになるのか予測がつかないのでこの仕様は有難いですね。&lt;/p&gt;
+
+&lt;p&gt;さて、作っていきましょうか。まずは必要そうなライブラリを読み込みます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;extern crate encoding;
+use self::encoding::{EncodingRef, DecoderTrap};
+use std::io::Read;
+use std::io;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そしてメインとなる構造体です。とある&lt;code&gt;Read&lt;/code&gt;を実装した型をラップする形にしましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub struct DecodingReader&amp;lt;R&amp;gt; {
+    inner: R,
+    encoding: EncodingRef,
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;Read&lt;/code&gt;はトレイトなので&lt;code&gt;inner&lt;/code&gt;のところを&lt;code&gt;&amp;amp;R&lt;/code&gt;としなくて大丈夫です。&lt;code&gt;Read&lt;/code&gt;の実装側が調整します。&lt;/p&gt;
+
+&lt;p&gt;そしてコンストラクタですね。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;impl &amp;lt;R: Read&amp;gt; DecodingReader&amp;lt;R&amp;gt; {
+    pub fn new(coding: EncodingRef, read: R)-&amp;gt; Self {
+        EncodingReader {
+            inner: read,
+            encoding: coding
+        }
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そのままですね。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;Read&lt;/code&gt;の実装です。まずは&lt;code&gt;inner&lt;/code&gt;の&lt;code&gt;read&lt;/code&gt;を呼んで、その結果を一旦デコードしてからまたバイト列に変換します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;impl &amp;lt;R: Read&amp;gt; Read for DecodingReader&amp;lt;R&amp;gt; {
+    fn read(&amp;amp;mut self, buf: &amp;amp;mut [u8]) -&amp;gt; io::Result&amp;lt;usize&amp;gt;{
+        // TODO set appropriate buffer size
+        let len = buf.len() / 2;
+        let n = try!(self.inner.read(&amp;amp;mut buf[..len]));
+        // TODO don&#39;t ignore input code
+        let str = self.encoding.decode(&amp;amp;mut buf[..n], DecoderTrap::Ignore).unwrap();
+        let mut i = 0;
+        for (d, s) in buf.iter_mut().zip(str.bytes()) {
+            *d = s;
+            i+=1;
+            if i == 0 {
+                break
+            };
+        }
+        assert!(i &amp;lt;= buf.len());
+        Ok(i)
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;先程も言った通りデコード読み込んだバイト列をUTF-8にした時にどれくらいバイト数が変わるか分からないので山勘で2倍くらいに膨らむだろうとして与えられたバッファ長の半分を使います。
+ここはもう少し調整が必要ですね。エンコーディング毎に適切なバッファ長を設定したい…&lt;/p&gt;
+
+&lt;p&gt;バッファを確保出来たら&lt;code&gt;let n = try!(self.inner.read(&amp;amp;mut buf[..len]));&lt;/code&gt;してそれっぽいサイズ読み込んで、読み込んだサイズをデコードにかけます。&lt;/p&gt;
+
+&lt;p&gt;現在&lt;code&gt;DecoderTrap&lt;/code&gt;を&lt;code&gt;Ignore&lt;/code&gt;にして&lt;code&gt;unwrap&lt;/code&gt;してますが、これは少し雑すぎますね。例えば入力が全てvalidな文字を含んでいたとしても&lt;code&gt;read&lt;/code&gt;が多バイト文字の真ん中までしか読まなかった時にそれが無効なエンコーディングと判定されて無視されるのでユーザからしたら「合ってる筈なのに何故か1文字欠損するバグ」として現れます。今回即席で作ったので勘弁して下さい。&lt;/p&gt;
+
+&lt;p&gt;変換は文字列にしか出来ないようなので一旦文字列に落してからまたバイト列として取り出し、バッファに書き出します。デコード後のバイト列が&lt;code&gt;read&lt;/code&gt;したバイト列より小さかったら一部&lt;code&gt;read&lt;/code&gt;したデータが残ってしまいそうですが、「何如なる不変条件も…」とあるので問題ないでしょう。返り値にデコード後のバイト列の長さを返していれば良い筈です。&lt;/p&gt;
+
+&lt;p&gt;さて、エンコードのエラーハンドリングしてないだとか本当に読み込みのバッファ長が適切なのかとかの疑問はあるものの、一応ストリームのデコーダが出来ました。使ってみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;extern crate encoding;
+extern crate japanese;
+
+use encoding::{Encoding, DecoderTrap};
+use encoding::all::ISO_2022_JP;
+
+use std::fs::File;
+use std::io::BufReader;
+use std::io::BufRead;
+use std::str::from_utf8;
+use japanese::buf::DecodingReader;
+
+
+fn main() {
+    let file = File::open(&amp;quot;src/japanese.txt&amp;quot;).unwrap();
+    let e = DecodingReader::new(ISO_2022_JP, &amp;amp;file);
+    let mut br = BufReader::new(e);
+    let b = br.fill_buf().unwrap();
+    for line in b.lines() {
+        println!(&amp;quot;{}&amp;quot;, line.unwrap());
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これでちゃんとISO-2022-JPのファイルを読めます。&lt;/p&gt;
+
+&lt;p&gt;Javaに慣れてる人ならこういうIOに対するデコレータパターンは見覚えがあるでしょう。&lt;/p&gt;
+
+&lt;p&gt;今更ですがiso-2022-jpはいわゆるjisエンコーディングです。rust-encodingはshift_jisの拡張にあたるwindows31jだとかeuc-jpも扱えます(&lt;a href=&#34;https://lifthrasiir.github.io/rust-encoding/encoding/codec/japanese/index.html&#34;&gt;参考&lt;/a&gt;)。&lt;/p&gt;
+
+&lt;h1 id=&#34;今後:e3d3c2e4aaee703e1a1583ece8aa80f1&#34;&gt;今後&lt;/h1&gt;
+
+&lt;p&gt;ライブラリとして公開するか、あるいは作者の方がやる気はあるようなのでプルリクを送るかが終着点かな、と思っていますが如何せん雑にしか実装してないので微妙ですね。
+例の境界とマルチバイトの問題は&lt;code&gt;Read&lt;/code&gt;じゃなく&lt;code&gt;BufRead&lt;/code&gt;を要求して1文字分読み切るまで来るまで1バイトずつ読むとかになると思います。ダルい。&lt;/p&gt;
+
+&lt;h1 id=&#34;まとめ:e3d3c2e4aaee703e1a1583ece8aa80f1&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Rust標準だけでUTF-8以外の文字列を使うのはつらいよ&lt;/li&gt;
+&lt;li&gt;Rustのエンコーディングライブラリを紹介したよ&lt;/li&gt;
+&lt;li&gt;エンコーディングライブラリを使ってストリームデコーダを実装してみたよ。&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
     
     <item>
       <title>Cargoの使い方</title>
