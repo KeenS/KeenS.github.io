@@ -5,7 +5,6 @@ title: SML#に学ぶコンパイラ言語におけるREPLの実装方法
 ---
 
 このエントリは[言語実装 Advent Calendar 2015](http://qiita.com/advent-calendar/2015/lang_dev)16日目の記事です。  
-前: [SML#でJITコンパイラを作る軽い話]()  
 
 κeenです。かねてより気になっていたREPLの実装方法について、SML#のソースコードを読んだのでその話でもします。
 <!--more-->

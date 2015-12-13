@@ -5,8 +5,7 @@ title: SML#でJITコンパイラを作る軽い話
 ---
 
 このエントリは[ML Advent Calendar 2015](http://www.adventar.org/calendars/848)及び[言語実装 Advent Calendar 2015](http://qiita.com/advent-calendar/2015/lang_dev)15日目の記事です。  
-MLの前:   
-言語実装の前:   
+
 
 κeenです。先日流れてきた[RustでJITコンパイラを作る話](http://www.jonathanturner.org/2015/12/building-a-simple-jit-in-rust.html)が面白かったのでSML#でもやってみます。
 
@@ -375,3 +374,5 @@ make: *** [main.o] Error 1
 * JITを作るにはメモリ保護をいじれて関数ポインタのインポートが出来ればいいよ
 * SML#でもJIT作れるよ
 * アセンブラっぽいの作ったよ
+
+今回のコードは[こちら](https://github.com/KeenS/smljit)にあります。
