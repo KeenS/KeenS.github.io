@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+    <head>
+        
+        <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+
+        <title>SML#でJITコンパイラを作る軽い話 | κeenのHappy Hacκing Blog</title>
+        <link rel="stylesheet" href='http://fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css' />
+        <link rel="stylesheet" href="http://keens.github.io//libraries/normalize.3.0.1.css" />
+        <link rel="stylesheet" href="http://keens.github.io//css/liquorice.css" />
+        <link rel="shortcut icon" href="http://KeenS.github.io/favicon.ico" />
+        <link rel="apple-touch-icon-precomposed" href="http://KeenS.github.io/apple-touch-icon-144-precomposed.png" sizes="144x144" />
+        <link rel="alternate" href="" type="application/rss+xml" title="κeenのHappy Hacκing Blog" />
+        
+        <script>
+         (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+             (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+                                  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+         })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+         ga('create', 'UA-43779888-1', 'auto');
+         ga('send', 'pageview');
+
+        </script>
+        
+        <link rel="stylesheet" href="http://keens.github.io//highlight.js/styles/xcode.css" />
+<script src="http://keens.github.io//highlight.js/highlight.min.js"></script>
+<script>hljs.initHighlightingOnLoad();</script>
+<script type="text/x-mathjax-config">
+ MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
+</script>
+<script type="text/javascript"
+        src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML">
+</script>
+<meta http-equiv="X-UA-Compatible" CONTENT="IE=EmulateIE7" />
+
+    </head>
+    <body class="li-body">
+
+<header class="li-page-header">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-brand li-left">
+                <a href="http://keens.github.io//">κeenのHappy Hacκing Blog</a> | Lispエイリアンの狂想曲</div>
+                <div class="li-menu li-right">
+                    <span class="li-menu-icon" onclick="javascript:toggle('menu');">&#9776;</span>
+                    <ul id="menu2" class="li-menu-items">
+                        
+                            <li><a href="http://KeenS.github.io/about"> About </a></li>
+                        
+                            <li><a href="http://KeenS.github.io/post/"> Blog </a></li>
+                        
+                            <li><a href="http://KeenS.github.io/slide/"> Slide </a></li>
+                        
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="sixteen columns">
+                <ul id="menu" class="li-menu-items li-menu-mobile">
+                    
+                        <li><a href="http://KeenS.github.io/about"> About </a></li>
+                    
+                        <li><a href="http://KeenS.github.io/post/"> Blog </a></li>
+                    
+                        <li><a href="http://KeenS.github.io/slide/"> Slide </a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+
+
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <article class="li-article">
+                    <header class="li-article-header">
+                        <h1 class="li-article-title">SML#でJITコンパイラを作る軽い話</h1>
+                        <div class="li-article-meta">
+    <time class="li-article-date">2015-12-12</time>
+    <ul class="li-article-tag">
+    
+        <li>
+            <a href="http://KeenS.github.io/categories/sml">SML</a>
+        </li>
+    
+        <li>
+            <a href="http://KeenS.github.io/categories/smlsharp">SMLSharp</a>
+        </li>
+    
+        <li>
+            <a href="http://KeenS.github.io/categories/advent-calendar">Advent Calendar</a>
+        </li>
+    
+        <li>
+            <a href="http://KeenS.github.io/categories/advent-calendar-2015">Advent Calendar 2015</a>
+        </li>
+    
+        <li>
+            <a href="http://KeenS.github.io/categories/%e8%a8%80%e8%aa%9e%e5%87%a6%e7%90%86%e7%b3%bb">言語処理系</a>
+        </li>
+    
+</ul>
+
+</div>
+
+                    </header>
+                    <section>
+                        
+
+<p>このエントリは<a href="http://www.adventar.org/calendars/848">ML Advent Calendar 2015</a>及び<a href="http://qiita.com/advent-calendar/2015/lang_dev">言語実装 Advent Calendar 2015</a>15日目の記事です。</p>
+
+<p>κeenです。先日流れてきた<a href="http://www.jonathanturner.org/2015/12/building-a-simple-jit-in-rust.html">RustでJITコンパイラを作る話</a>が面白かったのでSML#でもやってみます。</p>
+
+<h1 id="jitコンパイラってなに:adcfd48c9789a206f0f1cfad72bd4b5a">JITコンパイラってなに？</h1>
+
+<p>JITはJust In Timeで、日本語にすると「間に合って」になります。誤読されかねませんが「臨時コンパイラ」と訳すのが適当なのでしょうか。</p>
+
+<p>普通のインタプリタがソースコードを直接評価するのに対してJITコンパイラはソースコードを内部で一旦ネイティブコードにコンパイルして実行します。</p>
+
+<p>よく、JITコンパイラ/JITコンパイルのことをJITと略して呼びます。</p>
+
+<h1 id="どこで使うの:adcfd48c9789a206f0f1cfad72bd4b5a">どこで使うの？</h1>
+
+<p>主に、インタプリタの高速化の目的で使われるようです。他にはコンパイラをインタプリタ化させる(REPLの実装とか)でも使えそうな気がしますが、詳しくは知りません。</p>
+
+<h1 id="jitってどうやって作るの:adcfd48c9789a206f0f1cfad72bd4b5a">JITってどうやって作るの？</h1>
+
+<p>JIT <strong>でない</strong> コンパイラが吐いたコードは一旦ディスクからメモリに読まれ、メモリ上で実行されます。</p>
+
+<p>JITコンパイラが吐くコードは直接メモリに吐かれ、メモリ上で実行されます。なので細かい条件を無視すれば</p>
+
+<ol>
+<li>吐かれる命令のための(特殊な)メモリ領域を用意する</li>
+<li>そこに実行したい命令列を書き込む</li>
+<li>書き込んだ命令列を実行する</li>
+</ol>
+
+<p>だけです。
+3.の「書き込んだ命令を実行する」が若干ふわっとしてますが、多くの場合は命令の書かれたメモリを関数ポインタとして扱って、その関数を呼び出す形で実行されます。
+一応直接プログラムカウンタをいじって書き込んだ命令列を実行させることも出来ます。</p>
+
+<h1 id="一緒に作ってみよう:adcfd48c9789a206f0f1cfad72bd4b5a">一緒に作ってみよう</h1>
+
+<p>思ったより簡単そうですね。作ってみましょう。</p>
+
+<h2 id="1-メモリ領域を準備する:adcfd48c9789a206f0f1cfad72bd4b5a">1. メモリ領域を準備する</h2>
+
+<p>先に「特殊な」と付言しましたのでそれについて説明しましょう。プロセス上のメモリは、OSによって保護されています。
+特に、そのままではそのメモリ上の命令列を実行出来ません。その保護を外すために<code>mprotect(2)</code>システムコールを使います。</p>
+
+<pre><code class="language-C">int mprotect(void *addr, size_t len, int prot);
+</code></pre>
+
+<p>SML#を使えば簡単に使えるようになります。</p>
+
+<pre><code class="language-sml">val mprotect = _import &quot;mprotect&quot;: (unit ptr, word, word) -&gt; int
+</code></pre>
+
+<p>SML#は2.0.0時点では32bitでしか動かないのでsize_tをwordとしてしまって大丈夫です。また、bit演算をやりたいので<code>prot</code>は本来はintですがwordにしました。</p>
+
+<p><code>mprotect(2)</code>はPOSIX(SUSv4)的には引数の<code>addr</code>がシステムのページの境界上にあることを要求しても良いことになっています。
+実際、OS Xが要求するらしいです。また、メモリ保護はページ単位で行われるため、<code>len</code>もページサイズの倍数である必要があります。
+<code>prot</code>は保護フラグですね。</p>
+
+<p>メモリの確保、特にページの境界にアラインメントされたメモリ領域を確保するにはSML#では厳しそうなのでこれもCの関数に頼ります。
+Linuxならいくつか方法はありますが、ポータブルには<code>posix_memalign(3)</code>を使うのが良いようです。</p>
+
+<pre><code class="language-C">int posix_memalign(void **memptr, size_t alignment, size_t size);
+</code></pre>
+
+<p>これもSML#から簡単に使えます。</p>
+
+<pre><code class="language-sml">val posix_memalign = _import &quot;posix_memalign&quot;: (unit ptr ref, word, word) -&gt; int
+</code></pre>
+
+<p>ついでにメモリの解放も必要ですね。<code>free(3)</code>もインポートしましょう。</p>
+
+<pre><code class="language-sml">val free = _import &quot;free&quot;: unit ptr -&gt; ()
+</code></pre>
+
+<p>さて、メモリを確保するのにいくつかCのマクロで定義された定数を定義しましょう。今のところSML#にCのマクロを使う術はなさそうです。どうにかしてCプリプロセッサを使えれば良いのですが…。</p>
+
+<pre><code class="language-sml">val PROT_READ  = 0wx1
+val PROT_WRITE = 0wx2
+val PROT_EXEC  = 0wx4
+val PROT_NONE  = 0wx0
+
+val PAGE_SIZE = 0w4096
+</code></pre>
+
+<p>ページサイズは本当は<code>sysconf(3)</code>を使って<code>sysconf(PAGESIZE)</code>として取るのが作法ですが面倒なので4KiB決め打ちにしてしまいました。</p>
+
+<p>さて、これらを用いてJIT用のメモリは次のように確保します。<code>Pointer</code>モジュールが必要なのでsmiファイルで<code>require &quot;ffi.smi&quot;</code>しましょう。</p>
+
+<pre><code class="language-sml">val op orb = Word.orb
+infix 5 orb
+val size = 0wx1
+val msize = size * PAGE_SIZE
+val pageRef: unit ptr ref = ref (Pointer.NULL ())
+val ret = posix_memalign (pageRef, PAGE_SIZE, msize)
+val page = if ret = 0
+           then !pageRef
+           else raise Fail &quot;memory allocation failed&quot;
+val PROT_RWEX = PROT_READ orb PROT_WRITE orb PROT_EXEC
+val ret = mprotect (page, msize, PROT_RWEX)
+val () = if ret = 0
+         then ()
+         else raise Fail &quot;memory protection error&quot;
+</code></pre>
+
+<p>これで<code>page</code>に実行可能フラグが立ったメモリが確保出来ました。sizeは書き込みたい命令列に応じて変えます。</p>
+
+<h1 id="2-命令列を書き込む:adcfd48c9789a206f0f1cfad72bd4b5a">2. 命令列を書き込む</h1>
+
+<p>さて、ここらへんからアセンブラの世界になってきます。</p>
+
+<p>まず、安全のために件のメモリ領域を<code>ret</code>命令で埋めます。
+<code>ret</code>命令は関数から戻る時に使われる命令で、変なことをしても<code>ret</code>で元の場所に戻ればどうにかなる可能性があるのです。</p>
+
+<p>メモリを一気に埋めるには<code>memset(3)</code>が便利です。</p>
+
+<pre><code class="language-C">void *memset(void *s, int c, size_t n);
+</code></pre>
+
+<p>これをSMLにインポートして使いましょう。<code>ret</code>命令に対応するマシン語は<code>0xc3</code>です。</p>
+
+<pre><code class="language-sml">val memset = _import &quot;memset&quot;: (unit ptr, word, word) -&gt; unit ptr
+val _ = memset (page, 0wxc3, msize)
+</code></pre>
+
+<p>じゃあ、命令を書き込んでいきましょう。最初はただ1を返すだけの関数に相当する命令です。
+64bitマシンを使っていても32bitでコンパイルしたSML#を使っている限りはx86(IA32)のアセンブラを使います。
+x86は値を<code>eax</code>レジスタに入れることで返り値とします。</p>
+
+<pre><code class="language-asm">mov 1 eax
+ret
+</code></pre>
+
+<p>このコードを<a href="https://defuse.ca/online-x86-assembler.htm#disassembly">オンラインアセンブラ</a>でアセンブルしてみると</p>
+
+<pre><code>0:  b8 01 00 00 00          mov    eax,0x1
+5:  c3                      ret
+</code></pre>
+
+<p>との結果が返ってきました。これを真心込めて1つづつメモリに書き込んでいきます。
+SML#からメモリに直接書き込むには内部APIっぽいものを触る必要があります。
+タイプ数を減らすためにいくつかエイリアスを定義しておきましょう。</p>
+
+<pre><code class="language-sml">val fromUnitPtr = SMLSharp_Builtin.Pointer.fromUnitPtr
+val store = Pointer.store
+val advance = Pointer.advance
+</code></pre>
+
+<p>メモリにword8の値を書き込むのにキャストが必要になるので<code>fromUnitPtr</code>を使います。
+さて、書き込んでいきます。</p>
+
+<pre><code class="language-sml">val mem = fromUnitPtr page
+val () = store page 0wxb8
+val mem = advance mem
+val () = store page 0wx01
+val mem = advance mem
+val () = store page 0wx00
+val mem = advance mem
+val () = store mem 0wx00
+val mem = advance mem
+val () = store mem 0wx00
+val mem = advance mem
+val () = store mem 0wxc3
+val _ = advance mem
+</code></pre>
+
+<p>これで<code>page</code>に1を返すだけの命令列が書き込まれした。</p>
+
+<h2 id="3-書き込んだ命令列を実行する:adcfd48c9789a206f0f1cfad72bd4b5a">3. 書き込んだ命令列を実行する</h2>
+
+<p>書き込んだ命令列は関数にキャストして使うことが多いと言いました。今回もそのようにします。</p>
+
+<p>そのために、また内部APIっぽいものを使います。</p>
+
+<pre><code class="language-sml">val toCodeptr = SMLSharp_Builtin.Pointer.toCodeptr
+</code></pre>
+
+<p><code>codeptr</code>型は関数ポインタを表すもののようです。<code>DynamicLink</code>モジュールなどで使われています。</p>
+
+<p>さて、今回の1を返すだけの命令列は<code>() -&gt; int</code>型になりますね。
+それをインポート、実行しましょう。</p>
+
+<pre><code class="language-sml">val freturn1 = toCodePtr page: _import () -&gt; int
+val () = print ((Int.toString (freturn1 ())) ^ &quot;\n&quot;)
+val _ = free page
+</code></pre>
+
+<p>これで見事<code>1</code>が印字されたら成功です。</p>
+
+<h1 id="さらに:adcfd48c9789a206f0f1cfad72bd4b5a">さらに</h1>
+
+<p>先程のコードは繰り返しが多く、整理されていませんでした。もう少し整理しましょう。</p>
+
+<pre><code class="language-sml">structure Emit = struct
+    val posix_memalign = _import &quot;posix_memalign&quot;: (unit ptr ref, word, word) -&gt; int
+    val mprotect = _import &quot;mprotect&quot;: (unit ptr, word, word) -&gt; int
+    val memset = _import &quot;memset&quot;: (unit ptr, word, word) -&gt; unit ptr
+    val free = _import &quot;free&quot;: unit ptr -&gt; ()
+    val printf = _import &quot;printf&quot;: (string, unit ptr) -&gt; ()
+
+    (* 
+#define PROT_READ	0x1		/* Page can be read.  */
+#define PROT_WRITE	0x2		/* Page can be written.  */
+#define PROT_EXEC	0x4		/* Page can be executed.  */
+#define PROT_NONE	0x0		/* Page can not be accessed.  */
+    *)
+
+    val PROT_READ  = 0wx1
+    val PROT_WRITE = 0wx2
+    val PROT_EXEC  = 0wx4
+    val PROT_NONE  = 0wx0
+
+    val PAGE_SIZE = 0w4096
+
+    type jitptr = word8 ptr
+    val fromUnitPtr = SMLSharp_Builtin.Pointer.fromUnitPtr
+    val toUnitPtr = SMLSharp_Builtin.Pointer.toUnitPtr
+    val toCodeptr = SMLSharp_Builtin.Pointer.toCodeptr
+    val store = Pointer.store
+    val advance = Pointer.advance
+
+
+    fun jitMemory size: jitptr = let
+        val op orb = Word.orb
+        infix 5 orb
+        val msize = size * PAGE_SIZE
+        val pageRef: unit ptr ref = ref (Pointer.NULL ())
+        val ret = posix_memalign (pageRef, PAGE_SIZE, msize)
+        val page = if ret = 0
+                   then !pageRef
+                   else raise Fail &quot;memory allocation failed&quot;
+        val PROT_RWEX = PROT_READ orb PROT_WRITE orb PROT_EXEC
+        val ret = mprotect (page, msize, PROT_RWEX)
+        val () = if ret = 0
+                 then ()
+                 else raise Fail &quot;memory protection error&quot;
+        (* init with ret for safety *)
+        val _ = memset (page, 0wxc3, msize)
+    in
+        fromUnitPtr page
+    end
+
+    fun freeJit (jitMem: jitptr) = free (SMLSharp_Builtin.Pointer.toUnitPtr jitMem)
+
+    fun pushWord page (word: word8) = (store (page, word); advance (page, 1))
+    fun pushWords (page: jitptr) l = List.foldl (fn(w,page) =&gt; pushWord page w) page l
+
+    val import: jitptr -&gt; codeptr = toCodeptr o toUnitPtr
+
+    fun fromMachineCode l = let
+        val len = Word.fromInt(List.length l)
+        val size = (len + PAGE_SIZE) div PAGE_SIZE
+        val page = jitMemory size
+        val _ = pushWords page l
+    in
+        import page
+    end
+end
+</code></pre>
+
+<p>次のように使います。一回importした関数はfreeしないことにしましょう。</p>
+
+<pre><code class="language-sml">fun println x = print (x ^ &quot;\n&quot;)
+val return1  =
+    (* 0:  b8 01 00 00 00          mov    eax,0x1  *)
+    [
+      0wxb8, 0wx01, 0wx00, 0wx00, 0wx00
+    ] 
+val freturn1 = Emit.fromMachineCode return1 :_import () -&gt; int
+val () = println (Int.toString (freturn1 ()))
+</code></pre>
+
+<h2 id="引数を取る:adcfd48c9789a206f0f1cfad72bd4b5a">引数を取る</h2>
+
+<p>もうアセンブラの話になります。</p>
+
+<p>x86では引数は右から順にスタックに積まれます。intを1つ取ってそれに1足して返す関数はこうなります。</p>
+
+<pre><code class="language-sml">val add1 = 
+    (* 0:  8b 44 24 04             mov    eax,DWORD PTR [esp+0x4] *)
+    (* 4:  83 c0 01                add    eax,0x1 *)
+    [
+      0wx8b, 0wx44, 0wx24, 0wx04,
+      0wx83, 0wxc0, 0wx01
+    ]
+val fadd1 = Emit.fromMachineCode add1 :_import (int) -&gt; int
+val () = println (Int.toString (fadd1 3))
+</code></pre>
+
+<p>正常に動けば4が印字されます。</p>
+
+<h1 id="つらい話:adcfd48c9789a206f0f1cfad72bd4b5a">つらい話</h1>
+
+<h2 id="バグ:adcfd48c9789a206f0f1cfad72bd4b5a">バグ</h2>
+
+<p>最初、<code>Pointer.store</code>でなく、<code>SMLSharp_Builtin.Pointer.store</code>を使っていたら<a href="https://github.com/smlsharp/smlsharp/issues/43">変なバグ</a>踏みました。バグというか使い方が悪かった。</p>
+
+<h2 id="デバッグ:adcfd48c9789a206f0f1cfad72bd4b5a">デバッグ</h2>
+
+<p>デバッガがないので非常につらいです。書き出された命令列を見るのに困りました。gdbで見たかったので、</p>
+
+<pre><code class="language-sml">val printf = _import &quot;printf&quot;: (string, unit ptr) -&gt; int
+val _ = pritnf (&quot;page pointr: %p&quot;, page)
+</code></pre>
+
+<p>して<code>printf</code>にブレークポイントを張り、そこで止めつつページのアドレスを取得、</p>
+
+<pre><code class="language-gdb">(gdb) x/20xh 0x81ca000
+</code></pre>
+
+<p>などとして見ていました。</p>
+
+<h1 id="もっと:adcfd48c9789a206f0f1cfad72bd4b5a">もっと</h1>
+
+<p>JITコンパイラが楽しかったのでアセンブラのDSLを作ってみました。1、2個の命令吐けるだけですがちゃんと動きました。今のところこのように書けます。Intel記法だとしんどそうだったのでAT&amp;T記法っぽく書けるようにしました。</p>
+
+<pre><code class="language-sml">val freturn1' = Emit.fromInsts [
+        xorl eax eax,
+        addl ($1) eax,
+        ret
+    ]:_import () -&gt; int
+val () = println (Int.toString (freturn1' ()))
+</code></pre>
+
+<p>x86は命令フォーマットが1バイトから15バイトまでの可変長で、内部表現をどのようにするか決めるだけでも一苦労でした。x86つらい。</p>
+
+<p>アドレッシングが複雑なのも悩みどころで、複数のアドレッシングを統一的に扱えるようにオーバーロードされた関数を用意したのですがあえなくSML#のバグを踏んで死亡しました。本当はこういう記法が出来る筈だった…</p>
+
+<pre><code class="language-sml">addl (%eax) eax
+addl eax (%eax)
+addl eax (%(eax, ebx))
+addl eax (%(eax, ebx, 4))
+addl eax (%(4, eax))
+</code></pre>
+
+<pre><code>$ /usr/local/bin/smlsharp   -c -o main.o main.sml
+uncaught exception: Bug.Bug: InferType: FIXME: user error: invalid instTy at src/compiler/typeinference2/main/InferTypes2.sml:47
+Makefile:11: recipe for target 'main.o' failed
+make: *** [main.o] Error 1
+</code></pre>
+
+<p><code>movl</code>を実装しようとしたらアドレッシングが動かなかったので萎えてまだ実装してません。</p>
+
+<p>よく考えたら<code>%</code>ってミスリーディングだし名前変えよう。</p>
+
+<h1 id="まとめ:adcfd48c9789a206f0f1cfad72bd4b5a">まとめ</h1>
+
+<ul>
+<li>JITを作るにはメモリ保護をいじれて関数ポインタのインポートが出来ればいいよ</li>
+<li>SML#でもJIT作れるよ</li>
+<li>アセンブラっぽいの作ったよ</li>
+</ul>
+
+                    </section>
+                </article>
+            </div>
+        </div>
+
+        <div class="row li-author">
+    <div class="sixteen columns">
+        Written by <strong>κeen</strong>
+    </div>
+</div>
+
+
+        <div class="row li-pagination">
+            <div class="eight columns">
+                <div class="li-pagination-previous">
+                    
+                        Later article<br />
+                        <a href="http://keens.github.io/blog/2015/12/12/sml_nimanabukonpairagengoniokerureplnojissouhouhou"> SML#に学ぶコンパイラ言語におけるREPLの実装方法</a>
+                    
+                </div>
+            </div>
+            <div class="eight columns">
+                <div class="li-pagination-next">
+                    
+                        Older article<br />
+                        <a href="http://keens.github.io/blog/2015/12/09/ri_jonnitsuite"> リージョンについて</a>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+<footer class="li-page-footer">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-page-footer-legal">
+                    &copy; 2015. All rights reserved. 
+                </div>
+                <div class="li-page-footer-theme">
+                    <span class=""><a href="https://github.com/eliasson/liquorice/">liquorice</a> is a theme for <a href="http://hugo.spf13.com">hugo</a></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+
+    <script type="text/javascript">
+    <!--
+    function toggle(id) {
+        var e = document.getElementById(id);
+        e.style.display == 'block' ? e.style.display = 'none' : e.style.display = 'block';
+    }
+    
+    </script>
+    <script type="text/javascript">
+    <!--
+        var _gaq = _gaq || [];
+        _gaq.push(['_setAccount', ""]);
+        _gaq.push(['_trackPageview']);
+
+        (function() {
+        var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+        ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+        var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+        })();
+    -->
+    </script>
+    </body>
+</html>
+

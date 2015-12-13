@@ -6,8 +6,920 @@
     <description>Recent content in Advent Calendar 2015 on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Wed, 09 Dec 2015 22:16:50 +0900</lastBuildDate>
+    <lastBuildDate>Sun, 13 Dec 2015 17:14:18 +0900</lastBuildDate>
     <atom:link href="http://KeenS.github.io/categories/advent-calendar-2015/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Rustでの日本語の扱い</title>
+      <link>http://keens.github.io/blog/2015/12/13/rustdenonihongonoatsukai</link>
+      <pubDate>Sun, 13 Dec 2015 17:14:18 +0900</pubDate>
+      
+      <guid>http://keens.github.io/blog/2015/12/13/rustdenonihongonoatsukai</guid>
+      <description>
+
+&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2015/rust-lang&#34;&gt;Rust Advent Calendar&lt;/a&gt; 14日目の記事です&lt;br /&gt;
+前:gifnksmさんの &lt;a href=&#34;http://gifnksm.hatenablog.jp/entry/2015/12/13/204655&#34;&gt;kcovを使ってRustプログラムのカバレッジを測定する - gifnksmの雑多なメモ&lt;/a&gt;&lt;br /&gt;
+後:nacika_insさんのtimeこわい&lt;/p&gt;
+
+&lt;p&gt;κeenです。当初の予定より小ネタになってしまいましたがRustでの日本語の扱いについて書こうかと。&lt;/p&gt;
+
+&lt;p&gt;ご存じの通りRustはマルチバイト文字をサポートしていますが、その殆どがUTF-8だけです。しかし日本人にはUTF-8だけでは少し辛いものがありますのでどうにかして対応しようかと。&lt;/p&gt;
+
+&lt;p&gt;ソースコード中でもマルチバイト文字を扱えますが、UTF-8である必要があります。&lt;/p&gt;
+
+&lt;p&gt;例えば&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rs&#34;&gt;fn main() {
+  println!(&amp;quot;あああ&amp;quot;);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これをISO-2022-JPで保存してrustcに食わせても、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;error: couldn&#39;t read &amp;quot;src/main.rs&amp;quot;: stream did not contain valid UTF-8
+Could not compile `japanese`.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と無下もないエラーが出てしまいます。&lt;/p&gt;
+
+&lt;p&gt;内部エンコーディングにもUTF-8が使われているのでRustの文字列をUTF-8以外で出力するにはなんとなく変換が必要そうなのは理解出来ますが、変に出入力をラップしてる関数を使うとまた意図せぬエラーが出ます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::fs::File;
+use std::io::BufRead;
+use std::io::BufReader;
+
+fn main() {
+  let file = File::open(&amp;quot;japanese.txt&amp;quot;);
+  let br = BufReader::new(&amp;amp;file);
+  for line in br.lines() {
+    matich line {
+      Ok(l) =&amp;gt; println!(&amp;quot;Ok: {}&amp;quot;, l),
+      Err(e) =&amp;gt; println!(&amp;quot;{:?}&amp;quot;, e)
+    };
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これもまた、&lt;code&gt;stream did not contain valid UTF-8&lt;/code&gt;エラーを出します。&lt;/p&gt;
+
+&lt;p&gt;ReadもBufReadもbyte orientedって言ってるのに何故か文字列を扱えるのが若干気になりますがまあ、そういうもんなんでしょう。&lt;/p&gt;
+
+&lt;h1 id=&#34;encoding:e3d3c2e4aaee703e1a1583ece8aa80f1&#34;&gt;encoding&lt;/h1&gt;
+
+&lt;p&gt;そこで救世主となるライブラリが&lt;a href=&#34;https://github.com/lifthrasiir/rust-encoding&#34;&gt;lifthrasiir/rust-encoding&lt;/a&gt;です。文字列のエンコーディングをサポートします。
+READMEに詳しい使い方が載っているのですが、このライブラリは与えられたスライスに対して指定されたエンコーディングでエンコード/デコードします。&lt;/p&gt;
+
+&lt;p&gt;なので先の例のようにISO-2022-JPで&lt;code&gt;&amp;quot;あああ&amp;quot;&lt;/code&gt;と出力したいなら&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;extern crate encoding;
+use encoding::{Encoding, EncoderTrap};
+use encoding::all::ISO_2022_JP;
+use std::io::Stdout;
+
+fn main() {
+  let bytes = ISO_2022_JP.encode(&amp;quot;あああ&amp;quot;, EncoderTrap::Ignore);
+  Stdout.write_all(&amp;amp;bytes[..]);
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と出来るでしょう。(即興で書いてコンパイルすらしてないので本当に出来るかは分かりませんが)&lt;/p&gt;
+
+&lt;p&gt;読み取りに関しては…………。そう、このライブラリはバッファに対してしか動作せず、ストリームに使えないのです。提供してくれたら良さそうなのですが、作者の方が忙しいようです。&lt;/p&gt;
+
+&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;&lt;a href=&#34;https://twitter.com/blackenedgold&#34;&gt;@blackenedgold&lt;/a&gt; stream encoding/decodingは計画してはいるのですが、私が忙しくてなかなか作業をすることができません&amp;hellip; orz&lt;/p&gt;&amp;mdash; Kang Seonghoon (@senokay) &lt;a href=&#34;https://twitter.com/senokay/status/666516796942319616&#34;&gt;2015, 11月 17&lt;/a&gt;&lt;/blockquote&gt;
+&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
+
+&lt;p&gt;余談ですがこの方は韓国の方のようですが、日本語もある程度分かるそうです。すごいですね。&lt;/p&gt;
+
+&lt;p&gt;さて、ストリームに対して使えないと分かったなら自分で対応するまで。幸いにも我々が使っているのはRustです。新しいものを既存の仕組みに載せるのは造作もありません。
+ストリームを良い感じにデコードするには&lt;a href=&#34;https://doc.rust-lang.org/std/io/trait.Read.html&#34;&gt;std::io::Read&lt;/a&gt;を実装した何かを作れば十分です。作っていきましょう。&lt;code&gt;Read&lt;/code&gt;トレイトを実装するには最低&lt;code&gt;read&lt;/code&gt;だけ実装してしまえば十分です。&lt;/p&gt;
+
+&lt;p&gt;この&lt;code&gt;read&lt;/code&gt;ですが、ドキュメントを読むと中々制限が緩いようです。&lt;/p&gt;
+
+&lt;blockquote&gt;
+&lt;p&gt;Pull some bytes from this source into the specified buffer, returning how many bytes were read.&lt;/p&gt;
+
+&lt;p&gt;This function does not provide any guarantees about whether it blocks waiting for data, but if an object needs to block for a read but cannot it will typically signal this via an Err return value.&lt;/p&gt;
+
+&lt;p&gt;If the return value of this method is Ok(n), then it must be guaranteed that 0 &amp;lt;= n &amp;lt;= buf.len(). A nonzero n value indicates that the buffer buf has been filled in with n bytes of data from this source. If n is 0, then it can indicate one of two scenarios:&lt;/p&gt;
+
+&lt;p&gt;This reader has reached its &amp;ldquo;end of file&amp;rdquo; and will likely no longer be able to produce bytes. Note that this does not mean that the reader will always no longer be able to produce bytes.
+   The buffer specified was 0 bytes in length.&lt;/p&gt;
+
+&lt;p&gt;No guarantees are provided about the contents of buf when this function is called, implementations cannot rely on any property of the contents of buf being true. It is recommended that implementations only write data to buf instead of reading its contents.&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;です。&lt;/p&gt;
+
+&lt;blockquote&gt;
+&lt;p&gt;No guarantees are provided about the contents of buf when this function is called, implementations cannot rely on any property of the contents of buf being true.&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;「関数が呼ばれる際に&lt;code&gt;buf&lt;/code&gt;に対しては何如なる保証もなく、呼出側はバッファの内容に対して何如なる不変条件も期待してはいけません」とあります。つまり、4096 byteのバッファが与えられても1呼び出しにつき1バイトしか返さないような実装でも許容されます。
+また、非同期ベースのIOのようにキャッシュにデータがなければIOブロッキングせずにエラーだとかの挙動もありえます。非常にシステムプログラミング言語らしい仕様ですね。&lt;/p&gt;
+
+&lt;p&gt;今から作ろうとしているデコーディングストリームも読み出したバイト列がデコード後に何バイトになるのか予測がつかないのでこの仕様は有難いですね。&lt;/p&gt;
+
+&lt;p&gt;さて、作っていきましょうか。まずは必要そうなライブラリを読み込みます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;extern crate encoding;
+use self::encoding::{EncodingRef, DecoderTrap};
+use std::io::Read;
+use std::io;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そしてメインとなる構造体です。とある&lt;code&gt;Read&lt;/code&gt;を実装した型をラップする形にしましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub struct DecodingReader&amp;lt;R&amp;gt; {
+    inner: R,
+    encoding: EncodingRef,
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;Read&lt;/code&gt;はトレイトなので&lt;code&gt;inner&lt;/code&gt;のところを&lt;code&gt;&amp;amp;R&lt;/code&gt;としなくて大丈夫です。&lt;code&gt;Read&lt;/code&gt;の実装側が調整します。&lt;/p&gt;
+
+&lt;p&gt;そしてコンストラクタですね。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;impl &amp;lt;R: Read&amp;gt; DecodingReader&amp;lt;R&amp;gt; {
+    pub fn new(coding: EncodingRef, read: R)-&amp;gt; Self {
+        EncodingReader {
+            inner: read,
+            encoding: coding
+        }
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そのままですね。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;Read&lt;/code&gt;の実装です。まずは&lt;code&gt;inner&lt;/code&gt;の&lt;code&gt;read&lt;/code&gt;を呼んで、その結果を一旦デコードしてからまたバイト列に変換します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;impl &amp;lt;R: Read&amp;gt; Read for DecodingReader&amp;lt;R&amp;gt; {
+    fn read(&amp;amp;mut self, buf: &amp;amp;mut [u8]) -&amp;gt; io::Result&amp;lt;usize&amp;gt;{
+        // TODO set appropriate buffer size
+        let len = buf.len() / 2;
+        let n = try!(self.inner.read(&amp;amp;mut buf[..len]));
+        // TODO don&#39;t ignore input code
+        let str = self.encoding.decode(&amp;amp;mut buf[..n], DecoderTrap::Ignore).unwrap();
+        let mut i = 0;
+        for (d, s) in buf.iter_mut().zip(str.bytes()) {
+            *d = s;
+            i+=1;
+            if i == 0 {
+                break
+            };
+        }
+        assert!(i &amp;lt;= buf.len());
+        Ok(i)
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;先程も言った通りデコード読み込んだバイト列をUTF-8にした時にどれくらいバイト数が変わるか分からないので山勘で2倍くらいに膨らむだろうとして与えられたバッファ長の半分を使います。
+ここはもう少し調整が必要ですね。エンコーディング毎に適切なバッファ長を設定したい…&lt;/p&gt;
+
+&lt;p&gt;バッファを確保出来たら&lt;code&gt;let n = try!(self.inner.read(&amp;amp;mut buf[..len]));&lt;/code&gt;してそれっぽいサイズ読み込んで、読み込んだサイズをデコードにかけます。&lt;/p&gt;
+
+&lt;p&gt;現在&lt;code&gt;DecoderTrap&lt;/code&gt;を&lt;code&gt;Ignore&lt;/code&gt;にして&lt;code&gt;unwrap&lt;/code&gt;してますが、これは少し雑すぎますね。例えば入力が全てvalidな文字を含んでいたとしても&lt;code&gt;read&lt;/code&gt;が多バイト文字の真ん中までしか読まなかった時にそれが無効なエンコーディングと判定されて無視されるのでユーザからしたら「合ってる筈なのに何故か1文字欠損するバグ」として現れます。今回即席で作ったので勘弁して下さい。&lt;/p&gt;
+
+&lt;p&gt;変換は文字列にしか出来ないようなので一旦文字列に落してからまたバイト列として取り出し、バッファに書き出します。デコード後のバイト列が&lt;code&gt;read&lt;/code&gt;したバイト列より小さかったら一部&lt;code&gt;read&lt;/code&gt;したデータが残ってしまいそうですが、「何如なる不変条件も…」とあるので問題ないでしょう。返り値にデコード後のバイト列の長さを返していれば良い筈です。&lt;/p&gt;
+
+&lt;p&gt;さて、エンコードのエラーハンドリングしてないだとか本当に読み込みのバッファ長が適切なのかとかの疑問はあるものの、一応ストリームのデコーダが出来ました。使ってみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;extern crate encoding;
+extern crate japanese;
+
+use encoding::{Encoding, DecoderTrap};
+use encoding::all::ISO_2022_JP;
+
+use std::fs::File;
+use std::io::BufReader;
+use std::io::BufRead;
+use std::str::from_utf8;
+use japanese::buf::DecodingReader;
+
+
+fn main() {
+    let file = File::open(&amp;quot;src/japanese.txt&amp;quot;).unwrap();
+    let e = DecodingReader::new(ISO_2022_JP, &amp;amp;file);
+    let mut br = BufReader::new(e);
+    let b = br.fill_buf().unwrap();
+    for line in b.lines() {
+        println!(&amp;quot;{}&amp;quot;, line.unwrap());
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これでちゃんとISO-2022-JPのファイルを読めます。&lt;/p&gt;
+
+&lt;p&gt;Javaに慣れてる人ならこういうIOに対するデコレータパターンは見覚えがあるでしょう。&lt;/p&gt;
+
+&lt;p&gt;今更ですがiso-2022-jpはいわゆるjisエンコーディングです。rust-encodingはshift_jisの拡張にあたるwindows31jだとかeuc-jpも扱えます(&lt;a href=&#34;https://lifthrasiir.github.io/rust-encoding/encoding/codec/japanese/index.html&#34;&gt;参考&lt;/a&gt;)。&lt;/p&gt;
+
+&lt;h1 id=&#34;今後:e3d3c2e4aaee703e1a1583ece8aa80f1&#34;&gt;今後&lt;/h1&gt;
+
+&lt;p&gt;ライブラリとして公開するか、あるいは作者の方がやる気はあるようなのでプルリクを送るかが終着点かな、と思っていますが如何せん雑にしか実装してないので微妙ですね。
+例の境界とマルチバイトの問題は&lt;code&gt;Read&lt;/code&gt;じゃなく&lt;code&gt;BufRead&lt;/code&gt;を要求して1文字分読み切るまで来るまで1バイトずつ読むとかになると思います。ダルい。&lt;/p&gt;
+
+&lt;h1 id=&#34;まとめ:e3d3c2e4aaee703e1a1583ece8aa80f1&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Rust標準だけでUTF-8以外の文字列を使うのはつらいよ&lt;/li&gt;
+&lt;li&gt;Rustのエンコーディングライブラリを紹介したよ&lt;/li&gt;
+&lt;li&gt;エンコーディングライブラリを使ってストリームデコーダを実装してみたよ。&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>SML#に学ぶコンパイラ言語におけるREPLの実装方法</title>
+      <link>http://keens.github.io/blog/2015/12/12/sml_nimanabukonpairagengoniokerureplnojissouhouhou</link>
+      <pubDate>Sat, 12 Dec 2015 19:42:52 +0900</pubDate>
+      
+      <guid>http://keens.github.io/blog/2015/12/12/sml_nimanabukonpairagengoniokerureplnojissouhouhou</guid>
+      <description>
+
+&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2015/lang_dev&#34;&gt;言語実装 Advent Calendar 2015&lt;/a&gt;16日目の記事です。&lt;/p&gt;
+
+&lt;p&gt;κeenです。かねてより気になっていたREPLの実装方法について、SML#のソースコードを読んだのでその話でもします。&lt;/p&gt;
+
+&lt;p&gt;さて、ソースコードを読みながらやっていきましょう。SML# 2.0.0のソースコードです。&lt;/p&gt;
+
+&lt;p&gt;REPLのエントリポイントは&lt;a href=&#34;https://github.com/smlsharp/smlsharp/blob/master/src/compiler/main/main/SimpleMain.sml#L949&#34;&gt;src/compiler/main/main/SimpleMain.smlL949&lt;/a&gt;です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;      | Interactive (options, context) =&amp;gt;
+        let
+          val newContext =
+              Top.loadInteractiveEnv
+                {stopAt = Top.NoStop,
+                 stdPath = [#systemBaseDir options],
+                 loadPath = nil}
+                context
+                (Filename.concatPath
+                   (#systemBaseDir options, Filename.fromString &amp;quot;prelude.smi&amp;quot;))
+          val context =
+              let
+                val context = Top.extendContext (context, newContext)
+                val context = Top.incVersion context
+              in
+                context
+              end
+          val _ = ReifiedTermData.init (#topEnv context)
+                  handle e =&amp;gt; raise e
+        in
+          RunLoop.interactive options context;
+          SUCCESS
+        end
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;いろいろごちゃごちゃやってますがオプションと共に&lt;code&gt;RunLoop.interactive&lt;/code&gt;を呼んでるだけです。&lt;/p&gt;
+
+&lt;p&gt;さて、RunLoop.smlはSimpleMain.smlと同じディレクトリにあります。&lt;code&gt;interactive&lt;/code&gt;関数は次のように定義されています。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;  fun interactive options context =
+      let
+        ...
+        val state = initInteractive ()
+        fun loop context input =
+            if !(#eof state) then ()
+            else
+              (Counter.reset();
+               NameEvalEnv.intExnConList();
+               case run options context input of
+                 SUCCESS newContext =&amp;gt;
+                 ....
+               | FAILED =&amp;gt;
+                 loop (Top.incVersion context) (interactiveInput state)
+              )
+      in
+        loop context (interactiveInput state)
+      end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;何やら状態を初期化した後は&lt;code&gt;interactiveInput&lt;/code&gt;で得られた結果を&lt;code&gt;run&lt;/code&gt;に渡しているようです。&lt;code&gt;run&lt;/code&gt;を見ましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;  fun run ({stdPath, loadPath, LDFLAGS, LIBS, errorOutput, llvmOptions,
+            ...}:options)
+          context input =
+      let
+        fun puts s = TextIO.output (errorOutput, s ^ &amp;quot;\n&amp;quot;)
+        val options = {stopAt = Top.NoStop,
+                       baseFilename = NONE,
+                       stdPath = stdPath,
+                       loadPath = loadPath}
+        val ({interfaceNameOpt, ...}, result) =
+             Top.compile options context input
+             handle e =&amp;gt;
+             (
+               case e of
+                 UserError.UserErrors errs =&amp;gt;
+                 app (fn e =&amp;gt; puts (userErrorToString e)) errs
+               | UserError.UserErrorsWithoutLoc errs =&amp;gt;
+                 app (fn (k,e) =&amp;gt; puts (userErrorToString (Loc.noloc,k,e))) errs
+               | Bug.Bug s =&amp;gt; puts (&amp;quot;Compiler bug:&amp;quot; ^ s)
+               | exn =&amp;gt; raise exn;
+               raise CompileError
+            )
+        val (newContext, module) =
+            case result of
+              Top.RETURN (newContext, module) =&amp;gt; (newContext, module)
+            | Top.STOPPED =&amp;gt; raise Bug.Bug &amp;quot;run&amp;quot;
+      in
+        let
+          val objfile = TempFile.create (&amp;quot;.&amp;quot; ^ SMLSharp_Config.OBJEXT ())
+          val asmfile = TempFile.create (&amp;quot;.&amp;quot; ^ SMLSharp_Config.ASMEXT ())
+          val _ = #start Counter.llvmOutputTimeCounter()
+          val _ = LLVM.compile llvmOptions (module, LLVM.AssemblyFile,
+                                            Filename.toString asmfile)
+          val _ = LLVM.compile llvmOptions (module, LLVM.ObjectFile,
+                                            Filename.toString objfile)
+          val _ = #stop Counter.llvmOutputTimeCounter()
+          val _ = LLVM.LLVMDisposeModule module
+          val sofile = TempFile.create (SMLSharp_Config.DLLEXT ())
+          val ldflags =
+              case SMLSharp_Config.HOST_OS_TYPE () of
+                SMLSharp_Config.Unix =&amp;gt; nil
+              | SMLSharp_Config.Cygwin =&amp;gt;
+                [&amp;quot;-Wl,-out-implib,&amp;quot;
+                 ^ Filename.toString (Filename.replaceSuffix &amp;quot;lib&amp;quot; sofile)]
+              | SMLSharp_Config.Mingw =&amp;gt;
+                [&amp;quot;-Wl,--out-implib=&amp;quot;
+                 ^ Filename.toString (Filename.replaceSuffix &amp;quot;lib&amp;quot; sofile)]
+          val libfiles =
+              case SMLSharp_Config.HOST_OS_TYPE () of
+                SMLSharp_Config.Unix =&amp;gt; nil
+              | SMLSharp_Config.Cygwin =&amp;gt;
+                map (fn x =&amp;gt; Filename.toString (Filename.replaceSuffix &amp;quot;lib&amp;quot; x))
+                    (!loadedFiles)
+              | SMLSharp_Config.Mingw =&amp;gt;
+                map (fn x =&amp;gt; Filename.toString (Filename.replaceSuffix &amp;quot;lib&amp;quot; x))
+                    (!loadedFiles)
+          val _ = BinUtils.link
+                    {flags = SMLSharp_Config.RUNLOOP_DLDFLAGS () :: LDFLAGS
+                             @ ldflags,
+                     libs = libfiles @ LIBS,
+                     objects = [objfile],
+                     dst = sofile,
+                     useCXX = false,
+                     quiet = not (!Control.printCommand)}
+          val so = DynamicLink.dlopen&#39; (Filename.toString sofile,
+                                        DynamicLink.GLOBAL,
+                                        DynamicLink.NOW)
+                   handle OS.SysErr (msg, _) =&amp;gt; raise DLError msg
+          val {mainSymbol, stackMapSymbol, codeBeginSymbol, ...} =
+              GenerateMain.moduleName (interfaceNameOpt, #version context)
+          val smap = DynamicLink.dlsym&#39; (so, stackMapSymbol)
+                     handle OS.SysErr (msg, _) =&amp;gt; raise DLError msg
+          val base = DynamicLink.dlsym&#39; (so, codeBeginSymbol)
+                     handle OS.SysErr (msg, _) =&amp;gt; raise DLError msg
+          val _ = sml_register_stackmap (smap, base)
+          val ptr = DynamicLink.dlsym (so, mainSymbol)
+                    handle OS.SysErr (msg, _) =&amp;gt; raise DLError msg
+          (*
+           * Note that &amp;quot;ptr&amp;quot; points to an ML toplevel code. This toplevel code
+           * should be called by the calling convention for ML toplevels of
+           * ML object files.  __attribute__((fastcc,no_callback)) is an ad
+           * hoc way of yielding this convention code; no_callback avoids
+           * calling sml_control_suspend.  If we change how to compile
+           * attributes in the future, we should revisit here and update the
+           * __attribute__ annotation.
+           *)
+          val mainFn =
+              ptr : _import __attribute__((fastcc,no_callback)) () -&amp;gt; ()
+        in
+          loadedFiles := sofile :: !loadedFiles;
+          mainFn () handle e =&amp;gt; raise UncaughtException e;
+          SUCCESS newContext
+        end
+        handle e =&amp;gt;
+          (
+            case e of
+              UserError.UserErrors errs =&amp;gt;
+              app (fn e =&amp;gt; puts (userErrorToString e)) errs
+            | UserError.UserErrorsWithoutLoc errs =&amp;gt;
+              app (fn (k,e) =&amp;gt; puts (userErrorToString (Loc.noloc,k,e))) errs
+            | DLError s =&amp;gt;
+              puts (&amp;quot;failed dynamic linking. Perhaps incorrect name in _import declaration: &amp;quot; ^ s)
+            | UncaughtException exn =&amp;gt;
+              puts (&amp;quot;uncaught exception &amp;quot; ^ exnMessage exn)
+            | CoreUtils.Failed {command, message} =&amp;gt;
+              (puts (&amp;quot;command failed: &amp;quot; ^ command); puts message)
+            | _ =&amp;gt; raise e;
+            FAILED
+          )
+      end
+      handle CompileError =&amp;gt; FAILED
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;デカいですね。どうやら&lt;code&gt;run&lt;/code&gt;がREPLの本体のようです。少しずつ見ていきます。&lt;/p&gt;
+
+&lt;p&gt;まずはコンパイルしているようです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;        val ({interfaceNameOpt, ...}, result) =
+             Top.compile options context input
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そして結果からcontextとmoduleを取り出します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;        val (newContext, module) =
+            case result of
+              Top.RETURN (newContext, module) =&amp;gt; (newContext, module)
+            | Top.STOPPED =&amp;gt; raise Bug.Bug &amp;quot;run&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;恐らくcontextが変数名とかを持っているのでしょう。
+moduleに関しては&lt;code&gt;Top.compile&lt;/code&gt;が最後にLLVMEmitをしてるのでLLVMのmodule(コンパイルされる最大単位)のことだと思います。だとするとここまではまだコードはメモリ上にあるはずです。&lt;/p&gt;
+
+&lt;p&gt;moduleを取り出した後どうしてるかというとオブジェクトファイルを作っているようです。ここでファイルに書き出されました。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;          val objfile = TempFile.create (&amp;quot;.&amp;quot; ^ SMLSharp_Config.OBJEXT ())
+          val asmfile = TempFile.create (&amp;quot;.&amp;quot; ^ SMLSharp_Config.ASMEXT ())
+          val _ = #start Counter.llvmOutputTimeCounter()
+          val _ = LLVM.compile llvmOptions (module, LLVM.AssemblyFile,
+                                            Filename.toString asmfile)
+          val _ = LLVM.compile llvmOptions (module, LLVM.ObjectFile,
+                                            Filename.toString objfile)
+          val _ = #stop Counter.llvmOutputTimeCounter()
+          val _ = LLVM.LLVMDisposeModule module
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;最後に呼んでるDisposeModuleはデストラクタですかね。ちゃんとお片付けしてます。&lt;/p&gt;
+
+&lt;p&gt;さらに、ダイナミックリンクファイルを作るようです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;          val sofile = TempFile.create (SMLSharp_Config.DLLEXT ())
+          val ldflags =
+              case SMLSharp_Config.HOST_OS_TYPE () of
+                SMLSharp_Config.Unix =&amp;gt; nil
+              | SMLSharp_Config.Cygwin =&amp;gt;
+                [&amp;quot;-Wl,-out-implib,&amp;quot;
+                 ^ Filename.toString (Filename.replaceSuffix &amp;quot;lib&amp;quot; sofile)]
+              | SMLSharp_Config.Mingw =&amp;gt;
+                [&amp;quot;-Wl,--out-implib=&amp;quot;
+                 ^ Filename.toString (Filename.replaceSuffix &amp;quot;lib&amp;quot; sofile)]
+          val libfiles =
+              case SMLSharp_Config.HOST_OS_TYPE () of
+                SMLSharp_Config.Unix =&amp;gt; nil
+              | SMLSharp_Config.Cygwin =&amp;gt;
+                map (fn x =&amp;gt; Filename.toString (Filename.replaceSuffix &amp;quot;lib&amp;quot; x))
+                    (!loadedFiles)
+              | SMLSharp_Config.Mingw =&amp;gt;
+                map (fn x =&amp;gt; Filename.toString (Filename.replaceSuffix &amp;quot;lib&amp;quot; x))
+                    (!loadedFiles)
+          val _ = BinUtils.link
+                    {flags = SMLSharp_Config.RUNLOOP_DLDFLAGS () :: LDFLAGS
+                             @ ldflags,
+                     libs = libfiles @ LIBS,
+                     objects = [objfile],
+                     dst = sofile,
+                     useCXX = false,
+                     quiet = not (!Control.printCommand)}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;この時、Windowsでは何かしらの制約があるのか過去にリンクしたダイナミックリンクファイル(libfiles)も今回作るダイナミックリンクファイルにリンクしているようです。&lt;/p&gt;
+
+&lt;p&gt;さて、ダイナミックリンクファイルを作った後は&lt;code&gt;dlopen&lt;/code&gt;を使ってダイナミックリンクします。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;          val so = DynamicLink.dlopen&#39; (Filename.toString sofile,
+                                        DynamicLink.GLOBAL,
+                                        DynamicLink.NOW)
+                   handle OS.SysErr (msg, _) =&amp;gt; raise DLError msg
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;その後はエントリポイントを捜してインポート、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;          val {mainSymbol, stackMapSymbol, codeBeginSymbol, ...} =
+              GenerateMain.moduleName (interfaceNameOpt, #version context)
+          val smap = DynamicLink.dlsym&#39; (so, stackMapSymbol)
+                     handle OS.SysErr (msg, _) =&amp;gt; raise DLError msg
+          val base = DynamicLink.dlsym&#39; (so, codeBeginSymbol)
+                     handle OS.SysErr (msg, _) =&amp;gt; raise DLError msg
+          val _ = sml_register_stackmap (smap, base)
+          val ptr = DynamicLink.dlsym (so, mainSymbol)
+                    handle OS.SysErr (msg, _) =&amp;gt; raise DLError msg
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そして実行します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;          val mainFn =
+              ptr : _import __attribute__((fastcc,no_callback)) () -&amp;gt; ()
+        in
+          loadedFiles := sofile :: !loadedFiles;
+          mainFn () handle e =&amp;gt; raise UncaughtException e;
+          SUCCESS newContext
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;結果を印字しているところが見当らないのですが吐かれたコードに印字部分も入っているんですかね。&lt;/p&gt;
+
+&lt;p&gt;あとは&lt;code&gt;interactive&lt;/code&gt;に返ってコンテキストを拡張したりバージョンをインクリメントしたりします。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;                   val context = Top.extendContext (context, newContext)
+                   val context = Top.incVersion context
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;バージョンによってシンボル名を変えることで何度もsoファイルをロードしても大丈夫なようにしてるんですかね。&lt;/p&gt;
+
+&lt;p&gt;ということでREPLの実装は入力を一旦ダイナミックリンクとしてコンパイルしてからロードしているようでした。&lt;/p&gt;
+
+&lt;h1 id=&#34;おまけ:7f851921bbb9914fa0252d9b589a6af0&#34;&gt;おまけ&lt;/h1&gt;
+
+&lt;p&gt;REPLの入力部分は次のようになっています。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;
+  fun initInteractive () =
+      let
+        val lineCount = ref 1
+        val eof = ref false
+        fun read (isFirst, _:int) =
+            let
+              val prompt = if isFirst then &amp;quot;# &amp;quot; else &amp;quot;&amp;gt; &amp;quot;
+              val _ = TextIO.output (TextIO.stdOut, prompt)
+              val _ = TextIO.flushOut TextIO.stdOut
+              val line = TextIO.inputLine TextIO.stdIn
+              val _ = lineCount := !lineCount + 1
+            in
+              case line of NONE =&amp;gt; (eof := true; &amp;quot;&amp;quot;) | SOME s =&amp;gt; s
+            end
+      in
+        {lineCount = lineCount, eof = eof, read = read}
+      end
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;結構小さいので色々Hack出来ます。例えば&lt;a href=&#34;https://github.com/smlsharp/smlsharp/pull/13&#34;&gt;hskさんのように&lt;/a&gt;REPLを付けることも出来ます。&lt;/p&gt;
+
+&lt;p&gt;このパッチで外部コマンドを呼ぶのが少し嫌な人はさらに&lt;code&gt;ioctl(2)&lt;/code&gt;を使ってrawモードにするパッチを当てるかlibeditなんかを使ってリッチな入力を実現するかをすればいいでしょう。
+個人利用なら(他人に配布しないなら)GPLv3のreadlineも使えるんですかね（ライセンスに詳しくない）。&lt;/p&gt;
+
+&lt;h1 id=&#34;まとめ:7f851921bbb9914fa0252d9b589a6af0&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;REPLの実装にはダイナミックリンクを使う方法があるよ&lt;/li&gt;
+&lt;li&gt;SML#のREPLはHack出来そうだよ&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>SML#でJITコンパイラを作る軽い話</title>
+      <link>http://keens.github.io/blog/2015/12/12/sml_dejitwotsukurukaruihanashi</link>
+      <pubDate>Sat, 12 Dec 2015 17:26:24 +0900</pubDate>
+      
+      <guid>http://keens.github.io/blog/2015/12/12/sml_dejitwotsukurukaruihanashi</guid>
+      <description>
+
+&lt;p&gt;このエントリは&lt;a href=&#34;http://www.adventar.org/calendars/848&#34;&gt;ML Advent Calendar 2015&lt;/a&gt;及び&lt;a href=&#34;http://qiita.com/advent-calendar/2015/lang_dev&#34;&gt;言語実装 Advent Calendar 2015&lt;/a&gt;15日目の記事です。&lt;/p&gt;
+
+&lt;p&gt;κeenです。先日流れてきた&lt;a href=&#34;http://www.jonathanturner.org/2015/12/building-a-simple-jit-in-rust.html&#34;&gt;RustでJITコンパイラを作る話&lt;/a&gt;が面白かったのでSML#でもやってみます。&lt;/p&gt;
+
+&lt;h1 id=&#34;jitコンパイラってなに:adcfd48c9789a206f0f1cfad72bd4b5a&#34;&gt;JITコンパイラってなに？&lt;/h1&gt;
+
+&lt;p&gt;JITはJust In Timeで、日本語にすると「間に合って」になります。誤読されかねませんが「臨時コンパイラ」と訳すのが適当なのでしょうか。&lt;/p&gt;
+
+&lt;p&gt;普通のインタプリタがソースコードを直接評価するのに対してJITコンパイラはソースコードを内部で一旦ネイティブコードにコンパイルして実行します。&lt;/p&gt;
+
+&lt;p&gt;よく、JITコンパイラ/JITコンパイルのことをJITと略して呼びます。&lt;/p&gt;
+
+&lt;h1 id=&#34;どこで使うの:adcfd48c9789a206f0f1cfad72bd4b5a&#34;&gt;どこで使うの？&lt;/h1&gt;
+
+&lt;p&gt;主に、インタプリタの高速化の目的で使われるようです。他にはコンパイラをインタプリタ化させる(REPLの実装とか)でも使えそうな気がしますが、詳しくは知りません。&lt;/p&gt;
+
+&lt;h1 id=&#34;jitってどうやって作るの:adcfd48c9789a206f0f1cfad72bd4b5a&#34;&gt;JITってどうやって作るの？&lt;/h1&gt;
+
+&lt;p&gt;JIT &lt;strong&gt;でない&lt;/strong&gt; コンパイラが吐いたコードは一旦ディスクからメモリに読まれ、メモリ上で実行されます。&lt;/p&gt;
+
+&lt;p&gt;JITコンパイラが吐くコードは直接メモリに吐かれ、メモリ上で実行されます。なので細かい条件を無視すれば&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;吐かれる命令のための(特殊な)メモリ領域を用意する&lt;/li&gt;
+&lt;li&gt;そこに実行したい命令列を書き込む&lt;/li&gt;
+&lt;li&gt;書き込んだ命令列を実行する&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;だけです。
+3.の「書き込んだ命令を実行する」が若干ふわっとしてますが、多くの場合は命令の書かれたメモリを関数ポインタとして扱って、その関数を呼び出す形で実行されます。
+一応直接プログラムカウンタをいじって書き込んだ命令列を実行させることも出来ます。&lt;/p&gt;
+
+&lt;h1 id=&#34;一緒に作ってみよう:adcfd48c9789a206f0f1cfad72bd4b5a&#34;&gt;一緒に作ってみよう&lt;/h1&gt;
+
+&lt;p&gt;思ったより簡単そうですね。作ってみましょう。&lt;/p&gt;
+
+&lt;h2 id=&#34;1-メモリ領域を準備する:adcfd48c9789a206f0f1cfad72bd4b5a&#34;&gt;1. メモリ領域を準備する&lt;/h2&gt;
+
+&lt;p&gt;先に「特殊な」と付言しましたのでそれについて説明しましょう。プロセス上のメモリは、OSによって保護されています。
+特に、そのままではそのメモリ上の命令列を実行出来ません。その保護を外すために&lt;code&gt;mprotect(2)&lt;/code&gt;システムコールを使います。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-C&#34;&gt;int mprotect(void *addr, size_t len, int prot);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;SML#を使えば簡単に使えるようになります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val mprotect = _import &amp;quot;mprotect&amp;quot;: (unit ptr, word, word) -&amp;gt; int
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;SML#は2.0.0時点では32bitでしか動かないのでsize_tをwordとしてしまって大丈夫です。また、bit演算をやりたいので&lt;code&gt;prot&lt;/code&gt;は本来はintですがwordにしました。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;mprotect(2)&lt;/code&gt;はPOSIX(SUSv4)的には引数の&lt;code&gt;addr&lt;/code&gt;がシステムのページの境界上にあることを要求しても良いことになっています。
+実際、OS Xが要求するらしいです。また、メモリ保護はページ単位で行われるため、&lt;code&gt;len&lt;/code&gt;もページサイズの倍数である必要があります。
+&lt;code&gt;prot&lt;/code&gt;は保護フラグですね。&lt;/p&gt;
+
+&lt;p&gt;メモリの確保、特にページの境界にアラインメントされたメモリ領域を確保するにはSML#では厳しそうなのでこれもCの関数に頼ります。
+Linuxならいくつか方法はありますが、ポータブルには&lt;code&gt;posix_memalign(3)&lt;/code&gt;を使うのが良いようです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-C&#34;&gt;int posix_memalign(void **memptr, size_t alignment, size_t size);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これもSML#から簡単に使えます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val posix_memalign = _import &amp;quot;posix_memalign&amp;quot;: (unit ptr ref, word, word) -&amp;gt; int
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ついでにメモリの解放も必要ですね。&lt;code&gt;free(3)&lt;/code&gt;もインポートしましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val free = _import &amp;quot;free&amp;quot;: unit ptr -&amp;gt; ()
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;さて、メモリを確保するのにいくつかCのマクロで定義された定数を定義しましょう。今のところSML#にCのマクロを使う術はなさそうです。どうにかしてCプリプロセッサを使えれば良いのですが…。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val PROT_READ  = 0wx1
+val PROT_WRITE = 0wx2
+val PROT_EXEC  = 0wx4
+val PROT_NONE  = 0wx0
+
+val PAGE_SIZE = 0w4096
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ページサイズは本当は&lt;code&gt;sysconf(3)&lt;/code&gt;を使って&lt;code&gt;sysconf(PAGESIZE)&lt;/code&gt;として取るのが作法ですが面倒なので4KiB決め打ちにしてしまいました。&lt;/p&gt;
+
+&lt;p&gt;さて、これらを用いてJIT用のメモリは次のように確保します。&lt;code&gt;Pointer&lt;/code&gt;モジュールが必要なのでsmiファイルで&lt;code&gt;require &amp;quot;ffi.smi&amp;quot;&lt;/code&gt;しましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val op orb = Word.orb
+infix 5 orb
+val size = 0wx1
+val msize = size * PAGE_SIZE
+val pageRef: unit ptr ref = ref (Pointer.NULL ())
+val ret = posix_memalign (pageRef, PAGE_SIZE, msize)
+val page = if ret = 0
+           then !pageRef
+           else raise Fail &amp;quot;memory allocation failed&amp;quot;
+val PROT_RWEX = PROT_READ orb PROT_WRITE orb PROT_EXEC
+val ret = mprotect (page, msize, PROT_RWEX)
+val () = if ret = 0
+         then ()
+         else raise Fail &amp;quot;memory protection error&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これで&lt;code&gt;page&lt;/code&gt;に実行可能フラグが立ったメモリが確保出来ました。sizeは書き込みたい命令列に応じて変えます。&lt;/p&gt;
+
+&lt;h1 id=&#34;2-命令列を書き込む:adcfd48c9789a206f0f1cfad72bd4b5a&#34;&gt;2. 命令列を書き込む&lt;/h1&gt;
+
+&lt;p&gt;さて、ここらへんからアセンブラの世界になってきます。&lt;/p&gt;
+
+&lt;p&gt;まず、安全のために件のメモリ領域を&lt;code&gt;ret&lt;/code&gt;命令で埋めます。
+&lt;code&gt;ret&lt;/code&gt;命令は関数から戻る時に使われる命令で、変なことをしても&lt;code&gt;ret&lt;/code&gt;で元の場所に戻ればどうにかなる可能性があるのです。&lt;/p&gt;
+
+&lt;p&gt;メモリを一気に埋めるには&lt;code&gt;memset(3)&lt;/code&gt;が便利です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-C&#34;&gt;void *memset(void *s, int c, size_t n);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これをSMLにインポートして使いましょう。&lt;code&gt;ret&lt;/code&gt;命令に対応するマシン語は&lt;code&gt;0xc3&lt;/code&gt;です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val memset = _import &amp;quot;memset&amp;quot;: (unit ptr, word, word) -&amp;gt; unit ptr
+val _ = memset (page, 0wxc3, msize)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;じゃあ、命令を書き込んでいきましょう。最初はただ1を返すだけの関数に相当する命令です。
+64bitマシンを使っていても32bitでコンパイルしたSML#を使っている限りはx86(IA32)のアセンブラを使います。
+x86は値を&lt;code&gt;eax&lt;/code&gt;レジスタに入れることで返り値とします。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-asm&#34;&gt;mov 1 eax
+ret
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このコードを&lt;a href=&#34;https://defuse.ca/online-x86-assembler.htm#disassembly&#34;&gt;オンラインアセンブラ&lt;/a&gt;でアセンブルしてみると&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;0:  b8 01 00 00 00          mov    eax,0x1
+5:  c3                      ret
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;との結果が返ってきました。これを真心込めて1つづつメモリに書き込んでいきます。
+SML#からメモリに直接書き込むには内部APIっぽいものを触る必要があります。
+タイプ数を減らすためにいくつかエイリアスを定義しておきましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val fromUnitPtr = SMLSharp_Builtin.Pointer.fromUnitPtr
+val store = Pointer.store
+val advance = Pointer.advance
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;メモリにword8の値を書き込むのにキャストが必要になるので&lt;code&gt;fromUnitPtr&lt;/code&gt;を使います。
+さて、書き込んでいきます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val mem = fromUnitPtr page
+val () = store page 0wxb8
+val mem = advance mem
+val () = store page 0wx01
+val mem = advance mem
+val () = store page 0wx00
+val mem = advance mem
+val () = store mem 0wx00
+val mem = advance mem
+val () = store mem 0wx00
+val mem = advance mem
+val () = store mem 0wxc3
+val _ = advance mem
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これで&lt;code&gt;page&lt;/code&gt;に1を返すだけの命令列が書き込まれした。&lt;/p&gt;
+
+&lt;h2 id=&#34;3-書き込んだ命令列を実行する:adcfd48c9789a206f0f1cfad72bd4b5a&#34;&gt;3. 書き込んだ命令列を実行する&lt;/h2&gt;
+
+&lt;p&gt;書き込んだ命令列は関数にキャストして使うことが多いと言いました。今回もそのようにします。&lt;/p&gt;
+
+&lt;p&gt;そのために、また内部APIっぽいものを使います。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val toCodeptr = SMLSharp_Builtin.Pointer.toCodeptr
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;codeptr&lt;/code&gt;型は関数ポインタを表すもののようです。&lt;code&gt;DynamicLink&lt;/code&gt;モジュールなどで使われています。&lt;/p&gt;
+
+&lt;p&gt;さて、今回の1を返すだけの命令列は&lt;code&gt;() -&amp;gt; int&lt;/code&gt;型になりますね。
+それをインポート、実行しましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val freturn1 = toCodePtr page: _import () -&amp;gt; int
+val () = print ((Int.toString (freturn1 ())) ^ &amp;quot;\n&amp;quot;)
+val _ = free page
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これで見事&lt;code&gt;1&lt;/code&gt;が印字されたら成功です。&lt;/p&gt;
+
+&lt;h1 id=&#34;さらに:adcfd48c9789a206f0f1cfad72bd4b5a&#34;&gt;さらに&lt;/h1&gt;
+
+&lt;p&gt;先程のコードは繰り返しが多く、整理されていませんでした。もう少し整理しましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;structure Emit = struct
+    val posix_memalign = _import &amp;quot;posix_memalign&amp;quot;: (unit ptr ref, word, word) -&amp;gt; int
+    val mprotect = _import &amp;quot;mprotect&amp;quot;: (unit ptr, word, word) -&amp;gt; int
+    val memset = _import &amp;quot;memset&amp;quot;: (unit ptr, word, word) -&amp;gt; unit ptr
+    val free = _import &amp;quot;free&amp;quot;: unit ptr -&amp;gt; ()
+    val printf = _import &amp;quot;printf&amp;quot;: (string, unit ptr) -&amp;gt; ()
+
+    (* 
+#define PROT_READ	0x1		/* Page can be read.  */
+#define PROT_WRITE	0x2		/* Page can be written.  */
+#define PROT_EXEC	0x4		/* Page can be executed.  */
+#define PROT_NONE	0x0		/* Page can not be accessed.  */
+    *)
+
+    val PROT_READ  = 0wx1
+    val PROT_WRITE = 0wx2
+    val PROT_EXEC  = 0wx4
+    val PROT_NONE  = 0wx0
+
+    val PAGE_SIZE = 0w4096
+
+    type jitptr = word8 ptr
+    val fromUnitPtr = SMLSharp_Builtin.Pointer.fromUnitPtr
+    val toUnitPtr = SMLSharp_Builtin.Pointer.toUnitPtr
+    val toCodeptr = SMLSharp_Builtin.Pointer.toCodeptr
+    val store = Pointer.store
+    val advance = Pointer.advance
+
+
+    fun jitMemory size: jitptr = let
+        val op orb = Word.orb
+        infix 5 orb
+        val msize = size * PAGE_SIZE
+        val pageRef: unit ptr ref = ref (Pointer.NULL ())
+        val ret = posix_memalign (pageRef, PAGE_SIZE, msize)
+        val page = if ret = 0
+                   then !pageRef
+                   else raise Fail &amp;quot;memory allocation failed&amp;quot;
+        val PROT_RWEX = PROT_READ orb PROT_WRITE orb PROT_EXEC
+        val ret = mprotect (page, msize, PROT_RWEX)
+        val () = if ret = 0
+                 then ()
+                 else raise Fail &amp;quot;memory protection error&amp;quot;
+        (* init with ret for safety *)
+        val _ = memset (page, 0wxc3, msize)
+    in
+        fromUnitPtr page
+    end
+
+    fun freeJit (jitMem: jitptr) = free (SMLSharp_Builtin.Pointer.toUnitPtr jitMem)
+
+    fun pushWord page (word: word8) = (store (page, word); advance (page, 1))
+    fun pushWords (page: jitptr) l = List.foldl (fn(w,page) =&amp;gt; pushWord page w) page l
+
+    val import: jitptr -&amp;gt; codeptr = toCodeptr o toUnitPtr
+
+    fun fromMachineCode l = let
+        val len = Word.fromInt(List.length l)
+        val size = (len + PAGE_SIZE) div PAGE_SIZE
+        val page = jitMemory size
+        val _ = pushWords page l
+    in
+        import page
+    end
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;次のように使います。一回importした関数はfreeしないことにしましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;fun println x = print (x ^ &amp;quot;\n&amp;quot;)
+val return1  =
+    (* 0:  b8 01 00 00 00          mov    eax,0x1  *)
+    [
+      0wxb8, 0wx01, 0wx00, 0wx00, 0wx00
+    ] 
+val freturn1 = Emit.fromMachineCode return1 :_import () -&amp;gt; int
+val () = println (Int.toString (freturn1 ()))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;引数を取る:adcfd48c9789a206f0f1cfad72bd4b5a&#34;&gt;引数を取る&lt;/h2&gt;
+
+&lt;p&gt;もうアセンブラの話になります。&lt;/p&gt;
+
+&lt;p&gt;x86では引数は右から順にスタックに積まれます。intを1つ取ってそれに1足して返す関数はこうなります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val add1 = 
+    (* 0:  8b 44 24 04             mov    eax,DWORD PTR [esp+0x4] *)
+    (* 4:  83 c0 01                add    eax,0x1 *)
+    [
+      0wx8b, 0wx44, 0wx24, 0wx04,
+      0wx83, 0wxc0, 0wx01
+    ]
+val fadd1 = Emit.fromMachineCode add1 :_import (int) -&amp;gt; int
+val () = println (Int.toString (fadd1 3))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;正常に動けば4が印字されます。&lt;/p&gt;
+
+&lt;h1 id=&#34;つらい話:adcfd48c9789a206f0f1cfad72bd4b5a&#34;&gt;つらい話&lt;/h1&gt;
+
+&lt;h2 id=&#34;バグ:adcfd48c9789a206f0f1cfad72bd4b5a&#34;&gt;バグ&lt;/h2&gt;
+
+&lt;p&gt;最初、&lt;code&gt;Pointer.store&lt;/code&gt;でなく、&lt;code&gt;SMLSharp_Builtin.Pointer.store&lt;/code&gt;を使っていたら&lt;a href=&#34;https://github.com/smlsharp/smlsharp/issues/43&#34;&gt;変なバグ&lt;/a&gt;踏みました。バグというか使い方が悪かった。&lt;/p&gt;
+
+&lt;h2 id=&#34;デバッグ:adcfd48c9789a206f0f1cfad72bd4b5a&#34;&gt;デバッグ&lt;/h2&gt;
+
+&lt;p&gt;デバッガがないので非常につらいです。書き出された命令列を見るのに困りました。gdbで見たかったので、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val printf = _import &amp;quot;printf&amp;quot;: (string, unit ptr) -&amp;gt; int
+val _ = pritnf (&amp;quot;page pointr: %p&amp;quot;, page)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;して&lt;code&gt;printf&lt;/code&gt;にブレークポイントを張り、そこで止めつつページのアドレスを取得、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-gdb&#34;&gt;(gdb) x/20xh 0x81ca000
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;などとして見ていました。&lt;/p&gt;
+
+&lt;h1 id=&#34;もっと:adcfd48c9789a206f0f1cfad72bd4b5a&#34;&gt;もっと&lt;/h1&gt;
+
+&lt;p&gt;JITコンパイラが楽しかったのでアセンブラのDSLを作ってみました。1、2個の命令吐けるだけですがちゃんと動きました。今のところこのように書けます。Intel記法だとしんどそうだったのでAT&amp;amp;T記法っぽく書けるようにしました。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val freturn1&#39; = Emit.fromInsts [
+        xorl eax eax,
+        addl ($1) eax,
+        ret
+    ]:_import () -&amp;gt; int
+val () = println (Int.toString (freturn1&#39; ()))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;x86は命令フォーマットが1バイトから15バイトまでの可変長で、内部表現をどのようにするか決めるだけでも一苦労でした。x86つらい。&lt;/p&gt;
+
+&lt;p&gt;アドレッシングが複雑なのも悩みどころで、複数のアドレッシングを統一的に扱えるようにオーバーロードされた関数を用意したのですがあえなくSML#のバグを踏んで死亡しました。本当はこういう記法が出来る筈だった…&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;addl (%eax) eax
+addl eax (%eax)
+addl eax (%(eax, ebx))
+addl eax (%(eax, ebx, 4))
+addl eax (%(4, eax))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ /usr/local/bin/smlsharp   -c -o main.o main.sml
+uncaught exception: Bug.Bug: InferType: FIXME: user error: invalid instTy at src/compiler/typeinference2/main/InferTypes2.sml:47
+Makefile:11: recipe for target &#39;main.o&#39; failed
+make: *** [main.o] Error 1
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;movl&lt;/code&gt;を実装しようとしたらアドレッシングが動かなかったので萎えてまだ実装してません。&lt;/p&gt;
+
+&lt;p&gt;よく考えたら&lt;code&gt;%&lt;/code&gt;ってミスリーディングだし名前変えよう。&lt;/p&gt;
+
+&lt;h1 id=&#34;まとめ:adcfd48c9789a206f0f1cfad72bd4b5a&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;JITを作るにはメモリ保護をいじれて関数ポインタのインポートが出来ればいいよ&lt;/li&gt;
+&lt;li&gt;SML#でもJIT作れるよ&lt;/li&gt;
+&lt;li&gt;アセンブラっぽいの作ったよ&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
     
     <item>
       <title>リージョンについて</title>
