@@ -21,7 +21,7 @@ description:
  + [@blackenedgold](https://twitter.com/blackenedgold)
  + Github: [KeenS](https://github.com/KeenS)
  + サイバーエージェントのエンジニア
- + Lisp, ML, Shell Scriptあたりを書きます
+ + Lisp, ML, Rust, Shell Scriptあたりを書きます
 
 </script>
 </section>
