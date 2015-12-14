@@ -165,7 +165,7 @@ val advance = Pointer.advance
 さて、書き込んでいきます。
 
 ``` sml
-val mem = fromUnitPtr page
+val mem: word8 ptr = fromUnitPtr page
 val () = store page 0wxb8
 val mem = advance mem
 val () = store page 0wx01

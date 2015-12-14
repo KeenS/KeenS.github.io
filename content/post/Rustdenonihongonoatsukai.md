@@ -206,8 +206,7 @@ fn main() {
     let file = File::open("src/japanese.txt").unwrap();
     let e = DecodingReader::new(ISO_2022_JP, &file);
     let mut br = BufReader::new(e);
-    let b = br.fill_buf().unwrap();
-    for line in b.lines() {
+    for line in br.lines() {
         println!("{}", line.unwrap());
     }
 }
