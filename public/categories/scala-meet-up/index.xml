@@ -20,10 +20,10 @@
     data-vertical=&#34;\n\n&#34;
     data-notes=&#34;^Note:&#34;&gt;
 &lt;script type=&#34;text/template&#34;&gt;
-# DSLtとTagless Final
+# DSLとTagless Final
 ----------------------
-サイバーエージェント アドテクスタジオ
-Scala Meet Up 2015-12-13
+サイバーエージェント アドテクスタジオ  
+Scala Meet Up 2015-12-18
 
 &lt;!-- .slide: class=&#34;center&#34; --&gt;
 
@@ -36,34 +36,85 @@ Scala Meet Up 2015-12-13
  + Github: [KeenS](https://github.com/KeenS)
  + AMoAdの新卒エンジニア
  + Lisp, ML, Rust, Shell Scriptあたりを書きます
+   - Scalaは初心者 ※ [Scala初心者の新卒が頑張ってLispを作ってみた](http://adtech.cyberagent.io/scalablog/2015/12/05/scala-lisp/)
+
+# 注意
+------
+
+* Scala初心者なのでScalaではなくScalaっぽい疑似コードで説明します
+  + ~~コード例動かす時間が無かっただけ~~
+* Scala初心者なのでScalaのコードは少なめに説明します
 
 
 # DSLを作る
 -----------
 
-以下のようなASTで表されるDSLを考える
+以下のようなHTTPなユーザをエミュレートするDSLを考える
 
 ``` scala
-なんか実用的な例
+val scenario = and(
+  get(&#34;/&#34;),
+  get(&#34;/users&#34;).andThen(res =&gt;
+    post(&#34;/follow&#34;, first(users.getJsonData))))
+val Right(_) = runScenario(scenario, &#34;user&#34;)
 ```
 
 
 # DSLを作る
 -----------
 
-普通はASTをラップして以下のようにする
+普通は以下のようなAST作ってをラップする
 
 ``` scala
+trait ScenarioDSL
+sealed case class Get(url: String) extends ScenarioDSL
+sealed case class Post(url: String, data: JSON) extends ScenarioDSL
+sealed case class And(first, ScenarioDSL, second ScenarioDSL) extends ScenarioDSL
+sealed case class AndThen(first: ScenarioDSL,
+   callBack: (Response) =&gt; ScenarioDSL) extends ScenarioDSL
+
+def get(url: String): ScenarioDSL= Get(url)
+....
 
 ```
+
+
+# DSLを作る
+-----------
+
+そして`runScenario`を作る
+
+``` scala
+def runScenario(scenario: ScenarioDSL, user: String) = {
+  scenario match {
+    Get(url) =&gt; Client.getInstance(user).get(url)
+    Post(url) =&gt; Client.getInstance(user).post(url)
+    And(first, second) =&gt; {runSenario(first, user); runSenario(second, user)}
+    ....
+  }
+}
+
+
+```
+
+
 
 
 # DSLを便利に
 -------------
 
-例えば、このDSLを文字列にする関数を追加する
+例えば、このDSLを`curl`コマンド関数を追加する
 
 ``` scala
+def toCurl(scenario: ScenarioDSL, user: String) =
+  val auth = makeAuth(user)
+  scenario match {
+    Get(url) =&gt; &#34;curl ${auth} ${SERVICE_HOST}/url&#34;
+    Post(url) =&gt; &#34;curl ${auth} -XPOST ${SERVICE_HOST}/url&#34;
+    And(first, second) =&gt; toCurl(first) + &#34;\n&#34; + toCurl(second)
+    ....
+  }
+}
 
 ```
 
@@ -71,32 +122,39 @@ Scala Meet Up 2015-12-13
 # DSLの拡張
 -----------
 
-このDSLに新たに    を追加する
+このDSLに新たに`select`を追加する
 
 ``` scala
-
+val scenario = and(
+  get(&#34;/&#34;),
+  select(get(&#34;/users&#34;),
+         post(&#34;/update&#34;)))
+val _ = runScenario(scenario, &#34;user&#34;)
 ```
 
 
-# Expression Prolem
+# Expression Problem
 -------------------
 
 この時に問題が出る
 
+* DSLを使う全てのコードに変更が必要
+  + `runScenario`と`toCurl`で`select`に対応する
 * DSLそのものに手を加える必要がある
-  + DSLを使う全てのコードに変更が必要
-  + そもそも、ライブラリだったら変更出来るの？
+  + DSLがsealed traitされてる
+  + そもそも、DSLがライブラリだったら変更出来るの？
 * 実際には使ってなくても全ての関数で新しい機能に対応しないといけない
-
+  + `toCurl`では`select`に対応しないとか
+  + 逆に、`toCurl`がプラグインでコードいじれなかったらどうしよう
 
-# それ、Tagless Finalで解決出来るよ
-----------------------------------
+# Tagless Finalで解決出来るよ
+----------------------------
 
 * 元のコードをいじらず
-* 必要な所だけを修正して
+* 必要な所だけを記述して
 * しかも元々の実装よりも速い
 
-ASTの作り方があります。
+DSLの作り方があります。それは型クラスを使ったやり方です。
 
 
 # 型クラスの復習
@@ -115,41 +173,263 @@ ASTの作り方があります。
 ---------------
 
 ``` rust
+trait Hello { //型クラス
+  fn hello(&amp;self) -&gt; String;
+}
 
+impl Hello for isize { //isize型のインスタンス
+  fn hello(&amp;self) -&gt; String {format!(&#34;I&#39;m {} years old&#34;, self)}
+}
+impl &lt;&#39;a&gt;Hello for &amp;&#39;a str {//&amp;str型のインスタンス
+  fn hello(&amp;self) -&gt; String {format!(&#34;My name is {}&#34;, self)}
+}
+fn main() {
+  println!(&#34;{}&#34;, 23.hello());     // =&gt; &#34;I&#39;m 23 years old&#34;
+  println!(&#34;{}&#34;, &#34;κeen&#34;.hello()); // =&gt; &#34;My name is κeen&#34;
+}
+```
+
+
+# DSLをRustに翻訳
+-------------
+
+Scalaで型クラスを説明するとややこしいので一旦先のDSL例をRustに翻訳します
+
+``` rust
+let scenario = and(
+  get(&#34;/&#34;.to_string()),
+  get(&#34;/users&#34;.to_string()).andThen(|req|
+    post(&#34;/follow&#34;.to_string(), req.getJsonData().first)));
+runScenario(scenario, &#34;user&#34;).unwrap();
 ```
 
 
 # Rustに翻訳
 -------------
-
-Scalaで説明するとややこしいので一旦先の例をRustに翻訳します
+DSLのASTはこうなります。
 
 ``` rust
-DSLのAST
+enum ScenarioDSL {
+  Get{url: String},
+  Post{url: String, data: RequestData},
+  And{first: Box&lt;ScenarioDSL&gt;, second: Box&lt;ScenarioDSL&gt;},
+  AndThen{first: Box&lt;ScenarioDSL&gt;,
+   callBack: FnOnce&lt;(Scenario, Request) -&gt; ScenarioDSL&gt;},
+}
+```
+
+# Rustに翻訳
+-------------
+runScenarioはこうなります。
+
+``` rust
+fn runScenario(scenario: &amp;ScenarioDSL, user: &amp;str)-&gt; Result&lt;()&gt; {
+  match scenario {
+    &amp;ScenarioDSL::Get{ref url} =&gt; Client::instance(user).get(url),
+    &amp;ScenarioDSL::Post{ref url} =&gt; Client::instance(user).post(url),
+    &amp;ScenarioDSL::And{ref first, ref second} =&gt; {
+      try!(runSenario(first));
+      runSenario(second)
+    },
+   ...
+  };
+}
 ```
 
 
 # Rustに翻訳
 -------------
+`toCurl`はこうなります
 
 ``` rust
-DSLのラッパ
+fn toCurl(scenario: &amp;ScenarioDSL, user: &amp;str)-&gt; String {
+  let auth = makeAuth(user)
+  match scenario {
+    &amp;ScenarioDSL::Get{ref url} =&gt; format!(&#34;curl {} {}{}&#34;, auth, SERVICE_HOST, url)
+    &amp;ScenarioDSL::Post{ref url} =&gt; format!(&#34;curl {} -X POST {}{}&#34;, auth, SERVICE_HOST, url)
+    &amp;ScenarioDSL::And{ref first, ref second} =&gt; {
+      let first_str = toCurl(first, user);
+      let second_str = toCurl(second, user);
+      format!(&#34;{}\n{}&#34;, first_str, second_str)
+    },
+   ...
+  }
+}
 ```
 
 
-# Rustに翻訳
--------------
+# Tagless Final
+---------------
 
-``` rust
-DSLのstringify
-```
+Rustの準備が終わったのでTagless Finalの説明に入ります。
 
+
 # Tagless Final
 ----------------
 
+* ASTをデータではなく関数で表わす
+* 同じ関数でも欲しい結果によって計算を変えるために型クラスを使う
+* どの型クラスのインスタンスとして扱うかで結果を変える
+  + そもそもASTは計算を抽象化してデータにしたもの。
+  + 抽象的な計算があるならデータにする必要はない
 
-initialなアプローチとfinalなアプローチ、taglessness
-ScalaでのTagless Final(Scala)
+* 型クラスでジェネリックに作って
+* 欲しい型を伝えるだけで挙動が変わる
+
+
+# 型クラス
+----------
+DSLの文法の型クラスを定義する。  
+DSLっぽく見せるため、ラッパを書く(Rust特有)。
+
+
+``` rust
+trait ScenarioSYM {
+  fn get(url: String) -&gt; Self;
+  fn post(url: String) -&gt; Self;
+  fn and(first: Self, second: Self) -&gt; Self;
+  ...
+}
+
+fn get&lt;C: ScenarioSYM&gt;(url: String) -&gt; C {C::get(url)}
+fn post&lt;C: ScenarioSYM&gt;(url: String) -&gt; C {C::post(url)}
+fn and&lt;C: ScenarioSYM&gt;(first: C, second: C) -&gt; C {C::and(first, second)}
+...
+```
+
+
+
+# `runScenario`
+------
+結果に`Result`型が結果として欲しいなら`Result`型に`ScenarioSYM`を実装する
+
+```rust
+impl ScenarioSYM for Result&lt;()&gt; {
+  fn get(self,url: String) -&gt; Self {...}
+  fn post(self, url: String) -&gt; Self {...}
+  fn and(self, url: String) -&gt; Self {...}
+}
+
+fn runScenario(res: Result&lt;()&gt;) -&gt; Result&lt;()&gt; {
+  res
+}
+```
+
+
+# `toCurl`
+----------
+`String`が欲しいなら`String`に実装すれば良い。
+
+``` rust
+impl ScenarioSYM for String {
+  fn get(self, url: String) -&gt; Self {...}
+  fn post(self, url: String) -&gt; Self {...}
+  fn and(self, url: String) -&gt; Self {...}
+}
+
+fn toCurl(str: String) -&gt; String {
+  str
+}
+```
+
+
+# 完成形
+--------
+
+``` rust
+let scenario = and(
+  get(&#34;/&#34;.to_string()),
+  get(&#34;/users&#34;.to_string()).andThen(|req|
+    post(&#34;/follow&#34;.to_string(), req.getData().iter().next())));
+  // ↑ここまではジェネリックなScenarioSYM型
+  // ↓ここで呼ばれることでResult&lt;()&gt;型にインスタンス化される
+runScenario(scenario, &#34;user&#34;).unwrap();
+```
+
+
+# DSLの拡張
+-----------
+
+拡張したい文法のDSLを定義して、欲しいものに実装するだけ。
+
+`runScenario`に変更は要らないしサポートしない`toCurl`は気にしなくて良い。
+
+``` rust
+trait SelectSYM {
+  fn select(self, first: Self, second: Self) -&gt; Self;
+}
+
+impl SelectSYM for Result&lt;()&gt; {
+  fn select(self, first: Self, second: Self) -&gt; Self {...}
+}
+```
+
+
+# Tagless Finalまとめ
+---------------------
+
+* この方式だと実行時にタグでパターンマッチしないので速い
+* DSLの拡張も機能の拡張も容易
+* 型クラス便利
+
+
+# ScalaでのTagless Final
+------------------------
+Rustで分かりやすく解説したのでScalaでどうなるか見ていきます。
+
+まずは型クラスを定義
+
+``` scala
+trait ScenarioSYM[C] {
+  def get(self: C, url: String): C
+  def post(self: C, url: String): C
+  ...
+}
+def get(self: C, url: String)(implicit i: ScenarioSYM[C]): C = i.get(self, url)
+def post(self: C, url: String)(implicit i: ScenarioSYM[C]): C = i.post(self, url)
+...
+```
+
+
+# `runScenario`
+------
+
+``` scala
+implicit val resultScenario = new ScenarioSYM[Either[Err, ()]] {
+  def get(self: Either[Err, ()], url: STring): Either[Err, ()] = ...
+  def post(self: Either[Err, ()], url: STring): Either[Err, ()] = ...
+  ...
+}
+
+def runScenario(ast: Either[Err, ()], user: String)
+      (implicit i: ScenarioSYM[Either[Err, ()]]) = ast
+```
+
+
+# 完成形
+--------
+Scalaの型クラスの制約上最初の例と少し異なる
+(`val`じゃなくて`implicit`を取る`def`になる)
+
+
+``` scala
+def scenario(implict i: ScenarioSYM[C]) = Scenario
+   get(&#34;/&#34;)
+   get(&#34;/users&#34;) andThen((scenario, res) =&gt;
+    scenario post(&#34;/follow&#34;, first(users.getJsonData)))
+val Right(_) = runScenario(scenario, &#34;user&#34;)
+
+```
+
+
+# まとめ
+--------
+
+* Expression Problemについて説明した
+* Tagless Finalを紹介した
+* 型クラス便利
+* Rust便利
+* [参考](http://okmij.org/ftp/tagless-final/course/)
 
 &lt;/script&gt;
 &lt;/section&gt;
