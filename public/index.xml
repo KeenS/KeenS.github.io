@@ -6,8 +6,225 @@
     <description>Recent content on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Sun, 13 Dec 2015 22:42:39 +0900</lastBuildDate>
+    <lastBuildDate>Sat, 19 Dec 2015 22:30:19 +0900</lastBuildDate>
     <atom:link href="http://KeenS.github.io/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>ClojureでReactive Messaging Pattern</title>
+      <link>http://keens.github.io/blog/2015/12/19/clojuredereactive_messaging_pattern</link>
+      <pubDate>Sat, 19 Dec 2015 22:30:19 +0900</pubDate>
+      
+      <guid>http://keens.github.io/blog/2015/12/19/clojuredereactive_messaging_pattern</guid>
+      <description>
+
+&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2015/clojure&#34;&gt;Clojure Advent Calendar 2015&lt;/a&gt;の16日目の記事です（大遅刻）&lt;/p&gt;
+
+&lt;p&gt;κeenです。ここのところ体調優れず、また、特に面白いネタもなくClojure Advent Calendarに遅刻したことをお詫び申し上げます。&lt;/p&gt;
+
+&lt;p&gt;さて、今日はReactive Messaging PatternをClojureのcore.asyncでやってみたいと思います。Reactive Messaging Pattersは、Java/Scala向けActorシステムの&lt;a href=&#34;http://akka.io/&#34;&gt;Akka&lt;/a&gt;の作者が著した本、&lt;a href=&#34;http://www.amazon.co.jp/Reactive-Messaging-Patterns-Actor-Model-ebook/dp/B011S8YC5G&#34;&gt;Amazon.co.jp: Reactive Messaging Patterns with the Actor Model: Applications and Integration in Scala and Akka&lt;/a&gt;で書かれているデザインパターンです。&lt;/p&gt;
+
+&lt;p&gt;非常に興味深い本なのですがScala及びAkka初心者の私には中々辛いので一旦Clojureで試してみようかと。&lt;/p&gt;
+
+&lt;p&gt;ところで、AkkaとClojureのcore.asynkには若干のモデルの違いがあります。詳しくは&lt;a href=&#34;http://blog.paralleluniverse.co/2015/05/21/quasar-vs-akka/&#34;&gt;ここ&lt;/a&gt;とかにあるのですが、一番大きくは非同期/同期モデルの違いがあります。
+Akkaの場合はActorにメッセージを送っても届いたという保障はなく(「その瞬間に」届いてないだけでなく、届く前にActorが再起動したらメッセージがロストしてしまう!)、また、メッセージの受信も&lt;code&gt;receive&lt;/code&gt;というコールバック用のメソッドを用意してそこでハンドルすることになります。&lt;/p&gt;
+
+&lt;p&gt;そういう違いがある中でどれだけClojureに翻訳出来るか多少不安ですがチャレンジしてみます。尚、原書には様々なパターンがあるのですが流石に本一冊分全部は紹介し切れないので面白そうでかつClojureでも役立ちそうなものだけ紹介することにします。このコードは原書のものをClojureに翻訳したものではなく、私が勝手に書いたものです。コードを参考にするのは雰囲気程度に留めて、実際を知りたかったら原書を読みましょう。&lt;/p&gt;
+
+&lt;p&gt;今回、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-clojure&#34;&gt;(defproject reactive-message-patterns &amp;quot;0.1.0-SNAPSHOT&amp;quot;
+  :description &amp;quot;FIXME: write description&amp;quot;
+  :url &amp;quot;http://example.com/FIXME&amp;quot;
+  :license {:name &amp;quot;Eclipse Public License&amp;quot;
+            :url &amp;quot;http://www.eclipse.org/legal/epl-v10.html&amp;quot;}
+  :dependencies [[org.clojure/clojure &amp;quot;1.7.0&amp;quot;]
+                 [org.clojure/core.async &amp;quot;0.2.374&amp;quot;]])
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;というプロジェクト設定で試しました。また、ソースコードは&lt;a href=&#34;https://github.com/KeenS/reactive-message-patterns&#34;&gt;こちら&lt;/a&gt;で公開しています。&lt;/p&gt;
+
+&lt;h1 id=&#34;messaging-with-actors:258416a532a86ac327ddeb3b653d90b7&#34;&gt;Messaging With Actors&lt;/h1&gt;
+
+&lt;h2 id=&#34;pipes-and-filters:258416a532a86ac327ddeb3b653d90b7&#34;&gt;Pipes And Filters&lt;/h2&gt;
+
+&lt;p&gt;メッセージが来る際に、そのまま受け取るのではなく一旦Filter用のActorで変換やvalidationをかけて本処理に入ります。&lt;/p&gt;
+
+&lt;p&gt;&lt;del&gt;Clojureなら&lt;code&gt;filter&amp;lt;&lt;/code&gt;/&lt;code&gt;filter&amp;gt;&lt;/code&gt;/ transducerで瞬殺&lt;/del&gt; Filter処理をActorに分離することで並列性やモジュール性が上がります。原書の例ではまずDecrypt Filterを噛ませてAuthenticate Filterで認証出来たら De-dup Filterで重複を取り除いてメッセージをクリーンにしてから処理を始める、とういうように非常に実用的な例が出ています。&lt;/p&gt;
+
+&lt;p&gt;また、(transformでなく、篩い分けの)Filterを分離することでFilterした後の処理、例えばinvalidなメッセージが来たらログに出すなどの柔軟性を得ることが出来ます。&lt;/p&gt;
+
+&lt;p&gt;これを実装してみましょう。すごい適当ですがメッセージが来たらそれを2倍するfilterを作ってみます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-clojure&#34;&gt;(use &#39;clojure.core.async)
+
+(defn filter-actor
+  ([f]
+   (let [in (chan)
+         out (chan)]
+     (do
+       (filter-actor f in out)
+       [in out])))
+  ([f in out]
+   (go-loop []
+     (if-let [v (&amp;lt;! in)]
+       (if-let [ret (f v)]
+         (if (&amp;gt;! out ret)
+           (recur)))
+       (close! out)))))
+
+(let [[in out] (filter-actor (fn [x] (* x 2)))]
+  (go
+    ;; producer
+    (doseq [v (range 1 10)]
+      (&amp;gt;! in v))
+    (close! in))
+  (go-loop []
+    ;; consumer
+    (if-let [v (&amp;lt;! out)]
+      (do
+        (println v)
+        (recur))
+      (close! out))))
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;簡単ですね。チャネルが終わったかどうか調べるのに一々&lt;code&gt;if-let&lt;/code&gt;を使うのが面倒ですがリストに対する再帰関数もそんな感じなのでまあ、こういうもんなんでしょう。&lt;/p&gt;
+
+&lt;h2 id=&#34;その他:258416a532a86ac327ddeb3b653d90b7&#34;&gt;その他&lt;/h2&gt;
+
+&lt;p&gt;他にもMessaging With ActorsにはMessage Router, Message Translator, Message Endpointsなどのパターンが載っているのですが割愛します。特にMessage Translatorは外部システム(HTTPリクエスト、MQ, SQLなど)とのやりとりの話なので簡単に試すには少し重すぎるようです。&lt;/p&gt;
+
+&lt;h1 id=&#34;messaging-channels:258416a532a86ac327ddeb3b653d90b7&#34;&gt;Messaging Channels&lt;/h1&gt;
+
+&lt;p&gt;この章にはActor同士のメッセージのやりとりの方法が色々書かれています。
+Point-to-Point Channel, Publish-Subscribe Channel, Datatype Channel, Invalid Message Channel, Dead Letter Channel, Guaranteed Delivery, Channel Adapter, Message Bridge, Message Bus。
+中々多くのパターンが載っているのですが一部はAkka固有であったりClojureには必要なかったりしますので、私が興味を持ったものを紹介します。&lt;/p&gt;
+
+&lt;h2 id=&#34;publish-subscribe:258416a532a86ac327ddeb3b653d90b7&#34;&gt;Publish-Subscribe&lt;/h2&gt;
+
+&lt;p&gt;定番ですね。概念自体の説明は不要と思います。core.asyncだとどうなるのかを見てみます。&lt;code&gt;pub&lt;/code&gt;と&lt;code&gt;sub&lt;/code&gt;を使います。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-clojure&#34;&gt;(let [publisher (chan)
+      publication (pub publisher :topic)
+      subscriber1 (chan)
+      subscriber2 (chan)]
+  (sub publication :delete subscriber1)
+  (sub publication :create subscriber1)
+
+  (sub publication :update subscriber2)
+  (sub publication :read subscriber2)
+
+  ;; start subscribers before publish start
+  (go-loop [] (when-let [v (&amp;lt;! subscriber1)] (printf &amp;quot;I&#39;m One, got %s\n&amp;quot; (:type v)) (recur)))
+  (go-loop [] (when-let [v (&amp;lt;! subscriber2)] (printf &amp;quot;I&#39;m Two, got %s\n&amp;quot; (:type v)) (recur)))
+
+  (go (onto-chan publisher [{:topic :update, :type &amp;quot;dog&amp;quot;}
+                            {:topic :create, :type &amp;quot;cat&amp;quot;}
+                            {:topic :read  , :type &amp;quot;fox&amp;quot;}]))
+  )
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;おもちゃのような例ですがこれで動くようです。因みに原書ではここに結構なページ数が割かれていて、分散システムを念頭に、異なるシステムにメッセージを送る話なども扱っています。core.asyncだとそこまでは出来そうにないですね。&lt;/p&gt;
+
+&lt;h2 id=&#34;invalid-message-channel:258416a532a86ac327ddeb3b653d90b7&#34;&gt;Invalid Message Channel&lt;/h2&gt;
+
+&lt;p&gt;とあるActorに予期しないメッセージが届いたらどうしましょうか。そのまま捨てますか？もしかしたらバグを潰せる好機かもしれないのにそのまま捨てるには勿体なすぎます。
+かといって全てのActorにデバッグ用のコードを入れていては埒が明かないどころかコードが複雑化してしまいます。そこでInvalid Massage Channelを使いましょう。&lt;/p&gt;
+
+&lt;p&gt;あるActorに予期しないメッセージが届いた時に、全てを放り投げるチャネルを用意しておいて、その先のActorでログを出すなりするのです。&lt;/p&gt;
+
+&lt;p&gt;今回は&lt;code&gt;:price&lt;/code&gt;タグのついていないメッセージが届いた時にinvalid actorに放り投げ、ログを出すものを作りました。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-clojure&#34;&gt;(defn invalid [data]
+  {:data data
+   :from (Thread/currentThread)})
+
+(let [invalid-chan (chan)
+      in (chan)
+      tax 0.08]
+  ;; invalid message processor
+  (go-loop []
+    (when-let [{data :data from :from} (&amp;lt;! invalid-chan)]
+      (printf &amp;quot;invalid data %s from %s from\n&amp;quot; data from)
+      (recur)))
+
+  ;; main processing actor
+  (go-loop []
+    (when-let [v (&amp;lt;! in)]
+      (if-let [price (:price v)]
+        (printf &amp;quot;price: %f\n&amp;quot; (* price (+ 1 tax)))
+        (&amp;gt;! invalid-chan (invalid v)))
+      (recur)))
+
+  (go (onto-chan in [{:goods &amp;quot;はじめてのClojure&amp;quot;
+                      :price 1900}
+                     {:goods &amp;quot;プログラミングClojure&amp;quot;
+                      :price 3400}
+                     {:goods &amp;quot;へび&amp;quot;
+                      :description &amp;quot;にょろにょろ&amp;quot;}])))
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;from&lt;/code&gt;についてはActorならアクターオブジェクトに対してリフレクションかけて何かしらの情報をとれるのですが&lt;code&gt;go&lt;/code&gt;に対するリフレクションが分からなかったので代わりにスレッド情報を使いました。
+私はこの章を読んだ時にいたく完動しました。ログの扱いを集約出来るし地味にIOして非同期モデルのアクターの邪魔になるログをそれぞれのアクターに持たなくて済む。
+しかしこれのActorが落ちたら、とかこのActor自身にinvalidなメッセージが来たら、とか色々考えたくなります。詳しくは原書を読みましょう。&lt;/p&gt;
+
+&lt;h2 id=&#34;その他-1:258416a532a86ac327ddeb3b653d90b7&#34;&gt;その他&lt;/h2&gt;
+
+&lt;p&gt;この章には他にも外部システムと連携するMessage Adapter、外部のメッセージングシステムと連携するMessage Bridge、複数のシステム間でメッセージをやりとりするMessage Busなどが載っていますが割愛します。&lt;/p&gt;
+
+&lt;h1 id=&#34;message-construction:258416a532a86ac327ddeb3b653d90b7&#34;&gt;Message Construction&lt;/h1&gt;
+
+&lt;p&gt;この章にはCommand Message, Document Message, Event Message, Request-Reply, Return Address, Correlation Identifire, Message Sequence, Message Expiration, Format Indicatorなどのメッセージ自体にまつわる話題が載っています。&lt;/p&gt;
+
+&lt;p&gt;&lt;del&gt;疲れてきたため&lt;/del&gt; AkkaやScala特有の話題が多いので1つだけに絞ります。。まあ、だいたいErlangとかやってたら自然と覚えるやつらです。&lt;/p&gt;
+
+&lt;h2 id=&#34;document-message:258416a532a86ac327ddeb3b653d90b7&#34;&gt;Document Message&lt;/h2&gt;
+
+&lt;p&gt;Command MessageやEvent Messageは良く見ますが、Document Messageとはどのようなものでしょうか。原書にはこう書いてあります&lt;/p&gt;
+
+&lt;blockquote&gt;
+&lt;p&gt;Use a Document Message to convey information to a receiver, but without indicating how the data should be used.&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;「受取側に情報を伝えはするが、その情報がどのように扱われるべきかを指示しない時にDocument Messageを使います」Command Messageに付随する情報でもなくEvent Messageに付随する情報でもなくただ単なる情報です。&lt;/p&gt;
+
+&lt;p&gt;これは例えばデータベースアダプタのような所で使うことになります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-clojure&#34;&gt;(let [db [{:id 1 :name &amp;quot;Aho&amp;quot;} {:id 2 :name &amp;quot;Ulman&amp;quot;} {:id 3 :name &amp;quot;Sethi&amp;quot;}]
+      in (chan)]
+  (go-loop []
+    (when-let [[id return] (&amp;lt;! in)]
+      (&amp;gt;! return (some #(when (= id (:id %) ) %) db))
+      (recur)))
+
+  (let [chan-cache (chan)]
+    (go-loop [id 1]
+      (&amp;gt;! in [id chan-cache])
+      (when-let [res (&amp;lt;! chan-cache)]
+        (println res)
+        (recur (+ id 1))))))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;複数のアクセスがあることを考えると双方向チャネルがあるからといってそれ1つを使うのは良くないでしょう。混線してしまいます。今回は返信用のチャネル自身も一緒に送ってしまってそこにDocumentを貰うことにしました。
+ActorならActor ID(Ref)を送ることになるでしょう。&lt;/p&gt;
+
+&lt;h1 id=&#34;message-routing:258416a532a86ac327ddeb3b653d90b7&#34;&gt;Message Routing&lt;/h1&gt;
+
+&lt;p&gt;この章は主にAkkaのクラスタ、分散実行に関る内容です。それ自体非常に興味深いのですがClojureだと試せないので飛ばします。
+まあ、実際にはクラスタを組まなくてもいくつかのactorを使ってactor群同士でやりとりをすればいいのですが準備が中々面倒ですね。&lt;/p&gt;
+
+&lt;p&gt;一応扱われているトピックを拾うとContent Based Router, Message Filter, Dynamic Router, Recipient List, Splitter,
+Aggregator, Resequencer, Composed Message Processor, Scatter-Gather, Routing-Slip, Process Manager, Message Brokerです。
+見ての通り非常に数が多く、ページ数もかなり割かれています。そして、よく使いそうなパターンが多く載っています。Scatter-Gatherとか重い処理する時に使いそうなんですけどね。&lt;/p&gt;
+
+&lt;h1 id=&#34;などなど:258416a532a86ac327ddeb3b653d90b7&#34;&gt;などなど&lt;/h1&gt;
+
+&lt;p&gt;ここまでで、4~7章を紹介しました。原書は10章まで続きます(1-3章は何故Actorが必要なのかなどを延々語ってます)が私はこの辺で筆を置くことにします。続きが気になる方は原書をお読み下さい。&lt;/p&gt;
+
+&lt;p&gt;Advent Calendar遅刻して大変申し分けありませんでした。&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>DSLとTagless Final</title>
@@ -3725,67 +3942,6 @@ HTTP/1.1 418 I&#39;m a Teapot
 一旦SSDの中身を元のHDDに退避してSSDにUEFIで起動するパーティション作ってそのパーティションに元のパーティションをddでコピーとかで出来ますかね…&lt;/p&gt;
 
 &lt;p&gt;サルでも分かる操作マニュアルが欲しい。&lt;/p&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>isucon にCommon Lispチームで出た</title>
-      <link>http://keens.github.io/blog/2015/09/27/isucon_nicommon_lispchi_mudedeta</link>
-      <pubDate>Sun, 27 Sep 2015 23:58:24 +0900</pubDate>
-      
-      <guid>http://keens.github.io/blog/2015/09/27/isucon_nicommon_lispchi_mudedeta</guid>
-      <description>
-
-&lt;p&gt;κeenです。 &lt;a href=&#34;isucon.net&#34;&gt;isucon&lt;/a&gt; に&lt;a href=&#34;https://twitter.com/i/notifications?lang=ja&#34;&gt;@nitro_idiot&lt;/a&gt;(深町さん)と&lt;a href=&#34;https://twitter.com/Rudolph_Miller?lang=ja&#34;&gt;@Rudolph_Miller&lt;/a&gt;のCommon Lispチームで出てきました。チーム名clfreaks。勿論Common Lispで再実装しました。&lt;/p&gt;
-
-&lt;p&gt;因みに深町さんは今回使ったWebサーバーのwooを含めCommon Lispのライブラリを多数公開している&lt;a href=&#34;http://github-awards.com/users/search?login=fukamachi&#34;&gt;世界一のCommon Lisper&lt;/a&gt;、ルドルフさんは元Common Lispの会社のCTO。&lt;/p&gt;
-
-&lt;h1 id=&#34;前日:b63483bc4957736680c2a5e5d35a6d40&#34;&gt;前日&lt;/h1&gt;
-
-&lt;p&gt;κeen 「あとはwooがunixソケット使えたら嬉しいんですがまあ、いいでしょう。」&lt;br /&gt;
-fukamachi 「今からやれば明日には間に合うな」&lt;br /&gt;
-fukamachi 「ローカルでは一応動いた。間に合いそうである」&lt;br /&gt;
-fukamachi 「5倍ちょっとくらい速いかな」&lt;/p&gt;
-
-&lt;p&gt;この間1時間半足らず。&lt;/p&gt;
-
-&lt;p&gt;κeen 「練習してて気付いたんですけどデプロイツールってどうしましょう。」&lt;br /&gt;
-fukamachi 「κeenさんが使い慣れてるツールで良いです」&lt;br /&gt;
-κeen 「シェルスクリプトかー。」&lt;br /&gt;
-fukamachi 「やめろ」&lt;/p&gt;
-
-&lt;p&gt;結局capistranoを使うことに。&lt;/p&gt;
-
-&lt;h1 id=&#34;当日の作業:b63483bc4957736680c2a5e5d35a6d40&#34;&gt;当日の作業&lt;/h1&gt;
-
-&lt;p&gt;私がマシン立ち上げてソースをgitに上げるまでやる。残りの二人はソースを読む、私はNginXやMySQLやCapistranの基本設定をする。&lt;/p&gt;
-
-&lt;h2 id=&#34;午前中-common-lispでの再実装:b63483bc4957736680c2a5e5d35a6d40&#34;&gt;午前中 Common Lispでの再実装&lt;/h2&gt;
-
-&lt;p&gt;ルドルフさんが見付けた遅い部分を書き出し、深町さんがCommon Lispの実装を進める。&lt;/p&gt;
-
-&lt;p&gt;私がmysqlの設定をするもなぜか反映されずに詰まる。ルドルフさんと一緒にやるも数時間やっても解決せず。結局新しいインスタンスを立ち上げたら動いた。my.cnfにsym linkを貼ったのが問題だったよう。/etc/my.cnfの問題ではない。&lt;/p&gt;
-
-&lt;h2 id=&#34;午後-実装を進めつつチューニング:b63483bc4957736680c2a5e5d35a6d40&#34;&gt;午後 実装を進めつつチューニング&lt;/h2&gt;
-
-&lt;p&gt;私の方がどうにかなったのでルドルフさんも実装をすすめる。私はインデックスを張ろうとしてalterが帰ってこなくて諦めたりどうせ使わないけどunicornのワーカー数を増やして気分だけでもスコアを上げたりN+1クエリをJOINで書き直したり。&lt;/p&gt;
-
-&lt;h2 id=&#34;comon-lispの実装がとりあえず終了:b63483bc4957736680c2a5e5d35a6d40&#34;&gt;Comon Lispの実装がとりあえず終了&lt;/h2&gt;
-
-&lt;p&gt;バグは残ってる、と言われつつCL実装をmasterにマージしたのがgitのログを見るに15:28。そこからデバッグ。色々ハマったりライブラリにバグがあったり（深町さんのライブラリだったのでその場でbug fix）してログイン処理が通ったのが17時くらい？そこからベンチマークを走らせるとまたtypoとかのバグがあってちまちま直していくも結局間に合わず0点のままFINISH。&lt;/p&gt;
-
-&lt;h1 id=&#34;反省とか:b63483bc4957736680c2a5e5d35a6d40&#34;&gt;反省とか&lt;/h1&gt;
-
-&lt;p&gt;思ったよりアプリケーションが重厚で再実装に時間取られすぎたなー、が一番。あとMysqlの設定でハマったのは本当にやりたくなかった。&lt;/p&gt;
-
-&lt;p&gt;ベンチマーク走らせるとデータが溜まることに気付かずに大分走らせた後でインデックスを張ろうとしたら20分くらい待っても帰ってこなかったのでインデックスを諦めた。なのでruby実装のスコアも800点くらい。
-やろうとしたことはN+1クエリを消すとかuserをメモリに載せるとか。&lt;/p&gt;
-
-&lt;p&gt;かなり苦い思いはしたけどCommon Lispに足りないものとか今後の課題とかも見えたし出た価値はあったと思う。例えばデプロイの度にコンパイルが走るが、コンパイルの重いライブラリを使ってるとデプロイが遅くなるので並列ビルド欲しいよね、とか。ただ、大きな目的だったWeサーバーのチューニングまではいけなかった。&lt;/p&gt;
-
-&lt;p&gt;今年は知り合いと出ちゃったので来年は知らない人とチームを組もうかと。&lt;/p&gt;
-
-&lt;p&gt;運営、出題の方々、お疲れ様でした。来年こそは本戦出ます。&lt;/p&gt;
 </description>
     </item>
     
