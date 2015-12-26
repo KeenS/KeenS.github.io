@@ -6,8 +6,217 @@
     <description>Recent content in Smlsharp on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Sat, 12 Dec 2015 19:42:52 +0900</lastBuildDate>
+    <lastBuildDate>Sat, 26 Dec 2015 20:09:24 +0900</lastBuildDate>
     <atom:link href="http://KeenS.github.io/categories/smlsharp/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>SML#とCプリプロセッサの連携</title>
+      <link>http://keens.github.io/blog/2015/12/26/sml_tocpuripurosessanorenkei</link>
+      <pubDate>Sat, 26 Dec 2015 20:09:24 +0900</pubDate>
+      
+      <guid>http://keens.github.io/blog/2015/12/26/sml_tocpuripurosessanorenkei</guid>
+      <description>
+
+&lt;p&gt;κeenです。Advent Calendarのためにネタやアイディアを用意したものの時間/場所的都合でAdvent Calendarとして出せなかったボツネタでも供養しようかと。
+Advent Calendarが終わってしまったので投げやり気味ですね。
+第3段はSML#とCプリプロセッサで連携する話。&lt;/p&gt;
+
+&lt;p&gt;SML#のC FFIを使ってるとマクロで定義された値などを触りたくなるのですが、触れないのでどうにかしようかと。&lt;/p&gt;
+
+&lt;p&gt;発想自体は単純で、SMLファイルの中でCのヘッダをインクルードしてCプリプロセッサを呼んであげればどうにかなります。&lt;/p&gt;
+
+&lt;h1 id=&#34;簡単な例:17ab4ed508953994d38c55ce3a68a752&#34;&gt;簡単な例&lt;/h1&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://keens.github.io/blog/2015/12/12/sml_dejitwotsukurukaruihanashi/&#34;&gt;JITを作る話&lt;/a&gt;の時のように、定数に触りたいとします。
+その時、以下のように.smlファイルを記述して、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;(* 
+#include&amp;lt;sys/mman.h&amp;gt;
+*)
+
+(* ====END_OF_HEADER==== *)
+datatype dummy = $ of int
+              
+val $PROT_READ  = $ PROT_READ
+val $PROT_WRITE = $ PROT_WRITE
+val $PROT_EXEC  = $ PROT_EXEC
+val $PROT_NONE  = $ PROT_NONE
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;以下のコマンドを実行します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;cpp -pipe -E cpp_pre.sml | sed &#39;1,/====END_OF_HEADER====/d;/^#/d&#39; &amp;gt; cpp.sml 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ポイントを挙げると、&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;smlファイルに&lt;code&gt;#include&lt;/code&gt;を書く。lintでエラーが出ないように&lt;code&gt;#include&lt;/code&gt;はコメントで囲む&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;include&lt;/code&gt;をコメントで囲ったところで安全でない( インクルードしたファイルに&amp;rsquo;&lt;code&gt;*)&lt;/code&gt;&amp;lsquo;、例えば &lt;code&gt;int f(char *);&lt;/code&gt;とかが入ってるとコメントが終端される)ので、&lt;code&gt;include&lt;/code&gt;の部分は後で削除する。
+そのための識別子として、&lt;code&gt;====END_OF_HEADER====&lt;/code&gt;を置いておく(これも完全には安全ではないが比較的マシ)。&lt;/li&gt;
+&lt;li&gt;Cのマクロと同じ識別子を使おうとすると識別子も置換されてしまうので左辺にダミーで&lt;code&gt;$&lt;/code&gt;をつけておく。スペースは空けない。
+逆に右辺は置換されてほしいので&lt;code&gt;$&lt;/code&gt;の後にスペースを空ける。&lt;/li&gt;
+&lt;li&gt;最後にCプリプロセッサを呼び、sedでヘッダ部分や無駄に追加されたCのコメントを除く。&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;ちょっと&lt;code&gt;$&lt;/code&gt;の部分がこの方式だとintにしか使えないのでイケてませんがないよりマシでしょう。因みに処理結果はこうなります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;datatype dummy = $ of int
+
+val $PROT_READ = $ 
+                   0x1
+
+val $PROT_WRITE = $ 
+                   0x2
+
+val $PROT_EXEC = $ 
+                   0x4
+
+val $PROT_NONE = $ 
+                   0x0
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;ifdef:17ab4ed508953994d38c55ce3a68a752&#34;&gt;&lt;code&gt;ifdef&lt;/code&gt;&lt;/h1&gt;
+
+&lt;p&gt;一旦発想さえ得てしまえば話は簡単です。次は&lt;code&gt;ifdef&lt;/code&gt;を使う例です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;(* ====END_OF_HEADER==== *)
+
+
+(* 
+#ifdef Debug
+*)
+val debug = true
+(* 
+#else
+*)
+val debug = false
+
+(* 
+#endif
+*)
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これは&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;cpp -pipe -E -DDebug ifdef_pre.sml | sed &#39;1,/====END_OF_HEADER====/d;/^#/d&#39; &amp;gt; ifdef.sml
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と&lt;code&gt;Debug&lt;/code&gt;を定義して処理すればifdef.smlの中身は&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;
+
+(*
+
+*)
+val debug = true
+(*
+
+
+
+
+
+
+*)
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;となりますし、定義せずに&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;
+``` sh
+cpp -pipe -E ifdef_pre.sml | sed &#39;1,/====END_OF_HEADER====/d;/^#/d&#39; &amp;gt; ifdef.sml
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と処理すれば&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;
+
+(*
+
+
+
+
+
+*)
+val debug = false
+
+(*
+
+*)
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;となってどちらでもSMLとして有効な文法になります。&lt;code&gt;ifndef&lt;/code&gt;だったり、&lt;code&gt;elif&lt;/code&gt;があったとしても有効な文法のままです。&lt;/p&gt;
+
+&lt;h1 id=&#34;まとめ:17ab4ed508953994d38c55ce3a68a752&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;CプリプロセッサでSMLファイルを処理する方法を提示したよ&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;ifdef&lt;/code&gt;も使えるよ&lt;/li&gt;
+&lt;li&gt;関数マクロは使えないよ&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>SML#のオレオレREPLを作る話 初級</title>
+      <link>http://keens.github.io/blog/2015/12/26/sml_nooreorereplwotsukuruhanashi_shokyuu</link>
+      <pubDate>Sat, 26 Dec 2015 19:48:30 +0900</pubDate>
+      
+      <guid>http://keens.github.io/blog/2015/12/26/sml_nooreorereplwotsukuruhanashi_shokyuu</guid>
+      <description>
+
+&lt;p&gt;κeenです。Advent Calendarのためにネタやアイディアを用意したものの時間/場所的都合でAdvent Calendarとして出せなかったボツネタでも供養しようかと。
+Advent Calendarが終わってしまったので投げやり気味ですね。
+第2段はSML#のオレオレREPLを作る話の初級。&lt;/p&gt;
+
+&lt;p&gt;SML#にはFFIがあり、任意のオブジェクトファイル/ライブラリをリンクしてC関数を呼び出すことが出来ますが、REPLで試そうとしてもREPLにリンクされていないので呼び出せません。
+そこで呼び出したいオブジェクトファイルをリンクしたREPLを作れば捗るよね、という発想です。&lt;/p&gt;
+
+&lt;h1 id=&#34;事前に必要なもの:25a90a3d9e2261c06baa6c7ce3911ca0&#34;&gt;事前に必要なもの&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;SML#のビルド時に使ったLLVMのパス&lt;/li&gt;
+&lt;li&gt;SML#をビルドした時のオブジェクトファイルの残骸（一部）&lt;/li&gt;
+&lt;li&gt;SML#のソーコード（一部）&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h1 id=&#34;コマンド:25a90a3d9e2261c06baa6c7ce3911ca0&#34;&gt;コマンド&lt;/h1&gt;
+
+&lt;p&gt;まず、普通のREPLを作るだけならこれだけです。（コンパイラも一緒にくっついてきますが面倒なのでそのままにしてます。）&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;SMLSHARP_SRC=/path/to/smlsharp
+LLVM_HOME=/path/to/LLVM
+cp ${SMLSHARP_SRC}/src/compiler/smlsharp.sml ./
+cat &amp;lt;&amp;lt;&#39;EOF&#39; &amp;gt; smlsharp.smi
+_require &amp;quot;prelude.smi&amp;quot;
+
+_require &amp;quot;compiler/main/main/SimpleMain.smi&amp;quot;
+EOF
+smlsharp -c++ -o oreore_repl &amp;quot;${SMLSHARP_SRC}/src/compiler/smlsharp.smi&amp;quot;  &amp;quot;${SMLSHARP_SRC}&amp;quot;/src/llvm/main/llvm_support.o &amp;quot;${SMLSHARP_SRC}&amp;quot;/src/llvm/main/SMLSharpGC.o $(&amp;quot;${LLVM_HOME}/bin/llvm-config&amp;quot; --ldflags --libs)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;あとは最後のリンクコマンドにフラグを足せばいいでしょう。注意点として、64bit OSを使ってるならちゃんと32bitでビルドしたライブラリをリンクしましょう。例えばlibuvをリンクするならこうです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;SMLSHARP_SRC=/path/to/smlsharp
+LLVM_HOME=/path/to/LLVM
+cp ${SMLSHARP_SRC}/src/compiler/smlsharp.sml ./
+cat &amp;lt;&amp;lt;&#39;EOF&#39; &amp;gt; smlsharp.smi
+_require &amp;quot;prelude.smi&amp;quot;
+
+_require &amp;quot;compiler/main/main/SimpleMain.smi&amp;quot;
+EOF
+smlsharp -c++ -o smlsharp_uv &amp;quot;${SMLSHARP_SRC}/src/compiler/smlsharp.smi&amp;quot; -L /opt/libuv32/lib -luv &amp;quot;${SMLSHARP_SRC}&amp;quot;/src/llvm/main/llvm_support.o &amp;quot;${SMLSHARP_SRC}&amp;quot;/src/llvm/main/SMLSharpGC.o $(&amp;quot;${LLVM_HOME}/bin/llvm-config&amp;quot; --ldflags --libs)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;終わりに:25a90a3d9e2261c06baa6c7ce3911ca0&#34;&gt;終わりに&lt;/h1&gt;
+
+&lt;p&gt;やり方さえ分かってしまえば簡単ですが見付けるのが難しい小ネタでした。因みに今回初級ですが、REPLにlibeditを統合するなどの上級ネタはいつか気が向いたら書くかもしれません。&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>SML#に学ぶコンパイラ言語におけるREPLの実装方法</title>
