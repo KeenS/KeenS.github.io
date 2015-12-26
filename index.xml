@@ -6,8 +6,265 @@
     <description>Recent content on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Sun, 20 Dec 2015 23:04:37 +0900</lastBuildDate>
+    <lastBuildDate>Sat, 26 Dec 2015 20:09:24 +0900</lastBuildDate>
     <atom:link href="http://KeenS.github.io/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>SML#とCプリプロセッサの連携</title>
+      <link>http://keens.github.io/blog/2015/12/26/sml_tocpuripurosessanorenkei</link>
+      <pubDate>Sat, 26 Dec 2015 20:09:24 +0900</pubDate>
+      
+      <guid>http://keens.github.io/blog/2015/12/26/sml_tocpuripurosessanorenkei</guid>
+      <description>
+
+&lt;p&gt;κeenです。Advent Calendarのためにネタやアイディアを用意したものの時間/場所的都合でAdvent Calendarとして出せなかったボツネタでも供養しようかと。
+Advent Calendarが終わってしまったので投げやり気味ですね。
+第3段はSML#とCプリプロセッサで連携する話。&lt;/p&gt;
+
+&lt;p&gt;SML#のC FFIを使ってるとマクロで定義された値などを触りたくなるのですが、触れないのでどうにかしようかと。&lt;/p&gt;
+
+&lt;p&gt;発想自体は単純で、SMLファイルの中でCのヘッダをインクルードしてCプリプロセッサを呼んであげればどうにかなります。&lt;/p&gt;
+
+&lt;h1 id=&#34;簡単な例:17ab4ed508953994d38c55ce3a68a752&#34;&gt;簡単な例&lt;/h1&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://keens.github.io/blog/2015/12/12/sml_dejitwotsukurukaruihanashi/&#34;&gt;JITを作る話&lt;/a&gt;の時のように、定数に触りたいとします。
+その時、以下のように.smlファイルを記述して、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;(* 
+#include&amp;lt;sys/mman.h&amp;gt;
+*)
+
+(* ====END_OF_HEADER==== *)
+datatype dummy = $ of int
+              
+val $PROT_READ  = $ PROT_READ
+val $PROT_WRITE = $ PROT_WRITE
+val $PROT_EXEC  = $ PROT_EXEC
+val $PROT_NONE  = $ PROT_NONE
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;以下のコマンドを実行します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;cpp -pipe -E cpp_pre.sml | sed &#39;1,/====END_OF_HEADER====/d;/^#/d&#39; &amp;gt; cpp.sml 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ポイントを挙げると、&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;smlファイルに&lt;code&gt;#include&lt;/code&gt;を書く。lintでエラーが出ないように&lt;code&gt;#include&lt;/code&gt;はコメントで囲む&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;include&lt;/code&gt;をコメントで囲ったところで安全でない( インクルードしたファイルに&amp;rsquo;&lt;code&gt;*)&lt;/code&gt;&amp;lsquo;、例えば &lt;code&gt;int f(char *);&lt;/code&gt;とかが入ってるとコメントが終端される)ので、&lt;code&gt;include&lt;/code&gt;の部分は後で削除する。
+そのための識別子として、&lt;code&gt;====END_OF_HEADER====&lt;/code&gt;を置いておく(これも完全には安全ではないが比較的マシ)。&lt;/li&gt;
+&lt;li&gt;Cのマクロと同じ識別子を使おうとすると識別子も置換されてしまうので左辺にダミーで&lt;code&gt;$&lt;/code&gt;をつけておく。スペースは空けない。
+逆に右辺は置換されてほしいので&lt;code&gt;$&lt;/code&gt;の後にスペースを空ける。&lt;/li&gt;
+&lt;li&gt;最後にCプリプロセッサを呼び、sedでヘッダ部分や無駄に追加されたCのコメントを除く。&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;ちょっと&lt;code&gt;$&lt;/code&gt;の部分がこの方式だとintにしか使えないのでイケてませんがないよりマシでしょう。因みに処理結果はこうなります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;datatype dummy = $ of int
+
+val $PROT_READ = $ 
+                   0x1
+
+val $PROT_WRITE = $ 
+                   0x2
+
+val $PROT_EXEC = $ 
+                   0x4
+
+val $PROT_NONE = $ 
+                   0x0
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;ifdef:17ab4ed508953994d38c55ce3a68a752&#34;&gt;&lt;code&gt;ifdef&lt;/code&gt;&lt;/h1&gt;
+
+&lt;p&gt;一旦発想さえ得てしまえば話は簡単です。次は&lt;code&gt;ifdef&lt;/code&gt;を使う例です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;(* ====END_OF_HEADER==== *)
+
+
+(* 
+#ifdef Debug
+*)
+val debug = true
+(* 
+#else
+*)
+val debug = false
+
+(* 
+#endif
+*)
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これは&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;cpp -pipe -E -DDebug ifdef_pre.sml | sed &#39;1,/====END_OF_HEADER====/d;/^#/d&#39; &amp;gt; ifdef.sml
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と&lt;code&gt;Debug&lt;/code&gt;を定義して処理すればifdef.smlの中身は&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;
+
+(*
+
+*)
+val debug = true
+(*
+
+
+
+
+
+
+*)
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;となりますし、定義せずに&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;
+``` sh
+cpp -pipe -E ifdef_pre.sml | sed &#39;1,/====END_OF_HEADER====/d;/^#/d&#39; &amp;gt; ifdef.sml
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と処理すれば&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;
+
+(*
+
+
+
+
+
+*)
+val debug = false
+
+(*
+
+*)
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;となってどちらでもSMLとして有効な文法になります。&lt;code&gt;ifndef&lt;/code&gt;だったり、&lt;code&gt;elif&lt;/code&gt;があったとしても有効な文法のままです。&lt;/p&gt;
+
+&lt;h1 id=&#34;まとめ:17ab4ed508953994d38c55ce3a68a752&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;CプリプロセッサでSMLファイルを処理する方法を提示したよ&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;ifdef&lt;/code&gt;も使えるよ&lt;/li&gt;
+&lt;li&gt;関数マクロは使えないよ&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>SML#のオレオレREPLを作る話 初級</title>
+      <link>http://keens.github.io/blog/2015/12/26/sml_nooreorereplwotsukuruhanashi_shokyuu</link>
+      <pubDate>Sat, 26 Dec 2015 19:48:30 +0900</pubDate>
+      
+      <guid>http://keens.github.io/blog/2015/12/26/sml_nooreorereplwotsukuruhanashi_shokyuu</guid>
+      <description>
+
+&lt;p&gt;κeenです。Advent Calendarのためにネタやアイディアを用意したものの時間/場所的都合でAdvent Calendarとして出せなかったボツネタでも供養しようかと。
+Advent Calendarが終わってしまったので投げやり気味ですね。
+第2段はSML#のオレオレREPLを作る話の初級。&lt;/p&gt;
+
+&lt;p&gt;SML#にはFFIがあり、任意のオブジェクトファイル/ライブラリをリンクしてC関数を呼び出すことが出来ますが、REPLで試そうとしてもREPLにリンクされていないので呼び出せません。
+そこで呼び出したいオブジェクトファイルをリンクしたREPLを作れば捗るよね、という発想です。&lt;/p&gt;
+
+&lt;h1 id=&#34;事前に必要なもの:25a90a3d9e2261c06baa6c7ce3911ca0&#34;&gt;事前に必要なもの&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;SML#のビルド時に使ったLLVMのパス&lt;/li&gt;
+&lt;li&gt;SML#をビルドした時のオブジェクトファイルの残骸（一部）&lt;/li&gt;
+&lt;li&gt;SML#のソーコード（一部）&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h1 id=&#34;コマンド:25a90a3d9e2261c06baa6c7ce3911ca0&#34;&gt;コマンド&lt;/h1&gt;
+
+&lt;p&gt;まず、普通のREPLを作るだけならこれだけです。（コンパイラも一緒にくっついてきますが面倒なのでそのままにしてます。）&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;SMLSHARP_SRC=/path/to/smlsharp
+LLVM_HOME=/path/to/LLVM
+cp ${SMLSHARP_SRC}/src/compiler/smlsharp.sml ./
+cat &amp;lt;&amp;lt;&#39;EOF&#39; &amp;gt; smlsharp.smi
+_require &amp;quot;prelude.smi&amp;quot;
+
+_require &amp;quot;compiler/main/main/SimpleMain.smi&amp;quot;
+EOF
+smlsharp -c++ -o oreore_repl &amp;quot;${SMLSHARP_SRC}/src/compiler/smlsharp.smi&amp;quot;  &amp;quot;${SMLSHARP_SRC}&amp;quot;/src/llvm/main/llvm_support.o &amp;quot;${SMLSHARP_SRC}&amp;quot;/src/llvm/main/SMLSharpGC.o $(&amp;quot;${LLVM_HOME}/bin/llvm-config&amp;quot; --ldflags --libs)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;あとは最後のリンクコマンドにフラグを足せばいいでしょう。注意点として、64bit OSを使ってるならちゃんと32bitでビルドしたライブラリをリンクしましょう。例えばlibuvをリンクするならこうです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;SMLSHARP_SRC=/path/to/smlsharp
+LLVM_HOME=/path/to/LLVM
+cp ${SMLSHARP_SRC}/src/compiler/smlsharp.sml ./
+cat &amp;lt;&amp;lt;&#39;EOF&#39; &amp;gt; smlsharp.smi
+_require &amp;quot;prelude.smi&amp;quot;
+
+_require &amp;quot;compiler/main/main/SimpleMain.smi&amp;quot;
+EOF
+smlsharp -c++ -o smlsharp_uv &amp;quot;${SMLSHARP_SRC}/src/compiler/smlsharp.smi&amp;quot; -L /opt/libuv32/lib -luv &amp;quot;${SMLSHARP_SRC}&amp;quot;/src/llvm/main/llvm_support.o &amp;quot;${SMLSHARP_SRC}&amp;quot;/src/llvm/main/SMLSharpGC.o $(&amp;quot;${LLVM_HOME}/bin/llvm-config&amp;quot; --ldflags --libs)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;終わりに:25a90a3d9e2261c06baa6c7ce3911ca0&#34;&gt;終わりに&lt;/h1&gt;
+
+&lt;p&gt;やり方さえ分かってしまえば簡単ですが見付けるのが難しい小ネタでした。因みに今回初級ですが、REPLにlibeditを統合するなどの上級ネタはいつか気が向いたら書くかもしれません。&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Rustのロガーを作る</title>
+      <link>http://keens.github.io/blog/2015/12/26/rustnoroga_wotsukuru</link>
+      <pubDate>Sat, 26 Dec 2015 19:18:31 +0900</pubDate>
+      
+      <guid>http://keens.github.io/blog/2015/12/26/rustnoroga_wotsukuru</guid>
+      <description>&lt;p&gt;κeenです。Advent Calendarのためにネタやアイディアを用意したものの時間/場所的都合でAdvent Calendarとして出せなかったボツネタでも供養しようかと。
+Advent Calendarが終わってしまったので投げやり気味ですね。
+第1段はRustのロガーを作る話。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://qiita.com/advent-calendar/2015/rust-lang&#34;&gt;Rust Advent Calendar&lt;/a&gt;の&lt;a href=&#34;http://keens.github.io/blog/2015/11/14/rustdechiisanatsu_ruwotsukuttemiru/&#34;&gt;初日&lt;/a&gt;でロガーはfacadと実装に分かれてると書きましたが、実装を作る話ですね。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://doc.rust-lang.org/log/log/index.html&#34;&gt;ドキュメント&lt;/a&gt;を見てもらえば分かる通り、logは&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub trait Log: Sync + Send {
+    fn enabled(&amp;amp;self, metadata: &amp;amp;LogMetadata) -&amp;gt; bool;
+    fn log(&amp;amp;self, record: &amp;amp;LogRecord);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;とだけインターフェースが定まっているのでそこを実装してあげれば終わりです。
+なぜまたloggerを作ろうとしたのかというと、Rust公式の&lt;a href=&#34;https://crates.io/crates/env_logger/&#34;&gt;env_logger&lt;/a&gt;は標準出力にしか出せず、crates.ioを捜しても（作ろうと思った時点ではパっと見）ファイルに書き出せるものがなさそうだったからです。&lt;/p&gt;
+
+&lt;p&gt;私が作ったのは&lt;a href=&#34;https://github.com/KeenS/file_logger&#34;&gt;file_logger&lt;/a&gt;といいます。まだcrates.ioには出してません。TOMLでコンフィグを書けるようになったら出そうかと思うのですがもう既にファイルに書きだせるものが他にありますかね。&lt;/p&gt;
+
+&lt;p&gt;今回作るにあたって目指したのは1つのことにだけ集中する他と組み合わせられるライブラリです。
+logはロガーをグローバル変数に代入して使い回してるので同時に1つしかロガーを登録出来ません。そこでロガーアグリケーターのようなものを作ってそれに複数のロガーを登録することが考えられます。
+調べきれてませんが恐らく既にいくつか存在するでしょう。アグリゲータの存在を仮定してしまえばアグリゲータに任せれる部分は任せてしまうのが良いでしょう。&lt;/p&gt;
+
+&lt;p&gt;ということで次のことを最初に決めました&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;ログフォーマットは柔軟性を持たせる&lt;/li&gt;
+&lt;li&gt;ログメッセージの内容に応じて出力を制御出来るフィルターを入れる。(アグリゲータが無差別にログを流し込んで来た時のため)&lt;/li&gt;
+&lt;li&gt;複数ファイルへのログはサポートしない。アグリゲータに任せる&lt;/li&gt;
+&lt;li&gt;プラグインはサポートしない。アグリゲータに任せる&lt;/li&gt;
+&lt;li&gt;ログローテーションはしない。&lt;code&gt;Write&lt;/code&gt;の実装に任せる。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;一応file loggerですがWriteをすべからく受け取れるので実際はストリームにも使えたりします。今書き出してみたらフォーマッタとかフィルタとかもアグリゲータに任せた方がいいのかなって気がしてきた。
+しかし単体での利便性を考えると仕方ない。&lt;/p&gt;
+
+&lt;p&gt;実装は大したことをやっていなくて、精々ログフォーマットを文字列で書けるように（TOMLで設定を書きたいため）フォーマットのパーサを書いた程度でしょうか。&lt;/p&gt;
+
+&lt;p&gt;もう少し考えてからリリースします。あとFile Lotating Writerも一緒に出さなきゃ片手落ちですかね…&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>Apache Drillの不自然な挙動</title>
@@ -3032,931 +3289,6 @@ thread &#39;/home/kim/log/#lisp-ja@freenode/2015-04-08.txt&#39; panicked at &#39
 
 &lt;p&gt;因みに本筋とは外れますが、今回のSQLiteの問題を扱うには一旦CSVファイルに書き出してからCSVインポートでバルクインサートが考えられます。
 CSVに書き出すのはちまちまやってもいいし今回のデータ量ならオンメモリ構築して一気に書き出しも出来るでしょう。あるいはSQLiteをやめてMySQLを使う。&lt;/p&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>Rustで小さなツールを作ってみる(前編)</title>
-      <link>http://keens.github.io/blog/2015/11/14/rustdechiisanatsu_ruwotsukuttemiru</link>
-      <pubDate>Sat, 14 Nov 2015 23:57:43 +0900</pubDate>
-      
-      <guid>http://keens.github.io/blog/2015/11/14/rustdechiisanatsu_ruwotsukuttemiru</guid>
-      <description>
-
-&lt;p&gt;この記事は&lt;a href=&#34;http://qiita.com/advent-calendar/2015/rust-lang&#34;&gt;Rust Advent Calendar 2015&lt;/a&gt; 1日目の記事です。&lt;br /&gt;
-次 &lt;a href=&#34;http://KeenS.github.io/blog/2015/11/29/rustdechiisanatsu_ruwotsukuttemiru_kouhen_/&#34;&gt;Rustで小さなツールを作ってみる(後編)&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;κeenです。Rust Advent Calendar初日ということで軽い話から。
-小さなツールって何だよって感じですが手元にIRCの生ログが大量にあるのでそれをDBにインポートしてみましょう。
-あまりRustに向いた仕事じゃなさそうですが手始めとして。&lt;/p&gt;
-
-&lt;p&gt;前編でログのパースを、後編でDBへのインポートをやります。&lt;/p&gt;
-
-&lt;p&gt;IRCの生ログは&lt;a href=&#34;http://www.clovery.jp/tiarra/&#34;&gt;tiarra&lt;/a&gt;が吐いたものです。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;#emacs@freenode&lt;/code&gt;のように&lt;code&gt;チャネル名@サーバ名&lt;/code&gt;のディレクトリに入っていて、ファイル名は&lt;code&gt;YYYY-mm-dd.txt&lt;/code&gt;で、&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;13:43:24 &amp;lt;#emacs@freenode:codingquark&amp;gt; Such key generation, much wow.
-13:43:59 ! Vejeta` (Ping timeout: 264 seconds)
-13:44:30 + jcazevedo (jcazevedo!~jcazevedo@a94-132-141-99.cpe.netcabo.pt) to #emacs@freenode
-13:45:30 + quazimodo (quazimodo!~quazimodo@155.143.14.28) to #emacs@freenode
-13:45:32 ! Hugehead_ (Read error: Connection reset by peer)
-13:48:48 + favadi (favadi!~textual@113.190.4.106) to #emacs@freenode
-13:51:06 wizzo -&amp;gt; bitchimightbe
-13:52:23 bitchimightbe -&amp;gt; wizzo
-13:53:05 - frost3772 from #emacs@freenode (&amp;quot;ERC (IRC client for Emacs 24.5.1)&amp;quot;)
-13:56:37 ! chandan (Quit: WeeChat 1.2)
-13:56:38 ! plunderous (Read error: Connection res
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のような形式で入ってます。先頭に&lt;code&gt;&amp;lt;&lt;/code&gt;が付いてるのが発言、&lt;code&gt;!&lt;/code&gt;がついてるのがなんかメッセージ(多分quitとかkillとか)、&lt;code&gt;+&lt;/code&gt;がjoin、&lt;code&gt;-&lt;/code&gt;がpart、無しがnickとかnoticeですかね。他にもログ取ってるircコマンドはあるのですが&lt;code&gt;!&lt;/code&gt;に内包されてそうですね(tiarraのマニュアルに載ってそうですが見るの面倒)&lt;/p&gt;
-
-&lt;p&gt;因みにログ全体は&lt;code&gt;~/log&lt;/code&gt;に置いてあります。&lt;/p&gt;
-
-&lt;p&gt;一応treeするとこんな感じ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;.
-├── #emacs@freenode
-│   ├── 2014-04-11.txt
-│   ├── 2014-04-12.txt
-│   ├── 2014-04-13.txt
-..  ..
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;2014-04-11から2015-11-01までの間ロギングしてます。&lt;/p&gt;
-
-&lt;h1 id=&#34;ディレクトリリスティングまで:a7315be0136fc976c0c4320441efd799&#34;&gt;ディレクトリリスティングまで&lt;/h1&gt;
-
-&lt;p&gt;まずは&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo new irc_log --bin
-$ cd irc_log
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;そして&lt;code&gt;src/main.rs&lt;/code&gt;を開いて&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::fs;
-
-fn main() {
-    let paths = fs::read_dir(&amp;quot;/home/kim/log&amp;quot;).unwrap();
-    for path in paths {
-        let path = path.unwrap().path();
-        println!(&amp;quot;{}&amp;quot;, path.to_string_lossy().to_string());
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;と書きましょう。path path煩いですね。OSの返す文字列(Cの文字列)とRustの文字列の違いだとか一旦&lt;code&gt;Path&lt;/code&gt;で抽象化してるだとかで文字列を抜き出すのは一苦労です。&lt;/p&gt;
-
-&lt;p&gt;さて、&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo run
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;でディレクトリ名が出てくればOK。&lt;/p&gt;
-
-&lt;h1 id=&#34;ファイル名リスティング:a7315be0136fc976c0c4320441efd799&#34;&gt;ファイル名リスティング&lt;/h1&gt;
-
-&lt;p&gt;mainを&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::fs;
-
-fn main() {
-    let paths = fs::read_dir(&amp;quot;/home/kim/log&amp;quot;).unwrap();
-    for path in paths {
-        let path = path.unwrap().path();
-        on_channel_dir(&amp;amp;path);
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;と置き換えてチャネルのディレクトリでの作業は&lt;code&gt;on_channel_dir&lt;/code&gt;でやりましょう。&lt;/p&gt;
-
-&lt;h2 id=&#34;チャネル名とサーバ名の抜き出し:a7315be0136fc976c0c4320441efd799&#34;&gt;チャネル名とサーバ名の抜き出し&lt;/h2&gt;
-
-&lt;p&gt;ディレクトリ名が&lt;code&gt;チャネル名@サーバ名&lt;/code&gt; の 形をしているので @の前後を抜き出せば良さそうです。&lt;/p&gt;
-
-&lt;p&gt;src/main.rsの先頭に&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::path::Path;
-use std::str::from_utf8;
-use std::os::unix::prelude::OsStrExt;
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;を追記して、&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn on_channel_dir(path: &amp;amp;Path) {
-    let dirname = from_utf8(path.file_name().unwrap().as_bytes()).unwrap().to_string();
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;でとりあえず&lt;code&gt;/&lt;/code&gt;の付かないディレクトリ名を取れそうです。難しい。やはりOSの返す文字列の扱いは面倒ですね。
-しかし一旦Rustの文字列になってしまえばこちらのもの。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let at = match dirname.find(&#39;@&#39;) {
-        Some(i) =&amp;gt; i,
-        None =&amp;gt; return
-    };
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;で&lt;code&gt;@&lt;/code&gt;の位置を取得出来ます。&lt;code&gt;@&lt;/code&gt;がなかったらreturnして無視しておきましょう（実際そういう名前のディレクトリがあるのですが今回の集計の対象外なので）。&lt;/p&gt;
-
-&lt;p&gt;あとは部分文字列を取るだけ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let channel = &amp;amp;dirname[..at];
-    let server = &amp;amp;dirname[at+1..];
-    println!(&amp;quot;{} at {}&amp;quot;, channel, server);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;ファイルリスティング:a7315be0136fc976c0c4320441efd799&#34;&gt;ファイルリスティング&lt;/h2&gt;
-
-&lt;p&gt;これは先程と同じですね。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let logs = fs::read_dir(path).unwrap();
-    for log in logs {
-        let log = log.unwrap().path();
-        println!(&amp;quot;{}&amp;quot;, log.to_string_lossy().to_string());
-    };
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;で、&lt;code&gt;on_channel_dir&lt;/code&gt;全体はこうです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn on_channel_dir(path: &amp;amp;Path) {
-    let dirname = from_utf8(path.file_name().unwrap().as_bytes()).unwrap().to_string();
-    let at = match dirname.find(&#39;@&#39;) {
-        Some(i) =&amp;gt; i,
-        None =&amp;gt; return
-    };
-    let channel = &amp;amp;dirname[..at];
-    let server = &amp;amp;dirname[at+1..];
-    println!(&amp;quot;{} at {}&amp;quot;, channel, server);
-    let logs = fs::read_dir(path).unwrap();
-    for log in logs {
-        let log = log.unwrap().path();
-        println!(&amp;quot;{}&amp;quot;, log.to_string_lossy().to_string());
-    };
-    
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;ファイルのパース:a7315be0136fc976c0c4320441efd799&#34;&gt;ファイルのパース&lt;/h1&gt;
-
-&lt;p&gt;次にまた&lt;code&gt;println!&lt;/code&gt;の部分を&lt;code&gt;on_log&lt;/code&gt;としてファイルをパースしていきましょう。&lt;/p&gt;
-
-&lt;h2 id=&#34;日付の抜き出し:a7315be0136fc976c0c4320441efd799&#34;&gt;日付の抜き出し&lt;/h2&gt;
-
-&lt;p&gt;先程と似てますので飛ばし気味にいきます。&lt;/p&gt;
-
-&lt;p&gt;簡単にやっても良いのですがお作法として日付ライブラリを使ってパースしましょう。
-&lt;code&gt;Cargo.toml&lt;/code&gt;に以下を追記。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-toml&#34;&gt;[dependencies]
-time = &amp;quot;*&amp;quot;
-log = &amp;quot;0.3.3&amp;quot;
-env_logger = &amp;quot;0.3.2&amp;quot;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;本当はバージョンも指定した方が良いのですが書き捨てのコードなのでまあ、良いでしょう。因みにtimeライブラリ自体扱いづらいとか色々問題があるのですがそれは後のAdvent Calendarに譲りましょう。しれっとloggerも導入します。printfデバッグにlogger便利!&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;cargo update
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;してdependenciesをインストールします。因みに&lt;code&gt;log&lt;/code&gt;がlogger facadで&lt;code&gt;env_logger&lt;/code&gt;がloggerの実装です。使い方は後程。&lt;/p&gt;
-
-&lt;p&gt;またsrc/main.rsの先頭に&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;#[macro_use]
-extern crate log;
-extern crate env_logger;
-extern crate time;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;を追記。&lt;/p&gt;
-
-&lt;p&gt;そして&lt;code&gt;on_log&lt;/code&gt;です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn on_log(log: &amp;amp;Path) {
-    let datestr = from_utf8(log.file_stem().unwrap().as_bytes()).unwrap().to_string();
-    let date = time::strptime(&amp;amp;datestr, &amp;quot;%Y-%m-%d&amp;quot;).urwrap();
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;今回は失敗しないことが分かってるので全部&lt;code&gt;unwrap&lt;/code&gt;してます。本当は&lt;code&gt;try!&lt;/code&gt;を使って上流に委ねた方がいいのですが今回は面倒なのでこうしちゃってます。正しいエラーハンドリングはtrplの&lt;a href=&#34;https://doc.rust-lang.org/book/error-handling.html&#34;&gt;Error Handling&lt;/a&gt;を読みましょう。&lt;/p&gt;
-
-&lt;h2 id=&#34;ファイルの読み出し:a7315be0136fc976c0c4320441efd799&#34;&gt;ファイルの読み出し&lt;/h2&gt;
-
-&lt;h3 id=&#34;開く:a7315be0136fc976c0c4320441efd799&#34;&gt;開く&lt;/h3&gt;
-
-&lt;p&gt;コードをいきなり載せると&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let file = match fs::File::open(log) {
-        Ok(f) =&amp;gt; f,
-        Err(e) =&amp;gt; {
-            error!(&amp;quot;could not open {}; skipping.&amp;quot;, log.display());
-            return;
-        }
-    };
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;です。これはエラーハンドリングします。1つのファイルに失敗しても次があるので。ここで使ってる&lt;code&gt;error!&lt;/code&gt;がloggerのマクロです。&lt;/p&gt;
-
-&lt;h2 id=&#34;行毎の読み出し:a7315be0136fc976c0c4320441efd799&#34;&gt;行毎の読み出し&lt;/h2&gt;
-
-&lt;p&gt;行毎の読み出しはバッファーリーダーが必要です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::io::BufReader;
-use std::io::BufRead;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;をsrc/main.rsの先頭部分に追記しましょう。因みに&lt;code&gt;BufRead&lt;/code&gt;がトレイトで、&lt;code&gt;BufReader&lt;/code&gt;が実装です。実装が必要なのは良いとして、トレイトまで必要なのはトレイトで定義された関数を呼び出すのにトレイトのインポートが必要だからですね。&lt;/p&gt;
-
-&lt;p&gt;さてさて、行の読み出しを進めます。先程オープンしたファイルを&lt;code&gt;BufReader&lt;/code&gt;で包んでやればOKです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let br = BufReader::new(&amp;amp;file);
-    for line in br.lines() {
-        let line = match line {
-            Ok(l) =&amp;gt; l,
-            Err(e) =&amp;gt; {
-                warn!(&amp;quot;ignoring error {}&amp;quot;, e);
-                continue;
-            }
-        };
-        ....
-    }
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;行の読み出し結果もResultで返ってくるんですね。これも失敗したら読み飛ばせばいいので&lt;code&gt;urwrap&lt;/code&gt;せずに扱います。&lt;/p&gt;
-
-&lt;h2 id=&#34;行のパース:a7315be0136fc976c0c4320441efd799&#34;&gt;行のパース&lt;/h2&gt;
-
-&lt;h3 id=&#34;ガード:a7315be0136fc976c0c4320441efd799&#34;&gt;ガード&lt;/h3&gt;
-
-&lt;p&gt;先頭部分の時間をパースする時に部分文字列を抜き出しますが、変な行だと10文字もなかったりするので一旦ガードを付けておきましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        if line.len() &amp;lt; 10 {
-            warn!(&amp;quot;ignoring line {}&amp;quot;, line);
-            continue;
-        }
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;時間のパース:a7315be0136fc976c0c4320441efd799&#34;&gt;時間のパース&lt;/h3&gt;
-
-&lt;p&gt;これはファイル名の時とほぼ同じ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        let time = match time::strptime(&amp;amp;line[0..8], &amp;quot;%H:%M:%S&amp;quot;) {
-            Ok(t) =&amp;gt; t,
-            Err(e) =&amp;gt; {
-                warn!(&amp;quot;Parse error {}; ignoring&amp;quot;, e);
-                continue;
-
-            }
-        };
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;今度は変な行が紛れてそうな（実際、ログファイルにはよくある）のでエラーは無視します。&lt;/p&gt;
-
-&lt;h3 id=&#34;メッセージのパース:a7315be0136fc976c0c4320441efd799&#34;&gt;メッセージのパース&lt;/h3&gt;
-
-&lt;p&gt;0-8文字目に時間があって、1スペース挟むので9文字目からがメッセージですね。そして先頭の文字で判断出来るのでした。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        let msg = &amp;amp;line[9..];
-        match &amp;amp;msg[0..1] {
-            &amp;quot;!&amp;quot; =&amp;gt; println!(&amp;quot;sysmsg {}&amp;quot;, &amp;amp;msg[1..]),
-            &amp;quot;+&amp;quot; =&amp;gt; println!(&amp;quot;join {}&amp;quot;, &amp;amp;msg[1..]),
-            &amp;quot;-&amp;quot; =&amp;gt; println!(&amp;quot;part {}&amp;quot;, &amp;amp;msg[1..]),
-            &amp;quot;&amp;lt;&amp;quot; =&amp;gt; match msg.find(&#39;&amp;gt;&#39;).map(|e| (&amp;amp;msg[1..e], &amp;amp;msg[e+1..])) {
-                Some((user, body)) =&amp;gt; println!(&amp;quot;user: {} body: {}&amp;quot;, user, body),
-                None =&amp;gt; ()
-            },
-            _ =&amp;gt; println!(&amp;quot;info {}&amp;quot;, &amp;amp;msg[1..]),
-        }
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;で判断出来そうです。パースした後の話は後回し。&lt;/p&gt;
-
-&lt;h1 id=&#34;ソース全体:a7315be0136fc976c0c4320441efd799&#34;&gt;ソース全体&lt;/h1&gt;
-
-&lt;p&gt;ソースの断片が続いたので一旦ここまでの全体像を出します。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;#[macro_use]
-extern crate log;
-extern crate env_logger;
-extern crate time;
-use std::str::from_utf8;
-use std::io::BufReader;
-use std::io::BufRead;
-use std::fs;
-use std::path::Path;
-use std::os::unix::prelude::OsStrExt;
-
-
-fn on_log(log: &amp;amp;Path) {
-    let datestr = from_utf8(log.file_stem().unwrap().as_bytes()).unwrap().to_string();
-    let date = time::strptime(&amp;amp;datestr, &amp;quot;%Y-%m-%d&amp;quot;);
-    let file = match fs::File::open(log) {
-        Ok(f) =&amp;gt; f,
-        Err(e) =&amp;gt; {
-            error!(&amp;quot;could not open {}; skipping.&amp;quot;, log.display());
-            return;
-        }
-    };
-    let br = BufReader::new(&amp;amp;file);
-    for line in br.lines() {
-        let line = match line {
-            Ok(l) =&amp;gt; l,
-            Err(e) =&amp;gt; {
-                warn!(&amp;quot;ignoring error {}&amp;quot;, e);
-                continue;
-            }
-        };
-        if line.len() &amp;lt; 10 {
-            warn!(&amp;quot;ignoring line {}&amp;quot;, line);
-            continue;
-        }
-        let time = match time::strptime(&amp;amp;line[0..8], &amp;quot;%H:%M:%S&amp;quot;) {
-            Ok(t) =&amp;gt; t,
-            Err(e) =&amp;gt; {
-                warn!(&amp;quot;Parse error {}; ignoring&amp;quot;, e);
-                continue;
-
-            }
-        };
-        let msg = &amp;amp;line[9..];
-        match &amp;amp;msg[0..1] {
-            &amp;quot;!&amp;quot; =&amp;gt; println!(&amp;quot;sysmsg {}&amp;quot;, &amp;amp;msg[1..]),
-            &amp;quot;+&amp;quot; =&amp;gt; println!(&amp;quot;join {}&amp;quot;, &amp;amp;msg[1..]),
-            &amp;quot;-&amp;quot; =&amp;gt; println!(&amp;quot;part {}&amp;quot;, &amp;amp;msg[1..]),
-            &amp;quot;&amp;lt;&amp;quot; =&amp;gt; match msg.find(&#39;&amp;gt;&#39;).map(|e| (&amp;amp;msg[1..e], &amp;amp;msg[e+1..])) {
-                Some((user, body)) =&amp;gt; println!(&amp;quot;user: {} body: {}&amp;quot;, user, body),
-                None =&amp;gt; ()
-            },
-            _ =&amp;gt; println!(&amp;quot;info {}&amp;quot;, &amp;amp;msg[1..]),
-        }
-    }
-}
-
-fn on_channel_dir(path: &amp;amp;Path) {
-    let dirname = from_utf8(path.file_name().unwrap().as_bytes()).unwrap().to_string();
-    let at = match dirname.find(&#39;@&#39;) {
-        Some(i) =&amp;gt; i,
-        None =&amp;gt; return
-    };
-    let channel = &amp;amp;dirname[..at];
-    let server = &amp;amp;dirname[at+1..];
-    println!(&amp;quot;{} at {}&amp;quot;, channel, server);
-    let logs = fs::read_dir(path).unwrap();
-    for log in logs {
-        on_log(&amp;amp;log.unwrap().path());
-    };
-}
-
-
-fn main(){
-    env_logger::init().unwrap();
-    let paths = fs::read_dir(&amp;quot;/home/kim/log&amp;quot;).unwrap();
-    for path in paths {
-        let path = path.unwrap().path();
-        on_channel_dir(&amp;amp;path);
-    }
-}
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;実はmainの先頭で&lt;code&gt;env_logger::init().unwrap();&lt;/code&gt;でロガーの初期化してました。忘れてましたね。ごめんなさい。&lt;/p&gt;
-
-&lt;p&gt;さて、これで一旦走らせてみましょう。動く筈です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo run
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;動いてるようですが、遅い。出力が多くてターミナル側がボトルネックのようです。&lt;/p&gt;
-
-&lt;h1 id=&#34;パニックハンドルとチューニング:a7315be0136fc976c0c4320441efd799&#34;&gt;パニックハンドルとチューニング&lt;/h1&gt;
-
-&lt;p&gt;一旦メッセージを出力をやめて様子見してみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;            &amp;quot;!&amp;quot; =&amp;gt; (),
-            &amp;quot;+&amp;quot; =&amp;gt; (),
-            &amp;quot;-&amp;quot; =&amp;gt; (),
-            &amp;quot;&amp;lt;&amp;quot; =&amp;gt; (),
-            _ =&amp;gt; (),
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;それでもまだ遅い上に謎のパニックが出てます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;thread &#39;/home/kim/log/#lisp@freenode&#39; panicked at &#39;index 0 and/or 8 in ` ;ZZZz;…,` do not lie on character boundary&#39;, ../src/libcore/str/mod.rs:1311
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ログを見てみましょう。env_loggerは環境変数からログレベルを渡してあげるとログを出します。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ RUST_LOG=Trace cargo run
-...
-WARN:irc_log: ignoring error stream did not contain valid UTF-8
-WARN:irc_log: ignoring error stream did not contain valid UTF-8
-WARN:irc_log: ignoring error stream did not contain valid UTF-8
-WARN:irc_log: ignoring error stream did not contain valid UTF-8
-WARN:irc_log: ignoring error stream did not contain valid UTF-8
-WARN:irc_log: ignoring error stream did not contain valid UTF-8
-WARN:irc_log: ignoring error stream did not contain valid UTF-8
-...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;意外と変な行が一杯あるのですね。しかしこれらはちゃんとエラーハンドリングしてるので問題ありません。&lt;/p&gt;
-
-&lt;p&gt;各所で&lt;code&gt;unwrap&lt;/code&gt;してるせいな気もしますが、&lt;code&gt;urwrap&lt;/code&gt;のせいならそういうメッセージが出るので違います。&lt;/p&gt;
-
-&lt;p&gt;実はこれ、非UTF-8のバイト列でrustの標準ライブラリが内部でパニックを出してます。
-これの扱いも後のAdvent Calendarに譲るとして、ワークアラウンドを捜しましょう。rust1.4時点ではパニックをハンドルする手段はありません。&lt;/p&gt;
-
-&lt;p&gt;パニックメッセージの先頭に&lt;code&gt;thread&lt;/code&gt;とついてるのでthreadで包めば良さそうです。&lt;/p&gt;
-
-&lt;h2 id=&#34;thread:a7315be0136fc976c0c4320441efd799&#34;&gt;Thread&lt;/h2&gt;
-
-&lt;p&gt;まずはthreadをインポートします。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::thread::Builder;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;そしてon_channel_logを少し弄りましょう。無効なバイト列を含むファイルをざっくり切る感じで。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    for log in logs {
-        on_log(&amp;amp;log.unwrap().path());
-    };
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;としていた部分を&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let threads = logs.map(|log| {
-        let log = log.unwrap().path();
-        let pathname = log.to_string_lossy().to_string();
-        Builder::new().name(pathname).spawn(move|| on_log(&amp;amp;log))
-    }).collect::&amp;lt;Vec&amp;lt;_&amp;gt;&amp;gt;();
-    for thread in threads {
-        let _ = thread.unwrap().join();
-    }
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;とします。一見複雑ですが、ファイル毎にスレッドを作って全部をvectorにして集めてそれぞれjoinを待ってるだけです。
-そしてスレッド名を処理するファイル名にしたいのでスレッドビルダを使っています。&lt;/p&gt;
-
-&lt;p&gt;さて、これで走らせてみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ time cargo run
-...
-#lisp at freenode
-thread &#39;/home/kim/log/#lisp@freenode/2014-08-18.txt&#39; panicked at &#39;index 0 and/or 8 in ` ;ZZZz;…,` do not lie on character boundary&#39;, ../src/libcore/str/mod.rs:1311
-#emacs at freenode
-...
-cargo run  327.21s user 8.71s system 630% cpu 53.289 total
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;lispチャネルの1ファイルだけに変なバイト列があることが分かりました。&lt;/p&gt;
-
-&lt;p&gt;そしてパフォーマンスですが、とりあえず&lt;code&gt;top&lt;/code&gt;で見る限りCPUは最大770%使ってくれてます（8コアマシン）。ファイル毎にスレッド作ってるので若干リソースの食い合いが発生してますがこれだけ並列度があればスレッドプールを使うまでもないでしょう。&lt;/p&gt;
-
-&lt;h2 id=&#34;さらなるチューニング:a7315be0136fc976c0c4320441efd799&#34;&gt;さらなるチューニング…？&lt;/h2&gt;
-
-&lt;p&gt;しかしそれでもまだ遅いですね。ちょこっと書いては走らせるのサイクルを回すには耐えられません。&lt;/p&gt;
-
-&lt;p&gt;そういえばログ全体のファイルサイズを確認してなかった。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ du -h
-...
-774M   .
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;意外と小さい。まだチューニングの余地はありそうです。メモリアロケーションを減らしましょうか、それとも時間のパースを手書きでやりましょうか。&lt;/p&gt;
-
-&lt;p&gt;いいえ。もっと簡単に速くする方法があります。&lt;code&gt;--release&lt;/code&gt;をつけて実行すればOKです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo run --release
-...
-...
-cargo run --release  3.63s user 5.44s system 203% cpu 4.453 total
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;(/ 53.289 4.453);=&amp;gt; 11.966988547046935&lt;/code&gt; 。12倍速くなりました。1ディレクトリ700以上のファイルがあってそれぞれにスレッドを作っているのでそろそろそのオーバーヘッドが効いてきてますね。&lt;/p&gt;
-
-&lt;p&gt;スレッドプールを試してみたい気もしますがひとまずこれで置いておきましょう。&lt;/p&gt;
-
-&lt;p&gt;次は後編、DBへのインポートです。&lt;/p&gt;
-
-&lt;p&gt;蛇足ですが行のパースのところは正規表現でも出来ましたね。そっちの方が好きな方は試してみて下さい。&lt;/p&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>一時ファイルの作り方</title>
-      <link>http://keens.github.io/blog/2015/11/08/ichijifairunotsukurikata</link>
-      <pubDate>Sun, 08 Nov 2015 21:40:14 +0900</pubDate>
-      
-      <guid>http://keens.github.io/blog/2015/11/08/ichijifairunotsukurikata</guid>
-      <description>
-
-&lt;p&gt;Rustに&lt;a href=&#34;https://github.com/Stebalien/tempfile&#34;&gt;tempfile&lt;/a&gt;というライブラリがある。その名の通りテンポラリファイルを作るライブラリだ。
-必要に迫られてそのライブラリにPRを送ろうとして実装を読んだのだが普段あまり意識しなかったテンポラリファイルの作り方を知ったのでちょっと解説してみる。&lt;/p&gt;
-
-&lt;p&gt;Rustはほぼそのままの使い心地でCのライブラリを呼べるのでCが分かる人になら伝わると思う。&lt;/p&gt;
-
-&lt;p&gt;ライブラリの構成として、src/*.rsにOS非依存なコードやユーザ向けのAPIがあり、src/imp/{windows,unix}.rsにOS依存なコードがある。
-私はWindowsの実装には興味ないし詳しくもないのでunix向けの実装だけを見る。&lt;/p&gt;
-
-&lt;p&gt;imp以下を見る前にこのライブライが提供するAPIを解説しておくと、大きく分けて&lt;code&gt;TempFile&lt;/code&gt;と&lt;code&gt;NamedTempFile&lt;/code&gt;がある。無名、Namedどちらにもデフォルトの一時ファイルディレクトリ下に一時ファイルを作るAPIと指定したディレクトリ以下に作るAPIとがある。
-&lt;code&gt;TempFile&lt;/code&gt;が作るファイルは完全に匿名で、ファイルシステムに残らない。I/Oが出来るストリームだけを返す。定期的に/tmp以下を削除するジョブが走っていたとしても安全だし、他のプロセスに中身を読まれる危険性もない。
-一方&lt;code&gt;NamedTempFile&lt;/code&gt;の方は予測不可能なファイル名でファイルを作るものの、ファイルシステムに残るので安全ではない。しかしファイル名を要求する関数や外部プロセスと協調する時に使える。&lt;/p&gt;
-
-&lt;p&gt;それぞれで実装を見ていく。&lt;/p&gt;
-
-&lt;h1 id=&#34;tempfile:047d25333d01b489b97d09f703fb9afe&#34;&gt;TempFile&lt;/h1&gt;
-
-&lt;p&gt;これはLinuxとその他で実装が分かれる。ユーザーAPI側でテンポラリファイルを作るディレクトリの指定は吸収しているのでこちらではただ指定されたディレクトリ下にテンポラリファイルを作ればいい。&lt;/p&gt;
-
-&lt;h2 id=&#34;linux:047d25333d01b489b97d09f703fb9afe&#34;&gt;Linux&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;#[cfg(target_os = &amp;quot;linux&amp;quot;)]
-pub fn create(dir: &amp;amp;Path) -&amp;gt; io::Result&amp;lt;File&amp;gt; {
-    const O_TMPFILE: libc::c_int = 0o20200000;
-    match unsafe {
-        libc::open(try!(cstr(dir)).as_ptr(), O_CLOEXEC | O_EXCL | O_TMPFILE | O_RDWR, 0o600)
-    } {
-        -1 =&amp;gt; create_unix(dir),
-        fd =&amp;gt; Ok(unsafe { FromRawFd::from_raw_fd(fd) }),
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;Linux 3.11から&lt;code&gt;O_TMPFILE&lt;/code&gt;が入ったので実装は直接的だ。&lt;code&gt;O_TMPFILE&lt;/code&gt;はテンポラリファイル向けにファイルシステムに名前が登録されない匿名のファイルを作る。Lispのgensymに似ている。
-O_EXCLでリンクによる別名での参照を回避し、Linux 2.6.23以後で入ったO_CLOEXECで&lt;code&gt;exec(2)&lt;/code&gt;した時にfdを閉じるようにする。そうすれば関係のないプログラムからファイルが参照されるのを防げる。&lt;/p&gt;
-
-&lt;p&gt;このライブラリコールが成功すればそのままFileを返す。&lt;/p&gt;
-
-&lt;p&gt;Linux 3.11未満やO_TMPFILEをサポートしないファイルシステムだったら失敗し、-1が返るのでLinuxに依存しない汎用の&lt;code&gt;create_unix&lt;/code&gt;にフォールバックする。&lt;/p&gt;
-
-&lt;h2 id=&#34;unix:047d25333d01b489b97d09f703fb9afe&#34;&gt;Unix&lt;/h2&gt;
-
-&lt;p&gt;Unix向けの実装は恐らくPOSIX互換なシステムなら全てで動く。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;#[cfg(not(target_os = &amp;quot;linux&amp;quot;))]
-pub fn create(dir: &amp;amp;Path) -&amp;gt; io::Result&amp;lt;File&amp;gt; {
-    create_unix(dir)
-}
-
-fn create_unix(dir: &amp;amp;Path) -&amp;gt; io::Result&amp;lt;File&amp;gt; {
-    for _ in 0..::NUM_RETRIES {
-        let tmp_path = dir.join(&amp;amp;tmpname());
-        return match create_named(&amp;amp;tmp_path) {
-            Ok(file) =&amp;gt; {
-                // I should probably tell the user this failed but the temporary file creation
-                // didn&#39;t really fail...
-                let _ = fs::remove_file(tmp_path);
-                Ok(file)
-            },
-            Err(ref e) if e.kind() == io::ErrorKind::AlreadyExists =&amp;gt; continue,
-            Err(e) =&amp;gt; Err(e),
-        }
-    }
-    Err(io::Error::new(io::ErrorKind::AlreadyExists,
-                       &amp;quot;too many temporary directories already exist&amp;quot;))
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;汎用の&lt;code&gt;create_unix&lt;/code&gt;では完全に無名のテンポラリファイルを作るのを諦めて、一旦ランダム生成な名前のファイルを作って開き、成功したらそのファイルを削除する。
-1つでも開いてるプロセスがある時に削除されるとUnixのファイルはそのプロセスからは見れるが他のプロセスからは見れない状態になるので色々便利に使われている。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;create_named&lt;/code&gt;は後程見るとして、ランダム生成なファイル名だと稀に既に存在するファイル名と被る可能性があるので何度かリトライしている。
-リトライ回数はsrc/lib.rsで定義されていて、&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;const NUM_RETRIES: u32 = 1 &amp;lt;&amp;lt; 31;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;となっている。思ったよりえけつない回数リトライしている。もちろん、ファイル名が被った以外の理由でファイル生成が失敗したのならリトライに意味はないので大人しくreturnしている。&lt;/p&gt;
-
-&lt;p&gt;で、&lt;code&gt;create_named&lt;/code&gt;だが&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub fn create_named(path: &amp;amp;Path) -&amp;gt; io::Result&amp;lt;File&amp;gt; {
-    match unsafe {
-        libc::open(try!(cstr(&amp;amp;path)).as_ptr(), O_CLOEXEC | O_EXCL | O_RDWR | O_CREAT, 0o600)
-    } {
-        -1 =&amp;gt; Err(io::Error::last_os_error()),
-        fd =&amp;gt; Ok(unsafe { FromRawFd::from_raw_fd(fd) }),
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;となっている。単に&lt;code&gt;create&lt;/code&gt;のフラグの&lt;code&gt;O_TMPFILE&lt;/code&gt;が&lt;code&gt;O_CREAT&lt;/code&gt;になっただけ。&lt;/p&gt;
-
-&lt;h1 id=&#34;namedtempfile:047d25333d01b489b97d09f703fb9afe&#34;&gt;NamedTempFile&lt;/h1&gt;
-
-&lt;p&gt;こちらはユーザーAPIの中から直接OS互換用コードを呼んでいる。src/named.rsに実装がある。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    /// Create a new temporary file in the specified directory.
-    pub fn new_in&amp;lt;P: AsRef&amp;lt;Path&amp;gt;&amp;gt;(dir: P) -&amp;gt; io::Result&amp;lt;NamedTempFile&amp;gt; {
-        for _ in 0..::NUM_RETRIES {
-            let path = dir.as_ref().join(&amp;amp;util::tmpname());
-            return match imp::create_named(&amp;amp;path) {
-                Ok(file) =&amp;gt; Ok(NamedTempFile(Some(NamedTempFileInner { path: path, file: file, }))),
-                Err(ref e) if e.kind() == io::ErrorKind::AlreadyExists =&amp;gt; continue,
-                Err(e) =&amp;gt; Err(e),
-            }
-        }
-        Err(io::Error::new(io::ErrorKind::AlreadyExists,
-                           &amp;quot;too many temporary directories already exist&amp;quot;))
-    }
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;返り値をユーザAPI向けにラップしている以外は無名の一時ファイルと変わらない。余談だがここで使われているファイル名にユーザが干渉することが出来ず、完全にランダムなファイル名になっている。
-ファイルの末尾(例えば拡張子)や先頭(例えばapp_nameなどの識別子)を挟めない。私が今作業してるパッチはその辺をもう少し自由にするものだ。&lt;/p&gt;
-
-&lt;p&gt;閑話休題。似たような実装が2つもあるのは気になるので一応windows向けの実装も読んでみる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;const ACCESS: DWORD     = winapi::FILE_GENERIC_READ
-                        | winapi::FILE_GENERIC_WRITE;
-const SHARE_MODE: DWORD = winapi::FILE_SHARE_DELETE
-                        | winapi::FILE_SHARE_READ
-                        | winapi::FILE_SHARE_WRITE;
-const FLAGS: DWORD      = winapi::FILE_ATTRIBUTE_HIDDEN
-                        | winapi::FILE_ATTRIBUTE_TEMPORARY;
-
-
-fn to_utf16(s: &amp;amp;Path) -&amp;gt; Vec&amp;lt;u16&amp;gt; {
-    s.as_os_str().encode_wide().chain(Some(0).into_iter()).collect()
-}
-
-fn win_create(path: &amp;amp;Path,
-                     access: DWORD,
-                     share_mode: DWORD,
-                     disp: DWORD,
-                     flags: DWORD) -&amp;gt; io::Result&amp;lt;File&amp;gt; {
-
-    let path = to_utf16(path);
-    let handle = unsafe {
-        CreateFileW(
-            path.as_ptr(),
-            access,
-            share_mode,
-            0 as *mut _,
-            disp,
-            flags,
-            ptr::null_mut())
-    };
-    if handle == winapi::INVALID_HANDLE_VALUE {
-        Err(io::Error::last_os_error())
-    } else {
-        Ok(unsafe { File::from_raw_handle(handle as RawHandle) })
-    }
-}
-
-pub fn create_named(path: &amp;amp;Path) -&amp;gt; io::Result&amp;lt;File&amp;gt; {
-    win_create(path, ACCESS, SHARE_MODE, winapi::CREATE_NEW, FLAGS)
-}
-
-pub fn create(dir: &amp;amp;Path) -&amp;gt; io::Result&amp;lt;File&amp;gt; {
-    for _ in 0..::NUM_RETRIES {
-        return match win_create(
-            &amp;amp;dir.join(&amp;amp;tmpname()),
-            ACCESS,
-            SHARE_MODE,
-            winapi::CREATE_NEW,
-            FLAGS | winapi::FILE_FLAG_DELETE_ON_CLOSE)
-        {
-            Ok(f) =&amp;gt; Ok(f),
-            Err(ref e) if e.kind() == io::ErrorKind::AlreadyExists =&amp;gt; continue,
-            Err(e) =&amp;gt; Err(e),
-        };
-    }
-    Err(io::Error::new(io::ErrorKind::AlreadyExists,
-                       &amp;quot;too many temporary directories already exist&amp;quot;))
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;Windows向けの実装は必ずファイル名を指定する必要があり、リトライが必要そう？&lt;code&gt;NamedTempFile&lt;/code&gt;を作るには(理論的に)どの実装でもリトライが必要だからユーザAPI側で纏めたのかな？&lt;/p&gt;
-
-&lt;h1 id=&#34;まとめ:047d25333d01b489b97d09f703fb9afe&#34;&gt;まとめ&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;テンポラリファイルを作るならまずは&lt;code&gt;O_TMPFILE&lt;/code&gt;を試す&lt;/li&gt;
-&lt;li&gt;ダメならランダム生成なファイル名で成功するまでリトライ、成功したら即座にファイルを削除&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;作業中のコードをpushし忘れて土日に進捗出来なかったのでまたお茶を濁すはめになった。&lt;/p&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>ClojureでDSPを作った話</title>
-      <link>http://keens.github.io/slide/ClojuredeDSPwotsukuttahanashi/</link>
-      <pubDate>Tue, 27 Oct 2015 21:04:20 +0900</pubDate>
-      
-      <guid>http://keens.github.io/slide/ClojuredeDSPwotsukuttahanashi/</guid>
-      <description>&lt;section data-markdown
-    data-separator=&#34;\n\n&#34;
-    data-vertical=&#34;\n\n&#34;
-    data-notes=&#34;^Note:&#34;&gt;
-&lt;script type=&#34;text/template&#34;&gt;
-# ClojureでDSPを作った話
-----------------------
-Lisp Meet Up #3
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# About Me
----------
-![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
-
- + κeen
- + [@blackenedgold](https://twitter.com/blackenedgold)
- + Github: [KeenS](https://github.com/KeenS)
- + サイバーエージェントのエンジニア
- + Lisp, ML, Shell Scriptあたりを書きます
-
-
-# DSPとは
---------
-
-* Demand Side Platform
-* 広告主から広告を集めて広告の表示権を競り落し、適切な広告を出す
-  0. 広告主を集めて
-  1. 競りの通知を受け取って
-  2. 一番コスパが良さそうな広告を選んで
-  3. 入札して
-  4. 落札通知を受け取る
-  5. 落札したら広告を出す
-
-
- 
-# ひとりDSP
-----------
-
-* AdTech Studioの新卒研修
-* 2ヶ月間、業務時間の20%を使ってDSPを作る
-  + 実質8営業日
-* 業務ロジックを理解することが目的
-* 最後に新卒の作ったDSP同士で競争、利益が得点になる
-* 他には最終発表での得点も
-* **研修なので好きにやっていい**
-  + Clojureで書くことに
-* サーバーの他は広告主データと学習用データが与えられる
-
-
-
-&lt;iframe src=&#34;//www.slideshare.net/slideshow/embed_code/key/92I5tQt6q6IjII&#34; width=&#34;425&#34; height=&#34;355&#34; frameborder=&#34;0&#34; marginwidth=&#34;0&#34; marginheight=&#34;0&#34; scrolling=&#34;no&#34; style=&#34;border:1px solid #CCC; border-width:1px; margin-bottom:5px; max-width: 100%;&#34; allowfullscreen&gt; &lt;/iframe&gt; &lt;div style=&#34;margin-bottom:5px&#34;&gt; &lt;strong&gt; &lt;a href=&#34;//www.slideshare.net/prir/ss-35918532&#34; title=&#34;日本におけるアドテク市場とサイバーエージェントのアドテク事業について&#34; target=&#34;_blank&#34;&gt;日本におけるアドテク市場とサイバーエージェントのアドテク事業について&lt;/a&gt; &lt;/strong&gt; from &lt;strong&gt;&lt;a href=&#34;//www.slideshare.net/prir&#34; target=&#34;_blank&#34;&gt;CyberAgent, Inc.&lt;/a&gt;&lt;/strong&gt; &lt;/div&gt;
-
-
-# 作るもの
----------
-
-* 競りの通知を受け取って入札するJSON REST API
-* 落札の通知を受け取るJSON REST API
-  + 割とシンプル
-* 「一番コスパが良さそうな広告を選ぶ」部分は色々と工夫する
-* 今回は広告を出すところまではやらない
-* クリック情報は落札通知に入ってる
-
-
-# b11dについて
--------------
-
-* 今回作ったDSP
-* [KeenS/b11d](https://github.com/KeenS/b11d)
-* Clojure製
-* 5日くらいで作った
-* あまりゴテゴテしない方針
-  + 今回パフォーマンスは無視していい
-  + Clojureに慣れてないので学習コストも抑えたい
-* NginXとAppとMySQL構成+α
-* DBは綺麗に設計したい
-* 1リクエスト毎にDBを引きにいく素敵仕様
-
-
-# WAP
------
-
-* Compojure
-* Sinatra likeなやつ
-* ringの上に乗っかてる
-* かなりシンプルな部類だがJSON REST API程度ならこれで十分
-* ringミドルウェアのでJSON部分も抽象化
-* 学習コストが低いので気軽に始められる
-
-
-# JSONライブラリ
---------------
-
-* ring.middleware.json/wrap-json-{body, response}
-  + JSON-&gt;マップとマップ-&gt;JSON
-  + bodyの方はキーがStringになるのが微妙
-    - セキュリティ的に仕方ない
-  + Content-Typeを指定しないと動かない罠
-* cheshire
-  + 事前データをインポートするのに使った
-  + ringのJSONミドルウェアの依存なのでそのまま使った
-  + 自然で使い易いAPI
-
-
-# データベース接続
-----------------
-
-* java.jdbc
-* JDBCのClojure向けラッパ?
-* DataSourceを自分で渡すのでコネクションプールも簡単
-* SQL手書きしたら良い感じにマップを返してくれる
-* Storeはカラムと値の対応を手書き
-* 便利マクロもいくつか
-
-
-# データベース接続
-----------------
-
-* eager loading面倒問題
-  + 入れ子オブジェクトを保存する方も面倒だった
-  + ORMの便利さを実感。
-* bulk insert難しい問題
-  + 実行時可変長引数難しい
-* ORMはXXXを使うかJavaのやつをそのまま使う?
-* JavaはXMLさえ我慢すれば割と良い奴揃ってる
-* しかしレスポンスはマップで欲しいかも
-
-
-# 運用
------
-
-* warに固めてTomcat vs スタンドアロンなfat jar
-* 今回はfat jarを選択
-* スタンドアロンだとsupervisordとかでの管理が楽
-* Tomcatの運用経験がない
-* Jetty中々優秀らしい
-* jstatを使ってMackerelでメトリクス取った
-
-
-# 非同期化
----------
-
-* core.async/goで手軽に非同期
-* DBへの書き込みを非同期にした
-* DB書き込みでエラーが出ても500にならない恐怖
-* 最初の方で支払いを記録出来てなくて予算管理が死亡
-  + 予算管理失敗ペナルティで、大分点数引かれたらしい
-* goroutineでの例外処理どうやるんだろう。
-
-
-# 開発環境
----------
-
-* nREPL + Emacs + CIDER
-* 補完の設定上手くいかなかった
-* 諸々地味に不便
-* 起動遅い
-* Emacs側からnREPL立ち上げたい
-* サーバーのライブリロード欲しい
-* 正解が欲しい
-
-
-
-# その他Clojureについて
----------------------
-
-* コンスのCarを取るのに`hd`か`head`か`car`か分かんなかった
-  + 結局どれでもなくて`first`だった
-* 引数のパターンマッチが便利
-  + JSON REST APIだとリクエストに何を期待してるのか分かりづらい
-  + パターンマッチがドキュメントになる
-* やっぱJavaのライブラリ使えるの便利
-
-
-# 落穂拾い
----------
-
-* デプロイにはシェルスクリプト
-  + お家芸
-* 「一番コスパが良さそうな広告を選んで入札」で統計か機械学習が必要
-  + 1回表示した時の収益の期待値を計算する
-* 今回は事前データの統計を使った
-  + 理想的には機械学習。時間変化についていける
-* In Appでオンライン学習出来るライブラリが思ったよりない
-  + 分散処理向けの大袈裟なのが多い
-  + Weka? liblinear-java?
-* 後で考えたらIncanter使えばよかった
-
-
-# まとめ
--------
-
-* 給料貰いながらLisp書いた
-* ClojureでDSP作った
-* Clojureで機械学習したかったけど間に合わなかった
-
-
-# 参考
-------
-
-* [Internal of b11d | κeenのHappy Hacκing Blog](http://keens.github.io/slide/Internal_of_b11d/)
-
-&lt;/script&gt;
-&lt;/section&gt;
 </description>
     </item>
     
