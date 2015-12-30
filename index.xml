@@ -6,8 +6,460 @@
     <description>Recent content on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Sat, 26 Dec 2015 20:09:24 +0900</lastBuildDate>
+    <lastBuildDate>Tue, 29 Dec 2015 23:40:45 +0900</lastBuildDate>
     <atom:link href="http://KeenS.github.io/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>ATS2の依存型を使ってAVL木</title>
+      <link>http://keens.github.io/blog/2015/12/29/ats2noizongatawotsukatteavlki</link>
+      <pubDate>Tue, 29 Dec 2015 23:40:45 +0900</pubDate>
+      
+      <guid>http://keens.github.io/blog/2015/12/29/ats2noizongatawotsukatteavlki</guid>
+      <description>
+
+&lt;p&gt;κeenです。少しばかりATS2を触ってみたので成果報告でも。&lt;/p&gt;
+
+&lt;p&gt;AVL木は左右のノードの高さが高々1しか違わない平衡二分木です。OCamlやSMLでナイーブに実装すると本当に1しか違わないことを保証するのは難しく、精々テストなどで部分的に検査するだけです。&lt;/p&gt;
+
+&lt;p&gt;ところがSMLに似た文法を持つATS2には依存型があり、左右のノードの高さが高々1しか違わないことを型で保証出来ます。
+つまり、左右のノードの高さが2以上違う木を作ろうとしてもコンパイルエラーになるのでコンパイルが通れば高さについてはバグがないこと保証されます。&lt;/p&gt;
+
+&lt;p&gt;そういうAVL木を使ってTreeSetを作ってみたので紹介します。&lt;/p&gt;
+
+&lt;p&gt;私のブログ(のこの記事)の読者ならATS2も依存型もAVL木も知ってそうですが一応説明します。&lt;/p&gt;
+
+&lt;h1 id=&#34;ats2って何:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;ATS2って何?&lt;/h1&gt;
+
+&lt;p&gt;詳しい説明は&lt;a href=&#34;http://jats-ug.metasepi.org/#document&#34;&gt;日本ATSユーザグループ&lt;/a&gt;に譲るとして、この記事にて重要な点を挙げます。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;SMLに似た文法を持つML方言&lt;/li&gt;
+&lt;li&gt;型の部分に型以外の項（例えば整数とか）が使える&lt;a href=&#34;https://ja.wikipedia.org/wiki/%E4%BE%9D%E5%AD%98%E5%9E%8B&#34;&gt;依存型&lt;/a&gt;を持つ&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;他にももっと素晴しい型システムや機能、特徴があるのですがとりあえずのところは上記の特徴を押えておいて下さい。&lt;/p&gt;
+
+&lt;h1 id=&#34;依存型って何:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;依存型って何?&lt;/h1&gt;
+
+&lt;p&gt;先程も述べた通り、ざっくり言うと型の部分に型以外の項が使える型システムです。&lt;/p&gt;
+
+&lt;p&gt;例えば、次のSMLのコードを考えてみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;Array.get(arr: int array, index: int): int
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;型から読み取れるのは「&lt;code&gt;int&lt;/code&gt;の配列&lt;code&gt;arr&lt;/code&gt;と整数&lt;code&gt;index&lt;/code&gt;を受け取って&lt;code&gt;int&lt;/code&gt;の値を返す」関数です。
+しかしこの関数は&lt;code&gt;index&lt;/code&gt;が&lt;code&gt;arr&lt;/code&gt;の長さよりも大きい時に実行時例外を上げます。内部でメモリを護るために境界チェックをして、チェックに落ちた時に例外を挙げている筈です。。
+配列アクセスの度に実行時例外をハンドルするのはコード上もパフォーマンス上も避けたいですよね。
+こういうものをコンパイル時に防ぎたくありませんか？無駄な境界チェックを省きたくありまんか？依存型を使えばそれが出来ます。&lt;/p&gt;
+
+&lt;p&gt;例えば&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;array_get{n, i: nat| i &amp;lt; n}(arr: arrayref(int, n), index: int(i)): int
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これは「長さ&lt;code&gt;n&lt;/code&gt;の&lt;code&gt;int&lt;/code&gt;配列&lt;code&gt;arr&lt;/code&gt;と&lt;code&gt;n&lt;/code&gt;以下の自然数&lt;code&gt;index&lt;/code&gt;を受け取って&lt;code&gt;int&lt;/code&gt;の値を返す」関数です。
+正しい入力しか受け取らないので実行時例外が起きませんし内部で境界チェックも必要ありません。面白くないですか？&lt;/p&gt;
+
+&lt;p&gt;私も大して型システムに詳しくないのでこのくらいの例しか挙げることが出来ませんがきっとさらに面白い世界が広がっているのでしょう。&lt;/p&gt;
+
+&lt;h1 id=&#34;avl木って何:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;AVL木って何？&lt;/h1&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://ja.wikipedia.org/wiki/AVL%E6%9C%A8&#34;&gt;Wikipedia&lt;/a&gt;を参照すると詳しいことが載っています。前の説明を繰り返すと、左右のノードの高さが高々1しか違わない平衡二分木です。自身の高さは左右の高さの高い方+1です。
+データ構造は左右の木、ノードの保持する値の他にそのノードの高さを保持します。&lt;/p&gt;
+
+&lt;p&gt;なので平衡度は赤黒木より高く、検索が高速な一方、要素数を変更する操作の度に平衡を取らないといけないので挿入や削除は赤黒木に負けるそうです。
+OCamlのstdlibのMap/Setの実装に使われています。(OCamlは左右の高さが高々2違う木なので厳密にはAVL木ではないのですがアルゴリズムは同じです。)&lt;/p&gt;
+
+&lt;p&gt;因みにAVLは人の名前の頭文字みたいです。&lt;/p&gt;
+
+&lt;h1 id=&#34;作ってみよう:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;作ってみよう&lt;/h1&gt;
+
+&lt;p&gt;今回、ATS2の依存型に関係ない機能、関数テンプレートなどは理解（読解）の妨げになると判断してそれらを使わないコード例を出します。
+(関数テンプーレートを使わなくても多相型を使えば良さそうですが、ATS wayではなさそうです。)&lt;/p&gt;
+
+&lt;p&gt;ということで、整数を格納するSetを作ってみましょう。&lt;/p&gt;
+
+&lt;p&gt;実装に先立って、&lt;a href=&#34;https://github.com/ocaml/ocaml/blob/trunk/stdlib/set.ml&#34;&gt;OCamlのSet&lt;/a&gt;や&lt;a href=&#34;https://tech.bezoomnyville.com/2015/12/07/A-GADT-implementation-of-AVL-tree.html&#34;&gt;GADTを使ったAVLの実装&lt;/a&gt;を読んでおくと比較が出来るかと思います。&lt;/p&gt;
+
+&lt;p&gt;今回OCamlのSetを参考にして作ったので比較のためにコードを載せたいのですがOCamlは確かコードの再配布に厳しいライセンスだった気がするのでやめておきます。(スニペットくらいなら著作権は発生せず、ライセンス関係なしに使えるのですが念のため。)&lt;/p&gt;
+
+&lt;h2 id=&#34;おまじない:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;おまじない&lt;/h2&gt;
+
+&lt;p&gt;標準的な操作を取り込むため、以下をファイルの先頭に書きます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;#include &amp;quot;share/atspre_staload.hats&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;データ型:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;データ型&lt;/h2&gt;
+
+&lt;p&gt;高さnのAVL木を表わすデータ型を考えます。このデータ型は、&amp;rdquo;型パラメータとして&amp;rdquo;木の高さnを取ります。&lt;/p&gt;
+
+&lt;p&gt;書き出しはこうです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;datatype avlt(n: int) =
+ ...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;続けて、Emptyを書きます。Emptyは高さ0です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;datatype avlt(n: int) =
+    Empty(0)
+    ...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;続いて、Nodeですが、左の木の高さと右の木の高さを表わす変数を導入します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;  | {l, m: nat} Node of ...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このクルクル括弧&lt;code&gt;{}&lt;/code&gt;で囲まれた部分は「任意の&lt;code&gt;nat&lt;/code&gt;なる&lt;code&gt;l&lt;/code&gt;,&lt;code&gt;m&lt;/code&gt;に対して」と読めば読み易いです。&lt;/p&gt;
+
+&lt;p&gt;データ構造は、左右の木、値、高さを持つのでした。ここで、高さは&lt;code&gt;n&lt;/code&gt;であると型で制約されてます。ということでこうです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;  | {l, m: nat} Node of (avlt(l), int, avlt(m), int(n))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;最後の高さの部分で&lt;code&gt;int(n)&lt;/code&gt;となっているのは、&lt;code&gt;n&lt;/code&gt;は種&lt;code&gt;int&lt;/code&gt;であって型ではないので「整数&lt;code&gt;n&lt;/code&gt;の&lt;code&gt;int&lt;/code&gt;&amp;ldquo;型&amp;rdquo;」にする為に&lt;code&gt;int()&lt;/code&gt;を適用する必要があるのです。依存型だと「ただの整数値」だけでなく「整数3」などの型も作れるのです。&lt;/p&gt;
+
+&lt;p&gt;さて、このままだと左右の木の高さが高々1しか違わないということを表わせていません。さらにいうと、自身の高さについての制約も書けていません。これらの制約はこう書きます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;  | {l, m: nat | &amp;lt;制約&amp;gt; }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;今回の制約はこうなりますね。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;  | {l, m: nat |
+    (l + 2 == n &amp;amp;&amp;amp; m + 1 == n) || // 右が左より1高い 又は
+    (l + 1 == n &amp;amp;&amp;amp; m + 1 == n) || // 左右同じ高さ 又は
+    (l + 1 == n &amp;amp;&amp;amp; m + 2 == n)    // 左が右より1高い
+    }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;結果、データ型はこうです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;datatype avlt(n: int) =
+    Empty(0)
+  | {l, m: nat |
+    (l + 2 == n &amp;amp;&amp;amp; m + 1 == n) ||
+    (l + 1 == n &amp;amp;&amp;amp; m + 1 == n) ||
+    (l + 1 == n &amp;amp;&amp;amp; m + 2 == n)
+} Node of (avlt(l), int, avlt(m), int(n))
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;中々複雑ですね。&lt;/p&gt;
+
+&lt;h2 id=&#34;height:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;&lt;code&gt;height&lt;/code&gt;&lt;/h2&gt;
+
+&lt;p&gt;軽い関数から作っていきましょう。まずは木の高さを返す関数&lt;code&gt;height&lt;/code&gt;です。高さ&lt;code&gt;n&lt;/code&gt;の木を受け取って整数&lt;code&gt;n&lt;/code&gt;を返します。&lt;/p&gt;
+
+&lt;p&gt;書き出しはこうです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun height...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そして&lt;code&gt;n&lt;/code&gt;を導入します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun height{n: nat}...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;引数は「高さ&lt;code&gt;n&lt;/code&gt;の木」ですね。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun height{n: nat}(tree: avlt(n))...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;返り値は「整数&lt;code&gt;n&lt;/code&gt;」です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun height{n: nat}(tree: avlt(n)): int(n) = ...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;関数本体は普通です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun height{n: nat}(tree: avlt(n)): int(n) = 
+  case+ tree of
+  | Empty () =&amp;gt; 0
+  | Node (_, _, _, n) =&amp;gt; n
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ここで使っている&lt;code&gt;case+&lt;/code&gt;ですが、普通の&lt;code&gt;case&lt;/code&gt;より強くて網羅性検査に落ちるとコンパイルエラーになります。&lt;/p&gt;
+
+&lt;h2 id=&#34;create:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;&lt;code&gt;create&lt;/code&gt;&lt;/h2&gt;
+
+&lt;p&gt;これから&lt;code&gt;insert&lt;/code&gt;を実装していく訳ですが、ユーティリティから少しづつ実装していきます。まずは高さが高々1しか違わない木2つと値を1つ受け取って新たな木を作る&lt;code&gt;create&lt;/code&gt;です。&lt;code&gt;Node&lt;/code&gt;を生で使うのに比べて高さの計算が必要なくなります。&lt;/p&gt;
+
+&lt;p&gt;これは先に実装を与えて、後で型を考えましょう。先程の&lt;code&gt;height&lt;/code&gt;を使います。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun create??(l: ??, v: int, r: ??): ?? = let
+  val hl = height l
+  val hr = height r
+in
+  if hl &amp;gt;= hr
+  then Node(l, v, r, hl + 1)
+  else Node(l, v, r, hr + 1)
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;さて、型を考えていきます。まずは&lt;code&gt;l&lt;/code&gt;と&lt;code&gt;r&lt;/code&gt;はある高さを持つ木です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun create{l, m: nat} (l: avlt(l), v: int, r: avlt(m)): ?? = ...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;次に、左右で高さが高々1しか違わないことを制約したいです。これは&lt;code&gt;Node&lt;/code&gt;の定義を参考にすると書けるでしょうか。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun create{
+  l, m: nat |
+  l + 1 == m ||
+  l == m + 1 ||
+  l == m
+  } (l: avlt(l), v: int, r: avlt(m)): ?? = ...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;最後に返り値の型を考えます。返り値は「&lt;code&gt;l&lt;/code&gt;か&lt;code&gt;m&lt;/code&gt;どちらか大きい方+1の高さを持つ木」です。私は最初、それをこう表現していました。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun create...(...): [n: nat | n == m + 1 || n == l + 1] avlt(n) = ...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;[n: nat | n == m + 1 || n == l + 1] avlt(n)&lt;/code&gt;の部分を読み下すと、「&lt;code&gt;n = m + 1&lt;/code&gt;又は&lt;code&gt;n = l + 1&lt;/code&gt;を満たす&lt;code&gt;n&lt;/code&gt;に対して&lt;code&gt;avlt(n)&lt;/code&gt;」という型になります。これは、間違ってはいないのですが正確ではありませんでした。なぜならこの型に忠実に従うと&lt;code&gt;l = m + 1&lt;/code&gt;の時に&lt;code&gt;n = m + 1&lt;/code&gt;、すなわち&lt;code&gt;n = l&lt;/code&gt;もありえてしまいます。勿論そんなことはなく、&lt;code&gt;l = m + 1&lt;/code&gt;ならば&lt;code&gt;n = l + 1&lt;/code&gt;です。&lt;/p&gt;
+
+&lt;p&gt;よって正しい型は&lt;code&gt;[n: nat | (m &amp;gt; l &amp;amp;&amp;amp; n == m + 1) || (l &amp;gt;= m &amp;amp;&amp;amp; n == l + 1)] avlt(x, n)&lt;/code&gt;です。やたら長いですね。&lt;/p&gt;
+
+&lt;p&gt;全体を載せると、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun create{
+  l, m: nat |
+  l + 1 == m ||
+  l == m + 1 ||
+  l == m
+  } (l: avlt(l), v: int, r: avlt(m)): [n: nat | (m &amp;gt; l &amp;amp;&amp;amp; n == m + 1) || (l &amp;gt;= m &amp;amp;&amp;amp; n == l + 1)] avlt(n) = let
+  val hl = height l
+  val hr = height r
+in
+  if hl &amp;gt;= hr
+  then Node(l, v, r, hl + 1)
+  else Node(l, v, r, hr + 1)
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;になります。&lt;/p&gt;
+
+&lt;h2 id=&#34;rotate:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;&lt;code&gt;rotate&lt;/code&gt;&lt;/h2&gt;
+
+&lt;p&gt;OCamlのSetでは1まとめに&lt;code&gt;bal&lt;/code&gt;としていますが、条件分岐が多すぎて読みづらいので&lt;code&gt;right&lt;/code&gt;と&lt;code&gt;left&lt;/code&gt;に分離することにします。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;rotate_xxx&lt;/code&gt;は、左右で高さがちょうど2違う木と値を受け取って、バランスのとれた木を作って返す関数です。
+&lt;code&gt;rotate_right&lt;/code&gt;なら左の木が右の木より2高い木を受け取って上手い具合に木の付け替えをして新たな木を返します。&lt;/p&gt;
+
+&lt;p&gt;返り値の木は左の木と同じ高さかあるいはそれより1高い木です。&lt;/p&gt;
+
+&lt;p&gt;そろそろ慣れてきたと思うので型までを一気に書きます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun rotate_right{hl, hr: nat |
+  hl == hr + 2
+}(l: avlt(hl), v: int, r: avlt(hr)): [n: nat| n == hl || n == hl + 1] avlt(n) = ...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;さて、さらに左側の木の左右の高さでも場合分けが必要になるのでまずは色々バラします。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun rotate_right{hl, hr: nat |
+  hl == hr + 2
+}(l: avlt(hl), v: int, r: avlt(hr)): [n: nat| n == hl || n == hl + 1] avlt(n) = let
+  val+ Node(ll, lv, lr, _) = l
+  val hll = height ll
+  val hlr = height lr
+in
+  ...
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;さて、ここが一番面白い所です。&lt;code&gt;val+ Node(ll, lv, lr, _) = l&lt;/code&gt;に注目して下さい。 OCamlでは&lt;code&gt;match l with Empty -&amp;gt; invalid_arg &amp;quot;Set.bal&amp;quot; | Node (ll, lv, lr, _) -&amp;gt; ...&lt;/code&gt;となっていた部分です。
+型制約から、&lt;code&gt;l&lt;/code&gt;は高さ2以上の木であることが分かっているので&lt;code&gt;Empty&lt;/code&gt;でないことが保証されます。なので &lt;strong&gt;&lt;code&gt;Node&lt;/code&gt;だけで網羅出来ているとコンパイラが理解してくれ&lt;/strong&gt; ます。マッチが1節しかないので&lt;code&gt;val&lt;/code&gt;のパターンマッチで代用出来ますね。
+&lt;code&gt;val+&lt;/code&gt;は&lt;code&gt;case+&lt;/code&gt;と同じく網羅性検査に落ちるとコンパイルエラーになるバージョンの&lt;code&gt;val&lt;/code&gt;です。&lt;/p&gt;
+
+&lt;p&gt;残りの実装をまとめると、こうです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun rotate_right{hl, hr: nat |
+  hl == hr + 2
+}(l: avlt(hl), v: int, r: avlt(hr)): [n: nat| n == hl || n == hl + 1] avlt(n) = let
+  val+ Node(ll, lv, lr, _) = l
+  val hll = height ll
+  val hlr = height lr
+in
+  if  hll &amp;gt;= hlr
+  then create(ll, lv, create(lr, v, r))
+  else let
+       val+ Node(lrl, lrv, lrr, _) =  lr
+  in
+    create(create(ll, lv, lrl), lrv, create(lrr, v, r))
+  end
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;rotate_left&lt;/code&gt;はこうです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun rotate_left{hl, hr: nat |
+  hl + 2 == hr
+}(l: avlt(hl), v: int, r: avlt(hr)): [n: nat| n == hr || n == hr + 1] avlt(n) = let
+  val+ Node(rl, rv, rr, _) = r
+  val hrl = height rl
+  val hrr = height rr
+in
+  if  hrr &amp;gt;= hrl
+  then create(create(l, v, rl), rv, rr)
+  else let
+    val+ Node(rll, rlv, rlr, _) =  rl
+  in
+    create(create(l, v, rll), rlv, create(rlr, rv, rr))
+  end
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;bal:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;&lt;code&gt;bal&lt;/code&gt;&lt;/h2&gt;
+
+&lt;p&gt;&lt;code&gt;rotate_right&lt;/code&gt;, &lt;code&gt;rotate_left&lt;/code&gt;, &lt;code&gt;create&lt;/code&gt;を1まとめにして左右の高さの差が高々2の2つの木と値を受け取ってバランスのとれた木を作って返す&lt;code&gt;bal&lt;/code&gt;を作りましょう。&lt;/p&gt;
+
+&lt;p&gt;型がエグいことになります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun bal{hl, hr: nat |
+  ~2 &amp;lt;= hl - hr  &amp;amp;&amp;amp; hl - hr &amp;lt;= 2
+}(l: avlt(hl), v: int, r: avlt(hr)): [n: nat|
+ (hl == hr - 2 &amp;amp;&amp;amp; n == hr    ) ||
+ (hl == hr - 2 &amp;amp;&amp;amp; n == hr + 1) ||
+ (hl == hr - 1 &amp;amp;&amp;amp; n == hr + 1) ||
+ (hl == hr     &amp;amp;&amp;amp; n == hl + 1) ||
+ (hl == hr + 1 &amp;amp;&amp;amp; n == hl + 1) ||
+ (hl == hr + 2 &amp;amp;&amp;amp; n == hl + 1) ||
+ (hl == hr + 2 &amp;amp;&amp;amp; n == hl    )
+] avlt(n) = let
+  val hl = height l
+  val hr = height r
+in
+  if hl = hr + 2
+  then rotate_right(l, v, r)
+  else if hl = hr - 2
+  then rotate_left(l, v, r)
+  else create(l, v, r)
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;cmp:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;&lt;code&gt;cmp&lt;/code&gt;&lt;/h2&gt;
+
+&lt;p&gt;さて、本来のOCamlのSetはファンクタで出来てますがATS2には原始的なファンクタしかないのでファンクタを使わずにこれまで実装してきました。
+あまりよろしくありませんが&lt;code&gt;cmp&lt;/code&gt;もベタっと実装してしまいましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun cmp(x: int, y: int): int = x - y
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;empty-singleton:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;&lt;code&gt;empty&lt;/code&gt;, &lt;code&gt;singleton&lt;/code&gt;&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun empty(): avlt(0) = Empty()
+fun singleton(x: int): avlt(1) = Node(Empty, x, Empty, 1)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;insert:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;&lt;code&gt;insert&lt;/code&gt;&lt;/h2&gt;
+
+&lt;p&gt;ここまで辿りついたらもう難しいところはありません。&lt;code&gt;insert&lt;/code&gt;した結果、木の高さが変わらないか1増えるだけです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun insert{m: nat}(x: int, tree: avlt(m)): [n: nat | n == m || n == m + 1]avlt(n) =
+  case+ tree of
+  | Empty () =&amp;gt; singleton(x)
+  | t as Node(l, v, r, _) =&amp;gt; let
+    val c = cmp(x, v)
+  in
+    if c = 0 then t
+    else if c &amp;lt; 0
+    then bal(insert(x, l), v, r)
+    else bal(l, v, insert(x, r))
+  end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;mem:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;&lt;code&gt;mem&lt;/code&gt;&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun mem{m: nat}(x: int, tree: avlt(m)): bool =
+  case+ tree of
+  | Empty () =&amp;gt; false
+  | Node(l, v, r, _) =&amp;gt; let
+    val c = cmp(x, v)
+  in
+    if c = 0
+    then true
+    else if c &amp;lt; 0
+    then mem(x, r)
+    else mem(x, l)
+  end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;遊ぶ:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;遊ぶ&lt;/h1&gt;
+
+&lt;p&gt;さて、少しばかり遊んでみましょう&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;
+implement
+main0 () =  {
+  val tree = Empty
+  val tree = insert(1, tree)
+  val tree = insert(2, tree)
+  val tree = insert(4, tree)
+  val b = mem(2, tree)
+  val c = mem(3, tree)
+  val () = fprintln!(stdout_ref, b)
+  val () = fprintln!(stdout_ref, c)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これまでのファイルを&lt;code&gt;avlset_int.dat&lt;/code&gt;に保存して、以下のようにコンパイル/実行します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ patscc avlset.dats -DATS_MEMALLOC_LIBC
+$ ./a.out
+true
+false
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ちゃんと動いているようです。(GCをリンクしてないのでメモリリークしてる気がしますが、GCのリンクの仕方が分からなかったのでこのままにします。)&lt;/p&gt;
+
+&lt;h1 id=&#34;まとめ:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;p&gt;依存型を持つATS2を使うことでAVL木の高さに関する要件を必ず満たす木を作ることが出来ました。
+これは変な入力がないことを保証するばかりでなく、自らの実装がバグっていないことの確認にも使えます。
+また、&lt;code&gt;val+&lt;/code&gt;の例で見た通り、パターンマッチについてもより厳格な検査が出来るので無意味なコードを書かなくて済みました。&lt;/p&gt;
+
+&lt;p&gt;今回のコードは&lt;a href=&#34;https://github.com/KeenS/avlset&#34;&gt;こちら&lt;/a&gt;に置いておきます。また、関数テンプレートを使ったよりジェネリックな実装もあります。&lt;/p&gt;
+
+&lt;h1 id=&#34;ノート:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;ノート&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;今回型レベルで保証したのは高さに対する要件だけでした。
+「ノードの左側の木にはそのノードの保持する値より小さい値しか入っていない」「一度&lt;code&gt;insert&lt;/code&gt;した値は&lt;code&gt;mem&lt;/code&gt;すると&lt;code&gt;true&lt;/code&gt;が返ってくる」などの要件については無保証のままです。
+実はATS2には&lt;a href=&#34;http://jats-ug.metasepi.org/doc/ATS2/INT2PROGINATS/c2849.html&#34;&gt;定理証明器&lt;/a&gt;も付いており、そのような振舞に関しても保証出来ます。&lt;/li&gt;
+&lt;li&gt;ATS2には依存型の他にも&lt;a href=&#34;http://jats-ug.metasepi.org/doc/ATS2/INT2PROGINATS/p3301.html&#34;&gt;線形型&lt;/a&gt;を持っていて、GCに頼らないメモリ管理が可能です。
+今回のコードも線形型を使ってメモリリークしないように出来るでしょう。&lt;/li&gt;
+&lt;li&gt;関数テンプレートを使ったAVL木の実装には若干危い点があります。関数テンプレートは実装をアドホックに変更出来るので
+比較関数を差し替えれてしまいます。&lt;code&gt;cmp(x, y) = x - y&lt;/code&gt;で木を作った後に&lt;code&gt;cmp(x, y) = y - x&lt;/code&gt;にしてさらに要素を挿入したら大惨事になるでしょう。
+そこまで気にするようなら&lt;a href=&#34;http://jats-ug.metasepi.org/doc/ATS2/INT2PROGINATS/x1974.html&#34;&gt;ファンクタ&lt;/a&gt;を使うべきです。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h1 id=&#34;その他:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;その他&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;CoqやAgdaのように依存型も定理証明器もある言語がありますが、それらと違ってATS2は「汎用プログラミング言語に表現力の高い依存型を付けて、ついでに定理証明器もついてる」くらいです。
+本格的な証明には向かない一方汎用プログラミングにはATS2の方が向いているでしょう。&lt;/li&gt;
+&lt;li&gt;しかしCoqと似ている面もあり、ATS2の世界で依存型や線形型、証明などで強い保証を付けた後は一旦Cのコードをエクストラクトして、それをコンパイルしています。&lt;/li&gt;
+&lt;li&gt;Cにエクストラクトされるということで、ATS2はCとの相互連携が出来ます。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;さて、ATS2には心躍る特徴がたくさんあります。依存型で実行時検査をコンパイル時検査に持ち上げ、定理証明器でバグも潰せて、
+線形型でボックス/アンボックデータの扱いやGCに頼らないリソース管理やデータ競合の回避が出来、
+並列プログラミングもサポート、低レベルなCのコードを呼べてバイナリサイズも小さいなどなど。&lt;/p&gt;
+
+&lt;p&gt;しかし、これらの機能を得るのにATS2は1つだけ代償を払いました。学習コストです。
+私はCも書きますしSMLも書きます。依存型のあるCoqや線形型より少し弱いアフィン型のあるRustも書いたことがあります。そんな私にもATS2は難解です。
+最近難解な言語として名高くなってきたRustですら足元に及ばないでしょう。&lt;/p&gt;
+
+&lt;p&gt;それでも、急峻な学習曲線の崖をよじ登った先には素晴しい世界が広がっているのです。1つ、修行だと思ってトライしてみてはいかがでしょうか。&lt;/p&gt;
+
+&lt;p&gt;参考: &lt;a href=&#34;http://fumieval.tumblr.com/post/28324791101/%E3%83%97%E3%83%AD%E3%82%B0%E3%83%A9%E3%83%9E%E3%81%AE%E5%8C%BA%E5%88%86&#34;&gt;プログラマの区分&lt;/a&gt;&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>SML#とCプリプロセッサの連携</title>
@@ -2905,390 +3357,6 @@ main &amp;quot;$@&amp;quot;
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;まだ洗練されていませんがお気に入りのタスクです。誰かCLIからCargo.tomlをいじれるツール作ってくれないかな。&lt;/p&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>Rustで小さなツールを作ってみる(後編)</title>
-      <link>http://keens.github.io/blog/2015/11/29/rustdechiisanatsu_ruwotsukuttemiru_kouhen_</link>
-      <pubDate>Sun, 29 Nov 2015 13:54:39 +0900</pubDate>
-      
-      <guid>http://keens.github.io/blog/2015/11/29/rustdechiisanatsu_ruwotsukuttemiru_kouhen_</guid>
-      <description>
-
-&lt;p&gt;この記事は&lt;a href=&#34;http://qiita.com/advent-calendar/2015/rust-lang&#34;&gt;Rust Advent Calendar 2015&lt;/a&gt; 2日目の記事です。&lt;br /&gt;
-前 &lt;a href=&#34;http://KeenS.github.io/blog/2015/11/14/rustdechiisanatsu_ruwotsukuttemiru/&#34;&gt;Rustで小さなツールを作ってみる(前編)&lt;/a&gt;&lt;br /&gt;
-次 &lt;a href=&#34;http://KeenS.github.io/blog/2015/11/29/cargonotsukaikata/&#34;&gt;Cargoの使い方&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;κeenです。昨日の記事で作りかけだったIRCの生ログのDBへのインポートの続きです。今日はDBへのインポートをやります。&lt;/p&gt;
-
-&lt;p&gt;とはいってもRustでDBを扱った経験がないので探り探りです。&lt;/p&gt;
-
-&lt;h1 id=&#34;要件:b5100d6caeb6e32800002ace57fa8102&#34;&gt;要件&lt;/h1&gt;
-
-&lt;p&gt;今回は簡単なのでORMは要らない気がしますが、サンプルということでORMも使いましょう。さらに、サンプルということでクエリビルダも使いましょう。&lt;/p&gt;
-
-&lt;p&gt;…と思ったのですが中々良いライブラリがありませんでした。ドキュメントもろくにないまま放置されてる&lt;a href=&#34;https://github.com/deuterium-orm/deuterium&#34;&gt;deuterium&lt;/a&gt;と開発途中でまだpostgresしかサポートされていない&lt;a href=&#34;https://github.com/ivanceras/rustorm&#34;&gt;rustorm&lt;/a&gt;/&lt;a href=&#34;https://github.com/ivanceras/codegenta&#34;&gt;codegenta&lt;/a&gt;くらいしかないようです。うぅ。
-最近話題になった&lt;a href=&#34;https://github.com/sgrif/diesel&#34;&gt;diesel&lt;/a&gt;もまだ若すぎるようです。&lt;/p&gt;
-
-&lt;p&gt;ということでシンプルなDBIを使います。そろそろ牡蠣の美味しい季節ですしSQL生書きしましょう。当たると怖いですが。で、テスト用にsqlite3を、（今回は使いませんが）本番用（？）にMySQLを使える奴を捜しましょう。&lt;/p&gt;
-
-&lt;h1 id=&#34;ライブラリ捜し:b5100d6caeb6e32800002ace57fa8102&#34;&gt;ライブラリ捜し&lt;/h1&gt;
-
-&lt;p&gt;まずは&lt;a href=&#34;https://crates.io&#34;&gt;crates.io&lt;/a&gt;を捜します。&amp;rdquo;sqlite&amp;rdquo;で捜せばいいでしょうか。&lt;/p&gt;
-
-&lt;p&gt;MySQLとSQLite3をサポートしているライブラリ…&lt;a href=&#34;https://github.com/sfackler/r2d2&#34;&gt;r2d2&lt;/a&gt;がそれのようです。
-コネクションプールのライブラリなので何か違う気がしますが、mysqlもsqlite3も扱えて、結果コネクションを抽象化してくれるので大体大丈夫です。&lt;/p&gt;
-
-&lt;p&gt;蛇足ですが、名前はJavaにc3p0というコネクションプールがあるのでそこから来ているのでしょう。&lt;/p&gt;
-
-&lt;h1 id=&#34;スキーマ定義:b5100d6caeb6e32800002ace57fa8102&#34;&gt;スキーマ定義&lt;/h1&gt;
-
-&lt;p&gt;SQLiteを使い慣れないのですが大したことやってないので大丈夫でしょう。&lt;code&gt;DATETIME&lt;/code&gt; 型がないのが苦しいですね。&lt;/p&gt;
-
-&lt;p&gt;自然キーが文字列や複合キーなのでサロゲートキーを使って自然キーにUNIQUE制約をかけてますがちょっと気持悪いですね。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sql&#34;&gt;-- _*_ mode: sql; sql-product: &#39;sqlite _*_
-
-CREATE TABLE servers(
-        id   INTEGER PRIMARY KEY,
-        name  TEXT NOT NULL UNIQUE,
-        address TEXT
-        );
-m
-CREATE TABLE channels(
-        id INTEGER PRIMARY KEY,
-        server_id INTEGER REFERENCES servers(id) ON UPDATE CASCADE,
-        name TEXT NOT NULL,
-        UNIQUE(server_id, name)
-        );
-
-CREATE TABLE entries(
-        id INTEGER PRIMARY KEY,
-        channel_id INTEGER REFERENCES channels(id) ON UPDATE CASCADE,
-        user_id INTEGER REFERENCES users(i) ON UPDATE CASCADE,
-        type TEXT NOT NULL,
-        body TEXT NOT NULL,
-        created_at TEXT NOT NULL
-        );
-
-CREATE TABLE users(
-        id INTEGER PRIMARY KEY,
-        server_id INTEGER REFERENCES servers(id) ON UPDATE CASCADE,
-        name TEXT NOT NULL,
-        UNIQUE(server_id, name)
-        );
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これをetc/schema.sqlに保存します。&lt;/p&gt;
-
-&lt;h1 id=&#34;モデル定義:b5100d6caeb6e32800002ace57fa8102&#34;&gt;モデル定義&lt;/h1&gt;
-
-&lt;p&gt;折角シンプルなツールを作っているのでモデルは使わない。&lt;/p&gt;
-
-&lt;h1 id=&#34;コネクションまで:b5100d6caeb6e32800002ace57fa8102&#34;&gt;コネクションまで&lt;/h1&gt;
-
-&lt;p&gt;あらかじめ&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ sqlite test.db &amp;lt; etc/schema.sql
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;としてDBを作っておきましょう。&lt;/p&gt;
-
-&lt;p&gt;Cargo.tomlのdependenciesには&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-toml&#34;&gt;r2d2_sqlite = &amp;quot;0.0.3&amp;quot;
-r2d2 = &amp;quot;0.6.1&amp;quot;
-rusqlite = &amp;quot;0.4.0&amp;quot;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;を追記。&lt;/p&gt;
-
-&lt;p&gt;src/main.rsの先頭部分に&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;extern crate r2d2;
-extern crate r2d2_sqlite;
-extern crate rusqlite;
-use std::sync::Arc;
-use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::SqliteError;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;を追記しましょう。&lt;/p&gt;
-
-&lt;p&gt;そしてmainの中に次を追加。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let manager = SqliteConnectionManager::new(&amp;quot;test.db&amp;quot;).unwrap();
-    let config = r2d2::Config::builder().pool_size(16).build();
-    let pool = Arc::new(r2d2::Pool::new(config, manager).unwrap());
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これで一旦コンパイル。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo build
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これが通れば良いです。&lt;/p&gt;
-
-&lt;h1 id=&#34;はじめての挿入:b5100d6caeb6e32800002ace57fa8102&#34;&gt;はじめての挿入&lt;/h1&gt;
-
-&lt;p&gt;INSERTを発行してみましょう。&lt;code&gt;on_channel_dir&lt;/code&gt;の引数を変える必要があります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn on_channel_dir(path: &amp;amp;Path, pool: Arc&amp;lt;r2d2::Pool&amp;lt;SqliteConnectionManager&amp;gt;&amp;gt;) 
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;併せて、呼び出しも&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        on_channel_dir(&amp;amp;path, pool.clone());
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;となります。&lt;/p&gt;
-
-&lt;p&gt;そうしたら&lt;code&gt;on_channel_dir&lt;/code&gt;の中で&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let channel = &amp;amp;dirname[..at];
-    let server = &amp;amp;dirname[at+1..];
-    println!(&amp;quot;{} at {}&amp;quot;, channel, server);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;としていた辺でまずはserversへのインサートを発行しましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let conn = pool.get().unwrap();
-    let server_id = match conn.execute(&amp;quot;INSERT INTO servers (name) VALUES ($1)&amp;quot;, &amp;amp;[&amp;amp;server]) {
-        // unique constraint failed
-        Err(SqliteError{code: 19, message:_}) =&amp;gt; conn.query_row(&amp;quot;SELECT id FROM servers WHERE name = $1&amp;quot;, &amp;amp;[&amp;amp;server], |r| r.get(0)).unwrap(),
-        Ok(_) =&amp;gt; conn.last_insert_rowid(),
-        e =&amp;gt; {e.unwrap(); return}
-    };
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;プールからコネクションを持ってきて&lt;code&gt;INSERT&lt;/code&gt;を発行します。成功するか既にUNIQUEな名前が存在していて失敗したらサーバのidを持ってきます。それ以外の失敗だったらそのままパニックしていいでしょう。&lt;/p&gt;
-
-&lt;p&gt;しかしラッパがちょっと雑すぎやしませんかね。エラーステータスくらいenumでラップして欲しかった。&lt;/p&gt;
-
-&lt;p&gt;同じくチャネルもインサートしましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let channel_id = match conn.execute(&amp;quot;INSERT INTO channels (name, server_id) VALUES ($1, $2)&amp;quot;, &amp;amp;[&amp;amp;channel, &amp;amp;server_id]) {
-        // unique constraint failed
-        Err(SqliteError{code: 19, message:_}) =&amp;gt; conn.query_row(&amp;quot;SELECT id FROM channels WHERE name = $1&amp;quot;, &amp;amp;[&amp;amp;channel], |r| r.get(0)).unwrap(),
-        Ok(_) =&amp;gt; conn.last_insert_rowid(),
-        e =&amp;gt; {e.unwrap(); return}
-
-    };
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;こういうupsertというかinsert or get_idってどうやるのが正解なんでしょう。DB力が低い…&lt;/p&gt;
-
-&lt;h1 id=&#34;エントリのインサート:b5100d6caeb6e32800002ace57fa8102&#34;&gt;エントリのインサート&lt;/h1&gt;
-
-&lt;p&gt;同じく&lt;code&gt;on_log&lt;/code&gt;の引数を増やします。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn on_log(log: &amp;amp;Path, channel_id: i64,  pool: Arc&amp;lt;r2d2::Pool&amp;lt;SqliteConnectionManager&amp;gt;&amp;gt;) {
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;呼び出し側も。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        let pool_ = pool.clone();
-        Builder::new().name(pathname).spawn(move|| on_log(&amp;amp;log, channel_id, pool_))
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;move&lt;/code&gt;する前に&lt;code&gt;clone&lt;/code&gt;しないとダメですね。所有権難しい。&lt;/p&gt;
-
-&lt;p&gt;さて、今度は色々することがあります。
-まず、dateとtimeをくっつけてdatetimeにしましょう。timeがイミュータブルだったので&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        let mut time = ...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;とし、その下で&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        time.tm_mday = date.tm_mday;
-        time.tm_mon = date.tm_mon;
-        time.tm_year = date.tm_year;
-        let created_at = time.to_timespec();
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;とします。わざわざ&lt;code&gt;to_timespec&lt;/code&gt;で変換してるのは&lt;code&gt;Timespec&lt;/code&gt;だとDBライブラリが良い感じに変換してくれるからですね。&lt;/p&gt;
-
-&lt;p&gt;次にメッセージの抜き出し部分も値を返すように変更。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        let (user, type_, body) = match &amp;amp;msg[0..1] {
-            &amp;quot;!&amp;quot; =&amp;gt; (&amp;quot;server&amp;quot;, &amp;quot;sysmsg&amp;quot;, &amp;amp;msg[1..]),
-            &amp;quot;+&amp;quot; =&amp;gt; (&amp;quot;server&amp;quot;, &amp;quot;join&amp;quot;, &amp;amp;msg[1..]),
-            &amp;quot;-&amp;quot; =&amp;gt; (&amp;quot;server&amp;quot;, &amp;quot;part&amp;quot;, &amp;amp;msg[1..]),
-            &amp;quot;&amp;lt;&amp;quot; =&amp;gt; match msg.find(&#39;&amp;gt;&#39;).map(|e| (&amp;amp;msg[1..e], &amp;amp;msg[e+1..])) {
-                Some((user, body)) =&amp;gt; (user, &amp;quot;msg&amp;quot;, body),
-                None =&amp;gt; {
-                    warn!(&amp;quot;cannot parse the entry; skipping&amp;quot;);
-                    continue;
-                }
-            },
-            _ =&amp;gt; (&amp;quot;server&amp;quot;, &amp;quot;notice&amp;quot;, &amp;amp;msg[1..]),
-        };
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ここまで来たらあとはユーザとエントリをインサートするだけですね。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        let conn = pool.get().unwrap();
-        let user_id = match conn.execute(&amp;quot;INSERT INTO users (name) VALUES ($1)&amp;quot;, &amp;amp;[&amp;amp;user]) {
-            // unique constraint failed
-            Err(SqliteError{code: 19, message:_}) =&amp;gt; conn.query_row(&amp;quot;SELECT id FROM users WHERE name = $1&amp;quot;, &amp;amp;[&amp;amp;user], |r| r.get(0)).unwrap(),
-            Ok(_) =&amp;gt; conn.last_insert_rowid(),
-            e =&amp;gt; {e.unwrap(); return}
-        };
-        conn.execute(&amp;quot;INSERT INTO entries (channel_id, user_id, type, body, created_at) VALUES ($1, $2, $3, $4, $5)&amp;quot;, &amp;amp;[&amp;amp;channel_id, &amp;amp;user_id, &amp;amp;type_, &amp;amp;body, &amp;amp;created_at]);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;一旦これで走らせてみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo run --release
-...
-thread &#39;/home/kim/log/#hongo@utmc/2015-02-15.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2015-08-18.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-12-13.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2015-10-13.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-02-26.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-05-23.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2015-04-30.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2013-10-18.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2015-10-14.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-01-19.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-08-12.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: GetTimeout(())&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-06-03.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: GetTimeout(())&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2015-02-05.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: GetTimeout(())&#39;, ../src/libcore/result.rs:736
-...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;あちゃー。マルチスレッドでINSERTしてるのでロックが掛かってますね。SQLiteはファイルロックしか持たないので並列インサートはつらそう。&lt;/p&gt;
-
-&lt;h1 id=&#34;トランザクション:b5100d6caeb6e32800002ace57fa8102&#34;&gt;トランザクション&lt;/h1&gt;
-
-&lt;p&gt;はい、そういう時のトランザクションですよ。&lt;/p&gt;
-
-&lt;p&gt;最後のユーザやエントリーをインサートしてる部分で使ってみます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        let conn = pool.get().unwrap();
-        let trx = conn.transaction().unwrap();
-        let user_id = match conn.execute(&amp;quot;INSERT INTO users (name) VALUES ($1)&amp;quot;, &amp;amp;[&amp;amp;user]) {
-            // unique constraint failed
-            Err(SqliteError{code: 19, message:_}) =&amp;gt; conn.query_row(&amp;quot;SELECT id FROM users WHERE name = $1&amp;quot;, &amp;amp;[&amp;amp;user], |r| r.get(0)).unwrap(),
-            Ok(_) =&amp;gt; conn.last_insert_rowid(),
-            e =&amp;gt; {e.unwrap(); return}
-        };
-        trx.commit();
-        let trx = conn.transaction().unwrap();
-        conn.execute(&amp;quot;INSERT INTO entries (channel_id, user_id, type, body, created_at) VALUES ($1, $2, $3, $4, $5)&amp;quot;, &amp;amp;[&amp;amp;channel_id, &amp;amp;user_id, &amp;amp;type_, &amp;amp;body, &amp;amp;created_at]);
-        trx.commit();
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;排他制御が目的なのでトランザクションを2回取ってます。&lt;/p&gt;
-
-&lt;p&gt;これだとどうなるかというと&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;$ cargo run --release
-...
-thread &#39;/home/kim/log/#hongo@utmc/2015-02-15.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2015-08-18.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-12-13.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2015-10-13.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-02-26.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-05-23.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2015-04-30.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2013-10-18.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2015-10-14.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-01-19.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-08-12.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: GetTimeout(())&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-06-03.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: GetTimeout(())&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2015-02-05.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: GetTimeout(())&#39;, ../src/libcore/result.rs:736
-...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;エラーは減ったもののまだ出ます。&lt;/p&gt;
-
-&lt;h1 id=&#34;その他:b5100d6caeb6e32800002ace57fa8102&#34;&gt;その他&lt;/h1&gt;
-
-&lt;p&gt;他にスレッドプールを使って並列度を下げる、ワーカースレッドを使ってSQLiteへの書き込みを1スレッドにするなども試したのですが上手く行きませんでした。&lt;/p&gt;
-
-&lt;p&gt;スレッドプールについては、今回エラーハンドリングのためにスレッドを立てている訳ですが、パニックを出してスレッドが死ぬとあまり思わしくない挙動をするのでダメでした。&lt;/p&gt;
-
-&lt;p&gt;ワーカースレッドは書き込んだ後にまたchannel_idなどを受け取らないといけないのでやめました。promiseなどを使えば上手くいきそうな気もしますが色々面倒そうなので止めておきます。&lt;/p&gt;
-
-&lt;h1 id=&#34;コネクション:b5100d6caeb6e32800002ace57fa8102&#34;&gt;コネクション&lt;/h1&gt;
-
-&lt;p&gt;並列度を下げる方法はもう1つあります。&lt;/p&gt;
-
-&lt;p&gt;mainの中で&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let config = r2d2::Config::builder().pool_size(16).build();
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;としていたのを覚えていますでしょうか。これはコネクションプールに16個のコネクションを持っています。この数を落とせばなんとかならないでしょうか。&lt;/p&gt;
-
-&lt;p&gt;結論からいうとダメでした。今度は複数スレッドがコネクションを取り合ってタイムアウトが発生してしまいます。&lt;/p&gt;
-
-&lt;h1 id=&#34;並列度を下げる:b5100d6caeb6e32800002ace57fa8102&#34;&gt;並列度を下げる&lt;/h1&gt;
-
-&lt;p&gt;最後の最後、本当に並列度を下げる方法があります。スレッドを立てていた部分で&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let threads = logs.map(|log| {
-        let log = log.unwrap().path();
-        let pathname = log.to_string_lossy().to_string();
-        Builder::new().name(pathname).spawn(move|| on_log(&amp;amp;log))
-    }).collect::&amp;lt;Vec&amp;lt;_&amp;gt;&amp;gt;();
-    for thread in threads {
-        let _ = thread.unwrap().join();
-    }
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;としていました。これはファイル数分並列に実行してしまいます。ここを抑えましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    for log in logs {
-        let log = log.unwrap().path();
-        let pathname = log.to_string_lossy().to_string();
-        let pool_ = pool.clone();
-        let _ = Builder::new().name(pathname).spawn(move|| on_log(&amp;amp;log, channel_id, pool_)).unwrap().join();
-    }
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;spawn&lt;/code&gt;してそのまま&lt;code&gt;join&lt;/code&gt;します。こうすれば並列度を抑えつつパニックをスレッドに分離出来ます。&lt;/p&gt;
-
-&lt;p&gt;これで実行するとどうなるかというと&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo run --release
-...
-thread &#39;/home/kim/log/#lisp-ja@freenode/2015-04-08.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: GetTimeout(())&#39;, ../src/libcore/result.rs:736
-...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;いくつかタイムアウトを出します。えー。並列度1でこれならもうどうしようもないでしょう。&lt;/p&gt;
-
-&lt;h1 id=&#34;まとめ:b5100d6caeb6e32800002ace57fa8102&#34;&gt;まとめ&lt;/h1&gt;
-
-&lt;p&gt;さて、小さなツールを作るというタイトルにしては後半(執筆が)重い内容になってしまいました。というか、sqlite3の問題もしますが。&lt;/p&gt;
-
-&lt;p&gt;このブログの内容としては&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;rustでディレクトリを扱った&lt;/li&gt;
-&lt;li&gt;ファイルを扱った&lt;/li&gt;
-&lt;li&gt;文字列を扱った&lt;/li&gt;
-&lt;li&gt;日付を扱った&lt;/li&gt;
-&lt;li&gt;スレッドを扱った&lt;/li&gt;
-&lt;li&gt;ロガーライブラリを扱った&lt;/li&gt;
-&lt;li&gt;エラーハンドリングをした&lt;/li&gt;
-&lt;li&gt;パニックのハンドリングをした&lt;/li&gt;
-&lt;li&gt;DBを扱った&lt;/li&gt;
-&lt;li&gt;sqlite3に並列書き込みはつらい&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;ボツ案も含めれば私個人はORMやスレッドプール、チャネルも扱いましたが関係ないですね。&lt;/p&gt;
-
-&lt;p&gt;こういう簡単なツールでも思ったより色々な機能を触れるのでみなさん試してみてはいかがでしょうか。&lt;/p&gt;
-
-&lt;p&gt;ソースコード全体は&lt;a href=&#34;https://github.com/KeenS/irc_log&#34;&gt;ここ&lt;/a&gt;においておきます。&lt;/p&gt;
-
-&lt;p&gt;因みに本筋とは外れますが、今回のSQLiteの問題を扱うには一旦CSVファイルに書き出してからCSVインポートでバルクインサートが考えられます。
-CSVに書き出すのはちまちまやってもいいし今回のデータ量ならオンメモリ構築して一気に書き出しも出来るでしょう。あるいはSQLiteをやめてMySQLを使う。&lt;/p&gt;
 </description>
     </item>
     
