@@ -6,8 +6,86 @@
     <description>Recent content in Rust on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Sat, 26 Dec 2015 19:18:31 +0900</lastBuildDate>
+    <lastBuildDate>Fri, 08 Jan 2016 00:50:31 +0900</lastBuildDate>
     <atom:link href="http://KeenS.github.io/categories/rust/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Rustといえどリソースの解放は注意</title>
+      <link>http://keens.github.io/blog/2016/01/08/rusttoiedoriso_sunokaihouhachuui</link>
+      <pubDate>Fri, 08 Jan 2016 00:50:31 +0900</pubDate>
+      
+      <guid>http://keens.github.io/blog/2016/01/08/rusttoiedoriso_sunokaihouhachuui</guid>
+      <description>&lt;p&gt;κeenです。深夜にですが小ネタを。&lt;/p&gt;
+
+&lt;p&gt;Rustを使っているとついついリソースの解放のことは忘れてしまうのですが、注意しないといけない類のリソースがあります。&lt;/p&gt;
+
+&lt;p&gt;その1つが&lt;code&gt;BufWriter&lt;/code&gt;です。
+バッファリングライター全般に言えることですが、奴らはメモリ上にまだ書き込まれてない値を保持しているので解放する前にそれらを掃き出す必要があります。
+その時に書き込み例外が起き得るので、解放も安全な処理ではないのです。Javaのtry-with-resource文を使わないファイルの扱いについては悪名高いですが、あれは仕方ない話なのです。&lt;/p&gt;
+
+&lt;p&gt;ところでRustのリソースの解放は&lt;code&gt;Drop&lt;/code&gt;トレイトの&lt;code&gt;drop&lt;/code&gt;が担っていますが、返り値は&lt;code&gt;void&lt;/code&gt;です。基本的には裏で動くので当然ですね。
+そして、&lt;code&gt;drop&lt;/code&gt;はpanicを起こさないことが望ましいです。Rustは今のところ(1.5時点)panicから回復出来ないのでそれはそうでしょう。では、エラーを返り値でも返せない、panicも起こせない中&lt;code&gt;BufWrite&lt;/code&gt;はどうエラーを扱っているのでしょう。それは実装を見ると分かります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;impl&amp;lt;W: Write&amp;gt; Drop for BufWriter&amp;lt;W&amp;gt; {
+    fn drop(&amp;amp;mut self) {
+        if self.inner.is_some() {
+            // dtors should not panic, so we ignore a failed flush
+            // 訳: dropはパニックすべきではない、だからflushの失敗は無視する
+            let _r = self.flush_buf();
+        }
+    }
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;…はい。中々アレなことをやってくれますね。&lt;/p&gt;
+
+&lt;p&gt;ということで&lt;code&gt;BufWrite&lt;/code&gt;を使う時は&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;{
+  let file = File::create(&amp;quot;some_file.txt&amp;quot;).unwrap();
+  let br = BufWrite::new(&amp;amp;file);
+
+  // do something
+
+  match br.flush_buf() {
+    Ok(()) =&amp;gt; (),
+    Err(e) =&amp;gt; // handle errors
+  }
+
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;のようにライフタイムの終わりで&lt;code&gt;flush_buf&lt;/code&gt;を呼ぶのが作法的な方法です。
+&lt;code&gt;unwrap&lt;/code&gt;と同じく掃き出せない時に無視されてもいいならそこまでする必要はありませんが、それでもスコープの終わりに意図的に&lt;code&gt;flush_buf&lt;/code&gt;を呼んでない旨を書くと丁寧でしょう。&lt;/p&gt;
+
+&lt;p&gt;因みにスコープが大きすぎる時は&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;{
+  let file = File::create(&amp;quot;some_file.txt&amp;quot;).unwrap();
+  {
+    let br = BufWrite::new(&amp;amp;file);
+  
+    // do something with br
+  
+    match br.flush_buf() {
+      Ok(()) =&amp;gt; (),
+      Err(e) =&amp;gt; // handle errors
+    }
+  }
+  
+  // do other things
+
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;のようにスコープを作って不要なライフタイムを切り詰めるイディオムもあるので併せてどうぞ。&lt;/p&gt;
+
+&lt;p&gt;余談ですが&lt;code&gt;std::fs::File&lt;/code&gt;の実体はCの&lt;code&gt;FILE&lt;/code&gt;構造体ではなくファイルディスクリプタなのでバッファリングはしてません。のでこちらは気にする必要はありません。&lt;/p&gt;
+
+&lt;p&gt;という訳で小ネタでした。&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>Rustのロガーを作る</title>
