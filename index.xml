@@ -6,8 +6,128 @@
     <description>Recent content on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Fri, 08 Jan 2016 00:50:31 +0900</lastBuildDate>
+    <lastBuildDate>Mon, 11 Jan 2016 00:57:20 +0900</lastBuildDate>
     <atom:link href="http://KeenS.github.io/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>SML#のpthreadバインディング作った</title>
+      <link>http://keens.github.io/blog/2016/01/11/sml_nopthreadbaindingutsukutta</link>
+      <pubDate>Mon, 11 Jan 2016 00:57:20 +0900</pubDate>
+      
+      <guid>http://keens.github.io/blog/2016/01/11/sml_nopthreadbaindingutsukutta</guid>
+      <description>
+
+&lt;p&gt;κeenです。またしても深夜になってしまいましたがSML#のpthreadバインディングを作ったのでその報告を。&lt;/p&gt;
+
+&lt;p&gt;SML#はC FFIを簡単に書け、さらにランタイムがnon Moving GCなのでSML#自体はサポートしていないもののランタイムそのものはマルチスレッドに対応しているという大変興味深い特徴を持っています。
+処理系側としてもマルチスレッドが欲しいならpthreadのFFIを使って好きにやってくれというスタンスのようです。&lt;/p&gt;
+
+&lt;p&gt;ということでさまざまなマルチスレッドアプリケーションの下地になるべくpthreadのバインディングを作りました。とはいってもまだ不完全ですが。&lt;/p&gt;
+
+&lt;p&gt;どういうものが用意出来ているかは&lt;a href=&#34;https://github.com/KeenS/smlsharp_pthread/blob/master/src/pthread.smi&#34;&gt;こちら&lt;/a&gt;が一覧として機能しています。&lt;/p&gt;
+
+&lt;p&gt;SML的には改善の余地がある(例えば、排他的なフラグをdatatypeで定義するとか)のですが、あくまで低レベルなバインディングに徹するためにintのままで残してあります。&lt;/p&gt;
+
+&lt;p&gt;他にはCのマクロで実現されていたものはインポート出来ないのでどうにかしてあったりどうにかしてなかったりしてます。
+例えば&lt;code&gt;PTHREAD_XXX_INITIALIZER&lt;/code&gt;はマクロで定義された初期値ですが、SMLからは参照出来ないのであきらめました。
+代わりに&lt;code&gt;pthread_xxx_new&lt;/code&gt;関数を用意したので&lt;code&gt;pthread_xxx_init&lt;/code&gt;と併せて使うことでそれらの値を初期化出来ます。
+メモリ確保と初期化同時にやれよとの声が聞こえてきそうですが繰り返すとあくまで低レベルなバインディングなのでそういうのは他に譲ることにします。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;pthread_cleanup_{pop/push}&lt;/code&gt;はバインディングが書けませんでした。
+それらはマクロとして実現されていて、しかも&lt;code&gt;pthread_cleanup_push&lt;/code&gt;で開き括弧を挿入して&lt;code&gt;pthread_cleanup_pop&lt;/code&gt;で閉じるというエグい実装なので移植は無理でしょう。
+POSIX的にもマクロとして実現して良いことになっているので文句は言えません。&lt;/p&gt;
+
+&lt;h1 id=&#34;サンプルコード:2d3ca0e3b6ad5447c7ddca19d53be02a&#34;&gt;サンプルコード&lt;/h1&gt;
+
+&lt;p&gt;レポジトリにも入ってますが、スレッドを作る小さな例だとこうなります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;open PThread
+fun exit reason = (
+    print (reason ^ &amp;quot;\n&amp;quot;);
+    OS.Process.exit OS.Process.failure
+)
+
+
+val fromUnitPtr = SMLSharp_Builtin.Pointer.fromUnitPtr
+val toUnitPtr = SMLSharp_Builtin.Pointer.toUnitPtr
+(* durty hack *)
+val sml_str_new = _import &amp;quot;sml_str_new&amp;quot;: (string) -&amp;gt; char ptr
+
+fun threadFunc (arg:unit ptr): unit ptr = let
+    val cp: char ptr = fromUnitPtr arg
+    val s = Pointer.importString cp
+    val () = print s
+    (* val ret =ref _NULL *)
+    (* val () = ret := (String.size s) *)
+in
+    (* ret *)
+    _NULL
+end
+                   
+val () = let
+    val tattr = ref (pthread_attr_new())
+    val s = pthread_attr_init(tattr)
+    val () = if s &amp;lt;&amp;gt; 0
+             then exit &amp;quot;pthread_attr_init&amp;quot;
+             else ()
+    val thread_ref = ref (pthread_new())
+    val arg = sml_str_new &amp;quot;Hello world\n&amp;quot;
+    val s = pthread_create(thread_ref, tattr, threadFunc, toUnitPtr arg)
+    val t1 = !thread_ref
+    val () = if s &amp;lt;&amp;gt; 0
+             then exit &amp;quot;thread creation failed&amp;quot;
+             else ()
+    val s = pthread_attr_destroy(tattr)
+    val () = if s &amp;lt;&amp;gt; 0
+             then exit &amp;quot;pthread_attr_destroy&amp;quot;
+             else ()
+    val () = print &amp;quot;Message from main()\n&amp;quot;;
+    val resRef = ref (Pointer.NULL ())
+    val s = pthread_join(t1, resRef)
+    val () = if s &amp;lt;&amp;gt; 0
+             then exit &amp;quot;thread creation failed&amp;quot;
+             else ()
+    (* val () = print (&amp;quot;Thread returned&amp;quot; ^ Int.toString  (!resRef) ^ &amp;quot;\n&amp;quot;) *)
+in
+    ()
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;言わずとも雰囲気で読み取れそうですがこの例はCのサンプルをそのまま移植しました。Cだと&lt;code&gt;(void *)&lt;/code&gt;と文字列で相互変換が出来るのですがSML#だと一筋縄では出来ないので内部APIを叩くとかのかなりアレなハックしてます。
+&lt;a href=&#34;https://github.com/smlsharp/smlsharp/issues/45&#34;&gt;SML#にイシューに上げ&lt;/a&gt;ましたが&lt;code&gt;(void *)&lt;/code&gt;が強敵ですね。&lt;/p&gt;
+
+&lt;h1 id=&#34;可搬性の話:2d3ca0e3b6ad5447c7ddca19d53be02a&#34;&gt;可搬性の話&lt;/h1&gt;
+
+&lt;p&gt;ところで、pthreadはp(POSIX)の名が付いている通り様々なプラットフォームで利用出来、そしてそれぞれのプラットフォーム毎に実装が異なります。
+勿論、POSIXで定められているのでAPIレベルでは互換性がある(≒関数のバインディングは問題ない)のですが、ABI、データの表現に互換性がありません(≒データ型のバインディングに問題がある)&lt;/p&gt;
+
+&lt;p&gt;実はその辺で苦労がありました。今のところ手元の環境(Linux)でしか移植が済んでません。しかし他のプラットフォームの移植は書ける形になっています。
+これは&lt;a href=&#34;http://keens.github.io/blog/2015/12/26/sml_tocpuripurosessanorenkei/&#34;&gt;以前&lt;/a&gt;書いたSMLのファイルにCのプリプロセッサを適用するというなんともいえないハックを使うことで実現しています。
+他のプラットフォームに移植するには&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;どういうマクロが定義されている時にどのプラットフォームのpthreadを使っているかの対応を調べる&lt;/li&gt;
+&lt;li&gt;そのプラットフォームの&lt;code&gt;pthread.h&lt;/code&gt;を入手してデータ型を移植する&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;手順が必要です。私は手元の環境で動かすのが精一杯なのでMacとかで動かしたい方がいればプルリクを頂けると。
+前述の通り、関数のバインディングは可搬性があるので必要なのはデータ型と定数の移植です。ある程度はプリプロセッサも使えるのでほぼヘッダファイルを移植する感じですね。&lt;/p&gt;
+
+&lt;p&gt;まあ、実をいうと関数の移植も細々したものが面倒なので放置していたりします。ここら辺は作業ゲーなので気が向いたらやります。&lt;/p&gt;
+
+&lt;p&gt;あとは若干迷っているのが必ずしも実装されているとは限らないオプショナルな機能の移植ですね。
+バリアやリードライトロック、スピンロックがそれにあたります。
+可搬性とはいってもSML#自身が動く環境が限られているのでMacでもそれらが使えるなら移植してしまおうかと思っていますがまだ調べきれてません。&lt;/p&gt;
+
+&lt;h1 id=&#34;まとめ:2d3ca0e3b6ad5447c7ddca19d53be02a&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;pthreadのバインディング作ったよ&lt;/li&gt;
+&lt;li&gt;まだバインドが書かれてない関数もあるよ&lt;/li&gt;
+&lt;li&gt;Macの移植パッチ待ってるよ&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
     
     <item>
       <title>Rustといえどリソースの解放は注意</title>
@@ -2481,367 +2601,6 @@ moduleに関しては&lt;code&gt;Top.compile&lt;/code&gt;が最後にLLVMEmitを
 &lt;li&gt;REPLの実装にはダイナミックリンクを使う方法があるよ&lt;/li&gt;
 &lt;li&gt;SML#のREPLはHack出来そうだよ&lt;/li&gt;
 &lt;/ul&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>SML#でJITコンパイラを作る軽い話</title>
-      <link>http://keens.github.io/blog/2015/12/12/sml_dejitwotsukurukaruihanashi</link>
-      <pubDate>Sat, 12 Dec 2015 17:26:24 +0900</pubDate>
-      
-      <guid>http://keens.github.io/blog/2015/12/12/sml_dejitwotsukurukaruihanashi</guid>
-      <description>
-
-&lt;p&gt;このエントリは&lt;a href=&#34;http://www.adventar.org/calendars/848&#34;&gt;ML Advent Calendar 2015&lt;/a&gt;及び&lt;a href=&#34;http://qiita.com/advent-calendar/2015/lang_dev&#34;&gt;言語実装 Advent Calendar 2015&lt;/a&gt;15日目の記事です。&lt;/p&gt;
-
-&lt;p&gt;κeenです。先日流れてきた&lt;a href=&#34;http://www.jonathanturner.org/2015/12/building-a-simple-jit-in-rust.html&#34;&gt;RustでJITコンパイラを作る話&lt;/a&gt;が面白かったのでSML#でもやってみます。&lt;/p&gt;
-
-&lt;h1 id=&#34;jitコンパイラってなに:adcfd48c9789a206f0f1cfad72bd4b5a&#34;&gt;JITコンパイラってなに？&lt;/h1&gt;
-
-&lt;p&gt;JITはJust In Timeで、日本語にすると「間に合って」になります。誤読されかねませんが「臨時コンパイラ」と訳すのが適当なのでしょうか。&lt;/p&gt;
-
-&lt;p&gt;普通のインタプリタがソースコードを直接評価するのに対してJITコンパイラはソースコードを内部で一旦ネイティブコードにコンパイルして実行します。&lt;/p&gt;
-
-&lt;p&gt;よく、JITコンパイラ/JITコンパイルのことをJITと略して呼びます。&lt;/p&gt;
-
-&lt;h1 id=&#34;どこで使うの:adcfd48c9789a206f0f1cfad72bd4b5a&#34;&gt;どこで使うの？&lt;/h1&gt;
-
-&lt;p&gt;主に、インタプリタの高速化の目的で使われるようです。他にはコンパイラをインタプリタ化させる(REPLの実装とか)でも使えそうな気がしますが、詳しくは知りません。&lt;/p&gt;
-
-&lt;h1 id=&#34;jitってどうやって作るの:adcfd48c9789a206f0f1cfad72bd4b5a&#34;&gt;JITってどうやって作るの？&lt;/h1&gt;
-
-&lt;p&gt;JIT &lt;strong&gt;でない&lt;/strong&gt; コンパイラが吐いたコードは一旦ディスクからメモリに読まれ、メモリ上で実行されます。&lt;/p&gt;
-
-&lt;p&gt;JITコンパイラが吐くコードは直接メモリに吐かれ、メモリ上で実行されます。なので細かい条件を無視すれば&lt;/p&gt;
-
-&lt;ol&gt;
-&lt;li&gt;吐かれる命令のための(特殊な)メモリ領域を用意する&lt;/li&gt;
-&lt;li&gt;そこに実行したい命令列を書き込む&lt;/li&gt;
-&lt;li&gt;書き込んだ命令列を実行する&lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;p&gt;だけです。
-3.の「書き込んだ命令を実行する」が若干ふわっとしてますが、多くの場合は命令の書かれたメモリを関数ポインタとして扱って、その関数を呼び出す形で実行されます。
-一応直接プログラムカウンタをいじって書き込んだ命令列を実行させることも出来ます。&lt;/p&gt;
-
-&lt;h1 id=&#34;一緒に作ってみよう:adcfd48c9789a206f0f1cfad72bd4b5a&#34;&gt;一緒に作ってみよう&lt;/h1&gt;
-
-&lt;p&gt;思ったより簡単そうですね。作ってみましょう。&lt;/p&gt;
-
-&lt;h2 id=&#34;1-メモリ領域を準備する:adcfd48c9789a206f0f1cfad72bd4b5a&#34;&gt;1. メモリ領域を準備する&lt;/h2&gt;
-
-&lt;p&gt;先に「特殊な」と付言しましたのでそれについて説明しましょう。プロセス上のメモリは、OSによって保護されています。
-特に、そのままではそのメモリ上の命令列を実行出来ません。その保護を外すために&lt;code&gt;mprotect(2)&lt;/code&gt;システムコールを使います。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-C&#34;&gt;int mprotect(void *addr, size_t len, int prot);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;SML#を使えば簡単に使えるようになります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val mprotect = _import &amp;quot;mprotect&amp;quot;: (unit ptr, word, word) -&amp;gt; int
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;SML#は2.0.0時点では32bitでしか動かないのでsize_tをwordとしてしまって大丈夫です。また、bit演算をやりたいので&lt;code&gt;prot&lt;/code&gt;は本来はintですがwordにしました。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;mprotect(2)&lt;/code&gt;はPOSIX(SUSv4)的には引数の&lt;code&gt;addr&lt;/code&gt;がシステムのページの境界上にあることを要求しても良いことになっています。
-実際、OS Xが要求するらしいです。また、メモリ保護はページ単位で行われるため、&lt;code&gt;len&lt;/code&gt;もページサイズの倍数である必要があります。
-&lt;code&gt;prot&lt;/code&gt;は保護フラグですね。&lt;/p&gt;
-
-&lt;p&gt;メモリの確保、特にページの境界にアラインメントされたメモリ領域を確保するにはSML#では厳しそうなのでこれもCの関数に頼ります。
-Linuxならいくつか方法はありますが、ポータブルには&lt;code&gt;posix_memalign(3)&lt;/code&gt;を使うのが良いようです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-C&#34;&gt;int posix_memalign(void **memptr, size_t alignment, size_t size);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これもSML#から簡単に使えます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val posix_memalign = _import &amp;quot;posix_memalign&amp;quot;: (unit ptr ref, word, word) -&amp;gt; int
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ついでにメモリの解放も必要ですね。&lt;code&gt;free(3)&lt;/code&gt;もインポートしましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val free = _import &amp;quot;free&amp;quot;: unit ptr -&amp;gt; ()
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;さて、メモリを確保するのにいくつかCのマクロで定義された定数を定義しましょう。今のところSML#にCのマクロを使う術はなさそうです。どうにかしてCプリプロセッサを使えれば良いのですが…。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val PROT_READ  = 0wx1
-val PROT_WRITE = 0wx2
-val PROT_EXEC  = 0wx4
-val PROT_NONE  = 0wx0
-
-val PAGE_SIZE = 0w4096
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ページサイズは本当は&lt;code&gt;sysconf(3)&lt;/code&gt;を使って&lt;code&gt;sysconf(PAGESIZE)&lt;/code&gt;として取るのが作法ですが面倒なので4KiB決め打ちにしてしまいました。&lt;/p&gt;
-
-&lt;p&gt;さて、これらを用いてJIT用のメモリは次のように確保します。&lt;code&gt;Pointer&lt;/code&gt;モジュールが必要なのでsmiファイルで&lt;code&gt;require &amp;quot;ffi.smi&amp;quot;&lt;/code&gt;しましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val op orb = Word.orb
-infix 5 orb
-val size = 0wx1
-val msize = size * PAGE_SIZE
-val pageRef: unit ptr ref = ref (Pointer.NULL ())
-val ret = posix_memalign (pageRef, PAGE_SIZE, msize)
-val page = if ret = 0
-           then !pageRef
-           else raise Fail &amp;quot;memory allocation failed&amp;quot;
-val PROT_RWEX = PROT_READ orb PROT_WRITE orb PROT_EXEC
-val ret = mprotect (page, msize, PROT_RWEX)
-val () = if ret = 0
-         then ()
-         else raise Fail &amp;quot;memory protection error&amp;quot;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これで&lt;code&gt;page&lt;/code&gt;に実行可能フラグが立ったメモリが確保出来ました。sizeは書き込みたい命令列に応じて変えます。&lt;/p&gt;
-
-&lt;h1 id=&#34;2-命令列を書き込む:adcfd48c9789a206f0f1cfad72bd4b5a&#34;&gt;2. 命令列を書き込む&lt;/h1&gt;
-
-&lt;p&gt;さて、ここらへんからアセンブラの世界になってきます。&lt;/p&gt;
-
-&lt;p&gt;まず、安全のために件のメモリ領域を&lt;code&gt;ret&lt;/code&gt;命令で埋めます。
-&lt;code&gt;ret&lt;/code&gt;命令は関数から戻る時に使われる命令で、変なことをしても&lt;code&gt;ret&lt;/code&gt;で元の場所に戻ればどうにかなる可能性があるのです。&lt;/p&gt;
-
-&lt;p&gt;メモリを一気に埋めるには&lt;code&gt;memset(3)&lt;/code&gt;が便利です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-C&#34;&gt;void *memset(void *s, int c, size_t n);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これをSMLにインポートして使いましょう。&lt;code&gt;ret&lt;/code&gt;命令に対応するマシン語は&lt;code&gt;0xc3&lt;/code&gt;です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val memset = _import &amp;quot;memset&amp;quot;: (unit ptr, word, word) -&amp;gt; unit ptr
-val _ = memset (page, 0wxc3, msize)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;じゃあ、命令を書き込んでいきましょう。最初はただ1を返すだけの関数に相当する命令です。
-64bitマシンを使っていても32bitでコンパイルしたSML#を使っている限りはx86(IA32)のアセンブラを使います。
-x86は値を&lt;code&gt;eax&lt;/code&gt;レジスタに入れることで返り値とします。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-asm&#34;&gt;mov 1 eax
-ret
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;このコードを&lt;a href=&#34;https://defuse.ca/online-x86-assembler.htm#disassembly&#34;&gt;オンラインアセンブラ&lt;/a&gt;でアセンブルしてみると&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;0:  b8 01 00 00 00          mov    eax,0x1
-5:  c3                      ret
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;との結果が返ってきました。これを真心込めて1つづつメモリに書き込んでいきます。
-SML#からメモリに直接書き込むには内部APIっぽいものを触る必要があります。
-タイプ数を減らすためにいくつかエイリアスを定義しておきましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val fromUnitPtr = SMLSharp_Builtin.Pointer.fromUnitPtr
-val store = Pointer.store
-val advance = Pointer.advance
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;メモリにword8の値を書き込むのにキャストが必要になるので&lt;code&gt;fromUnitPtr&lt;/code&gt;を使います。
-さて、書き込んでいきます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val mem: word8 ptr = fromUnitPtr page
-val () = store page 0wxb8
-val mem = advance mem
-val () = store page 0wx01
-val mem = advance mem
-val () = store page 0wx00
-val mem = advance mem
-val () = store mem 0wx00
-val mem = advance mem
-val () = store mem 0wx00
-val mem = advance mem
-val () = store mem 0wxc3
-val _ = advance mem
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これで&lt;code&gt;page&lt;/code&gt;に1を返すだけの命令列が書き込まれした。&lt;/p&gt;
-
-&lt;h2 id=&#34;3-書き込んだ命令列を実行する:adcfd48c9789a206f0f1cfad72bd4b5a&#34;&gt;3. 書き込んだ命令列を実行する&lt;/h2&gt;
-
-&lt;p&gt;書き込んだ命令列は関数にキャストして使うことが多いと言いました。今回もそのようにします。&lt;/p&gt;
-
-&lt;p&gt;そのために、また内部APIっぽいものを使います。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val toCodeptr = SMLSharp_Builtin.Pointer.toCodeptr
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;codeptr&lt;/code&gt;型は関数ポインタを表すもののようです。&lt;code&gt;DynamicLink&lt;/code&gt;モジュールなどで使われています。&lt;/p&gt;
-
-&lt;p&gt;さて、今回の1を返すだけの命令列は&lt;code&gt;() -&amp;gt; int&lt;/code&gt;型になりますね。
-それをインポート、実行しましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val freturn1 = toCodePtr page: _import () -&amp;gt; int
-val () = print ((Int.toString (freturn1 ())) ^ &amp;quot;\n&amp;quot;)
-val _ = free page
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これで見事&lt;code&gt;1&lt;/code&gt;が印字されたら成功です。&lt;/p&gt;
-
-&lt;h1 id=&#34;さらに:adcfd48c9789a206f0f1cfad72bd4b5a&#34;&gt;さらに&lt;/h1&gt;
-
-&lt;p&gt;先程のコードは繰り返しが多く、整理されていませんでした。もう少し整理しましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;structure Emit = struct
-    val posix_memalign = _import &amp;quot;posix_memalign&amp;quot;: (unit ptr ref, word, word) -&amp;gt; int
-    val mprotect = _import &amp;quot;mprotect&amp;quot;: (unit ptr, word, word) -&amp;gt; int
-    val memset = _import &amp;quot;memset&amp;quot;: (unit ptr, word, word) -&amp;gt; unit ptr
-    val free = _import &amp;quot;free&amp;quot;: unit ptr -&amp;gt; ()
-    val printf = _import &amp;quot;printf&amp;quot;: (string, unit ptr) -&amp;gt; ()
-
-    (* 
-#define PROT_READ	0x1		/* Page can be read.  */
-#define PROT_WRITE	0x2		/* Page can be written.  */
-#define PROT_EXEC	0x4		/* Page can be executed.  */
-#define PROT_NONE	0x0		/* Page can not be accessed.  */
-    *)
-
-    val PROT_READ  = 0wx1
-    val PROT_WRITE = 0wx2
-    val PROT_EXEC  = 0wx4
-    val PROT_NONE  = 0wx0
-
-    val PAGE_SIZE = 0w4096
-
-    type jitptr = word8 ptr
-    val fromUnitPtr = SMLSharp_Builtin.Pointer.fromUnitPtr
-    val toUnitPtr = SMLSharp_Builtin.Pointer.toUnitPtr
-    val toCodeptr = SMLSharp_Builtin.Pointer.toCodeptr
-    val store = Pointer.store
-    val advance = Pointer.advance
-
-
-    fun jitMemory size: jitptr = let
-        val op orb = Word.orb
-        infix 5 orb
-        val msize = size * PAGE_SIZE
-        val pageRef: unit ptr ref = ref (Pointer.NULL ())
-        val ret = posix_memalign (pageRef, PAGE_SIZE, msize)
-        val page = if ret = 0
-                   then !pageRef
-                   else raise Fail &amp;quot;memory allocation failed&amp;quot;
-        val PROT_RWEX = PROT_READ orb PROT_WRITE orb PROT_EXEC
-        val ret = mprotect (page, msize, PROT_RWEX)
-        val () = if ret = 0
-                 then ()
-                 else raise Fail &amp;quot;memory protection error&amp;quot;
-        (* init with ret for safety *)
-        val _ = memset (page, 0wxc3, msize)
-    in
-        fromUnitPtr page
-    end
-
-    fun freeJit (jitMem: jitptr) = free (SMLSharp_Builtin.Pointer.toUnitPtr jitMem)
-
-    fun pushWord page (word: word8) = (store (page, word); advance (page, 1))
-    fun pushWords (page: jitptr) l = List.foldl (fn(w,page) =&amp;gt; pushWord page w) page l
-
-    val import: jitptr -&amp;gt; codeptr = toCodeptr o toUnitPtr
-
-    fun fromMachineCode l = let
-        val len = Word.fromInt(List.length l)
-        val size = (len + PAGE_SIZE) div PAGE_SIZE
-        val page = jitMemory size
-        val _ = pushWords page l
-    in
-        import page
-    end
-end
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;次のように使います。一回importした関数はfreeしないことにしましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;fun println x = print (x ^ &amp;quot;\n&amp;quot;)
-val return1  =
-    (* 0:  b8 01 00 00 00          mov    eax,0x1  *)
-    [
-      0wxb8, 0wx01, 0wx00, 0wx00, 0wx00
-    ] 
-val freturn1 = Emit.fromMachineCode return1 :_import () -&amp;gt; int
-val () = println (Int.toString (freturn1 ()))
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;引数を取る:adcfd48c9789a206f0f1cfad72bd4b5a&#34;&gt;引数を取る&lt;/h2&gt;
-
-&lt;p&gt;もうアセンブラの話になります。&lt;/p&gt;
-
-&lt;p&gt;x86では引数は右から順にスタックに積まれます。intを1つ取ってそれに1足して返す関数はこうなります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val add1 = 
-    (* 0:  8b 44 24 04             mov    eax,DWORD PTR [esp+0x4] *)
-    (* 4:  83 c0 01                add    eax,0x1 *)
-    [
-      0wx8b, 0wx44, 0wx24, 0wx04,
-      0wx83, 0wxc0, 0wx01
-    ]
-val fadd1 = Emit.fromMachineCode add1 :_import (int) -&amp;gt; int
-val () = println (Int.toString (fadd1 3))
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;正常に動けば4が印字されます。&lt;/p&gt;
-
-&lt;h1 id=&#34;つらい話:adcfd48c9789a206f0f1cfad72bd4b5a&#34;&gt;つらい話&lt;/h1&gt;
-
-&lt;h2 id=&#34;バグ:adcfd48c9789a206f0f1cfad72bd4b5a&#34;&gt;バグ&lt;/h2&gt;
-
-&lt;p&gt;最初、&lt;code&gt;Pointer.store&lt;/code&gt;でなく、&lt;code&gt;SMLSharp_Builtin.Pointer.store&lt;/code&gt;を使っていたら&lt;a href=&#34;https://github.com/smlsharp/smlsharp/issues/43&#34;&gt;変なバグ&lt;/a&gt;踏みました。バグというか使い方が悪かった。&lt;/p&gt;
-
-&lt;h2 id=&#34;デバッグ:adcfd48c9789a206f0f1cfad72bd4b5a&#34;&gt;デバッグ&lt;/h2&gt;
-
-&lt;p&gt;デバッガがないので非常につらいです。書き出された命令列を見るのに困りました。gdbで見たかったので、&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val printf = _import &amp;quot;printf&amp;quot;: (string, unit ptr) -&amp;gt; int
-val _ = pritnf (&amp;quot;page pointr: %p&amp;quot;, page)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;して&lt;code&gt;printf&lt;/code&gt;にブレークポイントを張り、そこで止めつつページのアドレスを取得、&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-gdb&#34;&gt;(gdb) x/20xh 0x81ca000
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;などとして見ていました。&lt;/p&gt;
-
-&lt;h1 id=&#34;もっと:adcfd48c9789a206f0f1cfad72bd4b5a&#34;&gt;もっと&lt;/h1&gt;
-
-&lt;p&gt;JITコンパイラが楽しかったのでアセンブラのDSLを作ってみました。1、2個の命令吐けるだけですがちゃんと動きました。今のところこのように書けます。Intel記法だとしんどそうだったのでAT&amp;amp;T記法っぽく書けるようにしました。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val freturn1&#39; = Emit.fromInsts [
-        xorl eax eax,
-        addl ($1) eax,
-        ret
-    ]:_import () -&amp;gt; int
-val () = println (Int.toString (freturn1&#39; ()))
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;x86は命令フォーマットが1バイトから15バイトまでの可変長で、内部表現をどのようにするか決めるだけでも一苦労でした。x86つらい。&lt;/p&gt;
-
-&lt;p&gt;アドレッシングが複雑なのも悩みどころで、複数のアドレッシングを統一的に扱えるようにオーバーロードされた関数を用意したのですがあえなくSML#のバグを踏んで死亡しました。本当はこういう記法が出来る筈だった…&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;addl (%eax) eax
-addl eax (%eax)
-addl eax (%(eax, ebx))
-addl eax (%(eax, ebx, 4))
-addl eax (%(4, eax))
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;$ /usr/local/bin/smlsharp   -c -o main.o main.sml
-uncaught exception: Bug.Bug: InferType: FIXME: user error: invalid instTy at src/compiler/typeinference2/main/InferTypes2.sml:47
-Makefile:11: recipe for target &#39;main.o&#39; failed
-make: *** [main.o] Error 1
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;movl&lt;/code&gt;を実装しようとしたらアドレッシングが動かなかったので萎えてまだ実装してません。&lt;/p&gt;
-
-&lt;p&gt;よく考えたら&lt;code&gt;%&lt;/code&gt;ってミスリーディングだし名前変えよう。&lt;/p&gt;
-
-&lt;h1 id=&#34;まとめ:adcfd48c9789a206f0f1cfad72bd4b5a&#34;&gt;まとめ&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;JITを作るにはメモリ保護をいじれて関数ポインタのインポートが出来ればいいよ&lt;/li&gt;
-&lt;li&gt;SML#でもJIT作れるよ&lt;/li&gt;
-&lt;li&gt;アセンブラっぽいの作ったよ&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;今回のコードは&lt;a href=&#34;https://github.com/KeenS/smljit&#34;&gt;こちら&lt;/a&gt;にあります。&lt;/p&gt;
 </description>
     </item>
     
