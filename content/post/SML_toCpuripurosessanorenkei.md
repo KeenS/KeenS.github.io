@@ -13,7 +13,7 @@ SML#のC FFIを使ってるとマクロで定義された値などを触りた�
 
 
 # 簡単な例
-[JITを作る話](http://keens.github.io/blog/2015/12/12/sml_dejitwotsukurukaruihanashi/)の時のように、定数に触りたいとします。
+[JITを作る話](//KeenS.github.io/blog/2015/12/12/sml_dejitwotsukurukaruihanashi/)の時のように、定数に触りたいとします。
 その時、以下のように.smlファイルを記述して、
 
 ``` sml

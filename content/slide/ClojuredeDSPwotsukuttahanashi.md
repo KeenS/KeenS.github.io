@@ -205,7 +205,7 @@ Lisp Meet Up #3
 # 参考
 ------
 
-* [Internal of b11d | κeenのHappy Hacκing Blog](http://keens.github.io/slide/Internal_of_b11d/)
+* [Internal of b11d | κeenのHappy Hacκing Blog](//KeenS.github.io/slide/Internal_of_b11d/)
 
 </script>
 </section>

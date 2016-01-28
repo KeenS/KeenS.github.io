@@ -278,11 +278,11 @@ LLVMは巨大だがこの本を読めばどこで何をやってるのか、LLVM
 # 29. 正規表現技術入門
 <iframe src="http://rcm-fe.amazon-adsystem.com/e/cm?lt1=_blank&bc1=000000&IS2=1&bg1=FFFFFF&fc1=000000&lc1=0000FF&t=httpkeensgith-22&o=9&p=8&l=as4&m=amazon&f=ifr&ref=ss_til&asins=4774172707" style="width:120px;height:240px;" scrolling="no" marginwidth="0" marginheight="0" frameborder="0"></iframe>
 
-一度[書評を書いた](http://keens.github.io/blog/2015/05/10/seikihyougengijutsunyuumonwoyonda/)。
+一度[書評を書いた](//KeenS.github.io/blog/2015/05/10/seikihyougengijutsunyuumonwoyonda/)。
 Webではまず得られない正規表現のまとまった情報が得られる。
 ドラゴンブックでも扱われている正規言語だがこちらの方がコードを交えながら解説するので詳しくて分かりやすい。
 
-Onigmoのコードが載っているのでそれを見て[最適化し](http://keens.github.io/blog/2015/05/26/onigmowosaidai49_kousokukashitahanashi/)、最終的には[パッチがRubyに取り込まれる](http://qiita.com/blackenedgold/items/2ec4d8bfaf220409609d)までの流れが出来た私にとっての思い出の1冊でもある。
+Onigmoのコードが載っているのでそれを見て[最適化し](//KeenS.github.io/blog/2015/05/26/onigmowosaidai49_kousokukashitahanashi/)、最終的には[パッチがRubyに取り込まれる](http://qiita.com/blackenedgold/items/2ec4d8bfaf220409609d)までの流れが出来た私にとっての思い出の1冊でもある。
 
 語彙が足りなくて申し訳ないが素晴しいの一言に付きる。
 

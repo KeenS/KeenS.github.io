@@ -5,7 +5,7 @@ title: ATS2の観が整理出来た
 ---
 
 κeenです。ATS2には3つの世界があります。動的な世界、静的な世界、証明の世界。
-[前回](http://keens.github.io/blog/2015/12/29/ats2noizongatawotsukatteavlki/)の記事では静的な世界を色々扱ってみました。
+[前回](//KeenS.github.io/blog/2015/12/29/ats2noizongatawotsukatteavlki/)の記事では静的な世界を色々扱ってみました。
 今回は証明の世界である観について少し。
 <!--more-->
 2016-1-2: いくつか誤植を直しました(用語で言えば、 注観→駐観 が正解でした)。

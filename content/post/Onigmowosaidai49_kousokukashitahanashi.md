@@ -6,7 +6,7 @@ title: Onigmoを最大49%高速化した話
 
 κeenです。Rubyでも使われてる高速な正規表現エンジン、Onigmo(鬼雲)を高速化したのでその話を。
 <!--more-->
-先日、[正規表現技術入門を読んだ](http://keens.github.io/blog/2015/05/10/seikihyougengijutsunyuumonwoyonda/)というエントリの中で
+先日、[正規表現技術入門を読んだ](//KeenS.github.io/blog/2015/05/10/seikihyougengijutsunyuumonwoyonda/)というエントリの中で
 
 > ところで本に載ってた鬼雲のコードはDT(編注: Direct Threaded)にしてなかったけど簡単のためなのかな？あるいは厳格にC89に準拠するため？picrinみたくプリプロセッサで分岐すれば使えるのに。
 

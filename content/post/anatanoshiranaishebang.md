@@ -30,7 +30,7 @@ title: あなたの知らないShebang
 ":" "/bin/sh"
 ```
 
-としてもちゃんと動いてくれます。なぜわざわざクォートするかというと[割と処理系ポータブルなCommon Lisp実行可能ファイルを作る | κeenのHappy Hacκing Blog](http://keens.github.io/blog/2014/12/08/ge-tochu-li-xi-potaburunacommon-lispshi-xing-ke-neng-huairuwozuo-ru/)のように別の言語のスクリプトとして実行される時に文字列リテラルになってくれると単純に無視されるので互換性が高まるのです。
+としてもちゃんと動いてくれます。なぜわざわざクォートするかというと[割と処理系ポータブルなCommon Lisp実行可能ファイルを作る | κeenのHappy Hacκing Blog](//KeenS.github.io/blog/2014/12/08/ge-tochu-li-xi-potaburunacommon-lispshi-xing-ke-neng-huairuwozuo-ru/)のように別の言語のスクリプトとして実行される時に文字列リテラルになってくれると単純に無視されるので互換性が高まるのです。
 
 ということで完全版ポータブルなCommon Lisp実行可能ファイルはこうなります。
 

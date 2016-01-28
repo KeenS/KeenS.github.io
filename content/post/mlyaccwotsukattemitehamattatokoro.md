@@ -3,7 +3,7 @@ categories: [SML, mlyacc, Prolog]
 date: 2015-01-31T11:55:51Z
 title: mlyaccを使ってみてハマったところ
 ---
-κeenです。前回の[mllexの記事](http://keens.github.io/blog/2014/12/10/mllexwoshi-tutemiru/)の続きです。今回はmlyaccを使ってみました。
+κeenです。前回の[mllexの記事](//KeenS.github.io/blog/2014/12/10/mllexwoshi-tutemiru/)の続きです。今回はmlyaccを使ってみました。
 <!--more-->
 <script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
 

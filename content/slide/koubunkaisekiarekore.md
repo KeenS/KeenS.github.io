@@ -434,7 +434,7 @@ each do {}
   + Lispは自由度が高い
   + 関数マクロはないよりマシ程度
 * ~衛生性~
-* [マクロについて整理してみる | κeenのHappy Hacκing Blog](http://keens.github.io/blog/2015/07/04/makuronitsuiteseirishitemiru/)
+* [マクロについて整理してみる | κeenのHappy Hacκing Blog](//KeenS.github.io/blog/2015/07/04/makuronitsuiteseirishitemiru/)
 
 
 ## Cのマクロ

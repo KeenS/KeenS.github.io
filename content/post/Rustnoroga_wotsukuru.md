@@ -7,7 +7,7 @@ title: Rustのロガーを作る
 Advent Calendarが終わってしまったので投げやり気味ですね。
 第1段はRustのロガーを作る話。
 
-[Rust Advent Calendar](http://qiita.com/advent-calendar/2015/rust-lang)の[初日](http://keens.github.io/blog/2015/11/14/rustdechiisanatsu_ruwotsukuttemiru/)でロガーはfacadと実装に分かれてると書きましたが、実装を作る話ですね。
+[Rust Advent Calendar](http://qiita.com/advent-calendar/2015/rust-lang)の[初日](//KeenS.github.io/blog/2015/11/14/rustdechiisanatsu_ruwotsukuttemiru/)でロガーはfacadと実装に分かれてると書きましたが、実装を作る話ですね。
 <!--more-->
 [ドキュメント](https://doc.rust-lang.org/log/log/index.html)を見てもらえば分かる通り、logは
 
