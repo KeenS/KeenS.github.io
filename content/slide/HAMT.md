@@ -1,5 +1,5 @@
 ---
-categories: [Scala, 社内]
+categories: [Scala, 社内, Scala Meet Up]
 date: 2016-01-31T16:17:35+09:00
 description: "社内勉強会「AdTech Scala Meetup」でのLT大会の資料です。"
 title: HAMT ~ イミュータブルで高速なハッシュマップ ~
@@ -28,12 +28,13 @@ title: HAMT ~ イミュータブルで高速なハッシュマップ ~
  + Lisp, ML, Rust, Shell Scriptあたりを書きます
 
 
-# scala.collections.immutable.HashMap
+# <span style="font-size: 60%">scala.collections.immutable.HashMap</span>
 -------------------------------------
 
+* 今日の話題。これの実装をみていく。
 * イミュータブル
 * キー-バリューペア
-* 値を追加する度に新たなハッシュマップを作る
+* 値を追加する度に新たなハッシュマップを作る <!-- .element: class="fragment grow" data-fragment-index="1" -->
 
 
 # HashMap
@@ -84,7 +85,7 @@ val hash2 = hash + (2 -> 2)
 ```
 
 
-# メモリ効率の良いデータ構造?
+# メモリ効率的データ構造?
 ----------------------------
 ## TreeMap
 
@@ -118,13 +119,13 @@ treeMap.get("very long ... key1")
 
 <table>
 <tr><td></td><th>HashMap</th><th>TreeMap</th></tr>
-<tr><th>アクセス効率</th><td>`O(1)`</td><td>`O(log(n))`</td></tr>
-<tr><th>イミュータブルな時の空間効率</th><td>悪い(毎回コピー)</td><td>良い(部分構造を共有)</td></tr>
-<tr><th>キーの比較</th><td>定数回</td><td>`O(log(n))`回</td></tr>
-<tr><th>キーの要件</th><td>Hash関数が定義されている</td><td>全順序関数が定義されている</td></tr>
+<tr><th>アクセス効率</th><td class="fragment highlight-red" data-fragment-index="1">`O(1)`</td><td>`O(log(n))`</td></tr>
+<tr><th>イミュータブルな時の空間効率</th><td>悪い(毎回コピー)</td><td class="fragment highlight-red"  data-fragment-index="1">良い(部分構造を共有)</td></tr>
+<tr><th>キーの比較</th><td class="fragment highlight-red"  data-fragment-index="1">定数回</td><td>`O(log(n))`回</td></tr>
+<tr><th>キーの要件</th><td class="fragment highlight-red"  data-fragment-index="1">Hash関数が定義されている</td><td>全順序関数が定義されている</td></tr>
 </table>
 
-# Hash-Array Mapped Trie
+# <span style="font-size: 90%">Hash-Array Mapped Trie</span>
 ------------------------
 
 * `O(1)`のアクセス効率
@@ -143,11 +144,11 @@ treeMap.get("very long ... key1")
 ------
 ## Hashする
 
-* 32bitの値が生成される
+* 40bitくらいの値が生成される
 
 ``` scala
 hash("key")
-// => 10101101010101001010110101010100
+// => 0b10101101010101001010110101010100
 ```
 
 
@@ -160,7 +161,7 @@ hash("key")
   + 32分木になる
 
 ```
-10 10110 10101 01001 01011 01010 10100
+11111 00010 10110 10101 01001 01011 01010 10100
 ```
 
 
@@ -172,11 +173,11 @@ hash("key")
 * トライ木の実装は32bitのbitmapを使ったArray Mapped Trieを使う
 
 
-(図が分かりづらい)
+(図が分かりづらいというか不適切)
 
 ```
-   6     5     4     3     2     1
-10 10110 10101 01001 01011 01010 10100
+8     7     6     5     4     3     2     1
+11111 00010 10110 10101 01001 01011 01010 10100
 
 1    2    3  4
    ...
@@ -195,7 +196,7 @@ hash("key")
 # 特徴
 ------
 
-* ハッシュが32bit固定長なので`O(1)`で動作
+* ハッシュ値が固定長なので`O(1)`で動作
 * Treeなので部分構造の共有が簡単
 * 木を辿る時の比較はhash値（の一部）なので高速
 * キーに全順序がなくてもハッシュ関数さえ定義されていれば木を構築出来る
