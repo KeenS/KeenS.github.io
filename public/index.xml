@@ -5,9 +5,511 @@
     <link>/</link>
     <description>Recent content on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
-    <language>ja-jp</language>
-    <lastBuildDate>Sun, 31 Jan 2016 14:43:14 +0900</lastBuildDate>
+    <language>en-us</language>
+    <lastBuildDate>Thu, 04 Feb 2016 23:47:34 +0900</lastBuildDate>
     <atom:link href="/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Common Lispで高速行列演算</title>
+      <link>/blog/2016/02/04/common_lispdekousokugyouretsuenzan</link>
+      <pubDate>Thu, 04 Feb 2016 23:47:34 +0900</pubDate>
+      
+      <guid>/blog/2016/02/04/common_lispdekousokugyouretsuenzan</guid>
+      <description>
+
+&lt;p&gt;κeenです。Common Lispから線形代数ライブラリを使うポストで比較にCommon Lispのコードが出されていたのですがもう少し改良出来そうだったので少しばかり高速化してみました。&lt;/p&gt;
+
+&lt;p&gt;そのポストはこちら。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://d.hatena.ne.jp/masatoi/20160204/1454519281&#34;&gt;Common Lispで行列演算: LLA(Lisp Linear Algebra)を使う - 翡翠はコンピュータに卵を生むか&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;圧倒的にCommon Lispが遅いですね。そのコードはこちらから。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://tanakahx.hatenablog.com/entry/2015/09/25/070000&#34;&gt;Python (NumPy) と Common Lisp (LLA) で行列積の実行速度を比較する - 不確定特異点&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;行列計算(GEMM)部分を抜き出すとこうなっています。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(defun simple-gemm (ma mb)
+  &amp;quot;Common Lispのみを使った行列積の計算&amp;quot;
+  (declare (optimize (speed 3) (debug 0) (safety 0)))
+  (declare (type (simple-array single-float (* *)) ma mb))
+  (let ((rows (array-dimension ma 0))
+        (cols (array-dimension mb 1)))
+    (declare (type fixnum rows cols))
+    (let ((result (make-matrix rows cols)))
+      (declare (type (simple-array single-float (* *)) result))
+      (dotimes (row rows)
+        (dotimes (col cols)
+          (dotimes (k cols)
+            (incf (aref result row col)
+                  (* (aref ma row k) (aref mb k col))))))
+      result)))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これを&lt;code&gt;*N*&lt;/code&gt; = 256, で100回繰り返したら&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;;; Evaluation took:
+;;   4.688 seconds of real time
+;;   4.692000 seconds of total run time (4.688000 user, 0.004000 system)
+;;   100.09% CPU
+;;   13,564,728,093 processor cycles
+;;   26,216,000 bytes consed
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;とのこと。まあ、まだ高速化の余地はありそうです。&lt;/p&gt;
+
+&lt;h1 id=&#34;キャッシュする:ac3da300d14ff6fe33746d6ed93b7e0b&#34;&gt;キャッシュする&lt;/h1&gt;
+
+&lt;p&gt;内側のループをみるとこうなっています。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;          (dotimes (k cols)
+            (incf (aref result row col)
+                  (* (aref ma row k) (aref mb k col))))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;incf&lt;/code&gt;をばらすとこうなります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;          (dotimes (k cols)
+            (setf (aref result row col)
+                  (+ (aref result row col) (* (aref ma row k) (aref mb k col)))))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;値として参照している方の&lt;code&gt;(aref result row col)&lt;/code&gt;は&lt;code&gt;k&lt;/code&gt;に依存しないのでループの外に出せます。
+書き込んでいる方は場所だから仕方ない。&lt;/p&gt;
+
+&lt;p&gt;これをキャッシュするようにすると&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(defun caching-gemm (ma mb)
+  &amp;quot;Common Lispのみを使った行列積の計算&amp;quot;
+  (declare (optimize (speed 3) (debug 0) (safety 0)))
+  (declare (type (simple-array single-float (* *)) ma mb))
+  (let ((rows (array-dimension ma 0))
+        (cols (array-dimension mb 1)))
+    (declare (type fixnum rows cols))
+    (let ((result (make-matrix rows cols)))
+      (declare (type (simple-array single-float (* *)) result))
+
+      (dotimes (row rows)
+        (dotimes (col cols)
+          (let ((cell (aref result row col)))
+           (dotimes (k cols)
+             (setf (aref result row col)
+              (+ cell (* (aref ma row k) (aref mb k col)))))
+           )))
+      result)))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;同じパラメータでベンチマークをとると&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;;; 3.971 seconds of real time
+;; 3.972000 seconds of total run time (3.972000 user, 0.000000 system)
+;; 100.03% CPU
+;; 11,491,319,119 processor cycles
+;; 26,216,000 bytes consed
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;ループアンローリング:ac3da300d14ff6fe33746d6ed93b7e0b&#34;&gt;ループアンローリング&lt;/h1&gt;
+
+&lt;p&gt;さて、先程の内側のループ、仕事が少ないですね。小さな仕事をチマチマループしてるとイテレーションコストが嵩みます。
+1回のイテレーションでの仕事を増やすべく、ループアンローリングをしましょう。&lt;/p&gt;
+
+&lt;p&gt;コピペはダルいのでまずはマクロを。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(defmacro dotimes-unroll ((i n unroll) &amp;amp;body body)
+  (let ((n_      (gensym &amp;quot;n&amp;quot;)))
+    `(let ((,n_ ,n))
+       (do ((,i 0))
+           ((&amp;lt; ,n_ (the fixnum (+ ,unroll ,i)))
+            (do ((,i ,i (the fixnum (1+ ,i))))
+                ((&amp;lt; ,n_ (the fixnum (1+ ,i))))
+              ,@body
+              ))
+         ,@(loop :repeat unroll :append (append body `((setq ,i (the fixnum (1+ ,i))))))))))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;少し試してみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(dotimes-unroll (i 10 3)
+  (format t &amp;quot;~%~a&amp;quot;) i)
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;よしよし。&lt;/p&gt;
+
+&lt;p&gt;それではこれを使ってアンロールします。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(defun loop-unroll-gemm (ma mb)
+  &amp;quot;Common Lispのみを使った行列積の計算&amp;quot;
+  (declare (optimize (speed 3) (debug 0) (safety 0)))
+  (declare (type (simple-array single-float (* *)) ma mb))
+  (let ((rows (array-dimension ma 0))
+        (cols (array-dimension mb 1)))
+    (declare (type fixnum rows cols))
+    (let ((result (make-matrix rows cols)))
+      (declare (type (simple-array single-float (* *)) result))
+
+      (dotimes (row rows)
+        (dotimes (col cols)
+          (let ((cell (aref result row col)))
+           (dotimes-unroll (k cols 16)
+             (setf (aref result row col)
+              (+ cell (* (aref ma row k) (aref mb k col))))))))
+      result)))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;アンロール数は16が一番パフォーマンス出たようでした。&lt;/p&gt;
+
+&lt;p&gt;さて、ベンチマークをしてみます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;;; Evaluation took:
+;;   3.847 seconds of real time
+;;   3.848000 seconds of total run time (3.848000 user, 0.000000 system)
+;;   [ Run times consist of 0.012 seconds GC time, and 3.836 seconds non-GC time. ]
+;;   100.03% CPU
+;;   11,128,993,432 processor cycles
+;;   26,216,000 bytes consed
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;辛うじて速くなってる…。因みにこれのパフォーマンスはCPUの命令キャッシュの状況に依存するので何度か試すとこれより速いスコアが出ることもあります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;Evaluation took:
+  3.338 seconds of real time
+  3.340000 seconds of total run time (3.332000 user, 0.008000 system)
+  [ Run times consist of 0.020 seconds GC time, and 3.320 seconds non-GC time. ]
+  100.06% CPU
+  9,657,259,219 processor cycles
+  26,248,768 bytes consed
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;メモリアクセスしない:ac3da300d14ff6fe33746d6ed93b7e0b&#34;&gt;メモリアクセスしない&lt;/h1&gt;
+
+&lt;p&gt;さて、最初にキャッシュした時に書き込まれている方の &lt;code&gt;(aref result row col)&lt;/code&gt; は場所だからキャッシュ出来ないといいました。まあ、それは正しいのですがループの中で毎回書き込む必要はありません。&lt;/p&gt;
+
+&lt;p&gt;レジスタ上で計算を済ませて最後に書き込んであげれば十分です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(defun on-register-gemm (ma mb)
+  &amp;quot;Common Lispのみを使った行列積の計算&amp;quot;
+  (declare (optimize (speed 3) (debug 0) (safety 0)))
+  (declare (type (simple-array single-float (* *)) ma mb))
+  (let ((rows (array-dimension ma 0))
+        (cols (array-dimension mb 1)))
+    (declare (type fixnum rows cols))
+    (let ((result (make-matrix rows cols)))
+      (declare (type (simple-array single-float (* *)) result))
+
+      (dotimes (row rows)
+        (dotimes (col cols)
+          (let ((res (aref result row col)))
+           (dotimes-unroll (k cols 16)
+             (setf res
+                   (the single-float (+ res (* (aref ma row k) (aref mb k col))))))
+           (setf (aref result row col) res))))
+      result)))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これを試してみます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;;; Evaluation took:
+;;   2.302 seconds of real time
+;;   2.304000 seconds of total run time (2.300000 user, 0.004000 system)
+;;   [ Run times consist of 0.008 seconds GC time, and 2.296 seconds non-GC time. ]
+;;   100.09% CPU
+;;   6,662,273,812 processor cycles
+;;   26,216,000 bytes consed
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;わお！急に速くなりました。 &lt;code&gt;(* 100 (- (/ 4.688 2.302) 1))&lt;/code&gt; ≒ 103、 100%近い高速化です。&lt;/p&gt;
+
+&lt;h1 id=&#34;おわりに:ac3da300d14ff6fe33746d6ed93b7e0b&#34;&gt;おわりに&lt;/h1&gt;
+
+&lt;p&gt;特に深い意味はなかったのですがパタヘネに載っていたやつを試してみたくて遊んでみました。&lt;/p&gt;
+
+&lt;p&gt;普通に行列計算したいなら線形代数ライブラリ使った方が良いと思います。&lt;/p&gt;
+
+&lt;h1 id=&#34;ノート:ac3da300d14ff6fe33746d6ed93b7e0b&#34;&gt;ノート&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;ループアンローリングの部分をイテレーションコストで説明しましたが他にも1ループ内の命令数が増えると組み合わせパズルのピースが増えるので最適化されやすくなります。まあ、SBCLは覗き穴最適化をほとんどしないのであまり意味ありませんが。気になる方はディスアセンブルしてみて下さい。&lt;/li&gt;
+&lt;li&gt;このあと、 &lt;code&gt;(aref mb k col)&lt;/code&gt; がCPUキャッシュを無駄にしているという話からキャッシュサイズ毎に行、列を分けて計算するやり方を紹介しようとしたのですが逆に遅くなってしまいました。付録Aにコードを置いておきます。うーむ。&lt;/li&gt;
+&lt;li&gt;本当はさらにこのセグメント毎にスレッドに計算を投げて並列化したかったのですがセグメントで高速化しなかったので萎えて諦めました。&lt;/li&gt;
+&lt;li&gt;パタヘネ的にはSIMDも使うのですが深夜に近付いてきて面倒になったのでこの辺でやめました。Common Lisp(SBCL)からSIMD命令を使うには&lt;a href=&#34;http://keens.github.io/blog/2014/12/02/vopdeyou-bu/&#34;&gt;私の過去のエントリ&lt;/a&gt;を参照して下さい。&lt;/li&gt;
+&lt;li&gt;本気で行列計算をしたいなら今回の $O(n^3)$ のアルゴリズムだけでなくStrassenのアルゴリズムやCoppersmith-Winogradのアルゴリズムも検討すべきです。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h1 id=&#34;付録a:ac3da300d14ff6fe33746d6ed93b7e0b&#34;&gt;付録A&lt;/h1&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(defun segmented-gemm (ma mb)
+  &amp;quot;Common Lispのみを使った行列積の計算&amp;quot;
+  (declare (optimize (speed 3) (debug 0) (safety 0)))
+  (declare (type (simple-array single-float (* *)) ma mb))
+  (let* ((segment 16)
+         (rows (array-dimension ma 0))
+         (cols (array-dimension mb 1))
+         (rowseg (floor rows segment))
+         (colseg (floor cols segment))
+         rowtmp coltmp
+         row col
+         )
+    (declare (type fixnum rows cols))
+    (let ((result (make-matrix rows cols)))
+      (declare (type (simple-array single-float (* *)) result))
+
+      (dotimes (ri rowseg)
+        (setf rowtmp (the fixnum (* ri segment)))
+        (dotimes (ci colseg)
+          (setf coltmp (the fixnum (* ci segment)))
+          (dotimes (rs segment)
+            (setf row (the fixnum (+ rowtmp rs)))
+            (dotimes-unroll (cs segment 8)
+              (setf col (the fixnum (+ coltmp cs)))
+              (let ((res (aref result row col)))
+                (dotimes-unroll (k cols 2)
+                  (setf res
+                        (the single-float (+ res (* (aref ma row k) (aref mb k col))))))
+                (setf (aref result row col) res))))))
+      result)))
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>HAMT ~ イミュータブルで高速なハッシュマップ ~</title>
+      <link>/slide/HAMT/</link>
+      <pubDate>Sun, 31 Jan 2016 16:17:35 +0900</pubDate>
+      
+      <guid>/slide/HAMT/</guid>
+      <description>&lt;section data-markdown
+    data-separator=&#34;\n\n&#34;
+    data-vertical=&#34;\n\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+&lt;script type=&#34;text/template&#34;&gt;
+# &lt;span style=&#34;font-size: 90%&#34;&gt;Hash-Array Mapped Trie&lt;/span&gt;
+----------------------
+ ~ イミュータブルで高速なハッシュマップ ~  
+サイバーエージェント AdTech Scala Meetup LT大会
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# About Me
+---------
+![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
+
+ + κeen
+ + [@blackenedgold](https://twitter.com/blackenedgold)
+ + Github: [KeenS](https://github.com/KeenS)
+ + 基盤開発グループの新卒
+ + Lisp, ML, Rust, Shell Scriptあたりを書きます
+
+
+# &lt;span style=&#34;font-size: 60%&#34;&gt;scala.collections.immutable.HashMap&lt;/span&gt;
+-------------------------------------
+
+* 今日の話題。これの実装をみていく。
+* イミュータブル
+* キー-バリューペア
+* 値を追加する度に新たなハッシュマップを作る &lt;!-- .element: class=&#34;fragment grow&#34; data-fragment-index=&#34;1&#34; --&gt;
+
+
+# HashMap
+----------------
+
+* `O(1)`のアクセス効率
+* 空間効率は悪い
+* ハッシュ関数が定義出来れば何でもキーに使える
+* 普通はミュータブルに使う
+  + 大量のメモリをアロケートするのでコピーはつらい
+
+
+# メモリ効率悪そう？
+-------------------------
+
+```scala
+val hash = HashMap.empty + (3 -&gt; 1)
+// +---+---+---+---+---+----
+// | / | 3 | / | / | / | ...
+// +---+---+---+---+---+----
+//       |
+//      +-+
+//      |1|
+//      +-+
+```
+
+
+# メモリ効率悪そう？
+-------------------------
+
+```scala
+val hash2 = hash + (2 -&gt; 2)
+// +---+---+---+---+---+----
+// | / | 3 | / | / | / | ...
+// +---+---+---+---+---+----
+//       |
+//      +-+
+//      |1|
+//      +-+
+//  &gt; Copy &lt;
+// +---+---+---+---+---+----
+// | / | 3 | / | 2 | / | ...
+// +---+---+---+---+---+----
+//       |       |
+//      +-+     +-+
+//      |1|     |2|
+//      +-+     +-+
+```
+
+
+# メモリ効率的データ構造?
+----------------------------
+## TreeMap
+
+* O(log(n))のアクセス効率
+* 空間効率はほどほど
+  + イミュータブルに使えばかなり良い
+  + 部分構造を再利用出来る
+* 全順序関数が定義出来れば何でもキーに出来る
+* キーが複数回比較される問題がある
+
+
+# キー同士の比較
+---------------
+長いキー同士の比較がO(log(n))回走る可能性がある
+
+```scala
+treeMap.get(&#34;very long ... key1&#34;)
+
+        ....
+       /
+&#34;very long ... key3&#34; -&gt; &#34;value3&#34;
+       \
+   &#34;very long ... key2&#34; -&gt; &#34;value2&#34;
+         \
+      &#34;very long ...key1&#34; -&gt; &#34;value1&#34;
+```
+
+
+# HashMap vs TreeMap
+-----------------
+
+&lt;table&gt;
+&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;th&gt;HashMap&lt;/th&gt;&lt;th&gt;TreeMap&lt;/th&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;th&gt;アクセス効率&lt;/th&gt;&lt;td class=&#34;fragment highlight-red&#34; data-fragment-index=&#34;1&#34;&gt;`O(1)`&lt;/td&gt;&lt;td&gt;`O(log(n))`&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;th&gt;イミュータブルな時の空間効率&lt;/th&gt;&lt;td&gt;悪い(毎回コピー)&lt;/td&gt;&lt;td class=&#34;fragment highlight-red&#34;  data-fragment-index=&#34;1&#34;&gt;良い(部分構造を共有)&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;th&gt;キーの比較&lt;/th&gt;&lt;td class=&#34;fragment highlight-red&#34;  data-fragment-index=&#34;1&#34;&gt;定数回&lt;/td&gt;&lt;td&gt;`O(log(n))`回&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;th&gt;キーの要件&lt;/th&gt;&lt;td class=&#34;fragment highlight-red&#34;  data-fragment-index=&#34;1&#34;&gt;Hash関数が定義されている&lt;/td&gt;&lt;td&gt;全順序関数が定義されている&lt;/td&gt;&lt;/tr&gt;
+&lt;/table&gt;
+
+# &lt;span style=&#34;font-size: 90%&#34;&gt;Hash-Array Mapped Trie&lt;/span&gt;
+------------------------
+
+* `O(1)`のアクセス効率
+* 部分構造を共有してメモリ効率も良い
+* キーの比較は定数回
+* Hash関数が定義されていればキーに出来る
+
+
+# 動作
+------
+
+* ざっくり言うと、「Hashして分割してトライ」
+
+
+# 動作
+------
+## Hashする
+
+* 40bitくらいの値が生成される
+
+``` scala
+hash(&#34;key&#34;)
+// =&gt; 0b10101101010101001010110101010100
+```
+
+
+# 動作
+------
+## 分割する
+
+* 下位から5bit毎に分割する
+  + 5bit = 0 ~ 31
+  + 32分木になる
+
+```
+11111 00010 10110 10101 01001 01011 01010 10100
+```
+
+
+# 動作
+------
+## トライ
+
+* 32分のトライ木になる
+* トライ木の実装は32bitのbitmapを使ったArray Mapped Trieを使う
+
+
+(図が分かりづらいというか不適切)
+
+```
+8     7     6     5     4     3     2     1
+11111 00010 10110 10101 01001 01011 01010 10100
+
+1    2    3  4
+   ...
+  /
+10100     ...
+  \        /
+   \    01011
+    \   /  \
+     \ /   01001....
+     01010
+       \
+        ...
+```
+
+
+# 特徴
+------
+
+* ハッシュ値が固定長なので`O(1)`で動作
+* Treeなので部分構造の共有が簡単
+* 木を辿る時の比較はhash値（の一部）なので高速
+* キーに全順序がなくてもハッシュ関数さえ定義されていれば木を構築出来る
+
+
+# まとめ
+--------
+
+* Scalaのimmutable.HashMapはコピーしても高速だよ
+* 裏で動くアルゴリズムを紹介したよ
+  + ざっくりなので本物はもう少し工夫してる
+  + prefix treeになってる
+
+
+# 参考
+------
+
+* PDF [Ideal Hash Trees](http://lampwww.epfl.ch/papers/idealhashtrees.pdf)
+  + HAMTの元論文
+* [HAMT(Hash Array Mapped Trie) - sileのブログ](http://sile.hatenablog.jp/entry/20100926/1285467529)
+  + HAMTの解説ブログ
+* PDF [Optimizing Hash-Array Mapped Tries for Fast and Lean Immutable JVM Collections](http://michael.steindorfer.name/publications/oopsla15.pdf)
+  + HAMTを改善したCHAMPというデータ構造の論文。Clojureにこれが入りそう。
+* [Optimizing Hash-Array Mapped Tries for Fast and Lean Immutable JVM Collections | the morning paper](http://blog.acolyer.org/2015/11/27/hamt/)
+  + CHAMPを解説したブログ
+
+&lt;/script&gt;
+&lt;/section&gt;
+</description>
+    </item>
     
     <item>
       <title>Rustのパッケージをcrates.ioに登録する</title>
@@ -2012,209 +2514,6 @@ logはロガーをグローバル変数に代入して使い回してるので�
 &lt;p&gt;実装は大したことをやっていなくて、精々ログフォーマットを文字列で書けるように（TOMLで設定を書きたいため）フォーマットのパーサを書いた程度でしょうか。&lt;/p&gt;
 
 &lt;p&gt;もう少し考えてからリリースします。あとFile Lotating Writerも一緒に出さなきゃ片手落ちですかね…&lt;/p&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>Apache Drillの不自然な挙動</title>
-      <link>/blog/2015/12/20/apache_drillnofushizennakyodou</link>
-      <pubDate>Sun, 20 Dec 2015 23:04:37 +0900</pubDate>
-      
-      <guid>/blog/2015/12/20/apache_drillnofushizennakyodou</guid>
-      <description>
-
-&lt;p&gt;この記事は&lt;a href=&#34;http://qiita.com/advent-calendar/2015/drill&#34;&gt;Apache Drill Advent Calendar 2015&lt;/a&gt;21日目のエントリです&lt;/p&gt;
-
-&lt;p&gt;最初は備忘録がてら普段使うMySQL、BigQuery、SQLite、Apache DrillのSQLシンタックスの違いでも書こうかと思ったのですが調査が思ったより大変だったのでやめました。ANSI SQLも色々変わってるということは理解出来ました。&lt;/p&gt;
-
-&lt;p&gt;ということでApache Drillを使ってて「ん？」と思った挙動をいくつか出してみようかと。1.4時点での情報です。&lt;/p&gt;
-
-&lt;h1 id=&#34;select-1:9fcdb67be54783fd9fe212856b3ef1e7&#34;&gt;&lt;code&gt;SELECT 1&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;シェルで手持ち無沙汰に&lt;code&gt;ls&lt;/code&gt;や&lt;code&gt;pwd&lt;/code&gt;を打つようにSQLプロンプトで&lt;code&gt;SELECT 1;&lt;/code&gt;を打つ訳ですが、Apache Drillはこれを受け付けてくれません。&lt;/p&gt;
-
-&lt;p&gt;まあ、これは不自然というかそういう仕様なのですが正しくは&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sql&#34;&gt;SELECT 1 FROM (VALUES(1));
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;です。手持ち無沙汰に打つには少し面倒ですね。そうでなくても日付関数の挙動を確かめたい時にも&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sql&#34;&gt;SELECT NOW();
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;などとやりたい訳ですがそれにも&lt;code&gt;FROM (VALUES(1));&lt;/code&gt;とダミーの&lt;code&gt;FROM&lt;/code&gt;句を付けてあげる必要があります。面倒ですね。&lt;/p&gt;
-
-&lt;h1 id=&#34;union-と-union-all:9fcdb67be54783fd9fe212856b3ef1e7&#34;&gt;&lt;code&gt;UNION&lt;/code&gt;と&lt;code&gt;UNION ALL&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;&lt;code&gt;UNION&lt;/code&gt;はテーブル同士のレコード間で重複を取り除いた集合を、&lt;code&gt;UNION ALL&lt;/code&gt;は重複を取り除かない集合を返します。Apache Drillでも試してみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sql&#34;&gt;SELECT * FROM (VALUES (1, 2, 3) UNION VALUES(4, 5, 6) UNION VALUES(7, 8, 9) UNION VALUES(1, 2, 3));
-SELECT * FROM (VALUES (1, 2, 3) UNION ALL VALUES(4, 5, 6) UNION ALL VALUES(7, 8, 9) UNION ALL VALUES(1, 2, 3));
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これらのクエリはどういう結果になるでしょうか。答えはこうです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;0: jdbc:drill:zk=local&amp;gt; SELECT * FROM (VALUES (1, 2, 3) UNION VALUES(4, 5, 6) UNION VALUES(7, 8, 9) UNION VALUES(1, 2, 3));
-+---------+---------+---------+
-| EXPR$0  | EXPR$1  | EXPR$2  |
-+---------+---------+---------+
-| 1       | 2       | 3       |
-+---------+---------+---------+
-1 row selected (0.416 seconds)
-0: jdbc:drill:zk=local&amp;gt; SELECT * FROM (VALUES (1, 2, 3) UNION ALL VALUES(4, 5, 6) UNION ALL VALUES(7, 8, 9) UNION ALL VALUES(1, 2, 3));
-+---------+---------+---------+
-| EXPR$0  | EXPR$1  | EXPR$2  |
-+---------+---------+---------+
-| 7       | 8       | 9       |
-| 7       | 8       | 9       |
-| 7       | 8       | 9       |
-| 7       | 8       | 9       |
-+---------+---------+---------+
-4 rows selected (0.115 seconds)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;うーん。これはバグだと思うんですよね。定数テーブルをキャッシュするようにしてたら全てのレコードで同じ値を参照しちゃって値を書き換えてしまったとか。
-&lt;code&gt;UNION&lt;/code&gt;が&lt;code&gt;UNION ALL&lt;/code&gt;の結果から&lt;code&gt;DISTINCT&lt;/code&gt;相当の処理をするなら2番目の結果を見れば最初の結果が従うのもうなずけますし。&lt;/p&gt;
-
-&lt;h1 id=&#34;ヘッダ付きcsv:9fcdb67be54783fd9fe212856b3ef1e7&#34;&gt;ヘッダ付きCSV&lt;/h1&gt;
-
-&lt;p&gt;Drill 1.4からヘッダ付きCSVの扱いが楽になりましたね。拡張子が&lt;code&gt;csv&lt;/code&gt;のままヘッダ付きCSVにクエリを投げられます。ちょっと試しましょう。&lt;/p&gt;
-
-&lt;p&gt;次のようなCSVファイルを用意します。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cat ~/Csv/test.csv
-foo,bar,baz
-1,1.0,&amp;quot;a&amp;quot;
-2,2.0,&amp;quot;b&amp;quot;
-3,3.0,&amp;quot;c&amp;quot;
-4,4.0,&amp;quot;d&amp;quot;
-5,5.0,&amp;quot;e&amp;quot;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;クエリを投げてみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;0: jdbc:drill:zk=local&amp;gt; SELECT * FROM TABLE(dfs.`/home/kim/Csv/test.csv`(type =&amp;gt; &#39;text&#39;, fieldDelimiter =&amp;gt; &#39;,&#39;, extractHeader =&amp;gt; true));
-+------+------+------+
-| foo  | bar  | baz  |
-+------+------+------+
-| 1    | 1.0  | a    |
-| 2    | 2.0  | b    |
-| 3    | 3.0  | c    |
-| 4    | 4.0  | d    |
-| 5    | 5.0  | e    |
-+------+------+------+
-5 rows selected (0.12 seconds)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;よしよし。じゃあ今度は&lt;code&gt;baz&lt;/code&gt;カラムだけ取り出してみましょう。ここで、会社のMacだと&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;0: jdbc:drill:zk=local&amp;gt; SELECT baz FROM TABLE(dfs.`/home/kim/Csv/test.csv`(type =&amp;gt; &#39;text&#39;, fieldDelimiter =&amp;gt; &#39;,&#39;, extractHeader =&amp;gt; true));
-+------+------+------+
-| foo  | bar  | baz  |
-+------+------+------+
-| 1    | 1.0  | a    |
-| 2    | 2.0  | b    |
-| 3    | 3.0  | c    |
-| 4    | 4.0  | d    |
-| 5    | 5.0  | e    |
-+------+------+------+
-5 rows selected (0.12 seconds)
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のようにカラムを指定しているのにも関らず全てのデータが返ってきていました。その旨を書こうと思ったのですが手元のLinuxマシンだと正しい結果が返ってくるようです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;0: jdbc:drill:zk=local&amp;gt; SELECT `bar` FROM TABLE(dfs.`/home/kim/Csv/test.csv`(type =&amp;gt; &#39;text&#39;, fieldDelimiter =&amp;gt; &#39;,&#39;, extractHeader =&amp;gt; true));
-+------+
-| bar  |
-+------+
-| 1.0  |
-| 2.0  |
-| 3.0  |
-| 4.0  |
-| 5.0  |
-+------+
-5 rows selected (0.088 seconds)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ちょっと会社で見たのが幻覚だったかもしれないので要調査ですね。&lt;/p&gt;
-
-&lt;h1 id=&#34;mysqlへの接続:9fcdb67be54783fd9fe212856b3ef1e7&#34;&gt;MySQLへの接続&lt;/h1&gt;
-
-&lt;p&gt;以下のようなSQLを投げた所、ひどく時間が掛かりました。投げた対象はプロダクションのデータが入ってる分析用のDBで、結構な量のデータが入ってます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sql&#34;&gt;SELECT * FROM mysql.mydb.`test` LIMIT 20;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;Apache Drill自体レスポンスが悪いのでクエリによってはそんなものかな、と思って最初はそのままにしたのですがふと気になって&lt;code&gt;EXPLAIN&lt;/code&gt;してみました。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;0: jdbc:drill:zk=localhost:2181&amp;gt; EXPLAIN PLAN FOR SELECT * FROM mysql.mydb.`test` LIMIT 20;
-+------+------+
-| text | json |
-+------+------+
-| 00-00    Screen
-00-01      Project(columns....)
-00-02        SelectionVectorRemover
-00-03          Limit(fetch=[20])
-00-04            Limit(fetch=[20])
-00-05              Jdbc(sql=[SELECT * FROM `mydb`.`test`])
-| {
-....
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;Jdbc(sql=[SELECT * FROM mydb.test])&lt;/code&gt; とあるのでなんとMySQLに&lt;code&gt;LIMIT&lt;/code&gt;をつけずにクエリを投げてます。そしてさらに何故か&lt;code&gt;Limit(fetch=[20])&lt;/code&gt;を2回やっています。&lt;/p&gt;
-
-&lt;p&gt;まあ、内部でLimitを2回やってるのは良いとしてもMySQLにLimit無しで投げるのはいただけないですね。
-分散モデルのDrillからしたら「分散してる俺らの方が処理が速いから全部俺らでやってやるよ」という気概なのかもしれませんがこちらとしてはDBへの負荷も考えて欲しいものです。
-まあ、かといって&lt;code&gt;WHERE&lt;/code&gt;句にインデックスが付く/付かないだとかその他の句によってMySQLのへの負荷も変わるのでなんとも言えないといえばそうなんですが簡単な場合にpush downしてくれるか
-あるいは手動でpush down出来る仕組みが欲しいですね。&lt;code&gt;FORCE INDEX&lt;/code&gt;みたいに。&lt;/p&gt;
-
-&lt;p&gt;さて、色々気になる点はありましたがApache Drillは面白いプロダクトです。
-主にビッグデータ分析に使われるようですが私は大きなテーブルからアドホックに抽出したCSVとMySQLにあるマスターデータをJOINするなどの目的で使っていきたいなと思っています。&lt;/p&gt;
-
-&lt;p&gt;皆様良いデータ分析ライフを！&lt;/p&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>最近作ってるLispの話</title>
-      <link>/blog/2015/12/20/saikintsukutterulispnohanashi</link>
-      <pubDate>Sun, 20 Dec 2015 22:40:16 +0900</pubDate>
-      
-      <guid>/blog/2015/12/20/saikintsukutterulispnohanashi</guid>
-      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2015/lisp&#34;&gt;Lisp Advent Calendar 2015&lt;/a&gt;21日目の記事です。&lt;/p&gt;
-
-&lt;p&gt;κeenです。最近あまりLispを書いてなくてネタがないので最近作ってるLispの話でもしようかと。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/KeenS/kappaLisp&#34;&gt;κLisp&lt;/a&gt;といいます。まだまだ完成には程遠いです。現在、&lt;a href=&#34;https://github.com/KeenS/kappaLisp/blob/master/src/eval.rs#L378&#34;&gt;ここら辺&lt;/a&gt;くらいの式なら評価出来ます。&lt;/p&gt;
-
-&lt;p&gt;このLispはSKK辞書に使われているS式を評価するために作られました。
-SKKは様々な場所に移植されているのでマルチプラットフォームで動いて他の言語と協調が出来る言語で作るのが望ましいのですが、今回はRustを選びました。
-最初はCにしようかと思ったのですがちょいとRustを試してみようかと(当時Rustほとんど書いたことがない初心者)。&lt;/p&gt;
-
-&lt;p&gt;SKKに書かれているS式を処理出来るLisp処理系はあるのですがGPLでライセンスされており、それを使ったiOSアプリをAppStoreに登録出来ないという問題があるそうです。
-なのでMITライセンスで作り始めました。&lt;/p&gt;
-
-&lt;p&gt;さて、Lisp処理系くらい簡単に作れそうなものですが、いくつかの点で詰まっています。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;そもそもRustが難しい&lt;/li&gt;
-&lt;li&gt;関数ポインタが思うように扱えない&lt;/li&gt;
-&lt;li&gt;やろうとした事がborrow checkに引っ掛かって出来なかった&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;この詰まった点はRustが悪い訳ではなくて単に私がRustに合わせた設計が出来なかっただけですね。そろそろRustにも少しづつですが慣れて来たのでどこかのタイミングでリファクタリングして進めていきたいですね。&lt;/p&gt;
-
-&lt;p&gt;一応現状でも進めようと思えば進めれるのですが&lt;a href=&#34;https://github.com/KeenS/kappaLisp/blob/master/src/eval.rs#L232&#34;&gt;ここ&lt;/a&gt;のように明らかにイケてないコードが続くので進めるモチベーション起きませんよね。&lt;/p&gt;
-
-&lt;p&gt;設計とかの話をすると、最終的にはC APIでS式の文字列を受け取ったらそれを評価した結果の文字列を返す関数を晒せばいいかな、と思ってます。
-ちゃんとiOSへのクロスコンパイルも出来ますしObj-C, Swift双方C FFIがあるのでそれで十分でしょう。(CF &lt;a href=&#34;http://qiita.com/moriturus/items/1190614dcbbe31ecfc2f&#34;&gt;http://qiita.com/moriturus/items/1190614dcbbe31ecfc2f&lt;/a&gt; , &lt;a href=&#34;http://safx-dev.blogspot.jp/2014/06/rustios.html&#34;&gt;http://safx-dev.blogspot.jp/2014/06/rustios.html&lt;/a&gt;)&lt;/p&gt;
-
-&lt;p&gt;パーサは手書きで、実行はインタプリタ、Emacs Lispに則ってLisp2のダイナミックスコープです。設計がクソなのでメモリ管理らしいメモリ管理はやってませんがRustのメモリ管理のお陰でメモリリークはしてません。
-ちゃんと設計してReference Countなメモリ管理でもしようかと。フットプリントの軽さ大事。&lt;/p&gt;
-
-&lt;p&gt;全然まとまりませんがいつか使えるようになってAquaSKKやFlickSKKに取り込まれるかもしれないのでその時には裏でこのLispが動いてるかもと思い出してあげて下さい。&lt;/p&gt;
 </description>
     </item>
     

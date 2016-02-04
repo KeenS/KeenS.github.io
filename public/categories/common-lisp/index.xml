@@ -5,9 +5,282 @@
     <link>/categories/common-lisp/</link>
     <description>Recent content in Common Lisp on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
-    <language>ja-jp</language>
-    <lastBuildDate>Sat, 04 Jul 2015 15:34:46 +0900</lastBuildDate>
+    <language>en-us</language>
+    <lastBuildDate>Thu, 04 Feb 2016 23:47:34 +0900</lastBuildDate>
     <atom:link href="/categories/common-lisp/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Common Lispで高速行列演算</title>
+      <link>/blog/2016/02/04/common_lispdekousokugyouretsuenzan</link>
+      <pubDate>Thu, 04 Feb 2016 23:47:34 +0900</pubDate>
+      
+      <guid>/blog/2016/02/04/common_lispdekousokugyouretsuenzan</guid>
+      <description>
+
+&lt;p&gt;κeenです。Common Lispから線形代数ライブラリを使うポストで比較にCommon Lispのコードが出されていたのですがもう少し改良出来そうだったので少しばかり高速化してみました。&lt;/p&gt;
+
+&lt;p&gt;そのポストはこちら。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://d.hatena.ne.jp/masatoi/20160204/1454519281&#34;&gt;Common Lispで行列演算: LLA(Lisp Linear Algebra)を使う - 翡翠はコンピュータに卵を生むか&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;圧倒的にCommon Lispが遅いですね。そのコードはこちらから。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://tanakahx.hatenablog.com/entry/2015/09/25/070000&#34;&gt;Python (NumPy) と Common Lisp (LLA) で行列積の実行速度を比較する - 不確定特異点&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;行列計算(GEMM)部分を抜き出すとこうなっています。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(defun simple-gemm (ma mb)
+  &amp;quot;Common Lispのみを使った行列積の計算&amp;quot;
+  (declare (optimize (speed 3) (debug 0) (safety 0)))
+  (declare (type (simple-array single-float (* *)) ma mb))
+  (let ((rows (array-dimension ma 0))
+        (cols (array-dimension mb 1)))
+    (declare (type fixnum rows cols))
+    (let ((result (make-matrix rows cols)))
+      (declare (type (simple-array single-float (* *)) result))
+      (dotimes (row rows)
+        (dotimes (col cols)
+          (dotimes (k cols)
+            (incf (aref result row col)
+                  (* (aref ma row k) (aref mb k col))))))
+      result)))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これを&lt;code&gt;*N*&lt;/code&gt; = 256, で100回繰り返したら&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;;; Evaluation took:
+;;   4.688 seconds of real time
+;;   4.692000 seconds of total run time (4.688000 user, 0.004000 system)
+;;   100.09% CPU
+;;   13,564,728,093 processor cycles
+;;   26,216,000 bytes consed
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;とのこと。まあ、まだ高速化の余地はありそうです。&lt;/p&gt;
+
+&lt;h1 id=&#34;キャッシュする:ac3da300d14ff6fe33746d6ed93b7e0b&#34;&gt;キャッシュする&lt;/h1&gt;
+
+&lt;p&gt;内側のループをみるとこうなっています。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;          (dotimes (k cols)
+            (incf (aref result row col)
+                  (* (aref ma row k) (aref mb k col))))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;incf&lt;/code&gt;をばらすとこうなります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;          (dotimes (k cols)
+            (setf (aref result row col)
+                  (+ (aref result row col) (* (aref ma row k) (aref mb k col)))))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;値として参照している方の&lt;code&gt;(aref result row col)&lt;/code&gt;は&lt;code&gt;k&lt;/code&gt;に依存しないのでループの外に出せます。
+書き込んでいる方は場所だから仕方ない。&lt;/p&gt;
+
+&lt;p&gt;これをキャッシュするようにすると&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(defun caching-gemm (ma mb)
+  &amp;quot;Common Lispのみを使った行列積の計算&amp;quot;
+  (declare (optimize (speed 3) (debug 0) (safety 0)))
+  (declare (type (simple-array single-float (* *)) ma mb))
+  (let ((rows (array-dimension ma 0))
+        (cols (array-dimension mb 1)))
+    (declare (type fixnum rows cols))
+    (let ((result (make-matrix rows cols)))
+      (declare (type (simple-array single-float (* *)) result))
+
+      (dotimes (row rows)
+        (dotimes (col cols)
+          (let ((cell (aref result row col)))
+           (dotimes (k cols)
+             (setf (aref result row col)
+              (+ cell (* (aref ma row k) (aref mb k col)))))
+           )))
+      result)))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;同じパラメータでベンチマークをとると&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;;; 3.971 seconds of real time
+;; 3.972000 seconds of total run time (3.972000 user, 0.000000 system)
+;; 100.03% CPU
+;; 11,491,319,119 processor cycles
+;; 26,216,000 bytes consed
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;ループアンローリング:ac3da300d14ff6fe33746d6ed93b7e0b&#34;&gt;ループアンローリング&lt;/h1&gt;
+
+&lt;p&gt;さて、先程の内側のループ、仕事が少ないですね。小さな仕事をチマチマループしてるとイテレーションコストが嵩みます。
+1回のイテレーションでの仕事を増やすべく、ループアンローリングをしましょう。&lt;/p&gt;
+
+&lt;p&gt;コピペはダルいのでまずはマクロを。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(defmacro dotimes-unroll ((i n unroll) &amp;amp;body body)
+  (let ((n_      (gensym &amp;quot;n&amp;quot;)))
+    `(let ((,n_ ,n))
+       (do ((,i 0))
+           ((&amp;lt; ,n_ (the fixnum (+ ,unroll ,i)))
+            (do ((,i ,i (the fixnum (1+ ,i))))
+                ((&amp;lt; ,n_ (the fixnum (1+ ,i))))
+              ,@body
+              ))
+         ,@(loop :repeat unroll :append (append body `((setq ,i (the fixnum (1+ ,i))))))))))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;少し試してみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(dotimes-unroll (i 10 3)
+  (format t &amp;quot;~%~a&amp;quot;) i)
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;よしよし。&lt;/p&gt;
+
+&lt;p&gt;それではこれを使ってアンロールします。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(defun loop-unroll-gemm (ma mb)
+  &amp;quot;Common Lispのみを使った行列積の計算&amp;quot;
+  (declare (optimize (speed 3) (debug 0) (safety 0)))
+  (declare (type (simple-array single-float (* *)) ma mb))
+  (let ((rows (array-dimension ma 0))
+        (cols (array-dimension mb 1)))
+    (declare (type fixnum rows cols))
+    (let ((result (make-matrix rows cols)))
+      (declare (type (simple-array single-float (* *)) result))
+
+      (dotimes (row rows)
+        (dotimes (col cols)
+          (let ((cell (aref result row col)))
+           (dotimes-unroll (k cols 16)
+             (setf (aref result row col)
+              (+ cell (* (aref ma row k) (aref mb k col))))))))
+      result)))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;アンロール数は16が一番パフォーマンス出たようでした。&lt;/p&gt;
+
+&lt;p&gt;さて、ベンチマークをしてみます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;;; Evaluation took:
+;;   3.847 seconds of real time
+;;   3.848000 seconds of total run time (3.848000 user, 0.000000 system)
+;;   [ Run times consist of 0.012 seconds GC time, and 3.836 seconds non-GC time. ]
+;;   100.03% CPU
+;;   11,128,993,432 processor cycles
+;;   26,216,000 bytes consed
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;辛うじて速くなってる…。因みにこれのパフォーマンスはCPUの命令キャッシュの状況に依存するので何度か試すとこれより速いスコアが出ることもあります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;Evaluation took:
+  3.338 seconds of real time
+  3.340000 seconds of total run time (3.332000 user, 0.008000 system)
+  [ Run times consist of 0.020 seconds GC time, and 3.320 seconds non-GC time. ]
+  100.06% CPU
+  9,657,259,219 processor cycles
+  26,248,768 bytes consed
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;メモリアクセスしない:ac3da300d14ff6fe33746d6ed93b7e0b&#34;&gt;メモリアクセスしない&lt;/h1&gt;
+
+&lt;p&gt;さて、最初にキャッシュした時に書き込まれている方の &lt;code&gt;(aref result row col)&lt;/code&gt; は場所だからキャッシュ出来ないといいました。まあ、それは正しいのですがループの中で毎回書き込む必要はありません。&lt;/p&gt;
+
+&lt;p&gt;レジスタ上で計算を済ませて最後に書き込んであげれば十分です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(defun on-register-gemm (ma mb)
+  &amp;quot;Common Lispのみを使った行列積の計算&amp;quot;
+  (declare (optimize (speed 3) (debug 0) (safety 0)))
+  (declare (type (simple-array single-float (* *)) ma mb))
+  (let ((rows (array-dimension ma 0))
+        (cols (array-dimension mb 1)))
+    (declare (type fixnum rows cols))
+    (let ((result (make-matrix rows cols)))
+      (declare (type (simple-array single-float (* *)) result))
+
+      (dotimes (row rows)
+        (dotimes (col cols)
+          (let ((res (aref result row col)))
+           (dotimes-unroll (k cols 16)
+             (setf res
+                   (the single-float (+ res (* (aref ma row k) (aref mb k col))))))
+           (setf (aref result row col) res))))
+      result)))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これを試してみます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;;; Evaluation took:
+;;   2.302 seconds of real time
+;;   2.304000 seconds of total run time (2.300000 user, 0.004000 system)
+;;   [ Run times consist of 0.008 seconds GC time, and 2.296 seconds non-GC time. ]
+;;   100.09% CPU
+;;   6,662,273,812 processor cycles
+;;   26,216,000 bytes consed
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;わお！急に速くなりました。 &lt;code&gt;(* 100 (- (/ 4.688 2.302) 1))&lt;/code&gt; ≒ 103、 100%近い高速化です。&lt;/p&gt;
+
+&lt;h1 id=&#34;おわりに:ac3da300d14ff6fe33746d6ed93b7e0b&#34;&gt;おわりに&lt;/h1&gt;
+
+&lt;p&gt;特に深い意味はなかったのですがパタヘネに載っていたやつを試してみたくて遊んでみました。&lt;/p&gt;
+
+&lt;p&gt;普通に行列計算したいなら線形代数ライブラリ使った方が良いと思います。&lt;/p&gt;
+
+&lt;h1 id=&#34;ノート:ac3da300d14ff6fe33746d6ed93b7e0b&#34;&gt;ノート&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;ループアンローリングの部分をイテレーションコストで説明しましたが他にも1ループ内の命令数が増えると組み合わせパズルのピースが増えるので最適化されやすくなります。まあ、SBCLは覗き穴最適化をほとんどしないのであまり意味ありませんが。気になる方はディスアセンブルしてみて下さい。&lt;/li&gt;
+&lt;li&gt;このあと、 &lt;code&gt;(aref mb k col)&lt;/code&gt; がCPUキャッシュを無駄にしているという話からキャッシュサイズ毎に行、列を分けて計算するやり方を紹介しようとしたのですが逆に遅くなってしまいました。付録Aにコードを置いておきます。うーむ。&lt;/li&gt;
+&lt;li&gt;本当はさらにこのセグメント毎にスレッドに計算を投げて並列化したかったのですがセグメントで高速化しなかったので萎えて諦めました。&lt;/li&gt;
+&lt;li&gt;パタヘネ的にはSIMDも使うのですが深夜に近付いてきて面倒になったのでこの辺でやめました。Common Lisp(SBCL)からSIMD命令を使うには&lt;a href=&#34;http://keens.github.io/blog/2014/12/02/vopdeyou-bu/&#34;&gt;私の過去のエントリ&lt;/a&gt;を参照して下さい。&lt;/li&gt;
+&lt;li&gt;本気で行列計算をしたいなら今回の $O(n^3)$ のアルゴリズムだけでなくStrassenのアルゴリズムやCoppersmith-Winogradのアルゴリズムも検討すべきです。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h1 id=&#34;付録a:ac3da300d14ff6fe33746d6ed93b7e0b&#34;&gt;付録A&lt;/h1&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(defun segmented-gemm (ma mb)
+  &amp;quot;Common Lispのみを使った行列積の計算&amp;quot;
+  (declare (optimize (speed 3) (debug 0) (safety 0)))
+  (declare (type (simple-array single-float (* *)) ma mb))
+  (let* ((segment 16)
+         (rows (array-dimension ma 0))
+         (cols (array-dimension mb 1))
+         (rowseg (floor rows segment))
+         (colseg (floor cols segment))
+         rowtmp coltmp
+         row col
+         )
+    (declare (type fixnum rows cols))
+    (let ((result (make-matrix rows cols)))
+      (declare (type (simple-array single-float (* *)) result))
+
+      (dotimes (ri rowseg)
+        (setf rowtmp (the fixnum (* ri segment)))
+        (dotimes (ci colseg)
+          (setf coltmp (the fixnum (* ci segment)))
+          (dotimes (rs segment)
+            (setf row (the fixnum (+ rowtmp rs)))
+            (dotimes-unroll (cs segment 8)
+              (setf col (the fixnum (+ coltmp cs)))
+              (let ((res (aref result row col)))
+                (dotimes-unroll (k cols 2)
+                  (setf res
+                        (the single-float (+ res (* (aref ma row k) (aref mb k col))))))
+                (setf (aref result row col) res))))))
+      result)))
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+    </item>
     
     <item>
       <title>マクロについて整理してみる</title>
@@ -2703,117 +2976,6 @@ alisp-9.0(compile)  | &lt;div class=&#34;graph&#34; style=&#34;width:calc(  0.6p
 &lt;!-- .slide: class=&#34;center&#34; --&gt;
 &lt;/script&gt;
 &lt;/section&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>Common Lispの勉強をするには、あるいは情報を得るには</title>
-      <link>/blog/2014/10/20/lisp-ja</link>
-      <pubDate>Mon, 20 Oct 2014 00:00:00 +0000</pubDate>
-      
-      <guid>/blog/2014/10/20/lisp-ja</guid>
-      <description>
-
-&lt;p&gt;&lt;a href=&#34;http://blog.8arrow.org/entry/2014/09/05/062028&#34;&gt;深町さんのブログ&lt;/a&gt;で日本語でCommon Lispの質問をする方法が載ってましたが質問じゃなくて単に情報を得たい、勉強をしたいという場合が書かれてなかったので勝手に補遺。&lt;/p&gt;
-
-&lt;h1 id=&#34;処理系選び:a9be93b0b4fb16c2c0e10aa859a2df5f&#34;&gt;処理系選び&lt;/h1&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://cl.cddddr.org/index.cgi?%BD%E8%CD%FD%B7%CF%3A%C1%AA%A4%D3%CA%FD%A4%CE%CC%DC%B0%C2&#34;&gt;処理系:選び方の目安 - Common LISP users jp&lt;/a&gt;や
-&lt;a href=&#34;https://sites.google.com/site/shidoinfo/Home/programing-lang/%E9%96%A2%E6%95%B0%E5%9E%8B%E3%83%97%E3%83%AD%E3%82%B0%E3%83%A9%E3%83%9F%E3%83%B3%E3%82%B0%E8%A8%80%E8%AA%9E/lisp/common-lisp/common-lisp-%E5%87%A6%E7%90%86%E7%B3%BB&#34;&gt;Common Lisp 処理系 - 紫藤のWiki&lt;/a&gt;が参考になるかと思います。&lt;/p&gt;
-
-&lt;h1 id=&#34;開発環境構築:a9be93b0b4fb16c2c0e10aa859a2df5f&#34;&gt;開発環境構築&lt;/h1&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://modern-cl.blogspot.jp/&#34;&gt;Modern Common Lisp&lt;/a&gt;あたりですかね。著者がちょっと古くなってきたので更新するって言ってました。&lt;/p&gt;
-
-&lt;p&gt;処理系のインストールなら*nix環境で使える拙作の&lt;a href=&#34;https://github.com/KeenS/CIM&#34;&gt;CIM&lt;/a&gt;もあります。解説は&lt;a href=&#34;/blog/2014/01/27/cim-explanation/&#34;&gt;こちら&lt;/a&gt;。&lt;/p&gt;
-
-&lt;h1 id=&#34;入門:a9be93b0b4fb16c2c0e10aa859a2df5f&#34;&gt;入門&lt;/h1&gt;
-
-&lt;h2 id=&#34;web:a9be93b0b4fb16c2c0e10aa859a2df5f&#34;&gt;Web&lt;/h2&gt;
-
-&lt;p&gt;私の一番のおすすめはM.HiroiさんのWebページです。一応Common Lispではなくxyzzyですがここで紹介されている内容であればCommon Lispにも共通します。&lt;br /&gt;
-&lt;a href=&#34;http://www.geocities.jp/m_hiroi/xyzzy_lisp.html&#34;&gt;M.Hiroi&amp;rsquo;s Home Page / xyzzy Lisp Programming&lt;/a&gt;&lt;/p&gt;
-
-&lt;h2 id=&#34;書籍:a9be93b0b4fb16c2c0e10aa859a2df5f&#34;&gt;書籍&lt;/h2&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;http://www.amazon.co.jp/%E5%AE%9F%E8%B7%B5Common-Lisp-Peter-Seibel/dp/4274067211&#34;&gt;実践Common Lisp&lt;/a&gt;は入門から実践までいけて素晴らしいです。内容の密度が濃いです。心無しか手にとってみると少し重いです。
-loopやformatなど複雑な部分はしっかりベージを割いてるので入門が終わってもリファレンスとして役立ちます。私も今でも参照してます。&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;http://www.amazon.co.jp/Land-Lisp-M-D-Conrad-Barski/dp/4873115876&#34;&gt;Land of Lisp&lt;/a&gt;は挿絵が多く、少し学んでは実際に使ってみるのルーチンなので勉強のモチベーションを保ちやすいです。
-内容は実践Common Lispに比べると細かな注釈が少ないかな？といったところ。さらっと読めて良いですね。&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;http://www.amazon.co.jp/gp/product/4798118907/ref=pd_lpo_sbs_dp_ss_2?pf_rd_p=466449256&amp;amp;pf_rd_s=lpo-top-stripe&amp;amp;pf_rd_t=201&amp;amp;pf_rd_i=4873115876&amp;amp;pf_rd_m=AN1VRQENFRJN5&amp;amp;pf_rd_r=1YA4XCHT36XJD6ZEF9KC&#34;&gt;実用Common Lisp&lt;/a&gt;(通称PAIP本)はぶ厚くて高い本。AI系の内容らしい。私は読んだことが無いのですが、数理システムが入門書として使ってるそうです。
-2014-12-14 追記 &lt;a href=&#34;/blog/2014/12/14/shi-yong-common-lispwodu-nda/&#34;&gt;読みました&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h1 id=&#34;何か作る:a9be93b0b4fb16c2c0e10aa859a2df5f&#34;&gt;何か作る&lt;/h1&gt;
-
-&lt;h2 id=&#34;web-1:a9be93b0b4fb16c2c0e10aa859a2df5f&#34;&gt;Web&lt;/h2&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;http://www.usamimi.info/~ide/programe/stg_doc/stg-commonlisp.pdf&#34;&gt;Common LispでSTGを作りますが何か&lt;/a&gt;は有名なPDF。STG(シューティングゲーム)を作る内容。多少古い(SDLが1.2系だとか)ものの、練習には十分です。&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;http://blog.8arrow.org/entry/2013/09/10/110632&#34;&gt;Common LispでWebAppの開発に必要なN個のこと - 八発白中&lt;/a&gt;はWeb Appを作るにあたって必要なライブラリを紹介している。紹介しているだけで作り方は書いてないのでどうにか頑張って下さい。&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;あんまり情報無いですね…Lisperのみなさんもっとアウトプットしましょう。&lt;/p&gt;
-
-&lt;h1 id=&#34;リファレンス:a9be93b0b4fb16c2c0e10aa859a2df5f&#34;&gt;リファレンス&lt;/h1&gt;
-
-&lt;h2 id=&#34;web-2:a9be93b0b4fb16c2c0e10aa859a2df5f&#34;&gt;Web&lt;/h2&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;http://www.lispworks.com/documentation/HyperSpec/Front/&#34;&gt;Common Lisp Hyper Spec&lt;/a&gt;はCommon Lispの機能をサンプルと共に網羅的に、詳細に紹介しています。英語です。
-主に&lt;a href=&#34;http://www.lispworks.com/documentation/HyperSpec/Front/Contents.htm&#34;&gt;コンテンツ&lt;/a&gt;からドリルダウンで調べていくと良いです。時間があればじっくり眺めても良いかも。
-Common Lispをやる上では必ず必要になるので、英語ですが必ず友達になっておきましょう。&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;http://tips.cddddr.org/common-lisp/&#34;&gt;逆引きCommon Lisp&lt;/a&gt;は名前の通りやりたいことからCommon Lispの機能を調べられます。サンプルもあります。残念ながら網羅的ではないのですが凡その需要は満たせると思います。&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;http://quickdocs.org/&#34;&gt;Quickdocs&lt;/a&gt;はライブラリのドキュメントサイト(英語)。ライブラリを捜す時にも良いと思います。&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h2 id=&#34;書籍-1:a9be93b0b4fb16c2c0e10aa859a2df5f&#34;&gt;書籍&lt;/h2&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;http://www.amazon.co.jp/COMMON-LISP-%E7%AC%AC2%E7%89%88-Guy-L-Steele/dp/4320025881/ref=cm_lmf_tit_10&#34;&gt;COMMON LISP 第2版&lt;/a&gt;は通称cltl2と呼ばれるCommon Lispの原典の和訳です。一応紹介しました。今のCommon LispはANSI Common Lispになってるので少し違います。&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h1 id=&#34;ポータルサイト:a9be93b0b4fb16c2c0e10aa859a2df5f&#34;&gt;ポータルサイト&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;http://cl.cddddr.org/index.cgi&#34;&gt;Common LISP users jp&lt;/a&gt;は日本語で様々な情報が得られます。&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;http://www.reddit.com/r/lisp_ja/&#34;&gt;redditの/r/lisp_ja&lt;/a&gt;にはLispに関連するWebページの情報が日々投稿されています。&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;http://www.cliki.net/&#34;&gt;CLiki&lt;/a&gt;はCommon Lispの総合Wiki(英語)。非常に有用な情報が溜まってます。&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;http://common-lisp.net/&#34;&gt;Common-Lisp.net&lt;/a&gt;はCommon Lispのコミュニティ支援サイト(英語)。多くのプロジェクトをホストしていて、そのWebページなんかもあります。&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h1 id=&#34;ソースコードを読む:a9be93b0b4fb16c2c0e10aa859a2df5f&#34;&gt;ソースコードを読む&lt;/h1&gt;
-
-&lt;p&gt;κeenの適当チョイスです。他にお勧めがあれば教えて下さい。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;https://github.com/keithj/alexandria&#34;&gt;alexandria&lt;/a&gt;は有名なユーティリティパッケージ。小さな関数やマクロで構成されてるのでイディオム集みたいな感じで読めると思います。&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://github.com/7max/log4cl&#34;&gt;log4cl&lt;/a&gt;はログライブラリ。ドキュメント(英語)をしっかり書いてるので読み易いです。&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://github.com/edicl/hunchentoot&#34;&gt;Hunchentoot&lt;/a&gt;はWebサーバ。ドキュメント(英語)を過剰に書いてるので読める筈。&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h1 id=&#34;ステップアップ:a9be93b0b4fb16c2c0e10aa859a2df5f&#34;&gt;ステップアップ&lt;/h1&gt;
-
-&lt;h2 id=&#34;web-3:a9be93b0b4fb16c2c0e10aa859a2df5f&#34;&gt;Web&lt;/h2&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;http://www.asahi-net.or.jp/~kc7k-nd/onlispjhtml/&#34;&gt;On Lisp&lt;/a&gt;は主にマクロについて書かれたCommon Lispプログラミングの指南書。書籍もありますが、Web版もあります。&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h2 id=&#34;書籍-2:a9be93b0b4fb16c2c0e10aa859a2df5f&#34;&gt;書籍&lt;/h2&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;http://www.amazon.co.jp/LET-OVER-LAMBDA-Edition-1-0/dp/4434133632&#34;&gt;Let Over Lambda&lt;/a&gt;(通称LOL)は過激とか狂気とか宗教とか言われるエッセイ。高速化の話とかクロージャの危ない使い方とかが書かれてます。&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h1 id=&#34;lisperとコミュニケーションをとる:a9be93b0b4fb16c2c0e10aa859a2df5f&#34;&gt;Lisperとコミュニケーションをとる&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;http://shibuya.lisp-users.org/&#34;&gt;Shibuya.lisp&lt;/a&gt;は渋谷を中心に半径2万kmを対象としたLispコミュニティ。毎月下旬の平日夜にLisp Meet Upをやってるのでひょこっとやってくると良いと思います。内容はCommon Lisp, Scheme, Clojureで回してるのでCommon Lisp回は3ヶ月に1回ですが毎回Common Lisperは来てるので別のLispの回でも構わず参加すると良いと思います。
-#lispmeetup の情報は&lt;a href=&#34;https://atnd.org/users/51173&#34;&gt;ここ&lt;/a&gt;から入手するのが良いかな？あとは&lt;a href=&#34;https://twitter.com/shibuya_lisp&#34;&gt;Twitterアカウント&lt;/a&gt;もあります。Ustream配信もしてます。&lt;/li&gt;
-&lt;li&gt;IRCの#lisp-ja@irc.freenode.orgと#common-lisp-ja@irc.freenode.orgにコミュニティがあります。常に誰かがいる訳ではないのですがちょくちょく見てる人はいるので発言してみると反応があるかもしれません。今もこの投稿に対して反応があってCIMとredditの項目を追加しました。&lt;/li&gt;
-&lt;/ul&gt;
 </description>
     </item>
     

@@ -5,9 +5,238 @@
     <link>/categories/scala-meet-up/</link>
     <description>Recent content in Scala Meet Up on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
-    <language>ja-jp</language>
-    <lastBuildDate>Sun, 13 Dec 2015 22:42:39 +0900</lastBuildDate>
+    <language>en-us</language>
+    <lastBuildDate>Sun, 31 Jan 2016 16:17:35 +0900</lastBuildDate>
     <atom:link href="/categories/scala-meet-up/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>HAMT ~ イミュータブルで高速なハッシュマップ ~</title>
+      <link>/slide/HAMT/</link>
+      <pubDate>Sun, 31 Jan 2016 16:17:35 +0900</pubDate>
+      
+      <guid>/slide/HAMT/</guid>
+      <description>&lt;section data-markdown
+    data-separator=&#34;\n\n&#34;
+    data-vertical=&#34;\n\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+&lt;script type=&#34;text/template&#34;&gt;
+# &lt;span style=&#34;font-size: 90%&#34;&gt;Hash-Array Mapped Trie&lt;/span&gt;
+----------------------
+ ~ イミュータブルで高速なハッシュマップ ~  
+サイバーエージェント AdTech Scala Meetup LT大会
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# About Me
+---------
+![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
+
+ + κeen
+ + [@blackenedgold](https://twitter.com/blackenedgold)
+ + Github: [KeenS](https://github.com/KeenS)
+ + 基盤開発グループの新卒
+ + Lisp, ML, Rust, Shell Scriptあたりを書きます
+
+
+# &lt;span style=&#34;font-size: 60%&#34;&gt;scala.collections.immutable.HashMap&lt;/span&gt;
+-------------------------------------
+
+* 今日の話題。これの実装をみていく。
+* イミュータブル
+* キー-バリューペア
+* 値を追加する度に新たなハッシュマップを作る &lt;!-- .element: class=&#34;fragment grow&#34; data-fragment-index=&#34;1&#34; --&gt;
+
+
+# HashMap
+----------------
+
+* `O(1)`のアクセス効率
+* 空間効率は悪い
+* ハッシュ関数が定義出来れば何でもキーに使える
+* 普通はミュータブルに使う
+  + 大量のメモリをアロケートするのでコピーはつらい
+
+
+# メモリ効率悪そう？
+-------------------------
+
+```scala
+val hash = HashMap.empty + (3 -&gt; 1)
+// +---+---+---+---+---+----
+// | / | 3 | / | / | / | ...
+// +---+---+---+---+---+----
+//       |
+//      +-+
+//      |1|
+//      +-+
+```
+
+
+# メモリ効率悪そう？
+-------------------------
+
+```scala
+val hash2 = hash + (2 -&gt; 2)
+// +---+---+---+---+---+----
+// | / | 3 | / | / | / | ...
+// +---+---+---+---+---+----
+//       |
+//      +-+
+//      |1|
+//      +-+
+//  &gt; Copy &lt;
+// +---+---+---+---+---+----
+// | / | 3 | / | 2 | / | ...
+// +---+---+---+---+---+----
+//       |       |
+//      +-+     +-+
+//      |1|     |2|
+//      +-+     +-+
+```
+
+
+# メモリ効率的データ構造?
+----------------------------
+## TreeMap
+
+* O(log(n))のアクセス効率
+* 空間効率はほどほど
+  + イミュータブルに使えばかなり良い
+  + 部分構造を再利用出来る
+* 全順序関数が定義出来れば何でもキーに出来る
+* キーが複数回比較される問題がある
+
+
+# キー同士の比較
+---------------
+長いキー同士の比較がO(log(n))回走る可能性がある
+
+```scala
+treeMap.get(&#34;very long ... key1&#34;)
+
+        ....
+       /
+&#34;very long ... key3&#34; -&gt; &#34;value3&#34;
+       \
+   &#34;very long ... key2&#34; -&gt; &#34;value2&#34;
+         \
+      &#34;very long ...key1&#34; -&gt; &#34;value1&#34;
+```
+
+
+# HashMap vs TreeMap
+-----------------
+
+&lt;table&gt;
+&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;th&gt;HashMap&lt;/th&gt;&lt;th&gt;TreeMap&lt;/th&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;th&gt;アクセス効率&lt;/th&gt;&lt;td class=&#34;fragment highlight-red&#34; data-fragment-index=&#34;1&#34;&gt;`O(1)`&lt;/td&gt;&lt;td&gt;`O(log(n))`&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;th&gt;イミュータブルな時の空間効率&lt;/th&gt;&lt;td&gt;悪い(毎回コピー)&lt;/td&gt;&lt;td class=&#34;fragment highlight-red&#34;  data-fragment-index=&#34;1&#34;&gt;良い(部分構造を共有)&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;th&gt;キーの比較&lt;/th&gt;&lt;td class=&#34;fragment highlight-red&#34;  data-fragment-index=&#34;1&#34;&gt;定数回&lt;/td&gt;&lt;td&gt;`O(log(n))`回&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;th&gt;キーの要件&lt;/th&gt;&lt;td class=&#34;fragment highlight-red&#34;  data-fragment-index=&#34;1&#34;&gt;Hash関数が定義されている&lt;/td&gt;&lt;td&gt;全順序関数が定義されている&lt;/td&gt;&lt;/tr&gt;
+&lt;/table&gt;
+
+# &lt;span style=&#34;font-size: 90%&#34;&gt;Hash-Array Mapped Trie&lt;/span&gt;
+------------------------
+
+* `O(1)`のアクセス効率
+* 部分構造を共有してメモリ効率も良い
+* キーの比較は定数回
+* Hash関数が定義されていればキーに出来る
+
+
+# 動作
+------
+
+* ざっくり言うと、「Hashして分割してトライ」
+
+
+# 動作
+------
+## Hashする
+
+* 40bitくらいの値が生成される
+
+``` scala
+hash(&#34;key&#34;)
+// =&gt; 0b10101101010101001010110101010100
+```
+
+
+# 動作
+------
+## 分割する
+
+* 下位から5bit毎に分割する
+  + 5bit = 0 ~ 31
+  + 32分木になる
+
+```
+11111 00010 10110 10101 01001 01011 01010 10100
+```
+
+
+# 動作
+------
+## トライ
+
+* 32分のトライ木になる
+* トライ木の実装は32bitのbitmapを使ったArray Mapped Trieを使う
+
+
+(図が分かりづらいというか不適切)
+
+```
+8     7     6     5     4     3     2     1
+11111 00010 10110 10101 01001 01011 01010 10100
+
+1    2    3  4
+   ...
+  /
+10100     ...
+  \        /
+   \    01011
+    \   /  \
+     \ /   01001....
+     01010
+       \
+        ...
+```
+
+
+# 特徴
+------
+
+* ハッシュ値が固定長なので`O(1)`で動作
+* Treeなので部分構造の共有が簡単
+* 木を辿る時の比較はhash値（の一部）なので高速
+* キーに全順序がなくてもハッシュ関数さえ定義されていれば木を構築出来る
+
+
+# まとめ
+--------
+
+* Scalaのimmutable.HashMapはコピーしても高速だよ
+* 裏で動くアルゴリズムを紹介したよ
+  + ざっくりなので本物はもう少し工夫してる
+  + prefix treeになってる
+
+
+# 参考
+------
+
+* PDF [Ideal Hash Trees](http://lampwww.epfl.ch/papers/idealhashtrees.pdf)
+  + HAMTの元論文
+* [HAMT(Hash Array Mapped Trie) - sileのブログ](http://sile.hatenablog.jp/entry/20100926/1285467529)
+  + HAMTの解説ブログ
+* PDF [Optimizing Hash-Array Mapped Tries for Fast and Lean Immutable JVM Collections](http://michael.steindorfer.name/publications/oopsla15.pdf)
+  + HAMTを改善したCHAMPというデータ構造の論文。Clojureにこれが入りそう。
+* [Optimizing Hash-Array Mapped Tries for Fast and Lean Immutable JVM Collections | the morning paper](http://blog.acolyer.org/2015/11/27/hamt/)
+  + CHAMPを解説したブログ
+
+&lt;/script&gt;
+&lt;/section&gt;
+</description>
+    </item>
     
     <item>
       <title>DSLとTagless Final</title>

@@ -5,9 +5,238 @@
     <link>/slide/</link>
     <description>Recent content in Slides on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
-    <language>ja-jp</language>
-    <lastBuildDate>Sun, 13 Dec 2015 22:42:39 +0900</lastBuildDate>
+    <language>en-us</language>
+    <lastBuildDate>Sun, 31 Jan 2016 16:17:35 +0900</lastBuildDate>
     <atom:link href="/slide/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>HAMT ~ イミュータブルで高速なハッシュマップ ~</title>
+      <link>/slide/HAMT/</link>
+      <pubDate>Sun, 31 Jan 2016 16:17:35 +0900</pubDate>
+      
+      <guid>/slide/HAMT/</guid>
+      <description>&lt;section data-markdown
+    data-separator=&#34;\n\n&#34;
+    data-vertical=&#34;\n\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+&lt;script type=&#34;text/template&#34;&gt;
+# &lt;span style=&#34;font-size: 90%&#34;&gt;Hash-Array Mapped Trie&lt;/span&gt;
+----------------------
+ ~ イミュータブルで高速なハッシュマップ ~  
+サイバーエージェント AdTech Scala Meetup LT大会
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# About Me
+---------
+![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
+
+ + κeen
+ + [@blackenedgold](https://twitter.com/blackenedgold)
+ + Github: [KeenS](https://github.com/KeenS)
+ + 基盤開発グループの新卒
+ + Lisp, ML, Rust, Shell Scriptあたりを書きます
+
+
+# &lt;span style=&#34;font-size: 60%&#34;&gt;scala.collections.immutable.HashMap&lt;/span&gt;
+-------------------------------------
+
+* 今日の話題。これの実装をみていく。
+* イミュータブル
+* キー-バリューペア
+* 値を追加する度に新たなハッシュマップを作る &lt;!-- .element: class=&#34;fragment grow&#34; data-fragment-index=&#34;1&#34; --&gt;
+
+
+# HashMap
+----------------
+
+* `O(1)`のアクセス効率
+* 空間効率は悪い
+* ハッシュ関数が定義出来れば何でもキーに使える
+* 普通はミュータブルに使う
+  + 大量のメモリをアロケートするのでコピーはつらい
+
+
+# メモリ効率悪そう？
+-------------------------
+
+```scala
+val hash = HashMap.empty + (3 -&gt; 1)
+// +---+---+---+---+---+----
+// | / | 3 | / | / | / | ...
+// +---+---+---+---+---+----
+//       |
+//      +-+
+//      |1|
+//      +-+
+```
+
+
+# メモリ効率悪そう？
+-------------------------
+
+```scala
+val hash2 = hash + (2 -&gt; 2)
+// +---+---+---+---+---+----
+// | / | 3 | / | / | / | ...
+// +---+---+---+---+---+----
+//       |
+//      +-+
+//      |1|
+//      +-+
+//  &gt; Copy &lt;
+// +---+---+---+---+---+----
+// | / | 3 | / | 2 | / | ...
+// +---+---+---+---+---+----
+//       |       |
+//      +-+     +-+
+//      |1|     |2|
+//      +-+     +-+
+```
+
+
+# メモリ効率的データ構造?
+----------------------------
+## TreeMap
+
+* O(log(n))のアクセス効率
+* 空間効率はほどほど
+  + イミュータブルに使えばかなり良い
+  + 部分構造を再利用出来る
+* 全順序関数が定義出来れば何でもキーに出来る
+* キーが複数回比較される問題がある
+
+
+# キー同士の比較
+---------------
+長いキー同士の比較がO(log(n))回走る可能性がある
+
+```scala
+treeMap.get(&#34;very long ... key1&#34;)
+
+        ....
+       /
+&#34;very long ... key3&#34; -&gt; &#34;value3&#34;
+       \
+   &#34;very long ... key2&#34; -&gt; &#34;value2&#34;
+         \
+      &#34;very long ...key1&#34; -&gt; &#34;value1&#34;
+```
+
+
+# HashMap vs TreeMap
+-----------------
+
+&lt;table&gt;
+&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;th&gt;HashMap&lt;/th&gt;&lt;th&gt;TreeMap&lt;/th&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;th&gt;アクセス効率&lt;/th&gt;&lt;td class=&#34;fragment highlight-red&#34; data-fragment-index=&#34;1&#34;&gt;`O(1)`&lt;/td&gt;&lt;td&gt;`O(log(n))`&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;th&gt;イミュータブルな時の空間効率&lt;/th&gt;&lt;td&gt;悪い(毎回コピー)&lt;/td&gt;&lt;td class=&#34;fragment highlight-red&#34;  data-fragment-index=&#34;1&#34;&gt;良い(部分構造を共有)&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;th&gt;キーの比較&lt;/th&gt;&lt;td class=&#34;fragment highlight-red&#34;  data-fragment-index=&#34;1&#34;&gt;定数回&lt;/td&gt;&lt;td&gt;`O(log(n))`回&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;th&gt;キーの要件&lt;/th&gt;&lt;td class=&#34;fragment highlight-red&#34;  data-fragment-index=&#34;1&#34;&gt;Hash関数が定義されている&lt;/td&gt;&lt;td&gt;全順序関数が定義されている&lt;/td&gt;&lt;/tr&gt;
+&lt;/table&gt;
+
+# &lt;span style=&#34;font-size: 90%&#34;&gt;Hash-Array Mapped Trie&lt;/span&gt;
+------------------------
+
+* `O(1)`のアクセス効率
+* 部分構造を共有してメモリ効率も良い
+* キーの比較は定数回
+* Hash関数が定義されていればキーに出来る
+
+
+# 動作
+------
+
+* ざっくり言うと、「Hashして分割してトライ」
+
+
+# 動作
+------
+## Hashする
+
+* 40bitくらいの値が生成される
+
+``` scala
+hash(&#34;key&#34;)
+// =&gt; 0b10101101010101001010110101010100
+```
+
+
+# 動作
+------
+## 分割する
+
+* 下位から5bit毎に分割する
+  + 5bit = 0 ~ 31
+  + 32分木になる
+
+```
+11111 00010 10110 10101 01001 01011 01010 10100
+```
+
+
+# 動作
+------
+## トライ
+
+* 32分のトライ木になる
+* トライ木の実装は32bitのbitmapを使ったArray Mapped Trieを使う
+
+
+(図が分かりづらいというか不適切)
+
+```
+8     7     6     5     4     3     2     1
+11111 00010 10110 10101 01001 01011 01010 10100
+
+1    2    3  4
+   ...
+  /
+10100     ...
+  \        /
+   \    01011
+    \   /  \
+     \ /   01001....
+     01010
+       \
+        ...
+```
+
+
+# 特徴
+------
+
+* ハッシュ値が固定長なので`O(1)`で動作
+* Treeなので部分構造の共有が簡単
+* 木を辿る時の比較はhash値（の一部）なので高速
+* キーに全順序がなくてもハッシュ関数さえ定義されていれば木を構築出来る
+
+
+# まとめ
+--------
+
+* Scalaのimmutable.HashMapはコピーしても高速だよ
+* 裏で動くアルゴリズムを紹介したよ
+  + ざっくりなので本物はもう少し工夫してる
+  + prefix treeになってる
+
+
+# 参考
+------
+
+* PDF [Ideal Hash Trees](http://lampwww.epfl.ch/papers/idealhashtrees.pdf)
+  + HAMTの元論文
+* [HAMT(Hash Array Mapped Trie) - sileのブログ](http://sile.hatenablog.jp/entry/20100926/1285467529)
+  + HAMTの解説ブログ
+* PDF [Optimizing Hash-Array Mapped Tries for Fast and Lean Immutable JVM Collections](http://michael.steindorfer.name/publications/oopsla15.pdf)
+  + HAMTを改善したCHAMPというデータ構造の論文。Clojureにこれが入りそう。
+* [Optimizing Hash-Array Mapped Tries for Fast and Lean Immutable JVM Collections | the morning paper](http://blog.acolyer.org/2015/11/27/hamt/)
+  + CHAMPを解説したブログ
+
+&lt;/script&gt;
+&lt;/section&gt;
+</description>
+    </item>
     
     <item>
       <title>DSLとTagless Final</title>
@@ -3217,501 +3446,6 @@ AA略
 &lt;!-- .slide: class=&#34;center&#34; --&gt;
 
 
-&lt;/script&gt;
-&lt;/section&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>Common Lispで限定継続と遊ぶ</title>
-      <link>/slide/Common_Lispdegenteikeizokutoasobu_/</link>
-      <pubDate>Sun, 26 Apr 2015 21:09:07 +0900</pubDate>
-      
-      <guid>/slide/Common_Lispdegenteikeizokutoasobu_/</guid>
-      <description>&lt;section data-markdown
-    data-separator=&#34;\n\n&#34;
-    data-vertical=&#34;\n\n&#34;
-    data-notes=&#34;^Note:&#34;&gt;
-&lt;script type=&#34;text/template&#34;&gt;
-# Common Lispで限定継続と遊ぶ
-----------------------
-[Lisp Meet Up #27](https://atnd.org/events/64988)
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# About Me
----------
-![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
-
- + κeen
- + [@blackenedgold](https://twitter.com/blackenedgold)
- + Github: [KeenS](https://github.com/KeenS)
- + 渋谷のエンジニア
- + Lisp, ML, Shell Scriptあたりを書きます
-
-
-# Agenda
---------
-
-0. cl-contの紹介
-1. 限定継続の話
-2. 限定継続の使い方の話
-3. 限定継続の実装の話
-
-
-# CL-CONTの紹介
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# CL-CONT
----------
-
-* Common Lispの限定継続ライブラリ
-* 結構古くからあるっぽい
-* 割と色々なライブラリが使ってる
-
-# CL-CONT
----------
-
-![cl-cont dependers](/images/cl-cont-dependers.png)
-
-# API
------
-
-* 継続を区切るマクロ
-  + `with-call/cc`
-  + `defun/cc`
-  + `lambda/cc`
-* 継続を取得するマクロ
-  + `call/cc`
-  + `let/cc`
-
-※後で説明するので意味が分からなくても問題ないです。
-
-
-# 限定継続の話
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# 継続とは
----------
-
-* &#34;その後&#34;の計算を表わす概念。
-* 値が決定した後トップレベルに戻るまでの計算。
-* Schemeが一級市民として扱えることで有名
-* 値として取り出した時は0-1引数関数として振る舞う
-
-# 継続とは
-----------
-`foo`の継続は、`foo`を虫食いにしたものと思えば良い。
-
-```lisp
-(mapc #&#39;writ-line
-      (loop :for x :in list
-         :collect (if (evenp x)
-                      (foo x))))
-```
-
-# 継続とは
-----------
-`foo`の継続は、`foo`を虫食いにしたものと思えば良い。
-
-```lisp
-(mapc #&#39;writ-line
-      (loop :for x :in list
-         :collect (if (evenp x)
-                      □)))
-```
-
-# 継続とは
-----------
-あとはそれを関数にするだけ
-
-```lisp
-(lambda (k)
-  (mapc #&#39;writ-line
-        (loop :for x :in list
-           :collect (if (evenp x)
-                        k))))
-```
-
-
-# 限定継続とは
----------
-
-* &#34;その後&#34;の計算を表わす概念。
-* 値が決定した後 *指定した位置* に戻るまでの計算。
-* 継続がトップレベルまで戻るのに対して限定継続途中で止まる。それだけ。
-* 部分継続などの言い方もある
-  + 英語もpart contとdelimited contで分かれる
-
-
-# 限定継続とは
--------------
-先の例を`loop`までの限定継続にすると
-
-```lisp
-(mapc #&#39;writ-line
-      (loop :for x :in list
-         :collect (if (evenp x)
-                      (foo x))))
-```
-
-
-# 限定継続とは
--------------
-先の例を`loop`までの限定継続にすると
-
-```lisp
-(loop :for x :in list
-           :collect (if (evenp x)
-                        □))
-```
-
-
-# 限定継続とは
--------------
-
-```lisp
-(lambda (k)
-  (loop :for x :in list
-     :collect (if (evenp x)
-                  k)))
-```
-
-# 限定継続の挙動
----------------
-普通のやつ
-
-```lisp
-(with-call/cc
-  (+ 1 (call/cc
-        (lambda (k)
-          (funcall k 2)))))
-```
-
-これは
-
-```lisp
-(+ 1 2)
-```
-
-と等価
-
-# 限定継続の挙動
----------------
-今度は継続を呼ばないでみる
-
-```lisp
-(with-call/cc
-  (+ 1 (call/cc (lambda (k) 2))))
-```
-
-これは
-
-```lisp
-2
-```
-
-と等価
-
-# 限定継続の挙動
----------------
-もうちょっと呼ばない例  
-(`(let/cc k ...)` = `(call/cc (lambda (k) ...))`)
-
-```lisp
-(with-call/cc
-  (write-line &#34;hello&#34;)
-  (let/cc k 1)
-  (write-line &#34;world&#34;))
-```
-
-は
-
-```lisp
-(progn
-  (write-line &#34;hello&#34;)
-  1)
-```
-
-と等価
-
-
-# 限定継続の使い方の話
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# 限定継続の使い方の話
----------------------
-
-* グリーンスレッド
-* コールバックを綺麗に書き換える
-* 非決定性計算
-* etc...
-
-
-## グリーンスレッド
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-
-## グリーンスレッド
------------------
-
-* またの名をコルーチン
-* またの名を強調スレッド
-
-
-
-## グリーンスレッド
------------------
-```lisp
-(let (c)
-  (setf c (with-call/cc
-            (write-line &#34;in thread A 1&#34;)
-            (let/cc k k)
-            (write-line &#34;in thread A 2&#34;)
-            (let/cc k k)
-            (write-line &#34;in thread A 3&#34;)))
-  (write-line &#34;in main thread 1&#34;)
-  (setq c (funcall c))
-  (write-line &#34;in main thread 2&#34;)
-  (setq c (funcall c))
-  (write-line &#34;in main thread 3&#34;))
-```
-
-## グリーンスレッド
------------------
-実行結果
-
-```
-in thread A 1
-in main thread 1
-in thread A 2
-in main thread 2
-in thread A 2
-in main thread 3
-
-```
-
-
-## コールバックの書き換え
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-## コールバックの書き換え
-----------------------
-本当はこう書きたい
-
-```lisp
-(with-event-loop
-    (format t &#34;Hello, ~a!~%&#34; (async-read stream)))
-```
-
-## コールバックの書き換え
-----------------------
-しかしライブラリがコールバック関数を要求してくる
-
-```lisp
-(with-event-loop
-    (async-read stream (lambda (line)
-                         (format t &#34;Hello, ~a!~%&#34; line))))
-```
-
-## コールバックの書き換え
------------------------
-コールバック = 限定継続（後述）なのでこうしてやれば良い。
-
-```lisp
-(with-event-loop
-    (with-call/cc
-      (format t &#34;Hello, ~a!~%&#34;
-              (call/cc (lambda (k))
-                       (async-read stream k)))))
-```
-
-## 非決定性計算
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-## 非決定性計算
--------------
-### ベースアイディア
-
-* 継続を関数として取り出した後同じ処理を何回も実行出来るんじゃね？
-
-
-## 非決定性計算
--------------
-### ベースアイディア
-複数回呼び出してみる
-
-```lisp
-(let (c)
-  (setf c (with-call/cc
-            (+ 1 (* 2 (- 3 (let/cc k k))))))
-  (list (funcall c 1)
-        (funcall c 2)
-        (funcall c 3)))
-```
-
-
-## 非決定性計算
--------------
-### ベースアイディア
-普通の1引数関数として使ってみる
-
-```lisp
-(let (c)
-  (setf c (with-call/cc
-            (+ 1 (* 2 (- 3 (let/cc k k))))))
-  (mapcar c (list 1 2 3)))
-```
-
-## 非決定性計算
--------------
-### ベースアイディア
-マクロでラップしてみる
-
-```lisp
-(defmacro for (&amp;body expr)
-  `(with-call/cc ,@expr))
-(defmacro in (m)
-  `(let/cc k (apply #&#39;append (mapcar k ,m))))
-(defun yield (x) (list x))
-(defun unit () nil)
-```
-
-
-## 非決定性計算
--------------
-使ってみる
-
-```lisp
-(for
-  (let ((x (in &#39;(1 2 3)))
-        (y (in &#39;(a b c))))
-    (yield (cons x y))))
-```
-
-```
-((1 . A) (1 . B) (1 . C) (2 . A) (2 . B) (2 . C) (3 . A) (3 . B) (3 . C))
-```
-
-
-# 限定継続の実装の話
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# 限定継続の実装の話
--------------------
-
-* 継続は0~1引数関数として取り出せるのであった。
-  + 実は機械的に取り出せる
-* 継続は全ての式に暗黙に存在するのであった
-  + 全ての式を継続を明示的に使うようにも出来る
-
-
-# CPS変換
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# CPS変換
----------
-
-* 全ての関数の引数を1つ増やして、そこで継続を受け取る
-* 値を返す時は暗黙のreturnを使うのではなく明示的に継続を呼ぶ
-* 関数を呼ぶ時は必ず継続を渡す。呼び出し元には返ってこない（自然と末尾再帰になる）
-
-
-# CPS変換
----------
-例えば
-
-```lisp
-(with-call/cc
-  (foo (call/cc
-        (lambda (k)
-          (funcall k 2)))))
-```
-
-は、取り出された継続が
-
-```lisp
-(lambda (k) (foo k))
-```
-
-。
-
-
-# CPS変換
----------
-よって
-
-```lisp
-((lambda (k) (foo k)) 2)
-```
-
-と変換される
-
-
-# CPS変換
----------
-再帰関数だと少し面倒
-
-```lisp
-(defun fact (n)
-  (if (&lt;= n)
-      1
-      (* n (fact (- n 1))))))
-
-```
-
-が
-
-```lisp
-(defun fact (n c)
-  (if (&lt;= n)
-      (c 1)
-      (fact (- n 1) (lambda (v) (* n v)))))
-```
-
-となる
-
-
-# CPS変換
----------
-
-* CPS変換を行なうことでいつでも継続を値として使える
-
-
-# 限定継続の実装の話
--------------------
-
-* CPS変換を裏で行なっている
-* 自動で出来るのでマクロで変換をしている
-  + 組み込み関数は変更出来ないので特別扱い
-  + スペシャルフォームも気をつける必要がある
-* `lambda`が乱立するのでパフォーマンスは酷い。
-
-
-# まとめ
--------
-
-* cl-contというライブラリがあって、限定継続が扱える
-* 限定継続は処理を中断したり再開したり繰り返したりに使える
-* 裏ではえげつないことをやっている
-* パフォーマンスが必要なところでは使っちゃダメ
-
-
-# 参考
-------
-* [picrin/partcont.scm at master · picrin-scheme/picrin](https://github.com/picrin-scheme/picrin)
-* [cl-cont | Quickdocs](http://quickdocs.org/cl-cont/)
-* [コルーチンをCommon Lispで簡単に定義 - さくらんぼのlambda日記](http://lambdasakura.hatenablog.com/entry/20111026/1319598590)
-* [継続渡しスタイル - Wikipedia](http://ja.wikipedia.org/wiki/%E7%B6%99%E7%B6%9A%E6%B8%A1%E3%81%97%E3%82%B9%E3%82%BF%E3%82%A4%E3%83%AB)
-* [M.Hiroi&#39;s Home Page / お気楽 Scheme プログラミング入門](http://www.geocities.jp/m_hiroi/func/abcscm20.html)
 &lt;/script&gt;
 &lt;/section&gt;
 </description>

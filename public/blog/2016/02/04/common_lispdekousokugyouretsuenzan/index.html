@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+    <head>
+        
+        <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+
+        <title>Common Lispで高速行列演算 | κeenのHappy Hacκing Blog</title>
+        <link rel="stylesheet" href='http://fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css' />
+        <link rel="stylesheet" href="/libraries/normalize.3.0.1.css" />
+        <link rel="stylesheet" href="/css/liquorice.css" />
+        <link rel="shortcut icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon-144-precomposed.png" sizes="144x144" />
+        <link rel="alternate" href="" type="application/rss+xml" title="κeenのHappy Hacκing Blog" />
+        
+        <script>
+         (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+             (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+                                  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+         })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+         ga('create', 'UA-43779888-1', 'auto');
+         ga('send', 'pageview');
+
+        </script>
+        
+        <link rel="stylesheet" href="/highlight.js/styles/xcode.css" />
+<script src="/highlight.js/highlight.min.js"></script>
+<script>hljs.initHighlightingOnLoad();</script>
+<script type="text/x-mathjax-config">
+ MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
+</script>
+<script type="text/javascript"
+        src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML">
+</script>
+<meta http-equiv="X-UA-Compatible" CONTENT="IE=EmulateIE7" />
+
+    </head>
+    <body class="li-body">
+
+<header class="li-page-header">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-brand li-left">
+                <a href="/">κeenのHappy Hacκing Blog</a> | Lispエイリアンの狂想曲</div>
+                <div class="li-menu li-right">
+                    <span class="li-menu-icon" onclick="javascript:toggle('menu');">&#9776;</span>
+                    <ul id="menu2" class="li-menu-items">
+                        
+                            <li><a href=""> About </a></li>
+                        
+                            <li><a href="/post/"> Blog </a></li>
+                        
+                            <li><a href="/slide/"> Slide </a></li>
+                        
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="sixteen columns">
+                <ul id="menu" class="li-menu-items li-menu-mobile">
+                    
+                        <li><a href=""> About </a></li>
+                    
+                        <li><a href="/post/"> Blog </a></li>
+                    
+                        <li><a href="/slide/"> Slide </a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+
+
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <article class="li-article">
+                    <header class="li-article-header">
+                        <h1 class="li-article-title">Common Lispで高速行列演算</h1>
+                        <div class="li-article-meta">
+    <time class="li-article-date">2016-02-04</time>
+    <ul class="li-article-tag">
+    
+        <li>
+            <a href="/categories/lisp">Lisp</a>
+        </li>
+    
+        <li>
+            <a href="/categories/common-lisp">Common Lisp</a>
+        </li>
+    
+</ul>
+
+</div>
+
+                    </header>
+                    <section>
+                        
+
+<p>κeenです。Common Lispから線形代数ライブラリを使うポストで比較にCommon Lispのコードが出されていたのですがもう少し改良出来そうだったので少しばかり高速化してみました。</p>
+
+<p>そのポストはこちら。</p>
+
+<p><a href="http://d.hatena.ne.jp/masatoi/20160204/1454519281">Common Lispで行列演算: LLA(Lisp Linear Algebra)を使う - 翡翠はコンピュータに卵を生むか</a></p>
+
+<p>圧倒的にCommon Lispが遅いですね。そのコードはこちらから。</p>
+
+<p><a href="http://tanakahx.hatenablog.com/entry/2015/09/25/070000">Python (NumPy) と Common Lisp (LLA) で行列積の実行速度を比較する - 不確定特異点</a></p>
+
+<p>行列計算(GEMM)部分を抜き出すとこうなっています。</p>
+
+<pre><code class="language-lisp">(defun simple-gemm (ma mb)
+  &quot;Common Lispのみを使った行列積の計算&quot;
+  (declare (optimize (speed 3) (debug 0) (safety 0)))
+  (declare (type (simple-array single-float (* *)) ma mb))
+  (let ((rows (array-dimension ma 0))
+        (cols (array-dimension mb 1)))
+    (declare (type fixnum rows cols))
+    (let ((result (make-matrix rows cols)))
+      (declare (type (simple-array single-float (* *)) result))
+      (dotimes (row rows)
+        (dotimes (col cols)
+          (dotimes (k cols)
+            (incf (aref result row col)
+                  (* (aref ma row k) (aref mb k col))))))
+      result)))
+</code></pre>
+
+<p>これを<code>*N*</code> = 256, で100回繰り返したら</p>
+
+<pre><code>;; Evaluation took:
+;;   4.688 seconds of real time
+;;   4.692000 seconds of total run time (4.688000 user, 0.004000 system)
+;;   100.09% CPU
+;;   13,564,728,093 processor cycles
+;;   26,216,000 bytes consed
+
+</code></pre>
+
+<p>とのこと。まあ、まだ高速化の余地はありそうです。</p>
+
+<h1 id="キャッシュする:ac3da300d14ff6fe33746d6ed93b7e0b">キャッシュする</h1>
+
+<p>内側のループをみるとこうなっています。</p>
+
+<pre><code class="language-lisp">          (dotimes (k cols)
+            (incf (aref result row col)
+                  (* (aref ma row k) (aref mb k col))))
+</code></pre>
+
+<p><code>incf</code>をばらすとこうなります。</p>
+
+<pre><code class="language-lisp">          (dotimes (k cols)
+            (setf (aref result row col)
+                  (+ (aref result row col) (* (aref ma row k) (aref mb k col)))))
+</code></pre>
+
+<p>値として参照している方の<code>(aref result row col)</code>は<code>k</code>に依存しないのでループの外に出せます。
+書き込んでいる方は場所だから仕方ない。</p>
+
+<p>これをキャッシュするようにすると</p>
+
+<pre><code class="language-lisp">(defun caching-gemm (ma mb)
+  &quot;Common Lispのみを使った行列積の計算&quot;
+  (declare (optimize (speed 3) (debug 0) (safety 0)))
+  (declare (type (simple-array single-float (* *)) ma mb))
+  (let ((rows (array-dimension ma 0))
+        (cols (array-dimension mb 1)))
+    (declare (type fixnum rows cols))
+    (let ((result (make-matrix rows cols)))
+      (declare (type (simple-array single-float (* *)) result))
+
+      (dotimes (row rows)
+        (dotimes (col cols)
+          (let ((cell (aref result row col)))
+           (dotimes (k cols)
+             (setf (aref result row col)
+              (+ cell (* (aref ma row k) (aref mb k col)))))
+           )))
+      result)))
+</code></pre>
+
+<p>同じパラメータでベンチマークをとると</p>
+
+<pre><code>;; 3.971 seconds of real time
+;; 3.972000 seconds of total run time (3.972000 user, 0.000000 system)
+;; 100.03% CPU
+;; 11,491,319,119 processor cycles
+;; 26,216,000 bytes consed
+</code></pre>
+
+<h1 id="ループアンローリング:ac3da300d14ff6fe33746d6ed93b7e0b">ループアンローリング</h1>
+
+<p>さて、先程の内側のループ、仕事が少ないですね。小さな仕事をチマチマループしてるとイテレーションコストが嵩みます。
+1回のイテレーションでの仕事を増やすべく、ループアンローリングをしましょう。</p>
+
+<p>コピペはダルいのでまずはマクロを。</p>
+
+<pre><code class="language-lisp">(defmacro dotimes-unroll ((i n unroll) &amp;body body)
+  (let ((n_      (gensym &quot;n&quot;)))
+    `(let ((,n_ ,n))
+       (do ((,i 0))
+           ((&lt; ,n_ (the fixnum (+ ,unroll ,i)))
+            (do ((,i ,i (the fixnum (1+ ,i))))
+                ((&lt; ,n_ (the fixnum (1+ ,i))))
+              ,@body
+              ))
+         ,@(loop :repeat unroll :append (append body `((setq ,i (the fixnum (1+ ,i))))))))))
+</code></pre>
+
+<p>少し試してみましょう。</p>
+
+<pre><code class="language-lisp">(dotimes-unroll (i 10 3)
+  (format t &quot;~%~a&quot;) i)
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+</code></pre>
+
+<p>よしよし。</p>
+
+<p>それではこれを使ってアンロールします。</p>
+
+<pre><code class="language-lisp">(defun loop-unroll-gemm (ma mb)
+  &quot;Common Lispのみを使った行列積の計算&quot;
+  (declare (optimize (speed 3) (debug 0) (safety 0)))
+  (declare (type (simple-array single-float (* *)) ma mb))
+  (let ((rows (array-dimension ma 0))
+        (cols (array-dimension mb 1)))
+    (declare (type fixnum rows cols))
+    (let ((result (make-matrix rows cols)))
+      (declare (type (simple-array single-float (* *)) result))
+
+      (dotimes (row rows)
+        (dotimes (col cols)
+          (let ((cell (aref result row col)))
+           (dotimes-unroll (k cols 16)
+             (setf (aref result row col)
+              (+ cell (* (aref ma row k) (aref mb k col))))))))
+      result)))
+</code></pre>
+
+<p>アンロール数は16が一番パフォーマンス出たようでした。</p>
+
+<p>さて、ベンチマークをしてみます。</p>
+
+<pre><code>;; Evaluation took:
+;;   3.847 seconds of real time
+;;   3.848000 seconds of total run time (3.848000 user, 0.000000 system)
+;;   [ Run times consist of 0.012 seconds GC time, and 3.836 seconds non-GC time. ]
+;;   100.03% CPU
+;;   11,128,993,432 processor cycles
+;;   26,216,000 bytes consed
+</code></pre>
+
+<p>辛うじて速くなってる…。因みにこれのパフォーマンスはCPUの命令キャッシュの状況に依存するので何度か試すとこれより速いスコアが出ることもあります。</p>
+
+<pre><code>Evaluation took:
+  3.338 seconds of real time
+  3.340000 seconds of total run time (3.332000 user, 0.008000 system)
+  [ Run times consist of 0.020 seconds GC time, and 3.320 seconds non-GC time. ]
+  100.06% CPU
+  9,657,259,219 processor cycles
+  26,248,768 bytes consed
+</code></pre>
+
+<h1 id="メモリアクセスしない:ac3da300d14ff6fe33746d6ed93b7e0b">メモリアクセスしない</h1>
+
+<p>さて、最初にキャッシュした時に書き込まれている方の <code>(aref result row col)</code> は場所だからキャッシュ出来ないといいました。まあ、それは正しいのですがループの中で毎回書き込む必要はありません。</p>
+
+<p>レジスタ上で計算を済ませて最後に書き込んであげれば十分です。</p>
+
+<pre><code class="language-lisp">(defun on-register-gemm (ma mb)
+  &quot;Common Lispのみを使った行列積の計算&quot;
+  (declare (optimize (speed 3) (debug 0) (safety 0)))
+  (declare (type (simple-array single-float (* *)) ma mb))
+  (let ((rows (array-dimension ma 0))
+        (cols (array-dimension mb 1)))
+    (declare (type fixnum rows cols))
+    (let ((result (make-matrix rows cols)))
+      (declare (type (simple-array single-float (* *)) result))
+
+      (dotimes (row rows)
+        (dotimes (col cols)
+          (let ((res (aref result row col)))
+           (dotimes-unroll (k cols 16)
+             (setf res
+                   (the single-float (+ res (* (aref ma row k) (aref mb k col))))))
+           (setf (aref result row col) res))))
+      result)))
+</code></pre>
+
+<p>これを試してみます。</p>
+
+<pre><code>;; Evaluation took:
+;;   2.302 seconds of real time
+;;   2.304000 seconds of total run time (2.300000 user, 0.004000 system)
+;;   [ Run times consist of 0.008 seconds GC time, and 2.296 seconds non-GC time. ]
+;;   100.09% CPU
+;;   6,662,273,812 processor cycles
+;;   26,216,000 bytes consed
+</code></pre>
+
+<p>わお！急に速くなりました。 <code>(* 100 (- (/ 4.688 2.302) 1))</code> ≒ 103、 100%近い高速化です。</p>
+
+<h1 id="おわりに:ac3da300d14ff6fe33746d6ed93b7e0b">おわりに</h1>
+
+<p>特に深い意味はなかったのですがパタヘネに載っていたやつを試してみたくて遊んでみました。</p>
+
+<p>普通に行列計算したいなら線形代数ライブラリ使った方が良いと思います。</p>
+
+<h1 id="ノート:ac3da300d14ff6fe33746d6ed93b7e0b">ノート</h1>
+
+<ul>
+<li>ループアンローリングの部分をイテレーションコストで説明しましたが他にも1ループ内の命令数が増えると組み合わせパズルのピースが増えるので最適化されやすくなります。まあ、SBCLは覗き穴最適化をほとんどしないのであまり意味ありませんが。気になる方はディスアセンブルしてみて下さい。</li>
+<li>このあと、 <code>(aref mb k col)</code> がCPUキャッシュを無駄にしているという話からキャッシュサイズ毎に行、列を分けて計算するやり方を紹介しようとしたのですが逆に遅くなってしまいました。付録Aにコードを置いておきます。うーむ。</li>
+<li>本当はさらにこのセグメント毎にスレッドに計算を投げて並列化したかったのですがセグメントで高速化しなかったので萎えて諦めました。</li>
+<li>パタヘネ的にはSIMDも使うのですが深夜に近付いてきて面倒になったのでこの辺でやめました。Common Lisp(SBCL)からSIMD命令を使うには<a href="http://keens.github.io/blog/2014/12/02/vopdeyou-bu/">私の過去のエントリ</a>を参照して下さい。</li>
+<li>本気で行列計算をしたいなら今回の $O(n^3)$ のアルゴリズムだけでなくStrassenのアルゴリズムやCoppersmith-Winogradのアルゴリズムも検討すべきです。</li>
+</ul>
+
+<h1 id="付録a:ac3da300d14ff6fe33746d6ed93b7e0b">付録A</h1>
+
+<pre><code class="language-lisp">(defun segmented-gemm (ma mb)
+  &quot;Common Lispのみを使った行列積の計算&quot;
+  (declare (optimize (speed 3) (debug 0) (safety 0)))
+  (declare (type (simple-array single-float (* *)) ma mb))
+  (let* ((segment 16)
+         (rows (array-dimension ma 0))
+         (cols (array-dimension mb 1))
+         (rowseg (floor rows segment))
+         (colseg (floor cols segment))
+         rowtmp coltmp
+         row col
+         )
+    (declare (type fixnum rows cols))
+    (let ((result (make-matrix rows cols)))
+      (declare (type (simple-array single-float (* *)) result))
+
+      (dotimes (ri rowseg)
+        (setf rowtmp (the fixnum (* ri segment)))
+        (dotimes (ci colseg)
+          (setf coltmp (the fixnum (* ci segment)))
+          (dotimes (rs segment)
+            (setf row (the fixnum (+ rowtmp rs)))
+            (dotimes-unroll (cs segment 8)
+              (setf col (the fixnum (+ coltmp cs)))
+              (let ((res (aref result row col)))
+                (dotimes-unroll (k cols 2)
+                  (setf res
+                        (the single-float (+ res (* (aref ma row k) (aref mb k col))))))
+                (setf (aref result row col) res))))))
+      result)))
+</code></pre>
+
+                    </section>
+                </article>
+            </div>
+        </div>
+
+        <div class="row li-author">
+    <div class="sixteen columns">
+        Written by <strong>κeen</strong>
+    </div>
+</div>
+
+
+        <div class="row li-pagination">
+            <div class="eight columns">
+                <div class="li-pagination-previous">
+                    
+                        &nbsp;
+                    
+                </div>
+            </div>
+            <div class="eight columns">
+                <div class="li-pagination-next">
+                    
+                        Older article<br />
+                        <a href="/slide/HAMT/"> HAMT ~ イミュータブルで高速なハッシュマップ ~</a>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+<footer class="li-page-footer">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-page-footer-legal">
+                    &copy; 2016. All rights reserved. 
+                </div>
+                <div class="li-page-footer-theme">
+                    <span class=""><a href="https://github.com/eliasson/liquorice/">liquorice</a> is a theme for <a href="http://hugo.spf13.com">hugo</a></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+
+    <script type="text/javascript">
+    <!--
+    function toggle(id) {
+        var e = document.getElementById(id);
+        e.style.display == 'block' ? e.style.display = 'none' : e.style.display = 'block';
+    }
+    
+    </script>
+    <script type="text/javascript">
+    <!--
+        var _gaq = _gaq || [];
+        _gaq.push(['_setAccount', ""]);
+        _gaq.push(['_trackPageview']);
+
+        (function() {
+        var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+        ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+        var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+        })();
+    -->
+    </script>
+    </body>
+</html>
+
