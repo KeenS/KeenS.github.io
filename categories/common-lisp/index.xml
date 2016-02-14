@@ -6,8 +6,177 @@
     <description>Recent content in Common Lisp on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Thu, 04 Feb 2016 23:47:34 +0900</lastBuildDate>
+    <lastBuildDate>Sun, 14 Feb 2016 22:37:35 +0900</lastBuildDate>
     <atom:link href="/categories/common-lisp/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>readlineの作り方</title>
+      <link>/blog/2016/02/14/readlinenotsukurikata</link>
+      <pubDate>Sun, 14 Feb 2016 22:37:35 +0900</pubDate>
+      
+      <guid>/blog/2016/02/14/readlinenotsukurikata</guid>
+      <description>
+
+&lt;p&gt;κeenです。なんか伏線っぽいもの回収しといた方が良いかなと思ってLinuxっぽい話でも。&lt;/p&gt;
+
+&lt;p&gt;readlineって便利ですよね。
+でもCで書かれているから他の言語から使おうと思うと面倒だったり使えなかったりGPLv3の所為で使えなかったりしますよね。
+そこである程度POSIXのインターフェースを扱わせてくれる言語でのreadlineの作り方でも。&lt;/p&gt;
+
+&lt;h1 id=&#34;カノニカルモードとエコーモード:58de41bc5e8c50f42088984a9312e8c7&#34;&gt;カノニカルモードとエコーモード&lt;/h1&gt;
+
+&lt;p&gt;readlineの仕組み自体は簡単で、全ての文字入力を受け取って、&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;readlineの制御キーシーケンスなら指定の制御を行なう&lt;/li&gt;
+&lt;li&gt;普通の文字ならそのまま画面に表示する&lt;/li&gt;
+&lt;li&gt;コントロールシーケンスなら &lt;code&gt;^W&lt;/code&gt; などとエスケープ表示する&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;これだけです。しかしそう簡単ではありません。
+あなたのお気に入りの言語で &lt;code&gt;readchar&lt;/code&gt; っぽい関数を実行してみると分かるかと思いますが、&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;一文字入力しただけではプログラムに入力文字が渡されない。エンターキーを押して初めてプログラムの &lt;code&gt;readchar&lt;/code&gt; 関数が返る。&lt;/li&gt;
+&lt;li&gt;入力した文字がそのままエコーバックされる。すなわち、 &lt;code&gt;←&lt;/code&gt; を押しても &lt;code&gt;^[[D&lt;/code&gt; が入力されてしまい、制御上不都合。&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;私は昔はこれらの挙動が適切な関数がないからだと思ってました。しかし、そうではありません。
+このような挙動をするのはプログラムの責任でもでもシェルの責任でもなくターミナルの責任です。&lt;/p&gt;
+
+&lt;p&gt;ターミナルには多彩なモードがあり、それによって挙動が変わるのです。
+つまり、1.の挙動をするのはカノニカルモードの挙動、2.の挙動をするのはエコーモードの挙動なのです。&lt;/p&gt;
+
+&lt;h1 id=&#34;tcgetattr-と-tcsetattr:58de41bc5e8c50f42088984a9312e8c7&#34;&gt;&lt;code&gt;tcgetattr&lt;/code&gt; と &lt;code&gt;tcsetattr&lt;/code&gt;&lt;/h1&gt;
+
+&lt;p&gt;さて、ターミナルのモードはプログラム側から変更出来ます。それを行なうのが &lt;code&gt;tcgetattr(3)&lt;/code&gt; と &lt;code&gt;tcsetattr(3)&lt;/code&gt; です。
+ざっくり言うと &lt;code&gt;tcgetattr&lt;/code&gt; で現在のターミナルのコンフィグレーションを取得して、それを所望のモードに書き換え、 &lt;code&gt;tcsetattr&lt;/code&gt; を使って反映出来ます。&lt;/p&gt;
+
+&lt;p&gt;今回はカノニカルモードとエコーモードをoffにしたいのですごい雑なコードだとこう書けるでしょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(require &#39;sb-posix)
+(let* ((stdin 0)
+       (termios (sb-posix:tcgetattr stdin))
+       (lflag (sb-posix:termios-lflag termios)))
+  (setf lflag (logand lflag (lognot sb-posix:icanon)))
+  (setf lflag (logand lflag (lognot sb-posix:echo)))
+  (setf (sb-posix:termios-lflag termios) lflag)
+  (sb-posix:tcsetattr stdin sb-posix:tcsadrain termios))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;しかし、これは雑すぎます。なぜならreadlineを実行し終わった後にターミナルを元の状態に復元する必要があるからです。
+そうしないとreadlineするつもりのない入力関数が予期せぬ挙動をするでしょう。
+あるいはLispプロセスを終了した後のターミナルにまで影響が及びます。
+なので &lt;strong&gt;必ず&lt;/strong&gt; 処理が終わったらターミナルの状態を復元する必要があります。&lt;/p&gt;
+
+&lt;p&gt;さて、Common Lispではこの「必ず」は &lt;code&gt;unwind-protect&lt;/code&gt; を使った &lt;code&gt;with-&lt;/code&gt; マクロで実現するのが常套手段です。
+コードはこのようになるでしょうか。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(defmacro with-readline-mode (&amp;amp;body body)
+  (let ((stdin       (gensym &amp;quot;stdin&amp;quot;))
+        (old-termios (gensym &amp;quot;old-termios&amp;quot;))
+        (new-termios (gensym &amp;quot;new-termios&amp;quot;))
+        (lflag       (gensym &amp;quot;lflag&amp;quot;)))
+    `(let* ((,stdin 0)
+            (,old-termios (sb-posix:tcgetattr ,stdin))
+            (,new-termios (sb-posix:tcgetattr ,stdin))
+            (,lflag (sb-posix:termios-lflag ,new-termios)))
+       (unwind-protect
+            (progn
+              (setf ,lflag (logand ,lflag (lognot sb-posix:icanon)))
+              (setf ,lflag (logand ,lflag (lognot sb-posix:echo)))
+              (setf (sb-posix:termios-lflag ,new-termios) ,lflag)
+              (sb-posix:tcsetattr ,stdin sb-posix:tcsadrain ,new-termios)
+              ,@body)
+        (sb-posix:tcsetattr ,stdin sb-posix:tcsadrain ,old-termios)))))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これで&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(with-readline-mode
+  (format t &amp;quot;~a~%&amp;quot; (read-char)))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;などとするとターミナルのモードが変わったことが実感出来るでしょう。&lt;/p&gt;
+
+&lt;p&gt;尚、繰り返すとこれはターミナルの設定の話なのでEmacs内から試そうとしても正常に動作しない筈です。&lt;/p&gt;
+
+&lt;h1 id=&#34;コントロールシーケンス:58de41bc5e8c50f42088984a9312e8c7&#34;&gt;コントロールシーケンス&lt;/h1&gt;
+
+&lt;p&gt;さて、Common Lispの標準にない拡張機能が必要なのはターミナルのモード変更だけで、あとは好き勝手出来るのですが私も少し嵌った部分があるのでそこだけ。&lt;/p&gt;
+
+&lt;p&gt;readlineに欲しい機能はなんでしょうか。色々あるかと思いますが、まずは &lt;code&gt;←&lt;/code&gt; 、 &lt;code&gt;→&lt;/code&gt; でカーソル移動をしたいのではないでしょうか。
+実はこれが大落し穴。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;←&lt;/code&gt; キーを押すとターミナルにはなんと3文字入力されます。すなわち、 Esc文字の &lt;code&gt;^[&lt;/code&gt; 、普通のASCII文字の &lt;code&gt;[&lt;/code&gt; 、そして大文字の &lt;code&gt;D&lt;/code&gt; です。&lt;/p&gt;
+
+&lt;p&gt;そしてカーソルの移動文字を受けてカーソルを移動するにはターミナルにそのままEsc文字の &lt;code&gt;^[&lt;/code&gt; 、普通のASCII文字の &lt;code&gt;[&lt;/code&gt; 、そして大文字の &lt;code&gt;D&lt;/code&gt; を入力してあげれば出来ます。&lt;/p&gt;
+
+&lt;p&gt;なのでこのようなコードになるでしょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(defconstant left &amp;quot;[d&amp;quot;)
+(defconstant right &amp;quot;[c&amp;quot;)
+
+(defun left ()
+  (format t &amp;quot;~a&amp;quot; left)
+  (force-output))
+
+(defun right ()
+  (format t &amp;quot;~a&amp;quot; right)
+  (force-output))
+
+
+(defun readline ()
+  (let ((line &#39;()))
+    (flet ((self-insert (char)
+             (format t &amp;quot;~c&amp;quot; char)
+             (setf line (cons char line))
+             (force-output)))
+      (with-readline-mode
+       (loop
+          (let* ((char (read-char))
+                 (code (char-code char)))
+            (case code
+              ; escape
+              ((#b11011)
+               (let* ((char (read-char))
+                      (code (char-code char)))
+                 ;; (write-line &amp;quot;called&amp;quot;)
+                 ;; (format t &amp;quot;~a~%&amp;quot; char)
+                 ;; (format t &amp;quot;~a~%&amp;quot; code)
+                 (case char
+                   ((#\[)
+                    (let* ((char (read-char))
+                           (code (char-code char)))
+                      (case char
+                        ((#\c) (right))
+                        ((#\d) (left)))))
+                   ((t)
+                    (self-insert #\escape)
+                    (self-insert char)))))
+              ((#b1010)
+               (return-from readline (coerce (reverse line) &#39;string)))
+              (t (self-insert char)))))))))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;case&lt;/code&gt; をネストしていくのはダルいし拡張性がないので現実的にはtrie木を使うことになるかと思いますが単純にはこのようなコードでreadlineを作れます。&lt;/p&gt;
+
+&lt;p&gt;Let&amp;rsquo;s Happy Hacκking!&lt;/p&gt;
+
+&lt;h1 id=&#34;付録a-伏線:58de41bc5e8c50f42088984a9312e8c7&#34;&gt;付録A: 伏線&lt;/h1&gt;
+
+&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;適当に魚と野菜炒めたらオサレっぽくなった &lt;a href=&#34;https://t.co/9IIzhIGjzd&#34;&gt;pic.twitter.com/9IIzhIGjzd&lt;/a&gt;&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/698821538686984192&#34;&gt;2016, 2月 14&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-conversation=&#34;none&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;&lt;a href=&#34;https://twitter.com/blackenedgold&#34;&gt;@blackenedgold&lt;/a&gt; 魚は何？タラ？だったら季節物だし、旬の鱈と野菜のソテー、詳解Linuxカーネルを添えて。と命名しよう&lt;/p&gt;&amp;mdash; Shinnosuke Takeda (@cnosuke) &lt;a href=&#34;https://twitter.com/cnosuke/status/698824048319410176&#34;&gt;2016, 2月 14&lt;/a&gt;&lt;/blockquote&gt;
+&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
+
+&lt;h1 id=&#34;付録b-pure-rubyなreadlineのソースコード:58de41bc5e8c50f42088984a9312e8c7&#34;&gt;付録B: Pure Rubyなreadlineのソースコード&lt;/h1&gt;
+
+&lt;p&gt;努力が必要ということが読み解ければ幸いです。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/ConnorAtherton/rb-readline/blob/master/lib/rbreadline.rb&#34;&gt;rb-readline/rbreadline.rb at master · ConnorAtherton/rb-readline&lt;/a&gt;&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>Common Lispで高速行列演算</title>
@@ -2683,298 +2852,6 @@ nil
  &lt;a class=&#34;footnote-return&#34; href=&#34;#fnref:a60a195e9e80913e6883fc5337a6bd1f:1&#34;&gt;&lt;sup&gt;[return]&lt;/sup&gt;&lt;/a&gt;&lt;/li&gt;
 &lt;/ol&gt;
 &lt;/div&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>claspを少し触ってみた</title>
-      <link>/slide/clasp/</link>
-      <pubDate>Tue, 28 Oct 2014 00:00:00 +0000</pubDate>
-      
-      <guid>/slide/clasp/</guid>
-      <description>&lt;section data-markdown
-    data-separator=&#34;\n\n&#34;
-    data-vertical=&#34;\n\n&#34;
-    data-notes=&#34;^Note:&#34;&gt;
-&lt;script type=&#34;text/template&#34;&gt;
-
-# claspを少し触ってみた
-----------------------
-Lisp Meet Up presented by Shibuya.lisp #21  
-2014-10-29  
-κeen(@blackenedgold)
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# About Me
----------
-![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:relative;right 0;&#34; --&gt;
-
- + κeen
- + 東大数学科の4年生
- + ソーシャルアカウントは上のアイコン達から。
- + Lisp, Ruby, OCaml, Shell Scriptあたりを書きます
-
-
-# clasp
--------
-
-* Github: [drmeister/clasp](https://github.com/drmeister/clasp)
-* 2014-09-18に0.1リリース(現在0.11プレビューが出ている)
-* 今は0.11プレビューが出ている
-* ANSI Common Lisp準拠を目指す(現在80 ~90%)
-* ECLからのフォーク
-* LLVMベースのJIT([MCJIT](http://llvm.org/docs/MCJITDesignAndImplementation.html))搭載
-* C++とLispで書かれている
-* C++との連携を意識
-
-Note:
-C++との連携の部分を強調。今回は0.11プレビューでの話
-
-
-# メモリ管理
-------------------
-
-* Memory Pool Systemと Boehm GCから選べる
-* ビルドするときにどっちかを選ぶ
-
-
-# メモリ管理
-------------------
-## [Boehm GC](http://www.hboehm.info/gc/)
-
-* Mark &amp;amp; Sweepのライブラリ
-* 枯れた有名なライブラリ
-* Lisp有名どころではGaucheが使う
-* RedHat系だとこれを使ってないとrpmリジェクトされやすいらしい(?)
-
-Note:
-他にはMozilla, W3M, GNU GCJ, GNU Obj-Cなどなど
-
-# メモリ管理
-------------------
-## [Memory Pool System](http://www.ravenbrook.com/project/mps/)
-
-* 複数のGCアルゴリズムを組み合わせて使えるらしい
-* since 1994
-* あまり分からないです&amp;gt;&amp;lt;
-
-
-# 依存ライブラリ
-----------------------
-
-* LLVM **3.6**
-* LLVM/clang **3.5** compiler
-* Boost build v2
-* boost libraries ver 1.55
-* Boehm 7.2
-* gmp-6.0.0
-* expat-2.0.1
-* zlib-1.2.8
-* readline-6.2
-
-
-&lt;span style=&#34;font-size:600%&#34;&gt;無理&lt;/span&gt;
-
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# externals-clasp
---------------------------
-
-* Github: [drmeister/externals-clasp](https://github.com/drmeister/externals-clasp)
-* 依存ライブラリを揃えるのが難しいとの声から作られた
-* 依存ライブラリを全てビルド&lt;!-- .element: class=&#34;fragment grow&#34; --&gt;
-
-
-&lt;span style=&#34;font-size:300%&#34;&gt;＼LLVMをビルド／&lt;/span&gt;
-
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-&lt;span style=&#34;font-size:300%&#34;&gt;＼Boostをビルド／&lt;/span&gt;
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-&lt;span style=&#34;font-size:200%&#34;&gt;ビルド時間はお察しです&lt;/span&gt;
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# 本体のビルド
-------------------
-Twitter実況をどうぞ↓↓
-
-# 本体のビルド
-------------------
-&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p&gt;clangがメモリ6GB以上食い続けてて怖い。何やってんの。&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/526417151486205952&#34;&gt;2014, 10月 26&lt;/a&gt;&lt;/blockquote&gt;
-
-# 本体のビルド
-------------------
-&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p&gt;clangの起動時間1時間超えてますよ…&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/526418636735401984&#34;&gt;2014, 10月 26&lt;/a&gt;&lt;/blockquote&gt;
-
-# 本体のビルド
-------------------
-&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p&gt;HDDプチプチ言ってるし今にも壊れそう&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/526420001587068929&#34;&gt;2014, 10月 26&lt;/a&gt;&lt;/blockquote&gt;
-
-# 本体のビルド
-------------------
-&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p&gt;&lt;a href=&#34;https://twitter.com/nobkz&#34;&gt;@nobkz&lt;/a&gt; claspのコンパイル中です。&amp;#10;clangなのにIOネックという謎の状態です。&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/526420473232367616&#34;&gt;2014, 10月 26&lt;/a&gt;&lt;/blockquote&gt;
-
-# 本体のビルド
-------------------
-&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p&gt;clangの消費メモリ7GB超えた&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/526423982992420864&#34;&gt;2014, 10月 26&lt;/a&gt;&lt;/blockquote&gt;
-
-&lt;span style=&#34;font-size:300%&#34;&gt;ビルドは自己責任で&lt;/span&gt;
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# 使ってみる
-------------
-## 起動オプション
-```
-/usr/local/clasp/bin/clasp_mps_o --help
-clasp options
--I/--ignore-image    - Don&#39;t load the boot image/start with init.lsp
--i/--image file      - Use the file as the boot image
--N/--non-interactive - Suppress all repls
--v/--version         - Print version
--s/--verbose         - Print more info while booting
--f/--feature feature - Add the feature to *features*
--e/--eval {form}     - Evaluate a form
--l/--load {file}     - LOAD the file
--r/--norc            - Don&#39;t load the ~/.clasprc file
--n/--noinit          - Don&#39;t load the init.lsp (very minimal environment)
--s/--seed #          - Seed the random number generator
--- {ARGS}*           - Trailing are added to core:*command-line-arguments*
-```
-
-# 使ってみる
-------------
-## ASDF
-
-* &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;1&#34; --&gt;動かない
-  + &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;2&#34; --&gt;ASDFの処理系依存の部分(`#+`)の問題
-  + &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;2&#34; --&gt;ECLと見做されるけどECLのコードは動かない
-
-# 使ってみる
-------------
-## cl-ppcre
-
-* [手動ロードスクリプト](https://gist.github.com/KeenS/4e25cb6e424ebe4e7a4a)
-* &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;1&#34; --&gt;動かない
-  + &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;2&#34; --&gt;`schar`がない
-  + &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;2&#34; --&gt;ANSI Common Lispにあるのに…
-
-# 使ってみる
-------------
-## C++との連携
-
-* &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;1&#34; --&gt;ドキュメントがない
-* &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;2&#34; --&gt;サンプルコードもない
-* &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;3&#34; --&gt;遂行不能
-
-# 使ってみる
-------------
-## LLVMの呼び出し
-* [clasp/src/llvmo/demo.lisp](https://github.com/drmeister/clasp/blob/master/src/llvmo/demo.lsp)
-* &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;1&#34; --&gt;動かない
-
-# 使ってみる
-------------
-&lt;style type=&#34;text/css&#34;&gt;
-.graph{
-  background:#aaa;
-  border-radius:5px;
-  white-space: nowrap;
-  text-align: left;
-}
-td {
-  white-space: nowrap;
-}
-&lt;/style&gt;
-
-処理系              |  `(time (fib 29))`
---------------------|-----------------------------------------------------------------
-clasp-0.1(boehm)    | &lt;div class=&#34;graph fragment&#34; style=&#34;width:calc(264.3px * 3);&#34; data-fragment-index=&#34;1&#34;&gt;26.43s&lt;/div&gt;
-clasp-0.1(mps)      | &lt;div class=&#34;graph fragment&#34; style=&#34;width:calc(172.8px * 3);&#34; data-fragment-index=&#34;1&#34;&gt;17.28s&lt;/div&gt;
-clasp-0.11(boehm)   | &lt;div class=&#34;graph fragment&#34; style=&#34;width:calc(213.2px * 3);&#34; data-fragment-index=&#34;2&#34;&gt;21.32s&lt;/div&gt;
-clasp-0.11(mps)     | &lt;div class=&#34;graph fragment&#34; style=&#34;width:calc(187.9px * 3);&#34; data-fragment-index=&#34;2&#34;&gt;18.79s&lt;/div&gt;
-ECL-13.5.1          | &lt;div class=&#34;graph&#34; style=&#34;width:calc( 16.0px * 3);&#34;&gt;1.603s&lt;/div&gt;
-ECL-13.5.1(compile) | &lt;div class=&#34;graph&#34; style=&#34;width:calc(  1.9px * 3);&#34;&gt;0.192s&lt;/div&gt;
-ABCL-1.3.1          | &lt;div class=&#34;graph&#34; style=&#34;width:calc( 32.9px * 3);&#34;&gt;3.292s&lt;/div&gt;
-ABCL-1.3.1(compile) | &lt;div class=&#34;graph&#34; style=&#34;width:calc(  2.4px * 3);&#34;&gt;0.241s&lt;/div&gt;
-
-
-# 使ってみる
-------------
-
-処理系              |  `(time (fib 29))`
---------------------|-----------------------------------------------------------------
-CLISP-2.49          | &lt;div class=&#34;graph&#34; style=&#34;width:calc( 38.4px * 3);&#34;&gt;3.847s&lt;/div&gt;
-CLISP-2.49(compile) | &lt;div class=&#34;graph&#34; style=&#34;width:calc(  7.1px * 3);&#34;&gt;0.7146s&lt;/div&gt;
-ccl-1.10            | &lt;div class=&#34;graph&#34; style=&#34;width:calc(  0.4px * 3);&#34;&gt;0.04033s&lt;/div&gt;
-sbcl-1.2.5          | &lt;div class=&#34;graph&#34; style=&#34;width:calc(  0.6px * 3);&#34;&gt;0.06469s&lt;/div&gt;
-alisp-9.0           | &lt;div class=&#34;graph&#34; style=&#34;width:calc(  230px * 3);&#34;&gt;23.09s&lt;/div&gt;
-alisp-9.0(compile)  | &lt;div class=&#34;graph&#34; style=&#34;width:calc(  0.6px * 3);&#34;&gt;0.06194s&lt;/div&gt;
-
-&lt;span style=&#34;font-size:200%&#34;&gt;LLVM/JITなのになぜ遅い？&lt;/span&gt;
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# LLVM/JITで遅い？
--------------------------
-
-* LLVMって速いんじゃ？
-* JIT搭載した○○が速いって聞いたよ
-  + JVM
-  + lua-jit
-  + Rubinius
-  + pypy
-
-
-# 言葉の罠: LLVM
---------------------
-
-* 遅いコードはどんなに頑張っても遅い
-* ECLのバックエンドにClang(=LLVM)を使ってもSBCLに勝てないのと同じ
-
-
-# 言葉の罠: JIT搭載
---------------------
-
-* JIT(実行時コンパイル)の意味は広い
-* 実行時にネイティブコードを吐けばJITと言える
-* claspは実行直前にコンパイルするだけ
-* 多くの速いJIT処理系はTracing JITを使う
-  + またの名を適応的コンパイル
-  + 実行時の情報に基いて実行中に最適化する
-  + `(declare ...)` を自動生成してる的な
-
-
-# Tracing JITへの道
---------------------
-
-* LLVMのJITは実行直前にコンパイルするだけ
-  + &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;1&#34; --&gt;Tracing JITのバックエンドには使える
-* 実行時最適化には最適化用のコードが必要
-  + &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;2&#34; --&gt;Common Lispでは`(declare ...)`用のコードを使い回せる
-* &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;3&#34; --&gt;案外近い
-
-
-# 結論
-------
-
-* &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;1&#34; --&gt;遅い
-* &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;2&#34; --&gt;時期尚早
-* &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;3&#34; --&gt;今後機能や速度改善があれば使えるようになるかも
-
-
-&lt;span style=&#34;font-size:600%&#34;&gt;以上&lt;/span&gt;  
-何か質問あればどうぞ
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-&lt;/script&gt;
-&lt;/section&gt;
 </description>
     </item>
     

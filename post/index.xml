@@ -6,8 +6,177 @@
     <description>Recent content in Posts on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Sun, 14 Feb 2016 17:12:01 +0900</lastBuildDate>
+    <lastBuildDate>Sun, 14 Feb 2016 22:37:35 +0900</lastBuildDate>
     <atom:link href="/post/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>readlineの作り方</title>
+      <link>/blog/2016/02/14/readlinenotsukurikata</link>
+      <pubDate>Sun, 14 Feb 2016 22:37:35 +0900</pubDate>
+      
+      <guid>/blog/2016/02/14/readlinenotsukurikata</guid>
+      <description>
+
+&lt;p&gt;κeenです。なんか伏線っぽいもの回収しといた方が良いかなと思ってLinuxっぽい話でも。&lt;/p&gt;
+
+&lt;p&gt;readlineって便利ですよね。
+でもCで書かれているから他の言語から使おうと思うと面倒だったり使えなかったりGPLv3の所為で使えなかったりしますよね。
+そこである程度POSIXのインターフェースを扱わせてくれる言語でのreadlineの作り方でも。&lt;/p&gt;
+
+&lt;h1 id=&#34;カノニカルモードとエコーモード:58de41bc5e8c50f42088984a9312e8c7&#34;&gt;カノニカルモードとエコーモード&lt;/h1&gt;
+
+&lt;p&gt;readlineの仕組み自体は簡単で、全ての文字入力を受け取って、&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;readlineの制御キーシーケンスなら指定の制御を行なう&lt;/li&gt;
+&lt;li&gt;普通の文字ならそのまま画面に表示する&lt;/li&gt;
+&lt;li&gt;コントロールシーケンスなら &lt;code&gt;^W&lt;/code&gt; などとエスケープ表示する&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;これだけです。しかしそう簡単ではありません。
+あなたのお気に入りの言語で &lt;code&gt;readchar&lt;/code&gt; っぽい関数を実行してみると分かるかと思いますが、&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;一文字入力しただけではプログラムに入力文字が渡されない。エンターキーを押して初めてプログラムの &lt;code&gt;readchar&lt;/code&gt; 関数が返る。&lt;/li&gt;
+&lt;li&gt;入力した文字がそのままエコーバックされる。すなわち、 &lt;code&gt;←&lt;/code&gt; を押しても &lt;code&gt;^[[D&lt;/code&gt; が入力されてしまい、制御上不都合。&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;私は昔はこれらの挙動が適切な関数がないからだと思ってました。しかし、そうではありません。
+このような挙動をするのはプログラムの責任でもでもシェルの責任でもなくターミナルの責任です。&lt;/p&gt;
+
+&lt;p&gt;ターミナルには多彩なモードがあり、それによって挙動が変わるのです。
+つまり、1.の挙動をするのはカノニカルモードの挙動、2.の挙動をするのはエコーモードの挙動なのです。&lt;/p&gt;
+
+&lt;h1 id=&#34;tcgetattr-と-tcsetattr:58de41bc5e8c50f42088984a9312e8c7&#34;&gt;&lt;code&gt;tcgetattr&lt;/code&gt; と &lt;code&gt;tcsetattr&lt;/code&gt;&lt;/h1&gt;
+
+&lt;p&gt;さて、ターミナルのモードはプログラム側から変更出来ます。それを行なうのが &lt;code&gt;tcgetattr(3)&lt;/code&gt; と &lt;code&gt;tcsetattr(3)&lt;/code&gt; です。
+ざっくり言うと &lt;code&gt;tcgetattr&lt;/code&gt; で現在のターミナルのコンフィグレーションを取得して、それを所望のモードに書き換え、 &lt;code&gt;tcsetattr&lt;/code&gt; を使って反映出来ます。&lt;/p&gt;
+
+&lt;p&gt;今回はカノニカルモードとエコーモードをoffにしたいのですごい雑なコードだとこう書けるでしょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(require &#39;sb-posix)
+(let* ((stdin 0)
+       (termios (sb-posix:tcgetattr stdin))
+       (lflag (sb-posix:termios-lflag termios)))
+  (setf lflag (logand lflag (lognot sb-posix:icanon)))
+  (setf lflag (logand lflag (lognot sb-posix:echo)))
+  (setf (sb-posix:termios-lflag termios) lflag)
+  (sb-posix:tcsetattr stdin sb-posix:tcsadrain termios))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;しかし、これは雑すぎます。なぜならreadlineを実行し終わった後にターミナルを元の状態に復元する必要があるからです。
+そうしないとreadlineするつもりのない入力関数が予期せぬ挙動をするでしょう。
+あるいはLispプロセスを終了した後のターミナルにまで影響が及びます。
+なので &lt;strong&gt;必ず&lt;/strong&gt; 処理が終わったらターミナルの状態を復元する必要があります。&lt;/p&gt;
+
+&lt;p&gt;さて、Common Lispではこの「必ず」は &lt;code&gt;unwind-protect&lt;/code&gt; を使った &lt;code&gt;with-&lt;/code&gt; マクロで実現するのが常套手段です。
+コードはこのようになるでしょうか。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(defmacro with-readline-mode (&amp;amp;body body)
+  (let ((stdin       (gensym &amp;quot;stdin&amp;quot;))
+        (old-termios (gensym &amp;quot;old-termios&amp;quot;))
+        (new-termios (gensym &amp;quot;new-termios&amp;quot;))
+        (lflag       (gensym &amp;quot;lflag&amp;quot;)))
+    `(let* ((,stdin 0)
+            (,old-termios (sb-posix:tcgetattr ,stdin))
+            (,new-termios (sb-posix:tcgetattr ,stdin))
+            (,lflag (sb-posix:termios-lflag ,new-termios)))
+       (unwind-protect
+            (progn
+              (setf ,lflag (logand ,lflag (lognot sb-posix:icanon)))
+              (setf ,lflag (logand ,lflag (lognot sb-posix:echo)))
+              (setf (sb-posix:termios-lflag ,new-termios) ,lflag)
+              (sb-posix:tcsetattr ,stdin sb-posix:tcsadrain ,new-termios)
+              ,@body)
+        (sb-posix:tcsetattr ,stdin sb-posix:tcsadrain ,old-termios)))))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これで&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(with-readline-mode
+  (format t &amp;quot;~a~%&amp;quot; (read-char)))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;などとするとターミナルのモードが変わったことが実感出来るでしょう。&lt;/p&gt;
+
+&lt;p&gt;尚、繰り返すとこれはターミナルの設定の話なのでEmacs内から試そうとしても正常に動作しない筈です。&lt;/p&gt;
+
+&lt;h1 id=&#34;コントロールシーケンス:58de41bc5e8c50f42088984a9312e8c7&#34;&gt;コントロールシーケンス&lt;/h1&gt;
+
+&lt;p&gt;さて、Common Lispの標準にない拡張機能が必要なのはターミナルのモード変更だけで、あとは好き勝手出来るのですが私も少し嵌った部分があるのでそこだけ。&lt;/p&gt;
+
+&lt;p&gt;readlineに欲しい機能はなんでしょうか。色々あるかと思いますが、まずは &lt;code&gt;←&lt;/code&gt; 、 &lt;code&gt;→&lt;/code&gt; でカーソル移動をしたいのではないでしょうか。
+実はこれが大落し穴。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;←&lt;/code&gt; キーを押すとターミナルにはなんと3文字入力されます。すなわち、 Esc文字の &lt;code&gt;^[&lt;/code&gt; 、普通のASCII文字の &lt;code&gt;[&lt;/code&gt; 、そして大文字の &lt;code&gt;D&lt;/code&gt; です。&lt;/p&gt;
+
+&lt;p&gt;そしてカーソルの移動文字を受けてカーソルを移動するにはターミナルにそのままEsc文字の &lt;code&gt;^[&lt;/code&gt; 、普通のASCII文字の &lt;code&gt;[&lt;/code&gt; 、そして大文字の &lt;code&gt;D&lt;/code&gt; を入力してあげれば出来ます。&lt;/p&gt;
+
+&lt;p&gt;なのでこのようなコードになるでしょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(defconstant left &amp;quot;[d&amp;quot;)
+(defconstant right &amp;quot;[c&amp;quot;)
+
+(defun left ()
+  (format t &amp;quot;~a&amp;quot; left)
+  (force-output))
+
+(defun right ()
+  (format t &amp;quot;~a&amp;quot; right)
+  (force-output))
+
+
+(defun readline ()
+  (let ((line &#39;()))
+    (flet ((self-insert (char)
+             (format t &amp;quot;~c&amp;quot; char)
+             (setf line (cons char line))
+             (force-output)))
+      (with-readline-mode
+       (loop
+          (let* ((char (read-char))
+                 (code (char-code char)))
+            (case code
+              ; escape
+              ((#b11011)
+               (let* ((char (read-char))
+                      (code (char-code char)))
+                 ;; (write-line &amp;quot;called&amp;quot;)
+                 ;; (format t &amp;quot;~a~%&amp;quot; char)
+                 ;; (format t &amp;quot;~a~%&amp;quot; code)
+                 (case char
+                   ((#\[)
+                    (let* ((char (read-char))
+                           (code (char-code char)))
+                      (case char
+                        ((#\c) (right))
+                        ((#\d) (left)))))
+                   ((t)
+                    (self-insert #\escape)
+                    (self-insert char)))))
+              ((#b1010)
+               (return-from readline (coerce (reverse line) &#39;string)))
+              (t (self-insert char)))))))))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;case&lt;/code&gt; をネストしていくのはダルいし拡張性がないので現実的にはtrie木を使うことになるかと思いますが単純にはこのようなコードでreadlineを作れます。&lt;/p&gt;
+
+&lt;p&gt;Let&amp;rsquo;s Happy Hacκking!&lt;/p&gt;
+
+&lt;h1 id=&#34;付録a-伏線:58de41bc5e8c50f42088984a9312e8c7&#34;&gt;付録A: 伏線&lt;/h1&gt;
+
+&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;適当に魚と野菜炒めたらオサレっぽくなった &lt;a href=&#34;https://t.co/9IIzhIGjzd&#34;&gt;pic.twitter.com/9IIzhIGjzd&lt;/a&gt;&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/698821538686984192&#34;&gt;2016, 2月 14&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-conversation=&#34;none&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;&lt;a href=&#34;https://twitter.com/blackenedgold&#34;&gt;@blackenedgold&lt;/a&gt; 魚は何？タラ？だったら季節物だし、旬の鱈と野菜のソテー、詳解Linuxカーネルを添えて。と命名しよう&lt;/p&gt;&amp;mdash; Shinnosuke Takeda (@cnosuke) &lt;a href=&#34;https://twitter.com/cnosuke/status/698824048319410176&#34;&gt;2016, 2月 14&lt;/a&gt;&lt;/blockquote&gt;
+&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
+
+&lt;h1 id=&#34;付録b-pure-rubyなreadlineのソースコード:58de41bc5e8c50f42088984a9312e8c7&#34;&gt;付録B: Pure Rubyなreadlineのソースコード&lt;/h1&gt;
+
+&lt;p&gt;努力が必要ということが読み解ければ幸いです。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/ConnorAtherton/rb-readline/blob/master/lib/rbreadline.rb&#34;&gt;rb-readline/rbreadline.rb at master · ConnorAtherton/rb-readline&lt;/a&gt;&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>分散VCSのモデル、あるいはPijulについて</title>
@@ -2376,63 +2545,6 @@ val debug = false
 &lt;li&gt;&lt;code&gt;ifdef&lt;/code&gt;も使えるよ&lt;/li&gt;
 &lt;li&gt;関数マクロは使えないよ&lt;/li&gt;
 &lt;/ul&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>SML#のオレオレREPLを作る話 初級</title>
-      <link>/blog/2015/12/26/sml_nooreorereplwotsukuruhanashi_shokyuu</link>
-      <pubDate>Sat, 26 Dec 2015 19:48:30 +0900</pubDate>
-      
-      <guid>/blog/2015/12/26/sml_nooreorereplwotsukuruhanashi_shokyuu</guid>
-      <description>
-
-&lt;p&gt;κeenです。Advent Calendarのためにネタやアイディアを用意したものの時間/場所的都合でAdvent Calendarとして出せなかったボツネタでも供養しようかと。
-Advent Calendarが終わってしまったので投げやり気味ですね。
-第2段はSML#のオレオレREPLを作る話の初級。&lt;/p&gt;
-
-&lt;p&gt;SML#にはFFIがあり、任意のオブジェクトファイル/ライブラリをリンクしてC関数を呼び出すことが出来ますが、REPLで試そうとしてもREPLにリンクされていないので呼び出せません。
-そこで呼び出したいオブジェクトファイルをリンクしたREPLを作れば捗るよね、という発想です。&lt;/p&gt;
-
-&lt;h1 id=&#34;事前に必要なもの:25a90a3d9e2261c06baa6c7ce3911ca0&#34;&gt;事前に必要なもの&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;SML#のビルド時に使ったLLVMのパス&lt;/li&gt;
-&lt;li&gt;SML#をビルドした時のオブジェクトファイルの残骸（一部）&lt;/li&gt;
-&lt;li&gt;SML#のソーコード（一部）&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h1 id=&#34;コマンド:25a90a3d9e2261c06baa6c7ce3911ca0&#34;&gt;コマンド&lt;/h1&gt;
-
-&lt;p&gt;まず、普通のREPLを作るだけならこれだけです。（コンパイラも一緒にくっついてきますが面倒なのでそのままにしてます。）&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;SMLSHARP_SRC=/path/to/smlsharp
-LLVM_HOME=/path/to/LLVM
-cp ${SMLSHARP_SRC}/src/compiler/smlsharp.sml ./
-cat &amp;lt;&amp;lt;&#39;EOF&#39; &amp;gt; smlsharp.smi
-_require &amp;quot;prelude.smi&amp;quot;
-
-_require &amp;quot;compiler/main/main/SimpleMain.smi&amp;quot;
-EOF
-smlsharp -c++ -o oreore_repl &amp;quot;${SMLSHARP_SRC}/src/compiler/smlsharp.smi&amp;quot;  &amp;quot;${SMLSHARP_SRC}&amp;quot;/src/llvm/main/llvm_support.o &amp;quot;${SMLSHARP_SRC}&amp;quot;/src/llvm/main/SMLSharpGC.o $(&amp;quot;${LLVM_HOME}/bin/llvm-config&amp;quot; --ldflags --libs)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;あとは最後のリンクコマンドにフラグを足せばいいでしょう。注意点として、64bit OSを使ってるならちゃんと32bitでビルドしたライブラリをリンクしましょう。例えばlibuvをリンクするならこうです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;SMLSHARP_SRC=/path/to/smlsharp
-LLVM_HOME=/path/to/LLVM
-cp ${SMLSHARP_SRC}/src/compiler/smlsharp.sml ./
-cat &amp;lt;&amp;lt;&#39;EOF&#39; &amp;gt; smlsharp.smi
-_require &amp;quot;prelude.smi&amp;quot;
-
-_require &amp;quot;compiler/main/main/SimpleMain.smi&amp;quot;
-EOF
-smlsharp -c++ -o smlsharp_uv &amp;quot;${SMLSHARP_SRC}/src/compiler/smlsharp.smi&amp;quot; -L /opt/libuv32/lib -luv &amp;quot;${SMLSHARP_SRC}&amp;quot;/src/llvm/main/llvm_support.o &amp;quot;${SMLSHARP_SRC}&amp;quot;/src/llvm/main/SMLSharpGC.o $(&amp;quot;${LLVM_HOME}/bin/llvm-config&amp;quot; --ldflags --libs)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;終わりに:25a90a3d9e2261c06baa6c7ce3911ca0&#34;&gt;終わりに&lt;/h1&gt;
-
-&lt;p&gt;やり方さえ分かってしまえば簡単ですが見付けるのが難しい小ネタでした。因みに今回初級ですが、REPLにlibeditを統合するなどの上級ネタはいつか気が向いたら書くかもしれません。&lt;/p&gt;
 </description>
     </item>
     
