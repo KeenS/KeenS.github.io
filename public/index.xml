@@ -6,8 +6,177 @@
     <description>Recent content on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Sun, 14 Feb 2016 17:12:01 +0900</lastBuildDate>
+    <lastBuildDate>Sun, 14 Feb 2016 22:37:35 +0900</lastBuildDate>
     <atom:link href="/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>readlineの作り方</title>
+      <link>/blog/2016/02/14/readlinenotsukurikata</link>
+      <pubDate>Sun, 14 Feb 2016 22:37:35 +0900</pubDate>
+      
+      <guid>/blog/2016/02/14/readlinenotsukurikata</guid>
+      <description>
+
+&lt;p&gt;κeenです。なんか伏線っぽいもの回収しといた方が良いかなと思ってLinuxっぽい話でも。&lt;/p&gt;
+
+&lt;p&gt;readlineって便利ですよね。
+でもCで書かれているから他の言語から使おうと思うと面倒だったり使えなかったりGPLv3の所為で使えなかったりしますよね。
+そこである程度POSIXのインターフェースを扱わせてくれる言語でのreadlineの作り方でも。&lt;/p&gt;
+
+&lt;h1 id=&#34;カノニカルモードとエコーモード:58de41bc5e8c50f42088984a9312e8c7&#34;&gt;カノニカルモードとエコーモード&lt;/h1&gt;
+
+&lt;p&gt;readlineの仕組み自体は簡単で、全ての文字入力を受け取って、&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;readlineの制御キーシーケンスなら指定の制御を行なう&lt;/li&gt;
+&lt;li&gt;普通の文字ならそのまま画面に表示する&lt;/li&gt;
+&lt;li&gt;コントロールシーケンスなら &lt;code&gt;^W&lt;/code&gt; などとエスケープ表示する&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;これだけです。しかしそう簡単ではありません。
+あなたのお気に入りの言語で &lt;code&gt;readchar&lt;/code&gt; っぽい関数を実行してみると分かるかと思いますが、&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;一文字入力しただけではプログラムに入力文字が渡されない。エンターキーを押して初めてプログラムの &lt;code&gt;readchar&lt;/code&gt; 関数が返る。&lt;/li&gt;
+&lt;li&gt;入力した文字がそのままエコーバックされる。すなわち、 &lt;code&gt;←&lt;/code&gt; を押しても &lt;code&gt;^[[D&lt;/code&gt; が入力されてしまい、制御上不都合。&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;私は昔はこれらの挙動が適切な関数がないからだと思ってました。しかし、そうではありません。
+このような挙動をするのはプログラムの責任でもでもシェルの責任でもなくターミナルの責任です。&lt;/p&gt;
+
+&lt;p&gt;ターミナルには多彩なモードがあり、それによって挙動が変わるのです。
+つまり、1.の挙動をするのはカノニカルモードの挙動、2.の挙動をするのはエコーモードの挙動なのです。&lt;/p&gt;
+
+&lt;h1 id=&#34;tcgetattr-と-tcsetattr:58de41bc5e8c50f42088984a9312e8c7&#34;&gt;&lt;code&gt;tcgetattr&lt;/code&gt; と &lt;code&gt;tcsetattr&lt;/code&gt;&lt;/h1&gt;
+
+&lt;p&gt;さて、ターミナルのモードはプログラム側から変更出来ます。それを行なうのが &lt;code&gt;tcgetattr(3)&lt;/code&gt; と &lt;code&gt;tcsetattr(3)&lt;/code&gt; です。
+ざっくり言うと &lt;code&gt;tcgetattr&lt;/code&gt; で現在のターミナルのコンフィグレーションを取得して、それを所望のモードに書き換え、 &lt;code&gt;tcsetattr&lt;/code&gt; を使って反映出来ます。&lt;/p&gt;
+
+&lt;p&gt;今回はカノニカルモードとエコーモードをoffにしたいのですごい雑なコードだとこう書けるでしょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(require &#39;sb-posix)
+(let* ((stdin 0)
+       (termios (sb-posix:tcgetattr stdin))
+       (lflag (sb-posix:termios-lflag termios)))
+  (setf lflag (logand lflag (lognot sb-posix:icanon)))
+  (setf lflag (logand lflag (lognot sb-posix:echo)))
+  (setf (sb-posix:termios-lflag termios) lflag)
+  (sb-posix:tcsetattr stdin sb-posix:tcsadrain termios))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;しかし、これは雑すぎます。なぜならreadlineを実行し終わった後にターミナルを元の状態に復元する必要があるからです。
+そうしないとreadlineするつもりのない入力関数が予期せぬ挙動をするでしょう。
+あるいはLispプロセスを終了した後のターミナルにまで影響が及びます。
+なので &lt;strong&gt;必ず&lt;/strong&gt; 処理が終わったらターミナルの状態を復元する必要があります。&lt;/p&gt;
+
+&lt;p&gt;さて、Common Lispではこの「必ず」は &lt;code&gt;unwind-protect&lt;/code&gt; を使った &lt;code&gt;with-&lt;/code&gt; マクロで実現するのが常套手段です。
+コードはこのようになるでしょうか。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(defmacro with-readline-mode (&amp;amp;body body)
+  (let ((stdin       (gensym &amp;quot;stdin&amp;quot;))
+        (old-termios (gensym &amp;quot;old-termios&amp;quot;))
+        (new-termios (gensym &amp;quot;new-termios&amp;quot;))
+        (lflag       (gensym &amp;quot;lflag&amp;quot;)))
+    `(let* ((,stdin 0)
+            (,old-termios (sb-posix:tcgetattr ,stdin))
+            (,new-termios (sb-posix:tcgetattr ,stdin))
+            (,lflag (sb-posix:termios-lflag ,new-termios)))
+       (unwind-protect
+            (progn
+              (setf ,lflag (logand ,lflag (lognot sb-posix:icanon)))
+              (setf ,lflag (logand ,lflag (lognot sb-posix:echo)))
+              (setf (sb-posix:termios-lflag ,new-termios) ,lflag)
+              (sb-posix:tcsetattr ,stdin sb-posix:tcsadrain ,new-termios)
+              ,@body)
+        (sb-posix:tcsetattr ,stdin sb-posix:tcsadrain ,old-termios)))))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これで&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(with-readline-mode
+  (format t &amp;quot;~a~%&amp;quot; (read-char)))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;などとするとターミナルのモードが変わったことが実感出来るでしょう。&lt;/p&gt;
+
+&lt;p&gt;尚、繰り返すとこれはターミナルの設定の話なのでEmacs内から試そうとしても正常に動作しない筈です。&lt;/p&gt;
+
+&lt;h1 id=&#34;コントロールシーケンス:58de41bc5e8c50f42088984a9312e8c7&#34;&gt;コントロールシーケンス&lt;/h1&gt;
+
+&lt;p&gt;さて、Common Lispの標準にない拡張機能が必要なのはターミナルのモード変更だけで、あとは好き勝手出来るのですが私も少し嵌った部分があるのでそこだけ。&lt;/p&gt;
+
+&lt;p&gt;readlineに欲しい機能はなんでしょうか。色々あるかと思いますが、まずは &lt;code&gt;←&lt;/code&gt; 、 &lt;code&gt;→&lt;/code&gt; でカーソル移動をしたいのではないでしょうか。
+実はこれが大落し穴。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;←&lt;/code&gt; キーを押すとターミナルにはなんと3文字入力されます。すなわち、 Esc文字の &lt;code&gt;^[&lt;/code&gt; 、普通のASCII文字の &lt;code&gt;[&lt;/code&gt; 、そして大文字の &lt;code&gt;D&lt;/code&gt; です。&lt;/p&gt;
+
+&lt;p&gt;そしてカーソルの移動文字を受けてカーソルを移動するにはターミナルにそのままEsc文字の &lt;code&gt;^[&lt;/code&gt; 、普通のASCII文字の &lt;code&gt;[&lt;/code&gt; 、そして大文字の &lt;code&gt;D&lt;/code&gt; を入力してあげれば出来ます。&lt;/p&gt;
+
+&lt;p&gt;なのでこのようなコードになるでしょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(defconstant left &amp;quot;[d&amp;quot;)
+(defconstant right &amp;quot;[c&amp;quot;)
+
+(defun left ()
+  (format t &amp;quot;~a&amp;quot; left)
+  (force-output))
+
+(defun right ()
+  (format t &amp;quot;~a&amp;quot; right)
+  (force-output))
+
+
+(defun readline ()
+  (let ((line &#39;()))
+    (flet ((self-insert (char)
+             (format t &amp;quot;~c&amp;quot; char)
+             (setf line (cons char line))
+             (force-output)))
+      (with-readline-mode
+       (loop
+          (let* ((char (read-char))
+                 (code (char-code char)))
+            (case code
+              ; escape
+              ((#b11011)
+               (let* ((char (read-char))
+                      (code (char-code char)))
+                 ;; (write-line &amp;quot;called&amp;quot;)
+                 ;; (format t &amp;quot;~a~%&amp;quot; char)
+                 ;; (format t &amp;quot;~a~%&amp;quot; code)
+                 (case char
+                   ((#\[)
+                    (let* ((char (read-char))
+                           (code (char-code char)))
+                      (case char
+                        ((#\c) (right))
+                        ((#\d) (left)))))
+                   ((t)
+                    (self-insert #\escape)
+                    (self-insert char)))))
+              ((#b1010)
+               (return-from readline (coerce (reverse line) &#39;string)))
+              (t (self-insert char)))))))))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;case&lt;/code&gt; をネストしていくのはダルいし拡張性がないので現実的にはtrie木を使うことになるかと思いますが単純にはこのようなコードでreadlineを作れます。&lt;/p&gt;
+
+&lt;p&gt;Let&amp;rsquo;s Happy Hacκking!&lt;/p&gt;
+
+&lt;h1 id=&#34;付録a-伏線:58de41bc5e8c50f42088984a9312e8c7&#34;&gt;付録A: 伏線&lt;/h1&gt;
+
+&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;適当に魚と野菜炒めたらオサレっぽくなった &lt;a href=&#34;https://t.co/9IIzhIGjzd&#34;&gt;pic.twitter.com/9IIzhIGjzd&lt;/a&gt;&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/698821538686984192&#34;&gt;2016, 2月 14&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-conversation=&#34;none&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;&lt;a href=&#34;https://twitter.com/blackenedgold&#34;&gt;@blackenedgold&lt;/a&gt; 魚は何？タラ？だったら季節物だし、旬の鱈と野菜のソテー、詳解Linuxカーネルを添えて。と命名しよう&lt;/p&gt;&amp;mdash; Shinnosuke Takeda (@cnosuke) &lt;a href=&#34;https://twitter.com/cnosuke/status/698824048319410176&#34;&gt;2016, 2月 14&lt;/a&gt;&lt;/blockquote&gt;
+&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
+
+&lt;h1 id=&#34;付録b-pure-rubyなreadlineのソースコード:58de41bc5e8c50f42088984a9312e8c7&#34;&gt;付録B: Pure Rubyなreadlineのソースコード&lt;/h1&gt;
+
+&lt;p&gt;努力が必要ということが読み解ければ幸いです。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/ConnorAtherton/rb-readline/blob/master/lib/rbreadline.rb&#34;&gt;rb-readline/rbreadline.rb at master · ConnorAtherton/rb-readline&lt;/a&gt;&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>分散VCSのモデル、あるいはPijulについて</title>
@@ -2453,158 +2622,6 @@ false
 &lt;p&gt;それでも、急峻な学習曲線の崖をよじ登った先には素晴しい世界が広がっているのです。1つ、修行だと思ってトライしてみてはいかがでしょうか。&lt;/p&gt;
 
 &lt;p&gt;参考: &lt;a href=&#34;http://fumieval.tumblr.com/post/28324791101/%E3%83%97%E3%83%AD%E3%82%B0%E3%83%A9%E3%83%9E%E3%81%AE%E5%8C%BA%E5%88%86&#34;&gt;プログラマの区分&lt;/a&gt;&lt;/p&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>SML#とCプリプロセッサの連携</title>
-      <link>/blog/2015/12/26/sml_tocpuripurosessanorenkei</link>
-      <pubDate>Sat, 26 Dec 2015 20:09:24 +0900</pubDate>
-      
-      <guid>/blog/2015/12/26/sml_tocpuripurosessanorenkei</guid>
-      <description>
-
-&lt;p&gt;κeenです。Advent Calendarのためにネタやアイディアを用意したものの時間/場所的都合でAdvent Calendarとして出せなかったボツネタでも供養しようかと。
-Advent Calendarが終わってしまったので投げやり気味ですね。
-第3段はSML#とCプリプロセッサで連携する話。&lt;/p&gt;
-
-&lt;p&gt;SML#のC FFIを使ってるとマクロで定義された値などを触りたくなるのですが、触れないのでどうにかしようかと。&lt;/p&gt;
-
-&lt;p&gt;発想自体は単純で、SMLファイルの中でCのヘッダをインクルードしてCプリプロセッサを呼んであげればどうにかなります。&lt;/p&gt;
-
-&lt;h1 id=&#34;簡単な例:17ab4ed508953994d38c55ce3a68a752&#34;&gt;簡単な例&lt;/h1&gt;
-
-&lt;p&gt;&lt;a href=&#34;//KeenS.github.io/blog/2015/12/12/sml_dejitwotsukurukaruihanashi/&#34;&gt;JITを作る話&lt;/a&gt;の時のように、定数に触りたいとします。
-その時、以下のように.smlファイルを記述して、&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;(* 
-#include&amp;lt;sys/mman.h&amp;gt;
-*)
-
-(* ====END_OF_HEADER==== *)
-datatype dummy = $ of int
-              
-val $PROT_READ  = $ PROT_READ
-val $PROT_WRITE = $ PROT_WRITE
-val $PROT_EXEC  = $ PROT_EXEC
-val $PROT_NONE  = $ PROT_NONE
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;以下のコマンドを実行します。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;cpp -pipe -E cpp_pre.sml | sed &#39;1,/====END_OF_HEADER====/d;/^#/d&#39; &amp;gt; cpp.sml 
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ポイントを挙げると、&lt;/p&gt;
-
-&lt;ol&gt;
-&lt;li&gt;smlファイルに&lt;code&gt;#include&lt;/code&gt;を書く。lintでエラーが出ないように&lt;code&gt;#include&lt;/code&gt;はコメントで囲む&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;include&lt;/code&gt;をコメントで囲ったところで安全でない( インクルードしたファイルに&amp;rsquo;&lt;code&gt;*)&lt;/code&gt;&amp;lsquo;、例えば &lt;code&gt;int f(char *);&lt;/code&gt;とかが入ってるとコメントが終端される)ので、&lt;code&gt;include&lt;/code&gt;の部分は後で削除する。
-そのための識別子として、&lt;code&gt;====END_OF_HEADER====&lt;/code&gt;を置いておく(これも完全には安全ではないが比較的マシ)。&lt;/li&gt;
-&lt;li&gt;Cのマクロと同じ識別子を使おうとすると識別子も置換されてしまうので左辺にダミーで&lt;code&gt;$&lt;/code&gt;をつけておく。スペースは空けない。
-逆に右辺は置換されてほしいので&lt;code&gt;$&lt;/code&gt;の後にスペースを空ける。&lt;/li&gt;
-&lt;li&gt;最後にCプリプロセッサを呼び、sedでヘッダ部分や無駄に追加されたCのコメントを除く。&lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;p&gt;ちょっと&lt;code&gt;$&lt;/code&gt;の部分がこの方式だとintにしか使えないのでイケてませんがないよりマシでしょう。因みに処理結果はこうなります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;datatype dummy = $ of int
-
-val $PROT_READ = $ 
-                   0x1
-
-val $PROT_WRITE = $ 
-                   0x2
-
-val $PROT_EXEC = $ 
-                   0x4
-
-val $PROT_NONE = $ 
-                   0x0
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;ifdef:17ab4ed508953994d38c55ce3a68a752&#34;&gt;&lt;code&gt;ifdef&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;一旦発想さえ得てしまえば話は簡単です。次は&lt;code&gt;ifdef&lt;/code&gt;を使う例です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;(* ====END_OF_HEADER==== *)
-
-
-(* 
-#ifdef Debug
-*)
-val debug = true
-(* 
-#else
-*)
-val debug = false
-
-(* 
-#endif
-*)
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これは&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;cpp -pipe -E -DDebug ifdef_pre.sml | sed &#39;1,/====END_OF_HEADER====/d;/^#/d&#39; &amp;gt; ifdef.sml
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;と&lt;code&gt;Debug&lt;/code&gt;を定義して処理すればifdef.smlの中身は&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;
-
-(*
-
-*)
-val debug = true
-(*
-
-
-
-
-
-
-*)
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;となりますし、定義せずに&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;
-``` sh
-cpp -pipe -E ifdef_pre.sml | sed &#39;1,/====END_OF_HEADER====/d;/^#/d&#39; &amp;gt; ifdef.sml
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;と処理すれば&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;
-
-(*
-
-
-
-
-
-*)
-val debug = false
-
-(*
-
-*)
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;となってどちらでもSMLとして有効な文法になります。&lt;code&gt;ifndef&lt;/code&gt;だったり、&lt;code&gt;elif&lt;/code&gt;があったとしても有効な文法のままです。&lt;/p&gt;
-
-&lt;h1 id=&#34;まとめ:17ab4ed508953994d38c55ce3a68a752&#34;&gt;まとめ&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;CプリプロセッサでSMLファイルを処理する方法を提示したよ&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;ifdef&lt;/code&gt;も使えるよ&lt;/li&gt;
-&lt;li&gt;関数マクロは使えないよ&lt;/li&gt;
-&lt;/ul&gt;
 </description>
     </item>
     
