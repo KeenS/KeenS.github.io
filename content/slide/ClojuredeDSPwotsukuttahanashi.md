@@ -1,5 +1,5 @@
 ---
-categories: [Clojure, AdTech]
+categories: [Clojure, Lisp, AdTech]
 date: 2015-10-27T21:04:20+09:00
 description: "Lisp Meet Upでの発表用。AdTech Studioでの研修でDSPをClojureで作った話。"
 title: ClojureでDSPを作った話
@@ -39,7 +39,7 @@ Lisp Meet Up #3
   5. 落札したら広告を出す
 
 
- 
+
 # ひとりDSP
 ----------
 
