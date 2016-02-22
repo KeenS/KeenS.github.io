@@ -6,8 +6,263 @@
     <description>Recent content in Slides on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Sun, 31 Jan 2016 16:17:35 +0900</lastBuildDate>
+    <lastBuildDate>Mon, 22 Feb 2016 20:19:11 +0900</lastBuildDate>
     <atom:link href="/slide/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>ClojureでSSPを作った話</title>
+      <link>/slide/ClojuredeSSPwotsukuttahanashi/</link>
+      <pubDate>Mon, 22 Feb 2016 20:19:11 +0900</pubDate>
+      
+      <guid>/slide/ClojuredeSSPwotsukuttahanashi/</guid>
+      <description>&lt;section data-markdown
+    data-separator=&#34;\n\n&#34;
+    data-vertical=&#34;\n\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+&lt;script type=&#34;text/template&#34;&gt;
+# ClojureでSSPを作った話
+----------------------
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# About Me
+---------
+![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
+
+ + κeen
+ + [@blackenedgold](https://twitter.com/blackenedgold)
+ + Github: [KeenS](https://github.com/KeenS)
+ + サイバーエージェントのエンジニア
+ + Lisp, ML, Rust, Shell Scriptあたりを書きます
+
+
+# SSPとは
+-------
+※今回作ったものの話なので実際は少し違う
+
+* Supplier Side Platform
+* メディアからの広告リクエストを受けて表示権をオークションに掛け、落札された広告を表示する
+  0. 広告リクエストを受け取って
+  1. 各DSPに競りの通知を投げて
+  2. 入札を受け取って
+  3. 落札者と落札価格を決めて
+  4. 落札通知を出す
+
+
+# アドテクコンペ
+---------------
+
+* [ビジネスモデルもエンジニアリングも学べるアドテクスタジオの育成プログラムとは | 株式会社サイバーエージェント](https://www.cyberagent.co.jp/techinfo_detail/id=11380)
+* サイバーエージェントの学生向けインターン
+* 3日間、3、4人のチームで **DSP** を作る
+* 学生は7チーム、1チームあたり2000q/sを捌くことになってる
+* 学生のDSPを繋ぐための **SSP** が必要になったので作ることに。
+
+
+&lt;iframe src=&#34;//www.slideshare.net/slideshow/embed_code/key/92I5tQt6q6IjII&#34; width=&#34;425&#34; height=&#34;355&#34; frameborder=&#34;0&#34; marginwidth=&#34;0&#34; marginheight=&#34;0&#34; scrolling=&#34;no&#34; style=&#34;border:1px solid #CCC; border-width:1px; margin-bottom:5px; max-width: 100%;&#34; allowfullscreen&gt; &lt;/iframe&gt; &lt;div style=&#34;margin-bottom:5px&#34;&gt; &lt;strong&gt; &lt;a href=&#34;//www.slideshare.net/prir/ss-35918532&#34; title=&#34;日本におけるアドテク市場とサイバーエージェントのアドテク事業について&#34; target=&#34;_blank&#34;&gt;日本におけるアドテク市場とサイバーエージェントのアドテク事業について&lt;/a&gt; &lt;/strong&gt; from &lt;strong&gt;&lt;a href=&#34;//www.slideshare.net/prir&#34; target=&#34;_blank&#34;&gt;CyberAgent, Inc.&lt;/a&gt;&lt;/strong&gt; &lt;/div&gt;
+
+
+# 作るもの
+----------
+
+* 各DSPに競りの通知(HTTPリクエスト)を投げる大規模HTTPクライアント
+  + 各DSPが2000q/s x 7チーム + 落札通知 = 16000q/s
+  + 丁度2000q/sになるような制御も必要
+* 入札を受けてのオークション、結果のロギングなど
+* 管理画面
+
+
+# s7pについて
+-------------
+
+* 今回作ったSSP
+* [KeenS/s7p](https://github.com/KeenS/s7p)
+* Clojure製
+* 3日くらいで作った
+* やや粗い部分も
+
+
+# 今日話すこと
+--------------
+
+* なぜClojureか
+* 16000q/s出すための工夫
+* 16000q/sに抑えるための制御
+* 運用して困った話とか
+
+
+
+# なぜClojureか
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+
+# なぜClojureか
+---------------
+
+* リクエストの数が多いので非同期IOは必須
+* 100msでタイムアウトする仕様なのでタイムアウト処理も
+* もともとはScala(akka)で作ったs6pがあった
+* Actorの設計が良くなかったので遅かった
+* あと非同期HTTPクライアントにタイムアウトがなかった
+* プロダクションコードを流用したのでインターンが終わった後公開出来なかった
+* 別言語で書き直すにあたってGo, Clojure, Common Lisp, Rust, Erlangが検討された
+
+# なぜClojureか
+---------------
+
+* Common Lisp: 一番慣れてるが、非同期HTTPクライアント(とfutureライブラリ)が使いづらそうなのでやめた
+* Rust: とりあえずパフォーマンスは出そうだし使いたかったが非同期HTTPクライアントが見付からなかった
+* Clojure: そこそこ慣れてるし速そうな非同期HTTPクライアントがあった。core.asyncで非同期プログラミングもし易い
+* Erlang: 恐らく一番向いてるが、ほとんど経験がない
+* Go: 結構向いてそうだがあまり経験がないのでClojureを選んだ
+
+
+# 16kq/s出すための工夫
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# 16kq/s出すための工夫
+------------------------
+非同期IO（一部同期しちゃったけど）
+
+``` clojure
+(defn work [test req result]
+  (-&gt;&gt; @dsps
+       (sequence (comp
+       ;; 全DSPにPOSTしてから(timeout 100ms)
+                  (map (fn [dsp] {:dsp dsp :response (http/post (:url dsp) (json-request-option req))}))
+       ;; 結果を待ち合わせる
+                  (map destruct)
+                  ...))
+       ...))
+    ....
+```
+
+
+# 16kq/s出すための工夫2
+------------------------
+一部同期したのでとにかくスレッド。スレッドへのディスパッチはチャネルで一発解決。
+
+``` clojure
+(defn worker [c]
+  (thread
+   ...))
+```
+
+```clojure
+(defn make-workers [ch n]
+  (doall (map (fn [_] (core/worker ch)) (range n))))
+```
+
+``` clojure
+ workers (manage/make-workers ch 1024)
+```
+
+
+# 16kq/s出すための工夫3
+------------------------
+ZeroMQを使ったmaster-slave構成
+(最終的にSlave18台)
+
+![master-slave構成図](/images/s7p/s7p.svg)
+
+
+
+# &lt;span style=&#34;font-size: 90%&#34;&gt;16kq/sに抑えるための制御&lt;/span&gt;
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# &lt;span style=&#34;font-size: 90%&#34;&gt;16kq/sに抑えるための制御&lt;/span&gt;
+---------------------------
+
+* DSPの買い付け能力というビジネス的な問題ではなくサーバの負荷という技術的な問題による制御
+* 1秒で160kクエリ投げて9秒休むとかは出来ない。もう少し細かく制御する必要がある。
+* しかし制御をあまり細かくしすぎると今度はそこで遅くなりそう。
+* リクエストを実際に投げるSlaveは分散してるけど統一した制御が必要
+
+
+# &lt;span style=&#34;font-size: 90%&#34;&gt;16kq/sに抑えるための制御&lt;/span&gt;
+---------------------------
+Master側で100ms毎にに200個だけZeroMQのキューに積む
+
+![QPS制御の図](/images/s7p/qps_control.svg)
+
+
+# &lt;span style=&#34;font-size: 90%&#34;&gt;16kq/sに抑えるための制御&lt;/span&gt;
+---------------------------
+実装にはcore.asyncの `chan` と `timeout` を使用。(非同期プログラミング便利!)
+
+```Clojure
+(defn start-query [sender reqs]
+  (let [timer (timer 100)]
+    (go-loop []
+      (let [t (&lt;! timer)
+            took (take @qp100ms @reqs)]
+        (doall
+         (doseq [req took]
+           (zmq/send-str sender (json/generate-string req))))
+        (swap! reqs #(drop @qp100ms %))
+        (if (and t (not (empty? took)))
+          (recur)
+          (println &#34;request done&#34;))))
+    timer))
+```
+
+
+# 運用して困った話とか
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+
+# 運用して困った話とか
+---------------------
+## &lt;span style=&#34;font-size: 50%&#34;&gt;レスポンスが遅いDSPにSSPのパフォーマンスが引き摺られる&lt;/span&gt;
+* DSPが速ければ余裕を見ても10台あれば十分だった
+* DSPのパフォーマンスに仮定をおけないので上限ギリギリの18台
+* 同期: 「DSP作ってる時はちょっとくらい待ってくれよ、って思ってたけどSSP運用したら遅いDSPガンガン切りたくなる気持分かった」
+
+# 運用して困った話とか
+---------------------
+## パフォーマンス検証が大変
+* リクエストを捌くサーバのパフォーマンスをどうするか悩む
+* サーバをチューニングすればSSPも速くなるが、検証にならない
+* かといって投げたクエリを捌けないサーバに対して検証する訳にもいかない
+* 結局安全側に倒したパフォーマンス見積りに。
+
+
+# 運用して困った話とか
+---------------------
+## &lt;span style=&#34;font-size: 80%&#34;&gt;Masterがログ吐きすぎてDisk Full&lt;/span&gt;
+* 最初の予定ではMasterはディスクをそんなに使わなかったのでディスクの小さいインスタンスだった
+* ディスクスペース空けてMaster再起動で復旧。焦った。
+
+# 運用して困った話とか
+---------------------
+## &lt;span style=&#34;font-size: 60%&#34;&gt;timeoutし続けるDSPがいてSlave完全沈黙&lt;/span&gt;
+* コネクションのクローズ待ちで固まってた
+* 該当DSPを切った上でSlaveの再起動で復旧
+  * カーネルのチューニングかtimeout頻度の検知が必要そう
+* timeoutを考慮に入れた構成にしてた筈なので想定外だった
+
+# まとめ
+---------
+
+* ClojureでSSP作ったよ
+* Clojure使えば非同期プログラミングが簡単に出来るよ
+* 運用って大変だよ
+
+
+# 参考
+-------
+
+* [KeenS/s7p: sexp version of s6p; a toy SSP.](https://github.com/KeenS/s7p)
+* [ClojureでDSPを作った話 | κeenのHappy Hacκing Blog](http://keens.github.io/slide/ClojuredeDSPwotsukuttahanashi/)
+* [KeenS/b11d: A toy DSP](https://github.com/KeenS/b11d)
+* [アドテクコンペ | 株式会社サイバーエージェント](https://www.cyberagent.co.jp/recruit/fresh/program_detail/id=11303&amp;season=2016)
+* [ビジネスモデルもエンジニアリングも学べるアドテクスタジオの育成プログラムとは | 株式会社サイバーエージェント](https://www.cyberagent.co.jp/techinfo_detail/id=11380)
+
+&lt;/script&gt;
+&lt;/section&gt;
+</description>
+    </item>
     
     <item>
       <title>HAMT ~ イミュータブルで高速なハッシュマップ ~</title>
@@ -705,7 +960,7 @@ Lisp Meet Up #3
   5. 落札したら広告を出す
 
 
- 
+
 # ひとりDSP
 ----------
 
@@ -3280,171 +3535,6 @@ AA略
 * 捕捉変数はヒープ領域に置かれるローカルスコープな変数
 
 ※あくまで実装の1例です
-
-&lt;/script&gt;
-&lt;/section&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>勉強会駆動勉強で猛勉強</title>
-      <link>/slide/benkyoukaikudoubenkyoudetakeshibenkyou/</link>
-      <pubDate>Wed, 06 May 2015 22:02:12 +0900</pubDate>
-      
-      <guid>/slide/benkyoukaikudoubenkyoudetakeshibenkyou/</guid>
-      <description>&lt;section data-markdown
-    data-separator=&#34;\n\n&#34;
-    data-vertical=&#34;\n\n&#34;
-    data-notes=&#34;^Note:&#34;&gt;
-&lt;script type=&#34;text/template&#34;&gt;
-# 勉強会駆動勉強で勉強
-----------------------
-サイバーエージェント15卒FRESH勉強会
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# About Me
----------
-![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
-
- + κeen
- + [@blackenedgold](https://twitter.com/blackenedgold)
- + Github: [KeenS](https://github.com/KeenS)
- + 渋谷のエンジニア
- + 大学では非情報系の学部にいた
- + Lisp, ML, Shell Scriptあたりを書きます
-
-# 勉強会駆動勉強
----------------
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# 勉強会駆動勉強
----------------
-## 方法
-
-1. 勉強会を見付ける &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;1&#34; --&gt;
-2. (詳しくない内容について)トークを登録する &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;2&#34; --&gt;
-3. 期日までに勉強する &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;3&#34; --&gt;
-4. 期日までに資料を作る &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;4&#34; --&gt;
-5. 発表する &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;5&#34; --&gt;
-
-
-# 勉強会駆動勉強
----------------
-## ポイント
-
-* 自分でテーマを決めてる
-* 自分で期限を決めてる
-* 決めた期限は強制力がある
-* アプトプットする
-* 質問などでフィードバックがくる
-
-
-# 勉強会駆動勉強
----------------
-## 身に付く力
-
-* 素早く調べる力
-* 要点を素早く見付ける力
-* プレゼン資料の作成力
-* プレゼン力
-
-
-# 例
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# 前回のRustの話
-実は発表決めた時点ではRustを書いたことなかった
-![Rust slide](/images/rust_slide.png)
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# ISUCON
-勉強会じゃないけど出場を決めてから周辺の勉強を始めた
-![iscon4 blog](/images/isucon4_blog.png)
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# おまけ
--------
-その他の勉強法
-
-* マイナー言語式勉強法
-* やっちゃれ勉強法
-
-
-# マイナー言語式勉強法
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# マイナー言語式勉強法
----------------------
-## 方法
-
-* マイナー言語を始める
-
-
-# マイナー言語式勉強法
----------------------
-## ポイント
-![lisplogo](/images/lisplogo_256.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
-
-* 情報が少ない
-* ライブラリも少ない
-* でも謎技術が使われていたりする
-
-
-# マイナー言語式勉強法
----------------------
-## 身につく力など
-
-* どうにかして情報を見付ける力
-* 英語力
-* ソースコード読解力
-* ライブラリ実装する力
-* 他人のソースのバグを見付ける力
-* プルリク力
-* RFCなどを読む力
-* パラダイムが広がる
-* 謎技術を使えるようになる
-
-
-# やっちゃれ勉強法
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# やっちゃれ勉強法
------------------
-## 方法
-
-* (言語/仕様に)詳しくないけどライブラリの実装始めちゃう
-* やっちゃれ（やってやれ）の気持で。
-
-
-# やっちゃれ勉強法
------------------
-## ポイント
-
-* 手を動かしてる
-
-
-# やっちゃれ勉強法
----------------------
-## 身につく力など
-
-* 実装力
-* 仕様の理解力
-* 言語への理解
-* (大抵)低レベルな操作
-
-
-
-&lt;span style=&#34;font-size:600%&#34;&gt;以上&lt;/span&gt;  
-何か質問あればどうぞ
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
 
 &lt;/script&gt;
 &lt;/section&gt;
