@@ -6,8 +6,263 @@
     <description>Recent content in Lisp on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Sun, 14 Feb 2016 22:37:35 +0900</lastBuildDate>
+    <lastBuildDate>Mon, 22 Feb 2016 20:19:11 +0900</lastBuildDate>
     <atom:link href="/categories/lisp/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>ClojureでSSPを作った話</title>
+      <link>/slide/ClojuredeSSPwotsukuttahanashi/</link>
+      <pubDate>Mon, 22 Feb 2016 20:19:11 +0900</pubDate>
+      
+      <guid>/slide/ClojuredeSSPwotsukuttahanashi/</guid>
+      <description>&lt;section data-markdown
+    data-separator=&#34;\n\n&#34;
+    data-vertical=&#34;\n\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+&lt;script type=&#34;text/template&#34;&gt;
+# ClojureでSSPを作った話
+----------------------
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# About Me
+---------
+![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
+
+ + κeen
+ + [@blackenedgold](https://twitter.com/blackenedgold)
+ + Github: [KeenS](https://github.com/KeenS)
+ + サイバーエージェントのエンジニア
+ + Lisp, ML, Rust, Shell Scriptあたりを書きます
+
+
+# SSPとは
+-------
+※今回作ったものの話なので実際は少し違う
+
+* Supplier Side Platform
+* メディアからの広告リクエストを受けて表示権をオークションに掛け、落札された広告を表示する
+  0. 広告リクエストを受け取って
+  1. 各DSPに競りの通知を投げて
+  2. 入札を受け取って
+  3. 落札者と落札価格を決めて
+  4. 落札通知を出す
+
+
+# アドテクコンペ
+---------------
+
+* [ビジネスモデルもエンジニアリングも学べるアドテクスタジオの育成プログラムとは | 株式会社サイバーエージェント](https://www.cyberagent.co.jp/techinfo_detail/id=11380)
+* サイバーエージェントの学生向けインターン
+* 3日間、3、4人のチームで **DSP** を作る
+* 学生は7チーム、1チームあたり2000q/sを捌くことになってる
+* 学生のDSPを繋ぐための **SSP** が必要になったので作ることに。
+
+
+&lt;iframe src=&#34;//www.slideshare.net/slideshow/embed_code/key/92I5tQt6q6IjII&#34; width=&#34;425&#34; height=&#34;355&#34; frameborder=&#34;0&#34; marginwidth=&#34;0&#34; marginheight=&#34;0&#34; scrolling=&#34;no&#34; style=&#34;border:1px solid #CCC; border-width:1px; margin-bottom:5px; max-width: 100%;&#34; allowfullscreen&gt; &lt;/iframe&gt; &lt;div style=&#34;margin-bottom:5px&#34;&gt; &lt;strong&gt; &lt;a href=&#34;//www.slideshare.net/prir/ss-35918532&#34; title=&#34;日本におけるアドテク市場とサイバーエージェントのアドテク事業について&#34; target=&#34;_blank&#34;&gt;日本におけるアドテク市場とサイバーエージェントのアドテク事業について&lt;/a&gt; &lt;/strong&gt; from &lt;strong&gt;&lt;a href=&#34;//www.slideshare.net/prir&#34; target=&#34;_blank&#34;&gt;CyberAgent, Inc.&lt;/a&gt;&lt;/strong&gt; &lt;/div&gt;
+
+
+# 作るもの
+----------
+
+* 各DSPに競りの通知(HTTPリクエスト)を投げる大規模HTTPクライアント
+  + 各DSPが2000q/s x 7チーム + 落札通知 = 16000q/s
+  + 丁度2000q/sになるような制御も必要
+* 入札を受けてのオークション、結果のロギングなど
+* 管理画面
+
+
+# s7pについて
+-------------
+
+* 今回作ったSSP
+* [KeenS/s7p](https://github.com/KeenS/s7p)
+* Clojure製
+* 3日くらいで作った
+* やや粗い部分も
+
+
+# 今日話すこと
+--------------
+
+* なぜClojureか
+* 16000q/s出すための工夫
+* 16000q/sに抑えるための制御
+* 運用して困った話とか
+
+
+
+# なぜClojureか
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+
+# なぜClojureか
+---------------
+
+* リクエストの数が多いので非同期IOは必須
+* 100msでタイムアウトする仕様なのでタイムアウト処理も
+* もともとはScala(akka)で作ったs6pがあった
+* Actorの設計が良くなかったので遅かった
+* あと非同期HTTPクライアントにタイムアウトがなかった
+* プロダクションコードを流用したのでインターンが終わった後公開出来なかった
+* 別言語で書き直すにあたってGo, Clojure, Common Lisp, Rust, Erlangが検討された
+
+# なぜClojureか
+---------------
+
+* Common Lisp: 一番慣れてるが、非同期HTTPクライアント(とfutureライブラリ)が使いづらそうなのでやめた
+* Rust: とりあえずパフォーマンスは出そうだし使いたかったが非同期HTTPクライアントが見付からなかった
+* Clojure: そこそこ慣れてるし速そうな非同期HTTPクライアントがあった。core.asyncで非同期プログラミングもし易い
+* Erlang: 恐らく一番向いてるが、ほとんど経験がない
+* Go: 結構向いてそうだがあまり経験がないのでClojureを選んだ
+
+
+# 16kq/s出すための工夫
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# 16kq/s出すための工夫
+------------------------
+非同期IO（一部同期しちゃったけど）
+
+``` clojure
+(defn work [test req result]
+  (-&gt;&gt; @dsps
+       (sequence (comp
+       ;; 全DSPにPOSTしてから(timeout 100ms)
+                  (map (fn [dsp] {:dsp dsp :response (http/post (:url dsp) (json-request-option req))}))
+       ;; 結果を待ち合わせる
+                  (map destruct)
+                  ...))
+       ...))
+    ....
+```
+
+
+# 16kq/s出すための工夫2
+------------------------
+一部同期したのでとにかくスレッド。スレッドへのディスパッチはチャネルで一発解決。
+
+``` clojure
+(defn worker [c]
+  (thread
+   ...))
+```
+
+```clojure
+(defn make-workers [ch n]
+  (doall (map (fn [_] (core/worker ch)) (range n))))
+```
+
+``` clojure
+ workers (manage/make-workers ch 1024)
+```
+
+
+# 16kq/s出すための工夫3
+------------------------
+ZeroMQを使ったmaster-slave構成
+(最終的にSlave18台)
+
+![master-slave構成図](/images/s7p/s7p.svg)
+
+
+
+# &lt;span style=&#34;font-size: 90%&#34;&gt;16kq/sに抑えるための制御&lt;/span&gt;
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# &lt;span style=&#34;font-size: 90%&#34;&gt;16kq/sに抑えるための制御&lt;/span&gt;
+---------------------------
+
+* DSPの買い付け能力というビジネス的な問題ではなくサーバの負荷という技術的な問題による制御
+* 1秒で160kクエリ投げて9秒休むとかは出来ない。もう少し細かく制御する必要がある。
+* しかし制御をあまり細かくしすぎると今度はそこで遅くなりそう。
+* リクエストを実際に投げるSlaveは分散してるけど統一した制御が必要
+
+
+# &lt;span style=&#34;font-size: 90%&#34;&gt;16kq/sに抑えるための制御&lt;/span&gt;
+---------------------------
+Master側で100ms毎にに200個だけZeroMQのキューに積む
+
+![QPS制御の図](/images/s7p/qps_control.svg)
+
+
+# &lt;span style=&#34;font-size: 90%&#34;&gt;16kq/sに抑えるための制御&lt;/span&gt;
+---------------------------
+実装にはcore.asyncの `chan` と `timeout` を使用。(非同期プログラミング便利!)
+
+```Clojure
+(defn start-query [sender reqs]
+  (let [timer (timer 100)]
+    (go-loop []
+      (let [t (&lt;! timer)
+            took (take @qp100ms @reqs)]
+        (doall
+         (doseq [req took]
+           (zmq/send-str sender (json/generate-string req))))
+        (swap! reqs #(drop @qp100ms %))
+        (if (and t (not (empty? took)))
+          (recur)
+          (println &#34;request done&#34;))))
+    timer))
+```
+
+
+# 運用して困った話とか
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+
+# 運用して困った話とか
+---------------------
+## &lt;span style=&#34;font-size: 50%&#34;&gt;レスポンスが遅いDSPにSSPのパフォーマンスが引き摺られる&lt;/span&gt;
+* DSPが速ければ余裕を見ても10台あれば十分だった
+* DSPのパフォーマンスに仮定をおけないので上限ギリギリの18台
+* 同期: 「DSP作ってる時はちょっとくらい待ってくれよ、って思ってたけどSSP運用したら遅いDSPガンガン切りたくなる気持分かった」
+
+# 運用して困った話とか
+---------------------
+## パフォーマンス検証が大変
+* リクエストを捌くサーバのパフォーマンスをどうするか悩む
+* サーバをチューニングすればSSPも速くなるが、検証にならない
+* かといって投げたクエリを捌けないサーバに対して検証する訳にもいかない
+* 結局安全側に倒したパフォーマンス見積りに。
+
+
+# 運用して困った話とか
+---------------------
+## &lt;span style=&#34;font-size: 80%&#34;&gt;Masterがログ吐きすぎてDisk Full&lt;/span&gt;
+* 最初の予定ではMasterはディスクをそんなに使わなかったのでディスクの小さいインスタンスだった
+* ディスクスペース空けてMaster再起動で復旧。焦った。
+
+# 運用して困った話とか
+---------------------
+## &lt;span style=&#34;font-size: 60%&#34;&gt;timeoutし続けるDSPがいてSlave完全沈黙&lt;/span&gt;
+* コネクションのクローズ待ちで固まってた
+* 該当DSPを切った上でSlaveの再起動で復旧
+  * カーネルのチューニングかtimeout頻度の検知が必要そう
+* timeoutを考慮に入れた構成にしてた筈なので想定外だった
+
+# まとめ
+---------
+
+* ClojureでSSP作ったよ
+* Clojure使えば非同期プログラミングが簡単に出来るよ
+* 運用って大変だよ
+
+
+# 参考
+-------
+
+* [KeenS/s7p: sexp version of s6p; a toy SSP.](https://github.com/KeenS/s7p)
+* [ClojureでDSPを作った話 | κeenのHappy Hacκing Blog](http://keens.github.io/slide/ClojuredeDSPwotsukuttahanashi/)
+* [KeenS/b11d: A toy DSP](https://github.com/KeenS/b11d)
+* [アドテクコンペ | 株式会社サイバーエージェント](https://www.cyberagent.co.jp/recruit/fresh/program_detail/id=11303&amp;season=2016)
+* [ビジネスモデルもエンジニアリングも学べるアドテクスタジオの育成プログラムとは | 株式会社サイバーエージェント](https://www.cyberagent.co.jp/techinfo_detail/id=11380)
+
+&lt;/script&gt;
+&lt;/section&gt;
+</description>
+    </item>
     
     <item>
       <title>readlineの作り方</title>
@@ -743,6 +998,219 @@ Aggregator, Resequencer, Composed Message Processor, Scatter-Gather, Routing-Sli
 &lt;p&gt;ここまでで、4~7章を紹介しました。原書は10章まで続きます(1-3章は何故Actorが必要なのかなどを延々語ってます)が私はこの辺で筆を置くことにします。続きが気になる方は原書をお読み下さい。&lt;/p&gt;
 
 &lt;p&gt;Advent Calendar遅刻して大変申し分けありませんでした。&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>ClojureでDSPを作った話</title>
+      <link>/slide/ClojuredeDSPwotsukuttahanashi/</link>
+      <pubDate>Tue, 27 Oct 2015 21:04:20 +0900</pubDate>
+      
+      <guid>/slide/ClojuredeDSPwotsukuttahanashi/</guid>
+      <description>&lt;section data-markdown
+    data-separator=&#34;\n\n&#34;
+    data-vertical=&#34;\n\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+&lt;script type=&#34;text/template&#34;&gt;
+# ClojureでDSPを作った話
+----------------------
+Lisp Meet Up #3
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# About Me
+---------
+![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
+
+ + κeen
+ + [@blackenedgold](https://twitter.com/blackenedgold)
+ + Github: [KeenS](https://github.com/KeenS)
+ + サイバーエージェントのエンジニア
+ + Lisp, ML, Shell Scriptあたりを書きます
+
+
+# DSPとは
+--------
+
+* Demand Side Platform
+* 広告主から広告を集めて広告の表示権を競り落し、適切な広告を出す
+  0. 広告主を集めて
+  1. 競りの通知を受け取って
+  2. 一番コスパが良さそうな広告を選んで
+  3. 入札して
+  4. 落札通知を受け取る
+  5. 落札したら広告を出す
+
+
+
+# ひとりDSP
+----------
+
+* AdTech Studioの新卒研修
+* 2ヶ月間、業務時間の20%を使ってDSPを作る
+  + 実質8営業日
+* 業務ロジックを理解することが目的
+* 最後に新卒の作ったDSP同士で競争、利益が得点になる
+* 他には最終発表での得点も
+* **研修なので好きにやっていい**
+  + Clojureで書くことに
+* サーバーの他は広告主データと学習用データが与えられる
+
+
+
+&lt;iframe src=&#34;//www.slideshare.net/slideshow/embed_code/key/92I5tQt6q6IjII&#34; width=&#34;425&#34; height=&#34;355&#34; frameborder=&#34;0&#34; marginwidth=&#34;0&#34; marginheight=&#34;0&#34; scrolling=&#34;no&#34; style=&#34;border:1px solid #CCC; border-width:1px; margin-bottom:5px; max-width: 100%;&#34; allowfullscreen&gt; &lt;/iframe&gt; &lt;div style=&#34;margin-bottom:5px&#34;&gt; &lt;strong&gt; &lt;a href=&#34;//www.slideshare.net/prir/ss-35918532&#34; title=&#34;日本におけるアドテク市場とサイバーエージェントのアドテク事業について&#34; target=&#34;_blank&#34;&gt;日本におけるアドテク市場とサイバーエージェントのアドテク事業について&lt;/a&gt; &lt;/strong&gt; from &lt;strong&gt;&lt;a href=&#34;//www.slideshare.net/prir&#34; target=&#34;_blank&#34;&gt;CyberAgent, Inc.&lt;/a&gt;&lt;/strong&gt; &lt;/div&gt;
+
+
+# 作るもの
+---------
+
+* 競りの通知を受け取って入札するJSON REST API
+* 落札の通知を受け取るJSON REST API
+  + 割とシンプル
+* 「一番コスパが良さそうな広告を選ぶ」部分は色々と工夫する
+* 今回は広告を出すところまではやらない
+* クリック情報は落札通知に入ってる
+
+
+# b11dについて
+-------------
+
+* 今回作ったDSP
+* [KeenS/b11d](https://github.com/KeenS/b11d)
+* Clojure製
+* 5日くらいで作った
+* あまりゴテゴテしない方針
+  + 今回パフォーマンスは無視していい
+  + Clojureに慣れてないので学習コストも抑えたい
+* NginXとAppとMySQL構成+α
+* DBは綺麗に設計したい
+* 1リクエスト毎にDBを引きにいく素敵仕様
+
+
+# WAP
+-----
+
+* Compojure
+* Sinatra likeなやつ
+* ringの上に乗っかてる
+* かなりシンプルな部類だがJSON REST API程度ならこれで十分
+* ringミドルウェアのでJSON部分も抽象化
+* 学習コストが低いので気軽に始められる
+
+
+# JSONライブラリ
+--------------
+
+* ring.middleware.json/wrap-json-{body, response}
+  + JSON-&gt;マップとマップ-&gt;JSON
+  + bodyの方はキーがStringになるのが微妙
+    - セキュリティ的に仕方ない
+  + Content-Typeを指定しないと動かない罠
+* cheshire
+  + 事前データをインポートするのに使った
+  + ringのJSONミドルウェアの依存なのでそのまま使った
+  + 自然で使い易いAPI
+
+
+# データベース接続
+----------------
+
+* java.jdbc
+* JDBCのClojure向けラッパ?
+* DataSourceを自分で渡すのでコネクションプールも簡単
+* SQL手書きしたら良い感じにマップを返してくれる
+* Storeはカラムと値の対応を手書き
+* 便利マクロもいくつか
+
+
+# データベース接続
+----------------
+
+* eager loading面倒問題
+  + 入れ子オブジェクトを保存する方も面倒だった
+  + ORMの便利さを実感。
+* bulk insert難しい問題
+  + 実行時可変長引数難しい
+* ORMはXXXを使うかJavaのやつをそのまま使う?
+* JavaはXMLさえ我慢すれば割と良い奴揃ってる
+* しかしレスポンスはマップで欲しいかも
+
+
+# 運用
+-----
+
+* warに固めてTomcat vs スタンドアロンなfat jar
+* 今回はfat jarを選択
+* スタンドアロンだとsupervisordとかでの管理が楽
+* Tomcatの運用経験がない
+* Jetty中々優秀らしい
+* jstatを使ってMackerelでメトリクス取った
+
+
+# 非同期化
+---------
+
+* core.async/goで手軽に非同期
+* DBへの書き込みを非同期にした
+* DB書き込みでエラーが出ても500にならない恐怖
+* 最初の方で支払いを記録出来てなくて予算管理が死亡
+  + 予算管理失敗ペナルティで、大分点数引かれたらしい
+* goroutineでの例外処理どうやるんだろう。
+
+
+# 開発環境
+---------
+
+* nREPL + Emacs + CIDER
+* 補完の設定上手くいかなかった
+* 諸々地味に不便
+* 起動遅い
+* Emacs側からnREPL立ち上げたい
+* サーバーのライブリロード欲しい
+* 正解が欲しい
+
+
+
+# その他Clojureについて
+---------------------
+
+* コンスのCarを取るのに`hd`か`head`か`car`か分かんなかった
+  + 結局どれでもなくて`first`だった
+* 引数のパターンマッチが便利
+  + JSON REST APIだとリクエストに何を期待してるのか分かりづらい
+  + パターンマッチがドキュメントになる
+* やっぱJavaのライブラリ使えるの便利
+
+
+# 落穂拾い
+---------
+
+* デプロイにはシェルスクリプト
+  + お家芸
+* 「一番コスパが良さそうな広告を選んで入札」で統計か機械学習が必要
+  + 1回表示した時の収益の期待値を計算する
+* 今回は事前データの統計を使った
+  + 理想的には機械学習。時間変化についていける
+* In Appでオンライン学習出来るライブラリが思ったよりない
+  + 分散処理向けの大袈裟なのが多い
+  + Weka? liblinear-java?
+* 後で考えたらIncanter使えばよかった
+
+
+# まとめ
+-------
+
+* 給料貰いながらLisp書いた
+* ClojureでDSP作った
+* Clojureで機械学習したかったけど間に合わなかった
+
+
+# 参考
+------
+
+* [Internal of b11d | κeenのHappy Hacκing Blog](//KeenS.github.io/slide/Internal_of_b11d/)
+
+&lt;/script&gt;
+&lt;/section&gt;
 </description>
     </item>
     
@@ -2292,378 +2760,6 @@ CL-USER&gt; :username
 * `(setf (readtable-case *readtable*) :invert)`を使うと快適だよ
 
 
-&lt;/script&gt;
-&lt;/section&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>Lispエイリアンの矢印作った</title>
-      <link>/blog/2015/03/03/lispeiriannoyajirushitsukutta</link>
-      <pubDate>Tue, 03 Mar 2015 21:30:13 +0900</pubDate>
-      
-      <guid>/blog/2015/03/03/lispeiriannoyajirushitsukutta</guid>
-      <description>&lt;p&gt;κeenです。勉強会などで役立ちそうなLispエイリアンの矢印を作りました。&lt;/p&gt;
-
-&lt;p&gt;Lispエイリアンの元データは&lt;a href=&#34;http://www.lisperati.com/logo.html&#34;&gt;こちら&lt;/a&gt;でPNGやSVGで公開されているのでInkscapeの練習がてらそれをいじりました。&lt;/p&gt;
-
-&lt;p&gt;どうぞ&lt;br /&gt;
-&lt;img src=&#34;/images/lisplogo_alien_arrow.svg&#34; alt=&#34;lisplogo_alien_arrow.svg&#34; /&gt;&lt;br /&gt;
-&lt;a href=&#34;/images/lisplogo_alien_arrow.svg&#34;&gt;lisplogo_alien_arrow.svg&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;ライセンスは元データに倣ってパブリックドメインとします。&lt;/p&gt;
-
-&lt;p&gt;PNG形式のもの必要…ですか？&lt;/p&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>既存のテンプレートエンジンの問題点と再設計</title>
-      <link>/slide/kizonnotenpure-toenjinnomondaitentosaisekkeiaruihaArrowsnitsuite/</link>
-      <pubDate>Mon, 02 Mar 2015 23:36:03 +0900</pubDate>
-      
-      <guid>/slide/kizonnotenpure-toenjinnomondaitentosaisekkeiaruihaArrowsnitsuite/</guid>
-      <description>&lt;section data-markdown
-    data-separator=&#34;\n\n&#34;
-    data-vertical=&#34;\n\n&#34;
-    data-notes=&#34;^Note:&#34;&gt;
-&lt;script type=&#34;text/template&#34;&gt;
-&lt;style type=&#34;text/css&#34;&gt;
-.red {
-color: red;
-}
-&lt;/style&gt;
-# 既存のテンプレートエンジンの問題点と再設計、あるいはArrowsについて
------------------------------------------------------------------
-Clack Meet Up #1  
-2015-03-05 @サムライト
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# About Me
----------
-![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
-
- + κeen
- + [@blackenedgold](https://twitter.com/blackenedgold)
- + Github: [KeenS](https://github.com/KeenS)
- + 野生のLisper
- + Lisp, Ruby, OCaml, Shell Scriptあたりを書きます
-
-# Template Engines
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# Existing Architeture
-----------------------
-0. (リクエスト)
-1. アプリ
-  0. 引数を計算
-  1. テンプレートに引数を渡す
-  2. レスポンスをレンダリング &lt;!--.element: class=&#34;fragment grow&#34;  --&gt;
-4. レスポンスをサーバに渡す
-5. (レスポンス)
-
-# Rendering?
-----------------------
-* 結合した文字列はクライアントに返ったらその後はゴミ
- + GCへ負荷がかかる (後述)
-* クライアントにとって1つの文字列である必要はない
-* むしろ返せる部分だけ先に返した方が得（後述）
-
-# GC Pressure (SBCL)
------------------
-* 世代別Copy GC
-* 結合した文字列は比較的大きい
-* `alloc_space`に入らない大きさならアロケートが遅い
-* GCを頻繁に起動してしまう
-* 16KBを越えると特別扱いされて遅い/メモリを喰う
-* LispのWebアプリはレスポンスタイムの分散が大きい（要出展）
-
-参考: [SBCL GENCGC @ x86 Linux](http://cl-www.msi.co.jp/reports/sbcl-gc-memo.html)
-
-# Split Response
----------------
-例えば、こんなの
-
-&lt;pre&gt;&lt;code class=&#34;html&#34;&gt;&amp;lt;!DOCTYPE html&amp;gt;
-&amp;lt;html xmlns=&amp;quot;http://www.w3.org/1999/xhtml&amp;quot; xml:lang=&amp;quot;en&amp;quot; lang=&amp;quot;en-us&amp;quot;&amp;gt;
-    &amp;lt;head&amp;gt;
-        &amp;lt;link rel=&amp;quot;stylesheet&amp;quot; href=&amp;quot;http://localhost:1313//reveal.js/lib/css/xcode.css&amp;quot;&amp;gt;
-        &amp;lt;script src=&amp;quot;//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js&amp;quot;&amp;gt;&amp;lt;/script&amp;gt;
-        ....
-        &amp;lt;/script&amp;gt;
-    &amp;lt;/head&amp;gt;
-    &amp;lt;body class=&amp;quot;li-body&amp;quot;&amp;gt;
-    &amp;lt;header&amp;gt;{{ header }}&amp;lt;/header&amp;gt;
-    {{ body }}
-    ...
-&lt;/code&gt;&lt;/pre&gt;
-
-# Split Response
----------------
-1. `{{ header }}`の前に先頭から`&lt;header&gt;`までを返す
-2. `{{ header }}`を返す
-3. `&lt;/header&gt;`を返す
-4. `{{ body }}`を返す
-
-...
-
-
-# Pros of Split Response
-------------------------
-* `header`を計算してる間にクライアントにhead部分が渡る
-  + 先に`&lt;link&gt;`や`&lt;script&gt;`を要求出来る
-  + サーバ側のスループットやレスポンスタイムは変わらないが
-    クライアントのレンダリング完了までの時間は大幅に短縮出来る
-* 文字列を結合する必要がない
-* 定数部分については長さが判ってるので最適化し易い
-
-# How TEs Work 
----------------------------
-## Compilation
-1. テンプレート文字列
- + パーサ &lt;!-- .element: style=&#34;list-style-image: url(/images/arrow_down.svg);&#34; --&gt;
-2. 抽象構文木
- + コードエミット &lt;!-- .element: style=&#34;list-style-image: url(/images/arrow_down.svg);&#34; --&gt;
-3. レンダリング関数
-
-# How TEs Work 
----------------------------
-## Rendering
-1. レンダリング関数
- + 引数 &lt;!-- .element: style=&#34;list-style-image: url(/images/arrow_down.svg);&#34; --&gt;
-2. 文字列
-
-# Misc Problems
----------------
-* サーバに渡すのは文字列なのにソケットに書き込む時はオクテット？
-  + 文字列で返す？オクテットで返す？（デバッグがー）
-  + オクテットの変換はいつ？
-* ストリームが遅い？
-  + POSIX APIが使える&#34;なら&#34;fdの方が速い？
-* ユーザが用意したバッファに書き出したい？
-* テンプレートに渡す引数が定数文字列なら畳み込める筈？
-* リクエストの度にテンプレートパースするのは筋悪だけど開発中は毎回コンパイルするのは面倒？
-
-&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
-
-# Arrows
-
-Template flies like an arrow
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
-# Arrows
---------
-* [KeenS/arrows](https://github.com/KeenS/arrows)
-* 現在開発中のテンプレートエンジン
-* 複数のテンプレートが選べる（予定）
-* 複数のバックエンドが選べる
-* バックエンドに依ってはnon-consing
-
-&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
-# How Arrows Works
-------------------
-## Compilation
-1. テンプレート文字列&lt;span class=&#34;red&#34;&gt; + 定数引数&lt;/span&gt;
-  + パーサ&lt;span class=&#34;red&#34;&gt;(default, cl-emd互換...)&lt;/span&gt; &lt;!-- .element: style=&#34;list-style-image: url(/images/arrow_down.svg);&#34; --&gt;
-2. 抽象構文木
-  + &lt;span class=&#34;red&#34;&gt;最適化(const folding, concat, convert...)&lt;/span&gt; &lt;!-- .element: style=&#34;list-style-image: url(/images/arrow_down.svg);&#34; --&gt;
-  + コードエミット &lt;!-- .element: style=&#34;list-style-image: url(/images/arrow_down.svg);&#34; --&gt;
-3. レンダリング関数&lt;span class=&#34;red&#34;&gt;(string, octets, stream, fast-io ...)&lt;/span&gt;
-
-&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
-# How Arrows Works
-------------------
-## Rendering
-1. レンダリング関数
-  + 引数 &lt;!-- .element: style=&#34;list-style-image: url(/images/arrow_down.svg);&#34; --&gt;
-2. 文字列&lt;span class=&#34;red&#34;&gt;、オクテット列、ストリーム書き出し、fast-io…&lt;/span&gt;
-
-&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
-# How compiled
---------------
-```html
-&lt;h1&gt;Hi {{var name}}!&lt;/h1&gt;
-```
-を
-```lisp
-(compile-template-string :xxx
-  &#34;&lt;h1&gt;Hi {{var name}}!&lt;/h1&gt;&#34; ())
-```
-とコンパイル
-
-# Stream backend
-----------------
-&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
-```lisp
-(lambda (stream &amp;key name)
-  (write-string &#34;&lt;h1&gt;Hi &#34; stream)
-  (write-string
-    (encode-for-tt (princ-to-string name))
-    stream)
-  (write-string &#34;!&lt;/h1&gt;&#34; stream))
-```
-* ほとんどアロケートしない
-
-&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
-# Octet backend
-----------------
-```lisp
-(lambda (&amp;key name)
-  (with-fast-output (buffer)
-    (fast-write-sequence
-      #.(string-to-octets &#34;&lt;h1&gt;Hi &#34;)
-       buffer)
-    (fast-write-sequence
-      (string-to-octets
-        (encode-for-tt (princ-to-string name)))
-                       buffer)
-    (fast-write-sequence
-      #.(string-to-octets &#34;!&lt;/h1&gt;&#34;)
-      buffer)))
-```
-
-&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
-# How optimized
----------------
-```html
-&lt;h1&gt;Hi {{var name}}!&lt;/h1&gt;
-```
-を
-
-```lisp
-(compile-template-string :stream
-   &#34;&lt;h1&gt;Hi {{var name}}!&lt;/h1&gt;&#34;
-   &#39;(:known-args (:name &#34;&lt;κeen&gt;&#34;)))
-```
-とコンパイル
-
-&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
-# How optimized
----------------
-## variable folding
-```lisp
-(lambda (stream)
-  (write-string &#34;&lt;h1&gt;Hi &#34; stream)
-  (write-string (encode-for-tt &#34;&lt;κeen&gt;&#34;) stream)
-  (write-string &#34;!&lt;/h1&gt;&#34; stream))
-```
-* 既知の引数は畳み込む
-* 文字列なら`princ-to-string`しない
-
-&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
-# How optimized
----------------
-## const folding
-```lisp
-(lambda (stream)
-  (write-string &#34;&lt;h1&gt;Hi &#34; stream)
-  (write-string &#34;&amp;lt;κeen&amp;gt;&#34; stream)
-  (write-string &#34;!&lt;/h1&gt;&#34; stream))
-```
-* 定数のエスケープはコンパイル時に済ませる
-
-&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
-# How optimized
----------------
-## append sequence
-```lisp
-(lambda (stream)
-  (write-string &#34;&lt;h1&gt;Hi &amp;lt;κeen&amp;gt;!&lt;/h1&gt;&#34;
-                stream))
-```
-* 複数シーケンスの書き出しは1つにまとめる
-
-&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
-# Further Ideas
----------------
-* 引数計算の遅延
-* 引数計算の並列化
-* 非同期化
-* HTML compction
-
-&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
-# Further Ideas
----------------
-## 引数計算の遅延
-* `name`の計算が重いときに先に`&#34;&lt;h1&gt;Hi &#34;`を返す。
-* `name`は必要になったら値を計算する(Promise パターン)
-```lisp
-(lambda (stream &amp;key name)
-  (write-string &#34;&lt;h1&gt;Hi &#34; stream)
-  (write-string
-    (encode-for-tt (princ-to-string name))
-    stream)
-  (write-string &#34;!&lt;/h1&gt;&#34; stream))
-```
-
-&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
-# Further Ideas
----------------
-## 引数計算の並列化
-* `name`の計算が重いときに先に`&#34;&lt;h1&gt;Hi &#34;`を返す。
-* `name`は並列に計算して必要になったら値を要求する(Futureパターン)
-```lisp
-(lambda (stream &amp;key name)
-  (write-string &#34;&lt;h1&gt;Hi &#34; stream)
-  (write-string
-    (encode-for-tt (princ-to-string name))
-    stream)
-  (write-string &#34;!&lt;/h1&gt;&#34; stream))
-```
-
-&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
-# Further Ideas
----------------
-## 非同期化
-* 単純にwriteを非同期にする
-* 他にFutureもブロックするので非同期Futureを使う
-
-&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
-# Further Ideas
----------------
-## HTML compction
-```html
-&lt;ol&gt;
-  &lt;li&gt; item 1 &lt;/li&gt;
-  &lt;li&gt; item 2 &lt;/li&gt;
-  &lt;li&gt; item 3 &lt;/li&gt;
-&lt;/ol&gt;
-
-```
-を
-```html
-&lt;ol&gt;&lt;li&gt;item 1&lt;/li&gt;&lt;li&gt;item 2&lt;/li&gt;&lt;li&gt;item 3&lt;/li&gt;&lt;/ol&gt;
-
-```
-* DOM構造が変わってしまう
-
-
-&lt;!-- .slide: data-background=&#34;/images/arrows.jpg&#34; --&gt;
-# TODOs
--------
-* 設計上複数シンタックスをサポート可能だがまだしてない
-* 既存のテンプレートエンジンとの比較ベンチマーク
-* 高速化
-* 多機能化
-  + テンプレート
-  + 最適化
-  + バックエンド
-* clackとの連携
-  + clackのAPIはメモリアロケーションが多めに必要になる
-
-# Summary
----------
-* 既存のテンプレートエンジンは非効率
-  + メモリを無駄遣いしていた
-  + ユーザーのことを考えてなかった
-* 新しいテンプレートエンジンを設計した
-  + メモリアロケーションをあまりしない
-  + ユーザー側の速度まで考慮した
-  + 柔軟
 &lt;/script&gt;
 &lt;/section&gt;
 </description>
