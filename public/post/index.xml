@@ -6,8 +6,54 @@
     <description>Recent content in Posts on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Wed, 24 Feb 2016 23:57:31 +0900</lastBuildDate>
+    <lastBuildDate>Sat, 27 Feb 2016 21:28:16 +0900</lastBuildDate>
     <atom:link href="/post/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>druidというリアルタイムデータ分析ツールを知った</title>
+      <link>/blog/2016/02/27/druidtoiuriarutaimude_tabunsekitsu_ruwoshitta</link>
+      <pubDate>Sat, 27 Feb 2016 21:28:16 +0900</pubDate>
+      
+      <guid>/blog/2016/02/27/druidtoiuriarutaimude_tabunsekitsu_ruwoshitta</guid>
+      <description>&lt;p&gt;κeenです。社内ハッカソンに出てきた。そこでdruidというツール（？）を触ったのでそれについて。&lt;/p&gt;
+
+&lt;p&gt;読み方は「ドゥルイド」でいいのかな？公式ページは&lt;a href=&#34;http://druid.io/&#34;&gt;こちら&lt;/a&gt;。&lt;a href=&#34;https://metamarkets.com/&#34;&gt;Metamarkets&lt;/a&gt;が主導で開発しているようで、&lt;a href=&#34;https://github.com/druid-io/druid&#34;&gt;オープンソースになっている&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;公式サイトを少し回遊してもらうと分かると思うが、時系列データを分散環境でストリーミング処理出来るツール。分散環境で動くだけあってコンポーネントはいくつかある。&lt;/p&gt;
+
+&lt;p&gt;主にはストリーミングデータを取り込む「REALTIME」、クライアントからのクエリを処理する「BROKER」、過去のデータを処理する「HISTORICAL」があるようだ。
+BROKERがDEEP STORAGE(s3などの永続データストア)にデータを保存し、HISTORICALがオンデマンドにそのデータを読み出してBROKERに返す。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://druid.io/docs/img/druid-dataflow-3.png&#34; alt=&#34;design of druid&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;イメージとしてはこんな感じだが、実際に動かすのには他のコンポーネントも必要で、分散環境に必須なZookeeperが必要なのはもちろんのこと、全体を司る「COORDINATOR」、取り込んだデータのメタデータを保存する「METADATA STORAGE」も必要になる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://druid.io/docs/img/druid-manage-1.png&#34; alt=&#34;detailed design of druid&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;画像の出展は&lt;a href=&#34;http://druid.io/docs/0.8.3/design/design.html&#34;&gt;こちら&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;中々に大仰なアーキテクチャだがどのみちリアルタイムデータ分析基盤を作ろうと思うとこれくらい必要になる。それを1まとめにしてディストリビュートしてくれるdruidを使った方がなんぼか近道な気はする。&lt;/p&gt;
+
+&lt;p&gt;さて、これを1インスタンスで動かそうと思うと、DEEP STORAGEはローカルファイルシステム、METADATA STORAGEは組込みのDerby DBでまかなえ、REALTIMEはデータを取り込む時にのみ必要なのでZookeeper、Coordinator、Broker、Historical、都合4つのJava製ミドルウェアを起動すればどうにか使える。
+これら合わせても2GBくらいのメモリしか必要なかったので十分手元で動く。&lt;/p&gt;
+
+&lt;p&gt;さて、このDruid、どういうことが出来るかというとクエリに注目すれば「Group By付きのAggrigation Functionを高速に動かす」が主な目的だろうか。&lt;a href=&#34;http://druid.io/docs/0.8.3/querying/querying.html&#34;&gt;他にも色々ある&lt;/a&gt;が。
+BIツールや他のダッシュボードツールなんかと連携してストリーミングデータをリアルタイムに可視化するのに一役買う。YahooやAlibabaなんかでも&lt;a href=&#34;http://druid.io/community/&#34;&gt;使われているようだ&lt;/a&gt;。
+例えばDruidをサポートするダッシュボードツール、&lt;a href=&#34;https://github.com/mistercrunch/panoramix&#34;&gt;panoramix&lt;/a&gt;なんかもある。&lt;/p&gt;
+
+&lt;p&gt;今回のハッカソンはGCPがテーマで、Cloud Pub/Subからデータを取り込むことになったがDruidにはPub/Subからデータを取り込むREALTIMEがない。ということでハッカソンで&lt;a href=&#34;https://github.com/KeenS/druid/tree/pubsub-extension/extensions/cloud-pubsub&#34;&gt;Pub/Sub extensionを作った&lt;/a&gt;。
+メーリスに投稿して様子を覘った上でコードを整理してプルリクを出す予定だ。
+拡張は思ったよりも作りやすく、ドキュメントを読まなくても既存のKafka拡張を参考にするだけで書けた。まあ、その後苦労したが。&lt;/p&gt;
+
+&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;はじめて使うDBのプラグイン書いたらデータのロードは出来たもののクエリの投げ方が分からずに入ったデータを確認出来ない…っ…&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/703202304913051648&#34;&gt;2016年2月26日&lt;/a&gt;&lt;/blockquote&gt;
+&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
+
+&lt;p&gt;今回作ったのはFirehose Pluginと呼ばれるものだが、他にもプラグインの種類は&lt;a href=&#34;http://druid.io/docs/0.8.3/development/modules.html&#34;&gt;色々ある&lt;/a&gt;みたいだ。
+しかしFirehose Pluginの基底クラスはあまりストリーミングデータのインポートには良くない気がする。FirehoseV2というのがあって、それが良いインターフェースになっていたが使い方が分からなかった。&lt;/p&gt;
+
+&lt;p&gt;今が0.9.0-SNAPSHOT。1.0.0が出る頃が楽しみだ。&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>Bind Addressの意味がようやく分かった</title>
@@ -2114,463 +2160,6 @@ Lispみたくそれっぽい見た目と挙動をしていたらPrologを主張�
 &lt;p&gt;datasortとかで作った新しい種は依存型や依存命題(?)、依存観(?)で使うためにある?&lt;/p&gt;
 
 &lt;p&gt;分からないことが多いですね。もう少しATS2の世界の整理をつけたい。&lt;/p&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>ATS2の依存型を使ってAVL木</title>
-      <link>/blog/2015/12/29/ats2noizongatawotsukatteavlki</link>
-      <pubDate>Tue, 29 Dec 2015 23:40:45 +0900</pubDate>
-      
-      <guid>/blog/2015/12/29/ats2noizongatawotsukatteavlki</guid>
-      <description>
-
-&lt;p&gt;κeenです。少しばかりATS2を触ってみたので成果報告でも。&lt;/p&gt;
-
-&lt;p&gt;AVL木は左右のノードの高さが高々1しか違わない平衡二分木です。OCamlやSMLでナイーブに実装すると本当に1しか違わないことを保証するのは難しく、精々テストなどで部分的に検査するだけです。&lt;/p&gt;
-
-&lt;p&gt;ところがSMLに似た文法を持つATS2には依存型があり、左右のノードの高さが高々1しか違わないことを型で保証出来ます。
-つまり、左右のノードの高さが2以上違う木を作ろうとしてもコンパイルエラーになるのでコンパイルが通れば高さについてはバグがないこと保証されます。&lt;/p&gt;
-
-&lt;p&gt;そういうAVL木を使ってTreeSetを作ってみたので紹介します。&lt;/p&gt;
-
-&lt;p&gt;私のブログ(のこの記事)の読者ならATS2も依存型もAVL木も知ってそうですが一応説明します。&lt;/p&gt;
-
-&lt;h1 id=&#34;ats2って何:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;ATS2って何?&lt;/h1&gt;
-
-&lt;p&gt;詳しい説明は&lt;a href=&#34;http://jats-ug.metasepi.org/#document&#34;&gt;日本ATSユーザグループ&lt;/a&gt;に譲るとして、この記事にて重要な点を挙げます。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;SMLに似た文法を持つML方言&lt;/li&gt;
-&lt;li&gt;型の部分に型以外の項（例えば整数とか）が使える&lt;a href=&#34;https://ja.wikipedia.org/wiki/%E4%BE%9D%E5%AD%98%E5%9E%8B&#34;&gt;依存型&lt;/a&gt;を持つ&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;他にももっと素晴しい型システムや機能、特徴があるのですがとりあえずのところは上記の特徴を押えておいて下さい。&lt;/p&gt;
-
-&lt;h1 id=&#34;依存型って何:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;依存型って何?&lt;/h1&gt;
-
-&lt;p&gt;先程も述べた通り、ざっくり言うと型の部分に型以外の項が使える型システムです。&lt;/p&gt;
-
-&lt;p&gt;例えば、次のSMLのコードを考えてみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;Array.get(arr: int array, index: int): int
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;型から読み取れるのは「&lt;code&gt;int&lt;/code&gt;の配列&lt;code&gt;arr&lt;/code&gt;と整数&lt;code&gt;index&lt;/code&gt;を受け取って&lt;code&gt;int&lt;/code&gt;の値を返す」関数です。
-しかしこの関数は&lt;code&gt;index&lt;/code&gt;が&lt;code&gt;arr&lt;/code&gt;の長さよりも大きい時に実行時例外を上げます。内部でメモリを護るために境界チェックをして、チェックに落ちた時に例外を挙げている筈です。。
-配列アクセスの度に実行時例外をハンドルするのはコード上もパフォーマンス上も避けたいですよね。
-こういうものをコンパイル時に防ぎたくありませんか？無駄な境界チェックを省きたくありまんか？依存型を使えばそれが出来ます。&lt;/p&gt;
-
-&lt;p&gt;例えば&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;array_get{n, i: nat| i &amp;lt; n}(arr: arrayref(int, n), index: int(i)): int
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これは「長さ&lt;code&gt;n&lt;/code&gt;の&lt;code&gt;int&lt;/code&gt;配列&lt;code&gt;arr&lt;/code&gt;と&lt;code&gt;n&lt;/code&gt;以下の自然数&lt;code&gt;index&lt;/code&gt;を受け取って&lt;code&gt;int&lt;/code&gt;の値を返す」関数です。
-正しい入力しか受け取らないので実行時例外が起きませんし内部で境界チェックも必要ありません。面白くないですか？&lt;/p&gt;
-
-&lt;p&gt;私も大して型システムに詳しくないのでこのくらいの例しか挙げることが出来ませんがきっとさらに面白い世界が広がっているのでしょう。&lt;/p&gt;
-
-&lt;h1 id=&#34;avl木って何:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;AVL木って何？&lt;/h1&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://ja.wikipedia.org/wiki/AVL%E6%9C%A8&#34;&gt;Wikipedia&lt;/a&gt;を参照すると詳しいことが載っています。前の説明を繰り返すと、左右のノードの高さが高々1しか違わない平衡二分木です。自身の高さは左右の高さの高い方+1です。
-データ構造は左右の木、ノードの保持する値の他にそのノードの高さを保持します。&lt;/p&gt;
-
-&lt;p&gt;なので平衡度は赤黒木より高く、検索が高速な一方、要素数を変更する操作の度に平衡を取らないといけないので挿入や削除は赤黒木に負けるそうです。
-OCamlのstdlibのMap/Setの実装に使われています。(OCamlは左右の高さが高々2違う木なので厳密にはAVL木ではないのですがアルゴリズムは同じです。)&lt;/p&gt;
-
-&lt;p&gt;因みにAVLは人の名前の頭文字みたいです。&lt;/p&gt;
-
-&lt;h1 id=&#34;作ってみよう:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;作ってみよう&lt;/h1&gt;
-
-&lt;p&gt;今回、ATS2の依存型に関係ない機能、関数テンプレートなどは理解（読解）の妨げになると判断してそれらを使わないコード例を出します。
-(関数テンプーレートを使わなくても多相型を使えば良さそうですが、ATS wayではなさそうです。)&lt;/p&gt;
-
-&lt;p&gt;ということで、整数を格納するSetを作ってみましょう。&lt;/p&gt;
-
-&lt;p&gt;実装に先立って、&lt;a href=&#34;https://github.com/ocaml/ocaml/blob/trunk/stdlib/set.ml&#34;&gt;OCamlのSet&lt;/a&gt;や&lt;a href=&#34;https://tech.bezoomnyville.com/2015/12/07/A-GADT-implementation-of-AVL-tree.html&#34;&gt;GADTを使ったAVLの実装&lt;/a&gt;を読んでおくと比較が出来るかと思います。&lt;/p&gt;
-
-&lt;p&gt;今回OCamlのSetを参考にして作ったので比較のためにコードを載せたいのですがOCamlは確かコードの再配布に厳しいライセンスだった気がするのでやめておきます。(スニペットくらいなら著作権は発生せず、ライセンス関係なしに使えるのですが念のため。)&lt;/p&gt;
-
-&lt;h2 id=&#34;おまじない:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;おまじない&lt;/h2&gt;
-
-&lt;p&gt;標準的な操作を取り込むため、以下をファイルの先頭に書きます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;#include &amp;quot;share/atspre_staload.hats&amp;quot;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;データ型:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;データ型&lt;/h2&gt;
-
-&lt;p&gt;高さnのAVL木を表わすデータ型を考えます。このデータ型は、&amp;rdquo;型パラメータとして&amp;rdquo;木の高さnを取ります。&lt;/p&gt;
-
-&lt;p&gt;書き出しはこうです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;datatype avlt(n: int) =
- ...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;続けて、Emptyを書きます。Emptyは高さ0です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;datatype avlt(n: int) =
-    Empty(0)
-    ...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;続いて、Nodeですが、左の木の高さと右の木の高さを表わす変数を導入します。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;  | {l, m: nat} Node of ...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;このクルクル括弧&lt;code&gt;{}&lt;/code&gt;で囲まれた部分は「任意の&lt;code&gt;nat&lt;/code&gt;なる&lt;code&gt;l&lt;/code&gt;,&lt;code&gt;m&lt;/code&gt;に対して」と読めば読み易いです。&lt;/p&gt;
-
-&lt;p&gt;データ構造は、左右の木、値、高さを持つのでした。ここで、高さは&lt;code&gt;n&lt;/code&gt;であると型で制約されてます。ということでこうです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;  | {l, m: nat} Node of (avlt(l), int, avlt(m), int(n))
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;最後の高さの部分で&lt;code&gt;int(n)&lt;/code&gt;となっているのは、&lt;code&gt;n&lt;/code&gt;は種&lt;code&gt;int&lt;/code&gt;であって型ではないので「整数&lt;code&gt;n&lt;/code&gt;の&lt;code&gt;int&lt;/code&gt;&amp;ldquo;型&amp;rdquo;」にする為に&lt;code&gt;int()&lt;/code&gt;を適用する必要があるのです。依存型だと「ただの整数値」だけでなく「整数3」などの型も作れるのです。&lt;/p&gt;
-
-&lt;p&gt;さて、このままだと左右の木の高さが高々1しか違わないということを表わせていません。さらにいうと、自身の高さについての制約も書けていません。これらの制約はこう書きます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;  | {l, m: nat | &amp;lt;制約&amp;gt; }
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;今回の制約はこうなりますね。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;  | {l, m: nat |
-    (l + 2 == n &amp;amp;&amp;amp; m + 1 == n) || // 右が左より1高い 又は
-    (l + 1 == n &amp;amp;&amp;amp; m + 1 == n) || // 左右同じ高さ 又は
-    (l + 1 == n &amp;amp;&amp;amp; m + 2 == n)    // 左が右より1高い
-    }
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;結果、データ型はこうです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;datatype avlt(n: int) =
-    Empty(0)
-  | {l, m: nat |
-    (l + 2 == n &amp;amp;&amp;amp; m + 1 == n) ||
-    (l + 1 == n &amp;amp;&amp;amp; m + 1 == n) ||
-    (l + 1 == n &amp;amp;&amp;amp; m + 2 == n)
-} Node of (avlt(l), int, avlt(m), int(n))
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;中々複雑ですね。&lt;/p&gt;
-
-&lt;h2 id=&#34;height:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;&lt;code&gt;height&lt;/code&gt;&lt;/h2&gt;
-
-&lt;p&gt;軽い関数から作っていきましょう。まずは木の高さを返す関数&lt;code&gt;height&lt;/code&gt;です。高さ&lt;code&gt;n&lt;/code&gt;の木を受け取って整数&lt;code&gt;n&lt;/code&gt;を返します。&lt;/p&gt;
-
-&lt;p&gt;書き出しはこうです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun height...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;そして&lt;code&gt;n&lt;/code&gt;を導入します。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun height{n: nat}...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;引数は「高さ&lt;code&gt;n&lt;/code&gt;の木」ですね。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun height{n: nat}(tree: avlt(n))...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;返り値は「整数&lt;code&gt;n&lt;/code&gt;」です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun height{n: nat}(tree: avlt(n)): int(n) = ...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;関数本体は普通です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun height{n: nat}(tree: avlt(n)): int(n) = 
-  case+ tree of
-  | Empty () =&amp;gt; 0
-  | Node (_, _, _, n) =&amp;gt; n
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ここで使っている&lt;code&gt;case+&lt;/code&gt;ですが、普通の&lt;code&gt;case&lt;/code&gt;より強くて網羅性検査に落ちるとコンパイルエラーになります。&lt;/p&gt;
-
-&lt;h2 id=&#34;create:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;&lt;code&gt;create&lt;/code&gt;&lt;/h2&gt;
-
-&lt;p&gt;これから&lt;code&gt;insert&lt;/code&gt;を実装していく訳ですが、ユーティリティから少しづつ実装していきます。まずは高さが高々1しか違わない木2つと値を1つ受け取って新たな木を作る&lt;code&gt;create&lt;/code&gt;です。&lt;code&gt;Node&lt;/code&gt;を生で使うのに比べて高さの計算が必要なくなります。&lt;/p&gt;
-
-&lt;p&gt;これは先に実装を与えて、後で型を考えましょう。先程の&lt;code&gt;height&lt;/code&gt;を使います。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun create??(l: ??, v: int, r: ??): ?? = let
-  val hl = height l
-  val hr = height r
-in
-  if hl &amp;gt;= hr
-  then Node(l, v, r, hl + 1)
-  else Node(l, v, r, hr + 1)
-end
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;さて、型を考えていきます。まずは&lt;code&gt;l&lt;/code&gt;と&lt;code&gt;r&lt;/code&gt;はある高さを持つ木です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun create{l, m: nat} (l: avlt(l), v: int, r: avlt(m)): ?? = ...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;次に、左右で高さが高々1しか違わないことを制約したいです。これは&lt;code&gt;Node&lt;/code&gt;の定義を参考にすると書けるでしょうか。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun create{
-  l, m: nat |
-  l + 1 == m ||
-  l == m + 1 ||
-  l == m
-  } (l: avlt(l), v: int, r: avlt(m)): ?? = ...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;最後に返り値の型を考えます。返り値は「&lt;code&gt;l&lt;/code&gt;か&lt;code&gt;m&lt;/code&gt;どちらか大きい方+1の高さを持つ木」です。私は最初、それをこう表現していました。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun create...(...): [n: nat | n == m + 1 || n == l + 1] avlt(n) = ...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;[n: nat | n == m + 1 || n == l + 1] avlt(n)&lt;/code&gt;の部分を読み下すと、「&lt;code&gt;n = m + 1&lt;/code&gt;又は&lt;code&gt;n = l + 1&lt;/code&gt;を満たす&lt;code&gt;n&lt;/code&gt;に対して&lt;code&gt;avlt(n)&lt;/code&gt;」という型になります。これは、間違ってはいないのですが正確ではありませんでした。なぜならこの型に忠実に従うと&lt;code&gt;l = m + 1&lt;/code&gt;の時に&lt;code&gt;n = m + 1&lt;/code&gt;、すなわち&lt;code&gt;n = l&lt;/code&gt;もありえてしまいます。勿論そんなことはなく、&lt;code&gt;l = m + 1&lt;/code&gt;ならば&lt;code&gt;n = l + 1&lt;/code&gt;です。&lt;/p&gt;
-
-&lt;p&gt;よって正しい型は&lt;code&gt;[n: nat | (m &amp;gt; l &amp;amp;&amp;amp; n == m + 1) || (l &amp;gt;= m &amp;amp;&amp;amp; n == l + 1)] avlt(x, n)&lt;/code&gt;です。やたら長いですね。&lt;/p&gt;
-
-&lt;p&gt;全体を載せると、&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun create{
-  l, m: nat |
-  l + 1 == m ||
-  l == m + 1 ||
-  l == m
-  } (l: avlt(l), v: int, r: avlt(m)): [n: nat | (m &amp;gt; l &amp;amp;&amp;amp; n == m + 1) || (l &amp;gt;= m &amp;amp;&amp;amp; n == l + 1)] avlt(n) = let
-  val hl = height l
-  val hr = height r
-in
-  if hl &amp;gt;= hr
-  then Node(l, v, r, hl + 1)
-  else Node(l, v, r, hr + 1)
-end
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;になります。&lt;/p&gt;
-
-&lt;h2 id=&#34;rotate:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;&lt;code&gt;rotate&lt;/code&gt;&lt;/h2&gt;
-
-&lt;p&gt;OCamlのSetでは1まとめに&lt;code&gt;bal&lt;/code&gt;としていますが、条件分岐が多すぎて読みづらいので&lt;code&gt;right&lt;/code&gt;と&lt;code&gt;left&lt;/code&gt;に分離することにします。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;rotate_xxx&lt;/code&gt;は、左右で高さがちょうど2違う木と値を受け取って、バランスのとれた木を作って返す関数です。
-&lt;code&gt;rotate_right&lt;/code&gt;なら左の木が右の木より2高い木を受け取って上手い具合に木の付け替えをして新たな木を返します。&lt;/p&gt;
-
-&lt;p&gt;返り値の木は左の木と同じ高さかあるいはそれより1高い木です。&lt;/p&gt;
-
-&lt;p&gt;そろそろ慣れてきたと思うので型までを一気に書きます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun rotate_right{hl, hr: nat |
-  hl == hr + 2
-}(l: avlt(hl), v: int, r: avlt(hr)): [n: nat| n == hl || n == hl + 1] avlt(n) = ...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;さて、さらに左側の木の左右の高さでも場合分けが必要になるのでまずは色々バラします。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun rotate_right{hl, hr: nat |
-  hl == hr + 2
-}(l: avlt(hl), v: int, r: avlt(hr)): [n: nat| n == hl || n == hl + 1] avlt(n) = let
-  val+ Node(ll, lv, lr, _) = l
-  val hll = height ll
-  val hlr = height lr
-in
-  ...
-end
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;さて、ここが一番面白い所です。&lt;code&gt;val+ Node(ll, lv, lr, _) = l&lt;/code&gt;に注目して下さい。 OCamlでは&lt;code&gt;match l with Empty -&amp;gt; invalid_arg &amp;quot;Set.bal&amp;quot; | Node (ll, lv, lr, _) -&amp;gt; ...&lt;/code&gt;となっていた部分です。
-型制約から、&lt;code&gt;l&lt;/code&gt;は高さ2以上の木であることが分かっているので&lt;code&gt;Empty&lt;/code&gt;でないことが保証されます。なので &lt;strong&gt;&lt;code&gt;Node&lt;/code&gt;だけで網羅出来ているとコンパイラが理解してくれ&lt;/strong&gt; ます。マッチが1節しかないので&lt;code&gt;val&lt;/code&gt;のパターンマッチで代用出来ますね。
-&lt;code&gt;val+&lt;/code&gt;は&lt;code&gt;case+&lt;/code&gt;と同じく網羅性検査に落ちるとコンパイルエラーになるバージョンの&lt;code&gt;val&lt;/code&gt;です。&lt;/p&gt;
-
-&lt;p&gt;残りの実装をまとめると、こうです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun rotate_right{hl, hr: nat |
-  hl == hr + 2
-}(l: avlt(hl), v: int, r: avlt(hr)): [n: nat| n == hl || n == hl + 1] avlt(n) = let
-  val+ Node(ll, lv, lr, _) = l
-  val hll = height ll
-  val hlr = height lr
-in
-  if  hll &amp;gt;= hlr
-  then create(ll, lv, create(lr, v, r))
-  else let
-       val+ Node(lrl, lrv, lrr, _) =  lr
-  in
-    create(create(ll, lv, lrl), lrv, create(lrr, v, r))
-  end
-end
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;rotate_left&lt;/code&gt;はこうです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun rotate_left{hl, hr: nat |
-  hl + 2 == hr
-}(l: avlt(hl), v: int, r: avlt(hr)): [n: nat| n == hr || n == hr + 1] avlt(n) = let
-  val+ Node(rl, rv, rr, _) = r
-  val hrl = height rl
-  val hrr = height rr
-in
-  if  hrr &amp;gt;= hrl
-  then create(create(l, v, rl), rv, rr)
-  else let
-    val+ Node(rll, rlv, rlr, _) =  rl
-  in
-    create(create(l, v, rll), rlv, create(rlr, rv, rr))
-  end
-end
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;bal:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;&lt;code&gt;bal&lt;/code&gt;&lt;/h2&gt;
-
-&lt;p&gt;&lt;code&gt;rotate_right&lt;/code&gt;, &lt;code&gt;rotate_left&lt;/code&gt;, &lt;code&gt;create&lt;/code&gt;を1まとめにして左右の高さの差が高々2の2つの木と値を受け取ってバランスのとれた木を作って返す&lt;code&gt;bal&lt;/code&gt;を作りましょう。&lt;/p&gt;
-
-&lt;p&gt;型がエグいことになります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun bal{hl, hr: nat |
-  ~2 &amp;lt;= hl - hr  &amp;amp;&amp;amp; hl - hr &amp;lt;= 2
-}(l: avlt(hl), v: int, r: avlt(hr)): [n: nat|
- (hl == hr - 2 &amp;amp;&amp;amp; n == hr    ) ||
- (hl == hr - 2 &amp;amp;&amp;amp; n == hr + 1) ||
- (hl == hr - 1 &amp;amp;&amp;amp; n == hr + 1) ||
- (hl == hr     &amp;amp;&amp;amp; n == hl + 1) ||
- (hl == hr + 1 &amp;amp;&amp;amp; n == hl + 1) ||
- (hl == hr + 2 &amp;amp;&amp;amp; n == hl + 1) ||
- (hl == hr + 2 &amp;amp;&amp;amp; n == hl    )
-] avlt(n) = let
-  val hl = height l
-  val hr = height r
-in
-  if hl = hr + 2
-  then rotate_right(l, v, r)
-  else if hl = hr - 2
-  then rotate_left(l, v, r)
-  else create(l, v, r)
-end
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;cmp:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;&lt;code&gt;cmp&lt;/code&gt;&lt;/h2&gt;
-
-&lt;p&gt;さて、本来のOCamlのSetはファンクタで出来てますがATS2には原始的なファンクタしかないのでファンクタを使わずにこれまで実装してきました。
-あまりよろしくありませんが&lt;code&gt;cmp&lt;/code&gt;もベタっと実装してしまいましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun cmp(x: int, y: int): int = x - y
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;empty-singleton:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;&lt;code&gt;empty&lt;/code&gt;, &lt;code&gt;singleton&lt;/code&gt;&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun empty(): avlt(0) = Empty()
-fun singleton(x: int): avlt(1) = Node(Empty, x, Empty, 1)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;insert:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;&lt;code&gt;insert&lt;/code&gt;&lt;/h2&gt;
-
-&lt;p&gt;ここまで辿りついたらもう難しいところはありません。&lt;code&gt;insert&lt;/code&gt;した結果、木の高さが変わらないか1増えるだけです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun insert{m: nat}(x: int, tree: avlt(m)): [n: nat | n == m || n == m + 1]avlt(n) =
-  case+ tree of
-  | Empty () =&amp;gt; singleton(x)
-  | t as Node(l, v, r, _) =&amp;gt; let
-    val c = cmp(x, v)
-  in
-    if c = 0 then t
-    else if c &amp;lt; 0
-    then bal(insert(x, l), v, r)
-    else bal(l, v, insert(x, r))
-  end
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;mem:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;&lt;code&gt;mem&lt;/code&gt;&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;fun mem{m: nat}(x: int, tree: avlt(m)): bool =
-  case+ tree of
-  | Empty () =&amp;gt; false
-  | Node(l, v, r, _) =&amp;gt; let
-    val c = cmp(x, v)
-  in
-    if c = 0
-    then true
-    else if c &amp;lt; 0
-    then mem(x, r)
-    else mem(x, l)
-  end
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;遊ぶ:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;遊ぶ&lt;/h1&gt;
-
-&lt;p&gt;さて、少しばかり遊んでみましょう&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-ats2&#34;&gt;
-implement
-main0 () =  {
-  val tree = Empty
-  val tree = insert(1, tree)
-  val tree = insert(2, tree)
-  val tree = insert(4, tree)
-  val b = mem(2, tree)
-  val c = mem(3, tree)
-  val () = fprintln!(stdout_ref, b)
-  val () = fprintln!(stdout_ref, c)
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これまでのファイルを&lt;code&gt;avlset_int.dat&lt;/code&gt;に保存して、以下のようにコンパイル/実行します。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ patscc avlset.dats -DATS_MEMALLOC_LIBC
-$ ./a.out
-true
-false
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ちゃんと動いているようです。(GCをリンクしてないのでメモリリークしてる気がしますが、GCのリンクの仕方が分からなかったのでこのままにします。)&lt;/p&gt;
-
-&lt;p&gt;追記: GCのリンクの仕方を教えてもらいました。&lt;/p&gt;
-
-&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-conversation=&#34;none&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;&lt;a href=&#34;https://twitter.com/blackenedgold&#34;&gt;@blackenedgold&lt;/a&gt; GC付きコンパイルには -DATS_MEMALLOC_GCBDW -lgc を使うようです。僕も今知りました。。。 / master · githwxi/ATS-Postiats-contrib &lt;a href=&#34;https://t.co/4DPotHeUJ1&#34;&gt;https://t.co/4DPotHeUJ1&lt;/a&gt;&lt;/p&gt;&amp;mdash; Myu-Myu- ATS-tan! (@masterq_mogumog) &lt;a href=&#34;https://twitter.com/masterq_mogumog/status/682142334704717824&#34;&gt;2015, 12月 30&lt;/a&gt;&lt;/blockquote&gt;
-&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
-
-&lt;h1 id=&#34;まとめ:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;まとめ&lt;/h1&gt;
-
-&lt;p&gt;依存型を持つATS2を使うことでAVL木の高さに関する要件を必ず満たす木を作ることが出来ました。
-これは変な入力がないことを保証するばかりでなく、自らの実装がバグっていないことの確認にも使えます。
-また、&lt;code&gt;val+&lt;/code&gt;の例で見た通り、パターンマッチについてもより厳格な検査が出来るので無意味なコードを書かなくて済みました。&lt;/p&gt;
-
-&lt;p&gt;今回のコードは&lt;a href=&#34;https://github.com/KeenS/avlset&#34;&gt;こちら&lt;/a&gt;に置いておきます。また、関数テンプレートを使ったよりジェネリックな実装もあります。&lt;/p&gt;
-
-&lt;h1 id=&#34;ノート:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;ノート&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;今回型レベルで保証したのは高さに対する要件だけでした。
-「ノードの左側の木にはそのノードの保持する値より小さい値しか入っていない」「一度&lt;code&gt;insert&lt;/code&gt;した値は&lt;code&gt;mem&lt;/code&gt;すると&lt;code&gt;true&lt;/code&gt;が返ってくる」などの要件については無保証のままです。
-実はATS2には&lt;a href=&#34;http://jats-ug.metasepi.org/doc/ATS2/INT2PROGINATS/c2849.html&#34;&gt;定理証明器&lt;/a&gt;も付いており、そのような振舞に関しても保証出来ます。&lt;/li&gt;
-&lt;li&gt;ATS2には依存型の他にも&lt;a href=&#34;http://jats-ug.metasepi.org/doc/ATS2/INT2PROGINATS/p3301.html&#34;&gt;線形型&lt;/a&gt;を持っていて、GCに頼らないメモリ管理が可能です。
-今回のコードも線形型を使ってメモリリークしないように出来るでしょう。&lt;/li&gt;
-&lt;li&gt;関数テンプレートを使ったAVL木の実装には若干危い点があります。関数テンプレートは実装をアドホックに変更出来るので
-比較関数を差し替えれてしまいます。&lt;code&gt;cmp(x, y) = x - y&lt;/code&gt;で木を作った後に&lt;code&gt;cmp(x, y) = y - x&lt;/code&gt;にしてさらに要素を挿入したら大惨事になるでしょう。
-そこまで気にするようなら&lt;a href=&#34;http://jats-ug.metasepi.org/doc/ATS2/INT2PROGINATS/x1974.html&#34;&gt;ファンクタ&lt;/a&gt;を使うべきです。&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h1 id=&#34;その他:a9fa379dc667a22ee7846d6b4d72d2e0&#34;&gt;その他&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;CoqやAgdaのように依存型も定理証明器もある言語がありますが、それらと違ってATS2は「汎用プログラミング言語に表現力の高い依存型を付けて、ついでに定理証明器もついてる」くらいです。
-本格的な証明には向かない一方汎用プログラミングにはATS2の方が向いているでしょう。&lt;/li&gt;
-&lt;li&gt;しかしCoqと似ている面もあり、ATS2の世界で依存型や線形型、証明などで強い保証を付けた後は一旦Cのコードをエクストラクトして、それをコンパイルしています。&lt;/li&gt;
-&lt;li&gt;Cにエクストラクトされるということで、ATS2はCとの相互連携が出来ます。&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;さて、ATS2には心躍る特徴がたくさんあります。依存型で実行時検査をコンパイル時検査に持ち上げ、定理証明器でバグも潰せて、
-線形型でボックス/アンボックデータの扱いやGCに頼らないリソース管理やデータ競合の回避が出来、
-並列プログラミングもサポート、低レベルなCのコードを呼べてバイナリサイズも小さいなどなど。&lt;/p&gt;
-
-&lt;p&gt;しかし、これらの機能を得るのにATS2は1つだけ代償を払いました。学習コストです。
-私はCも書きますしSMLも書きます。依存型のあるCoqや線形型より少し弱いアフィン型のあるRustも書いたことがあります。そんな私にもATS2は難解です。
-最近難解な言語として名高くなってきたRustですら足元に及ばないでしょう。&lt;/p&gt;
-
-&lt;p&gt;それでも、急峻な学習曲線の崖をよじ登った先には素晴しい世界が広がっているのです。1つ、修行だと思ってトライしてみてはいかがでしょうか。&lt;/p&gt;
-
-&lt;p&gt;参考: &lt;a href=&#34;http://fumieval.tumblr.com/post/28324791101/%E3%83%97%E3%83%AD%E3%82%B0%E3%83%A9%E3%83%9E%E3%81%AE%E5%8C%BA%E5%88%86&#34;&gt;プログラマの区分&lt;/a&gt;&lt;/p&gt;
 </description>
     </item>
     
