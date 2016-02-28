@@ -108,6 +108,12 @@ title: Common Lispで高速行列演算
 ;; 26,216,000 bytes consed
 ```
 
+2016-02-28 追記:
+
+<blockquote class="twitter-tweet" data-conversation="none" data-lang="ja"><p lang="ja" dir="ltr"><a href="https://twitter.com/blackenedgold">@blackenedgold</a> キャッシュのところ、resultのインデックスにkは使ってないけど、kが進むごとに対象の要素は変化してるはずなので、このキャッシュのしかたはまずいのでは?</p>&mdash; goskevich (@gos_k) <a href="https://twitter.com/gos_k/status/700622885933613056">2016年2月19日</a></blockquote>
+<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+ということでこれは間違ってました。
 
 # ループアンローリング
 
