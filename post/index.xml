@@ -6,8 +6,204 @@
     <description>Recent content in Posts on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Sat, 27 Feb 2016 21:28:16 +0900</lastBuildDate>
+    <lastBuildDate>Sun, 28 Feb 2016 14:40:59 +0900</lastBuildDate>
     <atom:link href="/post/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>RustのHigher-Kinded type Trait</title>
+      <link>/blog/2016/02/28/rustnohigherkinded_type_trait</link>
+      <pubDate>Sun, 28 Feb 2016 14:40:59 +0900</pubDate>
+      
+      <guid>/blog/2016/02/28/rustnohigherkinded_type_trait</guid>
+      <description>
+
+&lt;p&gt;κeenです。少し前の話になりますがRustの関連型を駆使してHigher Kinded type Trait（高階型トレイト）を実現してしまったものが出回ってたのでそれについて。
+本来RustはHKTをサポートしていませんが不思議なことに実装出来てしまっているのです。&lt;/p&gt;
+
+&lt;p&gt;HKTについて微塵も知らない方にも分かるように解説していきます。&lt;/p&gt;
+
+&lt;h1 id=&#34;map-可能なトレイト:b27135531fb7377c493eecfb210d7b92&#34;&gt;&lt;code&gt;map&lt;/code&gt; 可能なトレイト&lt;/h1&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://doc.rust-lang.org/core/option/enum.Option.html#method.map&#34;&gt;&lt;code&gt;Option&lt;/code&gt;&lt;/a&gt;、&lt;a href=&#34;https://doc.rust-lang.org/core/result/enum.Result.html#method.map&#34;&gt;&lt;code&gt;Result&lt;/code&gt;&lt;/a&gt;、etc 色々なトレイトが &lt;code&gt;map&lt;/code&gt; メソッドを実装しています。&lt;/p&gt;
+
+&lt;p&gt;それぞれ型シグネチャを抜き出してみましょう。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Option: &lt;code&gt;map&amp;lt;U, F: FnOnce(T) -&amp;gt; U&amp;gt;(self, f: F) -&amp;gt; Option&amp;lt;U&amp;gt;&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;Result: &lt;code&gt;map&amp;lt;U, F: FnOnce(T) -&amp;gt; U&amp;gt;(self, op: F) -&amp;gt; Result&amp;lt;U, E&amp;gt;&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;驚く程似てますね。これを抽象化して「&lt;code&gt;map&lt;/code&gt;メソッドを持つ」トレイトを定義したくなるかもしれません。
+しかしそれは簡単には書けません。何故なら&lt;code&gt;map&lt;/code&gt;はコンテナ型、つまり「型引数を取る型」に定義される型だからです。
+現在のRustは「型引数を取る型」に対するジェネリクスはサポートしていません。もし書こうとするとこのようになるでしょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Mappable&amp;lt;M&amp;lt;_&amp;gt;, T&amp;gt; where Self: M&amp;lt;T&amp;gt; {
+  fn map&amp;lt;U, F: FunOnce(T) -&amp;gt; U&amp;gt;(self, f: F) -&amp;gt; M&amp;lt;U&amp;gt;;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;M&amp;lt;_&amp;gt;&lt;/code&gt; なんて型パラメータを書くことは出来ませんし&lt;code&gt;M&amp;lt;T&amp;gt;&lt;/code&gt;や&lt;code&gt;M&amp;lt;U&amp;gt;&lt;/code&gt;も無理があります。残念ですね。&lt;/p&gt;
+
+&lt;h1 id=&#34;iterator-との違い:b27135531fb7377c493eecfb210d7b92&#34;&gt;&lt;code&gt;Iterator&lt;/code&gt; との違い&lt;/h1&gt;
+
+&lt;p&gt;さて、&lt;code&gt;Iterator&lt;/code&gt;にも&lt;a href=&#34;https://doc.rust-lang.org/std/iter/trait.Iterator.html#method.map&#34;&gt;&lt;code&gt;map&lt;/code&gt;&lt;/a&gt;はあります。
+これこそが求めている「&lt;code&gt;.map&lt;/code&gt; 可能なトレイト」ではないのでしょうか。
+これはおおよそは合っているのですがやや期待とは違う動作をします。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;Option&lt;/code&gt;の&lt;code&gt;map&lt;/code&gt;は不自由なく使えます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let o = Some(1);
+let o = o.map(|i| i + 1);
+println!(&amp;quot;{:?}&amp;quot;, o);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;一方、&lt;code&gt;Vec&lt;/code&gt;は全く同じような書き方は出来ません。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let v = vec![1];
+let v = v.map(|i| i + 1);
+println!(&amp;quot;{:?}&amp;quot;, v);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;anon&amp;gt;:3:11: 3:25 error: no method named `map` found for type `collections::vec::Vec&amp;lt;_&amp;gt;` in the current scope
+&amp;lt;anon&amp;gt;:3 let v = v.map(|i| i + 1);
+                   ^~~~~~~~~~~~~~
+&amp;lt;anon&amp;gt;:3:11: 3:25 note: the method `map` exists but the following trait bounds were not satisfied: `collections::vec::Vec&amp;lt;_&amp;gt; : core::iter::Iterator`, `[_] : core::iter::Iterator`
+error: aborting due to previous error
+playpen: application terminated with error code 101
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;正しくは、こうです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let v = vec![1];
+let v: Vec&amp;lt;i32&amp;gt; = v.iter().map(|i| i + 1).collect();
+println!(&amp;quot;{:?}&amp;quot;, v);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;色々実装上のノイズが乗っているのでやや例として不適切だったかもしれませんが、注目して欲しい部分はここです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let v: Vec&amp;lt;i32&amp;gt; = ...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;Vec&lt;/code&gt;から取り出したイテレータなのに&lt;code&gt;Vec&lt;/code&gt;に戻すためにわざわざ型アノテーションを書く必要があります。&lt;/p&gt;
+
+&lt;p&gt;どうしてこうなるかというとイテレータを取り出した時点で元のコンテナ型が&lt;code&gt;Vec&amp;lt;&amp;gt;&lt;/code&gt;であるという情報が失われているからです。
+これはRustの型システム上どうしても仕方のないことで、なので恐らくRustは「&lt;code&gt;map&lt;/code&gt;可能なトレイト」などを定義せず、コレクションの操作を&lt;code&gt;Iterator&lt;/code&gt;に集約しているんだと思います。
+この方式はある程度は上手くいきますが&lt;code&gt;Option&lt;/code&gt;や&lt;code&gt;Result&lt;/code&gt;はIteratorになれはしてもIteratorからは作れない(2要素のイテレータからOptionは作れない)ので独自でmapメソッドを持つことになってしまいます。&lt;/p&gt;
+
+&lt;h1 id=&#34;map-可能なトレイト-again:b27135531fb7377c493eecfb210d7b92&#34;&gt;&lt;code&gt;map&lt;/code&gt; 可能なトレイト again&lt;/h1&gt;
+
+&lt;p&gt;先程そういうのは作れないと言ったばかりですが実はどうにかする方法がなくもないです。先程の(仮想の)定義を思い出して下さい。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Mappable&amp;lt;M&amp;lt;_&amp;gt;, T&amp;gt; where Self: M&amp;lt;T&amp;gt; {
+  fn map&amp;lt;U, F: FunOnce(T) -&amp;gt; U&amp;gt;(self, f: F) -&amp;gt; M&amp;lt;U&amp;gt;;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ジェネリクスになっている登場人物は&lt;code&gt;M&amp;lt;_&amp;gt;&lt;/code&gt;、&lt;code&gt;U&lt;/code&gt;、&lt;code&gt;T&lt;/code&gt; ですね。しかし&lt;code&gt;M&amp;lt;_&amp;gt;&lt;/code&gt;は実際にはそのまま使われいる訳ではなく&lt;code&gt;M&amp;lt;T&amp;gt;&lt;/code&gt;または&lt;code&gt;M&amp;lt;U&amp;gt;&lt;/code&gt;の形でのみ使われています。
+では、&lt;code&gt;M&amp;lt;T&amp;gt;&lt;/code&gt;、&lt;code&gt;M&amp;lt;U&amp;gt;&lt;/code&gt;をパラメータに取るようにしてはどうでしょうか。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Mappable&amp;lt;T, MT&amp;gt; where Self: MT {
+  fn map&amp;lt;U, MU, F: FunOnce(T) -&amp;gt; U&amp;gt;(self, f: F) -&amp;gt; MU;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これで出来…てません。これは欲しい、正しいもの &lt;em&gt;も&lt;/em&gt; 作れてはいるのですが正しくないものも含んでいます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;impl &amp;lt;T, MT: Option&amp;lt;T&amp;gt; Mappable&amp;lt;MT, T&amp;gt;  for Option&amp;lt;T&amp;gt; {
+  fn map&amp;lt;U, MU, F: FunOnce(T) -&amp;gt; U&amp;gt;(self, f: F) -&amp;gt; MU {...}
+}
+
+let r: Result&amp;lt;String, ()&amp;gt; = Some(1).map(|i| i.to_string());
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;Option&lt;/code&gt; に対する&lt;code&gt;map&lt;/code&gt;を&lt;code&gt;Result&lt;/code&gt;で受けようとしています。
+これはもちろんおかしなことですが上記の型定義に従うとこういうことが出来てしまいます。
+もうちょっというと上のトレイトの定義はこういう「おかしなこと」が起こるような実装をしろ、と言っている訳で、実際には実装出来ません。&lt;/p&gt;
+
+&lt;p&gt;本来なら自由パラメータが3つなのに4つの自由パラメータを取ってしまったので不整合が起きる訳です。
+では、自由パラメータを3つにして1つを従属パラメータにしてはどうでしょうか。それは&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/associated-types.html&#34;&gt;関連型&lt;/a&gt;を使えばRustでも出来ます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Mappable&amp;lt;T, U, MT&amp;gt; where Self: MT {
+  type MU;
+  fn map&amp;lt;F: FunOnce(T) -&amp;gt; U&amp;gt;(self, f: F) -&amp;gt; MU;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;実は、これである程度上手くいきます。
+もちろん、実際に&lt;code&gt;M&amp;lt;_&amp;gt;&lt;/code&gt;を取れるのに比べると不自由で下手をするとバグる(MUを無関係な型に定義できてしまう)可能性があるのですが、先程の4パラメータの時と比べて
+トレイトが定義された時点で返す型は決まっているのでちゃんと実装出来ますし、使う時に不整合が起きることもありません。&lt;/p&gt;
+
+&lt;h1 id=&#34;hkt:b27135531fb7377c493eecfb210d7b92&#34;&gt;HKT&lt;/h1&gt;
+
+&lt;p&gt;さて、先の&lt;code&gt;Mappable&lt;/code&gt;の仮想定義、&lt;code&gt;map&lt;/code&gt;関数を除いて汎用的にするとこうなりますね。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait HKT&amp;lt;T, U, MT&amp;gt; where Self: MT {
+  type MU;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;Self: MT&lt;/code&gt; というアノテーションをつけてますが実際には使えません。&lt;code&gt;impl&lt;/code&gt;を書くときに気をつけて実装するしかないです。なのでこうなります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait HKT&amp;lt;T, U&amp;gt; {
+  type MU;
+}
+
+impl &amp;lt;T, U&amp;gt; HKT&amp;lt;T, U&amp;gt; for Option&amp;lt;T&amp;gt; {
+  type MU = Option&amp;lt;U&amp;gt;;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;さて、こう書くとするとこういうことも出来てしまいます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait HKT&amp;lt;T, U&amp;gt; {
+  type MU;
+}
+
+impl &amp;lt;S, T, U&amp;gt; HKT&amp;lt;T, U&amp;gt; for Option&amp;lt;S&amp;gt; {
+  type MU = Option&amp;lt;U&amp;gt;;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;T&lt;/code&gt;とは独立な&lt;code&gt;S&lt;/code&gt;に対するコンテナに対して実装できてしまうのです。「実装するときに気をつける」とはいいましたが制約を書けるなら書いた方がいいです。こうしましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait HKT&amp;lt;U&amp;gt; {
+  type T;
+  type MU;
+}
+
+impl &amp;lt;T, U&amp;gt; HKT&amp;lt;U&amp;gt; for Option&amp;lt;T&amp;gt; {
+  type T = T;
+  type MU = Option&amp;lt;U&amp;gt;;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これで冒頭に紹介したHKTの実装になりました。&lt;/p&gt;
+
+&lt;p&gt;逆にこのHKTの実装からMappableを定義するには、こうです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Mappable&amp;lt;U&amp;gt;: HKT&amp;lt;U&amp;gt; {
+  fn map&amp;lt;F: FunOnce(Self::T) -&amp;gt; U&amp;gt;(self, f: F) -&amp;gt; Self::MU;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;hktについてもっと:b27135531fb7377c493eecfb210d7b92&#34;&gt;HKTについてもっと&lt;/h1&gt;
+
+&lt;p&gt;ようやく話題のHKTの元実装です。こちら。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://gist.github.com/14427/af90a21b917d2892eace&#34;&gt;Higher-kinded type trait&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;ずいぶんとモナモナしいですがやはり高階型を使った一番実績のある構造はこのあたりでしょう。&lt;/p&gt;
+
+&lt;p&gt;こういうのを扱えるとプログラミングの幅が広がりますね。&lt;/p&gt;
+
+&lt;h1 id=&#34;ノート:b27135531fb7377c493eecfb210d7b92&#34;&gt;ノート&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;モナドの話題が出ましたがRustでモナドを実現するには高階型だけでなく複数ある関数トレイトのどれを選ぶかだとかその他諸々の問題を扱う必要があるようです。
+&lt;a href=&#34;https://m4rw3r.github.io/rust-and-monad-trait/&#34;&gt;Rust and the Monad trait - Not just higher kinded types · m4rw3r&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
     
     <item>
       <title>druidというリアルタイムデータ分析ツールを知った</title>
@@ -2075,91 +2271,6 @@ Lispみたくそれっぽい見た目と挙動をしていたらPrologを主張�
 &lt;hr /&gt;
 
 &lt;p&gt;思ったより言語の話題が多かった。&lt;/p&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>ATS2の観が整理出来た</title>
-      <link>/blog/2016/01/01/ats2nokangaseiridekita</link>
-      <pubDate>Fri, 01 Jan 2016 18:52:56 +0900</pubDate>
-      
-      <guid>/blog/2016/01/01/ats2nokangaseiridekita</guid>
-      <description>
-
-&lt;p&gt;κeenです。ATS2には3つの世界があります。動的な世界、静的な世界、証明の世界。
-&lt;a href=&#34;//KeenS.github.io/blog/2015/12/29/ats2noizongatawotsukatteavlki/&#34;&gt;前回&lt;/a&gt;の記事では静的な世界を色々扱ってみました。
-今回は証明の世界である観について少し。&lt;/p&gt;
-
-&lt;p&gt;2016-1-2: いくつか誤植を直しました(用語で言えば、 注観→駐観 が正解でした)。&lt;/p&gt;
-
-&lt;h1 id=&#34;観:8a288297483f9c5eb0b6a24b376548e7&#34;&gt;観&lt;/h1&gt;
-
-&lt;p&gt;観(view)は、線形型によるリソース管理をするための仕組みです。
-静的な世界と同様コンパイル時に検査されたらバイナリには現われませんが関数の引数として渡したり観を扱う関数(証明関数)を定義出来たり
-動的な世界と似た部分があります。&lt;/p&gt;
-
-&lt;h1 id=&#34;駐観:8a288297483f9c5eb0b6a24b376548e7&#34;&gt;駐観&lt;/h1&gt;
-
-&lt;p&gt;at-viewの和訳だそうです。これは観の中でも特に特定のアドレスにデータが存在することの証明を表わす観です。
-線形型の主な管理対象がメモリなので特別扱いされているのでしょう。&lt;/p&gt;
-
-&lt;h1 id=&#34;抽象観:8a288297483f9c5eb0b6a24b376548e7&#34;&gt;抽象観&lt;/h1&gt;
-
-&lt;p&gt;任意のリソース管理に使っていい観。これ自体は実体を持たないので後述のデータ観などで実体を与える必要があります。
-ドキュメントではロックの管理だとかに使う例が載っていました。&lt;/p&gt;
-
-&lt;h1 id=&#34;観型:8a288297483f9c5eb0b6a24b376548e7&#34;&gt;観型&lt;/h1&gt;
-
-&lt;p&gt;ただ単に観と型をくっつけたものです。「あると便利なのは分かるけど…」と思ってましたが、だんだん理解が追いついてきました。&lt;/p&gt;
-
-&lt;p&gt;1つには観と型を1つの記法で表わせるので記述が楽になる。もう1つにはある型に対して必ず線形型によるリスース管理がされることを保証出来る。&lt;/p&gt;
-
-&lt;p&gt;もう1つの用途が思い浮かんだらなるほど、となりました。&lt;/p&gt;
-
-&lt;p&gt;こちらは駐観に限らず任意の観と任意の型を組み合わせれるようです。&lt;/p&gt;
-
-&lt;h1 id=&#34;データ観:8a288297483f9c5eb0b6a24b376548e7&#34;&gt;データ観&lt;/h1&gt;
-
-&lt;p&gt;動的な世界でのデータ型のように、静的な世界でのデータ種のように、証明の世界にもデータ観というものがあります。&lt;/p&gt;
-
-&lt;p&gt;例えば、あるかもしれないしないかもしれないリソースを表わすのにオプショナル観が使えそうだ、など。&lt;/p&gt;
-
-&lt;p&gt;これ自体は新しい観を作るためのものです。&lt;/p&gt;
-
-&lt;h1 id=&#34;データ観型:8a288297483f9c5eb0b6a24b376548e7&#34;&gt;データ観型&lt;/h1&gt;
-
-&lt;p&gt;これは動的な世界と証明の世界両方に跨るものです。おおざっぱにはデータ型とデータ観を組み合わせたものです。
-つまり、データ型であり、データ観であり、両方合わさってるので観型でもあります。&lt;/p&gt;
-
-&lt;p&gt;「データ型を観で管理しようとしたら同じようなデータ観を作ることになるしまとめて作れたら嬉しいよね」が一番分かりやすい説明でしょうか。&lt;/p&gt;
-
-&lt;p&gt;データ観型専用のシンタックスなどもあるようなので単なるシンタックスシュガーではなさそうです。&lt;/p&gt;
-
-&lt;p&gt;こちらは駐観というかメモリ管理の観が割り当てられるみたいです。&lt;/p&gt;
-
-&lt;hr /&gt;
-
-&lt;p&gt;Rustと比べると随分リッチなリソース管理が出来ますね。&lt;/p&gt;
-
-&lt;h1 id=&#34;まだ良く分かってない部分:8a288297483f9c5eb0b6a24b376548e7&#34;&gt;まだ良く分かってない部分&lt;/h1&gt;
-
-&lt;p&gt;ATS2にはprop（命題）というものもあります。「観はpropの線形バージョン」と書いてあるのですがどう分けられているのでしょうか。
-例えば観型にpropは渡せなそうな気がしますが、証明関数には命題も観も渡せそうな気がします。&lt;/p&gt;
-
-&lt;p&gt;微妙に命題と観が共存していたり排他的であったりします。動的な世界のdatatyp, 静的な世界のdatasort, 証明の世界のdataviewという理解でいるとdatapropの居場所がなくなります。&lt;/p&gt;
-
-&lt;p&gt;今のところ、証明の世界も普通の命題であるpropと線形の命題であるviewに分かれていて、
-それらはsortが違うので一部では排他的であり、どちらのsortに対しても対応しているものもあるので共存してるようにも見えるという仮説を立てています。&lt;/p&gt;
-
-&lt;p&gt;ドキュメントにも種viewや種propという記述があるので種がsortが違うのは正しそうです。&lt;/p&gt;
-
-&lt;p&gt;しかしそうするとdatasortとかで新しく作った種はどこの世界に住むことになるんでしょうか。静的な世界?証明の世界に住む新しい種を定義出来ない?&lt;/p&gt;
-
-&lt;p&gt;ビルトインの種viewと種propの静的な項(の静的な項)だけが証明の世界の住人になれる?&lt;/p&gt;
-
-&lt;p&gt;datasortとかで作った新しい種は依存型や依存命題(?)、依存観(?)で使うためにある?&lt;/p&gt;
-
-&lt;p&gt;分からないことが多いですね。もう少しATS2の世界の整理をつけたい。&lt;/p&gt;
 </description>
     </item>
     
