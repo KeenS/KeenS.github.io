@@ -6,8 +6,154 @@
     <description>Recent content on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Tue, 01 Mar 2016 22:49:23 +0900</lastBuildDate>
+    <lastBuildDate>Tue, 01 Mar 2016 23:32:12 +0900</lastBuildDate>
     <atom:link href="/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Rustのゼロコスト抽象化</title>
+      <link>/blog/2016/03/01/rustnozerokosutochuushouka</link>
+      <pubDate>Tue, 01 Mar 2016 23:32:12 +0900</pubDate>
+      
+      <guid>/blog/2016/03/01/rustnozerokosutochuushouka</guid>
+      <description>&lt;p&gt;κeenです。今日Twitter上でのやりとりから少し面白いことが分かったのでそれについて。&lt;/p&gt;
+
+&lt;p&gt;最近1.0が出たKotlinについて、水島さんがツイートしてました。&lt;/p&gt;
+
+&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;nullableに対してはmapとかの高階関数を一切使えないのが痛い。 ?. でカバーできるケースは一部だけだ。zero-overhead null-safetyと唄っとるが、代わりにnullチェックお化けになるわけで、どこがzero-overheadだ &lt;a href=&#34;https://twitter.com/hashtag/kotlin_dis?src=hash&#34;&gt;#kotlin_dis&lt;/a&gt;&lt;/p&gt;&amp;mdash; 水島 宏太(Klassic作成中) (@kmizu) &lt;a href=&#34;https://twitter.com/kmizu/status/704453235277324288&#34;&gt;2016年2月29日&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;p&gt;それについて私が無関係なツイートを。&lt;/p&gt;
+
+&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;全く無関係だけどRustはOptionみたいな0-1の型をnull or valueに最適化するそうな。これこそがゼロコスト抽象かな &lt;a href=&#34;https://t.co/5Y7cBEyrMe&#34;&gt;https://t.co/5Y7cBEyrMe&lt;/a&gt;&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/704453898996547584&#34;&gt;2016年2月29日&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;p&gt;これはRustのnomiconに書かれています。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://doc.rust-lang.org/nomicon/repr-rust.html&#34;&gt;repr(Rust)&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;そうすると水島さんからお返事が。&lt;/p&gt;
+
+&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;&lt;a href=&#34;https://twitter.com/blackenedgold&#34;&gt;@blackenedgold&lt;/a&gt; Rust詳しくないですけど、Optionにmapとかした場合インライン展開されるんですかね？だとしたらとても理想的。&lt;/p&gt;&amp;mdash; 水島 宏太(Klassic作成中) (@kmizu) &lt;a href=&#34;https://twitter.com/kmizu/status/704455185125408768&#34;&gt;2016年2月29日&lt;/a&gt;&lt;/blockquote&gt;
+&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
+
+&lt;p&gt;確かにそうなると面白そう。ということで少し調べてみました。&lt;/p&gt;
+
+&lt;p&gt;まず、上記の話をまとめると、Rustの&lt;code&gt;Option&lt;/code&gt;に対する&lt;code&gt;map&lt;/code&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub fn map&amp;lt;U, F: FnOnce(T) -&amp;gt; U&amp;gt;(self, f: F) -&amp;gt; Option&amp;lt;U&amp;gt; {
+    match self {
+        Some(x) =&amp;gt; Some(f(x)),
+        None =&amp;gt; None,
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;は&lt;code&gt;x&lt;/code&gt;がポインタ型だった時に以下と同値です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub fn map&amp;lt;U, F: FnOnce(T) -&amp;gt; U&amp;gt;(self, f: F) -&amp;gt; Option&amp;lt;U&amp;gt; {
+    if (self != nullPointer ) {
+        f(x)
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;さらに、&lt;a href=&#34;https://github.com/rust-lang/rust/blob/master/src/libcore/option.rs#L386&#34;&gt;&lt;code&gt;map&lt;/code&gt;はインライン宣言されている&lt;/a&gt;ので以下のコード&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let opt = Some(&amp;amp;v);
+opt.map(|x| x + 1);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;は以下と同値です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let opt = &amp;amp;v;
+if (opt != nullPointer) {
+  (|x| x + 1)(opt)
+};
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;さて、ここで無名関数がどうコンパイルされるかという問題が出てきますが、&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/closures.html&#34;&gt;クロージャのドキュメント&lt;/a&gt;によるとこういう雰囲気のコードになるらしいです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let opt = &amp;amp;v;
+struct AnonymousType;
+
+impl FnOnce&amp;lt;(&amp;amp;i32)&amp;gt; for AnonymousType {
+    type Output = i32;
+    fn call_once(self, args: (&amp;amp;i32)) -&amp;gt; Self::Output {
+        args + 1
+    }
+}
+
+if (opt != nullPointer) {
+    let fn_once: FnOnce = AnonymousType;
+    fn_once.call_once(opt)
+};
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;思ったよりも複雑…。さて、問題は&lt;code&gt;let fn_once: FnOnce = AnonymousType;&lt;/code&gt;としているので一旦元の無名関数の情報が抜けてしまいます。
+となるとコンパイル時に具体的なメソッドを決定出来ないので&lt;code&gt;fn_once.call_once(opt);&lt;/code&gt;は以下のような雰囲気のコードになってしまいます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let call_once_fn = fn_once.get_call_once_fn();
+call_once_fn(opt);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;毎回呼び出すべき関数の取得が入るのは面倒ですね。&lt;/p&gt;
+
+&lt;p&gt;しかしなががらクロージャのドキュメントをよく読むと無名関数は静的ディスパッチされると書いてあります。つまり、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let call_once_fn = fn_once.get_call_once_fn();
+call_once_fn(opt);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と2段ではなく&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;the_call_once_fn_of_AnonymousType(opt);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;とコンパイル時に畳み込まれ、1段で済みます。&lt;/p&gt;
+
+&lt;p&gt;よって&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let opt = Some(&amp;amp;v);
+opt.map(|x| x + 1);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;は&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn the_call_once_fn_of_AnonymousType(x: &amp;amp;i32) -&amp;gt; i32 {
+    x + 1
+}
+
+
+let opt = &amp;amp;v;
+if (opt != nullPointer) {
+  the_call_once_fn_of_AnonymousType(opt)
+};
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と同値ということです。&lt;/p&gt;
+
+&lt;p&gt;ここからは私の推測ですが、&lt;code&gt;the_call_once_fn_of_AnonymousType&lt;/code&gt;は本体が小さい上に1回しか呼ばれないのでインライン化されるのではないかと思います。
+よってこの推測が正しければ&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let opt = Some(&amp;amp;v);
+opt.map(|x| x + 1);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;は&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let opt = &amp;amp;v;
+if (opt != nullPointer) {
+  opt + 1
+};
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;となる筈です。&lt;/p&gt;
+
+&lt;p&gt;ゼロコスト抽象化すごい!&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>テストについて考えてみた</title>
@@ -2405,134 +2551,6 @@ Akkaに固有の話もあるが大部分はBeamVMを始めとした他のアク�
 
 &lt;p&gt;私も大学生でプログラミングに目覚めて今丁度丸4年。去年の4月からプログラマとして働いているが未だインプットの足りなさをひしひしと感じる。働きながら勉強を続けるが中々時間がとれない。
 時間のある学生の時にもうちょっと効率的にインプットを増やしていたらと思う。そういう後悔をする人を一人でも減らそうと思ってこういう記事を書いてみた。&lt;/p&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>Isabelleに入門した</title>
-      <link>/blog/2016/01/12/isabelleninyuumonshita</link>
-      <pubDate>Tue, 12 Jan 2016 22:23:45 +0900</pubDate>
-      
-      <guid>/blog/2016/01/12/isabelleninyuumonshita</guid>
-      <description>
-
-&lt;p&gt;κeenです。連休中にIsabelleを少しばかり触ったのでその時のまとめを。&lt;/p&gt;
-
-&lt;h1 id=&#34;isabelleって:6b8d46c70d8b531bde7fec53a1ad6c6a&#34;&gt;Isabelleって？&lt;/h1&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://isabelle.in.tum.de/&#34;&gt;公式&lt;/a&gt;。定理証明支援系の一つ。SML処理系の1つ、Poly/MLで書かれている。
-どうやらHOL(Higher Order Logic)に焦点を当てているようだが詳しいことは分かっていない。&lt;/p&gt;
-
-&lt;p&gt;あと、Linuxが正式にはGNU/LinuxというようにIsabelleもIsabelle/Isar/HOLと言うべきらしいが、まだよく分かっていない。&lt;/p&gt;
-
-&lt;h1 id=&#34;インストール:6b8d46c70d8b531bde7fec53a1ad6c6a&#34;&gt;インストール&lt;/h1&gt;
-
-&lt;p&gt;公式サイトからダウンロード出来るが、後述のProofGeneralの関係上Isabelle2014をインストールする。&lt;/p&gt;
-
-&lt;h1 id=&#34;エディタ設定:6b8d46c70d8b531bde7fec53a1ad6c6a&#34;&gt;エディタ設定&lt;/h1&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/ProofGeneral/PG&#34;&gt;ProofGeneral&lt;/a&gt;を使う。恐らくGitHub版を使った方がいい。設定は1行&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;(load (expand-file-name &amp;quot;/path/to/ProofGeneral/generic/proof-site&amp;quot;) nil t)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;と書くだけ。多分&lt;code&gt;prettify-symbol-mode&lt;/code&gt;も自動でonになる。(なってなかったらなんか適当に設定しておこう。global-prettify-symbols-modeとかで。)
-Isabelleの古いドキュメントを見てるとX-Symbolsモードなるものが出てくるが、恐らく現在の&lt;code&gt;prettify-symbol-mode&lt;/code&gt;だと思う。&lt;/p&gt;
-
-&lt;h1 id=&#34;はじめる:6b8d46c70d8b531bde7fec53a1ad6c6a&#34;&gt;はじめる&lt;/h1&gt;
-
-&lt;p&gt;&lt;a href=&#34;isabelle.in.tum.de/doc/tutorial.pdf&#34;&gt;この&lt;/a&gt;チュートリアルを進めている。まだ途中。タクティックも&lt;code&gt;tactic_ind&lt;/code&gt;と&lt;code&gt;auto&lt;/code&gt;しか知らない。&lt;/p&gt;
-
-&lt;p&gt;とりあえず拡張子は.thyにしとくとEmacsが認識してくれる。&lt;/p&gt;
-
-&lt;h1 id=&#34;所感:6b8d46c70d8b531bde7fec53a1ad6c6a&#34;&gt;所感&lt;/h1&gt;
-
-&lt;p&gt;Coqを触ったことあるとそれなりにスムーズに入れた。ただしダブルクォートはキモい。
-Coqも3つくらいの言語が混ってるらしいのでその内のGallinaの部分をクォートで囲っている感じなのだろうか。
-クォートの部分はHOLがどうのこうの言ってた気がする。&lt;/p&gt;
-
-&lt;p&gt;まだどんなことが出来るのか分からないのでCoqの方がマシじゃんという感想しかない。&lt;/p&gt;
-
-&lt;h1 id=&#34;困ったところ:6b8d46c70d8b531bde7fec53a1ad6c6a&#34;&gt;困ったところ&lt;/h1&gt;
-
-&lt;p&gt;チュートリアル中に数学記号が出てくる。∀とか∃とか¬とか。断りもなしにソースコード中にも。
-最初、組版の都合上置き換えたのだろうとCoqのようにforall, exists, notと打っていたがエラーになった。じゃあ、とユニコードで打ってみてもエラーになった。
-結局、TeXのようにコマンドを入力するとWYSIWYGのようにシンボルになるらしい。
-さらにややこしいことにEmacsに特定のシーケンスでキーを入力するとそのコマンドを挿入してくれる機能がついている。&lt;/p&gt;
-
-&lt;p&gt;とりあえず今のところ分かっているものをまとめる&lt;/p&gt;
-
-&lt;table&gt;
-&lt;thead&gt;
-&lt;tr&gt;
-&lt;th&gt;見た目&lt;/th&gt;
-&lt;th&gt;Emacsでの入力&lt;/th&gt;
-&lt;th&gt;実際のタグ&lt;/th&gt;
-&lt;/tr&gt;
-&lt;/thead&gt;
-
-&lt;tbody&gt;
-&lt;tr&gt;
-&lt;td&gt;∀&lt;/td&gt;
-&lt;td&gt;\forall&lt;/td&gt;
-&lt;td&gt;&amp;lt;forall&amp;gt;&lt;/td&gt;
-&lt;/tr&gt;
-
-&lt;tr&gt;
-&lt;td&gt;∃&lt;/td&gt;
-&lt;td&gt;\exists&lt;/td&gt;
-&lt;td&gt;&amp;lt;exists&amp;gt;&lt;/td&gt;
-&lt;/tr&gt;
-
-&lt;tr&gt;
-&lt;td&gt;¬&lt;/td&gt;
-&lt;td&gt;\not&lt;/td&gt;
-&lt;td&gt;&amp;lt;not&amp;gt;&lt;/td&gt;
-&lt;/tr&gt;
-
-&lt;tr&gt;
-&lt;td&gt;∧&lt;/td&gt;
-&lt;td&gt;\and, /&lt;/td&gt;
-&lt;td&gt;&amp;lt;and&amp;gt;&lt;/td&gt;
-&lt;/tr&gt;
-
-&lt;tr&gt;
-&lt;td&gt;∨&lt;/td&gt;
-&lt;td&gt;\or, \/&lt;/td&gt;
-&lt;td&gt;&amp;lt;or&amp;gt;&lt;/td&gt;
-&lt;/tr&gt;
-
-&lt;tr&gt;
-&lt;td&gt;⇒&lt;/td&gt;
-&lt;td&gt;\Rightarrow, =&amp;gt;&lt;/td&gt;
-&lt;td&gt;&amp;lt;Rightarrow&amp;gt;&lt;/td&gt;
-&lt;/tr&gt;
-
-&lt;tr&gt;
-&lt;td&gt;→&lt;/td&gt;
-&lt;td&gt;\rightarrow, -&amp;gt;&lt;/td&gt;
-&lt;td&gt;&amp;lt;rightarrow&amp;gt;&lt;/td&gt;
-&lt;/tr&gt;
-
-&lt;tr&gt;
-&lt;td&gt;≡&lt;/td&gt;
-&lt;td&gt;\equiv, ==&lt;/td&gt;
-&lt;td&gt;&amp;lt;equiv&amp;gt;&lt;/td&gt;
-&lt;/tr&gt;
-
-&lt;tr&gt;
-&lt;td&gt;≠&lt;/td&gt;
-&lt;td&gt;\noteq, ~=&lt;/td&gt;
-&lt;td&gt;&amp;lt;noteq&amp;gt;&lt;/td&gt;
-&lt;/tr&gt;
-&lt;/tbody&gt;
-&lt;/table&gt;
-
-&lt;p&gt;なんかそれっぽい記号を連ねてみたら色々出てきた。けどユニコード入力出来ないから載せれないw。&lt;/p&gt;
-
-&lt;p&gt;逆引きしたい。見た目からコマンドを知りたい。&lt;/p&gt;
-
-&lt;p&gt;なんかまとまりないけどそんな所で。頭痛い。&lt;/p&gt;
 </description>
     </item>
     
