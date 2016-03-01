@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>テスト on κeenのHappy Hacκing Blog</title>
+    <link>/categories/%E3%83%86%E3%82%B9%E3%83%88/</link>
+    <description>Recent content in テスト on κeenのHappy Hacκing Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>ja-jp</language>
+    <lastBuildDate>Tue, 01 Mar 2016 22:49:23 +0900</lastBuildDate>
+    <atom:link href="/categories/%E3%83%86%E3%82%B9%E3%83%88/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>テストについて考えてみた</title>
+      <link>/blog/2016/03/01/tesutonitsuitekangaetemita</link>
+      <pubDate>Tue, 01 Mar 2016 22:49:23 +0900</pubDate>
+      
+      <guid>/blog/2016/03/01/tesutonitsuitekangaetemita</guid>
+      <description>
+
+&lt;p&gt;κeenです。
+普段はテストをあまり書かない人なのですが業務では流石に書く必要があって、馴れないことをしていると色々と考えることがあったのでまとめます。
+まだ私はテストのセオリーとかには詳しくないので勝手気儘に考えたことです。&lt;/p&gt;
+
+&lt;p&gt;今まではテストは「とりあえずエッジケースとかをカバー出来てればいいんでしょ」くらいにしか考えてませんでした。
+しかしオブジェクト指向をしていて他のオブジェクトの振舞いに依存するだとか関数の引数が複雑だとかの時には適切なケースを書くのが困難でした。&lt;/p&gt;
+
+&lt;p&gt;チームの人とかとどう書くのが適切かと話しているとなんとなくまとまってきました。&lt;/p&gt;
+
+&lt;h1 id=&#34;ホーア理論:a6610a259e229e09be210cb3df2778c4&#34;&gt;ホーア理論&lt;/h1&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://proofcafe.org/sf/Hoare_J.html&#34;&gt;ホーア理論&lt;/a&gt;的にはソフトウェアの振舞/性質を表すのには3つの要素が必要です。事前条件、操作、事後条件です。&lt;/p&gt;
+
+&lt;p&gt;「事前条件Pが満たされるときに操作Oを行い、それが停止するならば事後条件Qが満たされる」&lt;/p&gt;
+
+&lt;p&gt;エンジニアリング的には以下のように読み替えられます。&lt;/p&gt;
+
+&lt;p&gt;事前条件とは、メソッドを実行するまでのお善立て。引数を用意する、依存するオブジェクトのモックを用意する、などなど。
+操作が実際のメソッドの実行。
+事後条件こそがassertなどを使ったテストケース群です。&lt;/p&gt;
+
+&lt;h1 id=&#34;テストフレームワークとホーア理論:a6610a259e229e09be210cb3df2778c4&#34;&gt;テストフレームワークとホーア理論&lt;/h1&gt;
+
+&lt;p&gt;テストを書く時にもこの考え方は役に立つな、と思いました。事前条件 x 操作 x 事後条件を網羅していけばいい訳です。&lt;/p&gt;
+
+&lt;p&gt;ところで、テストフレームワークにはテストをグルーピングしたりといくつかのスコープをネスト出来る機能を持っているものもあります。
+ホーア理論では要素が3つある訳ですから3段にネストするのが適切な気がするのは納得いくと思います。しかしどの順番でネストするかは議論の余地がありそうです。&lt;/p&gt;
+
+&lt;p&gt;勿論、ホーア理論に従うなら操作の時系列的に事前条件&amp;gt;操作&amp;gt;事後条件のネストの仕方が一番自然かと思います。
+しかしテストしたい主役は振舞、メソッドなのでそれを階層の最上位に持ってくる方が可読性、ひいてはテストの意味が高まりそうです。&lt;/p&gt;
+
+&lt;p&gt;あるいは、4段にネストして最上位にだたのグルーピング目的にメソッドを、そしてその下に事前条件&amp;gt;操作&amp;gt;事後条件を持っていく手法もありそうです。
+しかしこれだとネストが深すぎますね。また、後述するように操作の子階層を作ると例外がどこ由来なのか分かりづらいという問題もあります。&lt;/p&gt;
+
+&lt;p&gt;これの改良版は最上位にだたのグルーピング目的にメソッドを、そして事前条件&amp;gt;(操作+事後条件)という形のネストの仕方をする方法です。
+これは例外の出所を明確に出来る他、多くのテストフレームワークで操作に対する表明と事後条件に対する表明を区別しない問題もクリア出来るという利点があります。
+1つある欠点は、操作と事後条件のスコープが分かれているので操作の返り値に対して事後条件で表明したい時にどうにかしてスコープの外に出してやる必要がある点です。
+副作用を容易に許す言語なら外のスコープの変数に代入すればいいだけですが、純粋な言語だと簡単ではありません。
+そういう意味でも操作に対する表明と事後条件に対する表明は分けたいなと思う次第。&lt;/p&gt;
+
+&lt;h1 id=&#34;操作に対する表明:a6610a259e229e09be210cb3df2778c4&#34;&gt;操作に対する表明&lt;/h1&gt;
+
+&lt;p&gt;本来のホーア理論的には事後条件で表明すれば十分ですが、実際には不十分な点があります。もう一度ホーア理論の表明について思い出しましょう。&lt;/p&gt;
+
+&lt;p&gt;「事前条件pが満たされるときに操作oを行い、 &lt;strong&gt;それが停止するならば&lt;/strong&gt; 事後条件qが満たされる」&lt;/p&gt;
+
+&lt;p&gt;現実的に、関数が正しく停止することも保証したいです。「無限ループを書く方が悪い」という訳ではありません。関数が停止しないのは何も無限ループだけでなく、例外などで脱出した場合も含みます。&lt;/p&gt;
+
+&lt;p&gt;なので例外を出す/出さないの表明も欲しくなる訳です。
+もう少し踏み込んで考えると、多くのテストフレームワークでassertと例外の送出の有無を同列扱いますが、前者は事後条件に対する表明、後者は操作に対する表明なので本来は分かれるべきです。&lt;/p&gt;
+
+&lt;p&gt;また、操作に対する表明はスコープを作るとしても操作の返り値を返す手段を用意してくれると事後条件の表明がやりやすくなるな、と思いました。まる。&lt;/p&gt;
+
+&lt;h1 id=&#34;まとめ:a6610a259e229e09be210cb3df2778c4&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;p&gt;テストをする時には3つの要素に分けて考えると考えやすくなります。その3つとは事前条件、操作、事後条件で、それぞれの組み合わせがあるのでテストケースのネストは合理的です。
+しかしながら人間の認識のためにネストの順番は入れ替えた方がよいのですが、そうするとコード上いくつか問題が発生します。&lt;/p&gt;
+
+&lt;p&gt;グルーピング目的にメソッドを、そして事前条件&amp;gt;(操作+事後条件)というネストの仕方が最終案に思えますが、それを的確に表現出来、かつコード上の問題をクリア出来るテストフレームワークが中々ないのが現状です。&lt;/p&gt;
+
+&lt;h1 id=&#34;付録a:a6610a259e229e09be210cb3df2778c4&#34;&gt;付録A&lt;/h1&gt;
+
+&lt;p&gt;考えがまとまるまでの過程&lt;/p&gt;
+
+&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;テスト書いててなぜテストライブラリがテストスートを階層構造にしてるのか考えたけど1つの事前条件に対して複数の操作が考えれてそれぞれの操作に対して保証したい不変条件と事後条件があるから少なくとも3段にネストしないと上手くグルーピング出来ないのかな。&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/704586009464311808&#34;&gt;2016年3月1日&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;しかしネストする順番はどうだろう。メソッドに対するテストでグルーピングしたいからメソッド&amp;gt;事前条件&amp;gt;事後/不変条件になるのかな。&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/704586479427670016&#34;&gt;2016年3月1日&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;事前条件を最上位に持ってきた方が理解しやすいし事前条件の使い回しもしやすいけど並行にテストを走らせようと思ったらやっぱり操作毎に事前条件用意してあげた方がいいし事前条件と事後条件が近い方が性質を理解しやすい?&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/704587239402008576&#34;&gt;2016年3月1日&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;あれ?もしかして操作ってメソッドじゃなくてメソッド+引数になる?&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/704588326175551488&#34;&gt;2016年3月1日&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;うーん。操作を行うパートと条件の準備/確認のパートを分けたいんだけど難しい。例えば操作によって例外が出ることを確認したいとかが非常にやりづらい。&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/704601381605232640&#34;&gt;2016年3月1日&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;いや?やっぱり操作と事後/不変条件のパートは分けれるな?&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/704602157148872704&#34;&gt;2016年3月1日&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;そしてやはり操作をネストのトップレベルにもってくると操作の引数とかが事前条件/前提条件に依存するのでやりづらい。&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/704602629737811968&#34;&gt;2016年3月1日&lt;/a&gt;&lt;/blockquote&gt;
+&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>
