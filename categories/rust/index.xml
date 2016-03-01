@@ -6,8 +6,154 @@
     <description>Recent content in Rust on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Sun, 28 Feb 2016 14:40:59 +0900</lastBuildDate>
+    <lastBuildDate>Tue, 01 Mar 2016 23:32:12 +0900</lastBuildDate>
     <atom:link href="/categories/rust/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Rustのゼロコスト抽象化</title>
+      <link>/blog/2016/03/01/rustnozerokosutochuushouka</link>
+      <pubDate>Tue, 01 Mar 2016 23:32:12 +0900</pubDate>
+      
+      <guid>/blog/2016/03/01/rustnozerokosutochuushouka</guid>
+      <description>&lt;p&gt;κeenです。今日Twitter上でのやりとりから少し面白いことが分かったのでそれについて。&lt;/p&gt;
+
+&lt;p&gt;最近1.0が出たKotlinについて、水島さんがツイートしてました。&lt;/p&gt;
+
+&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;nullableに対してはmapとかの高階関数を一切使えないのが痛い。 ?. でカバーできるケースは一部だけだ。zero-overhead null-safetyと唄っとるが、代わりにnullチェックお化けになるわけで、どこがzero-overheadだ &lt;a href=&#34;https://twitter.com/hashtag/kotlin_dis?src=hash&#34;&gt;#kotlin_dis&lt;/a&gt;&lt;/p&gt;&amp;mdash; 水島 宏太(Klassic作成中) (@kmizu) &lt;a href=&#34;https://twitter.com/kmizu/status/704453235277324288&#34;&gt;2016年2月29日&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;p&gt;それについて私が無関係なツイートを。&lt;/p&gt;
+
+&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;全く無関係だけどRustはOptionみたいな0-1の型をnull or valueに最適化するそうな。これこそがゼロコスト抽象かな &lt;a href=&#34;https://t.co/5Y7cBEyrMe&#34;&gt;https://t.co/5Y7cBEyrMe&lt;/a&gt;&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/704453898996547584&#34;&gt;2016年2月29日&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;p&gt;これはRustのnomiconに書かれています。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://doc.rust-lang.org/nomicon/repr-rust.html&#34;&gt;repr(Rust)&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;そうすると水島さんからお返事が。&lt;/p&gt;
+
+&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;&lt;a href=&#34;https://twitter.com/blackenedgold&#34;&gt;@blackenedgold&lt;/a&gt; Rust詳しくないですけど、Optionにmapとかした場合インライン展開されるんですかね？だとしたらとても理想的。&lt;/p&gt;&amp;mdash; 水島 宏太(Klassic作成中) (@kmizu) &lt;a href=&#34;https://twitter.com/kmizu/status/704455185125408768&#34;&gt;2016年2月29日&lt;/a&gt;&lt;/blockquote&gt;
+&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
+
+&lt;p&gt;確かにそうなると面白そう。ということで少し調べてみました。&lt;/p&gt;
+
+&lt;p&gt;まず、上記の話をまとめると、Rustの&lt;code&gt;Option&lt;/code&gt;に対する&lt;code&gt;map&lt;/code&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub fn map&amp;lt;U, F: FnOnce(T) -&amp;gt; U&amp;gt;(self, f: F) -&amp;gt; Option&amp;lt;U&amp;gt; {
+    match self {
+        Some(x) =&amp;gt; Some(f(x)),
+        None =&amp;gt; None,
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;は&lt;code&gt;x&lt;/code&gt;がポインタ型だった時に以下と同値です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub fn map&amp;lt;U, F: FnOnce(T) -&amp;gt; U&amp;gt;(self, f: F) -&amp;gt; Option&amp;lt;U&amp;gt; {
+    if (self != nullPointer ) {
+        f(x)
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;さらに、&lt;a href=&#34;https://github.com/rust-lang/rust/blob/master/src/libcore/option.rs#L386&#34;&gt;&lt;code&gt;map&lt;/code&gt;はインライン宣言されている&lt;/a&gt;ので以下のコード&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let opt = Some(&amp;amp;v);
+opt.map(|x| x + 1);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;は以下と同値です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let opt = &amp;amp;v;
+if (opt != nullPointer) {
+  (|x| x + 1)(opt)
+};
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;さて、ここで無名関数がどうコンパイルされるかという問題が出てきますが、&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/closures.html&#34;&gt;クロージャのドキュメント&lt;/a&gt;によるとこういう雰囲気のコードになるらしいです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let opt = &amp;amp;v;
+struct AnonymousType;
+
+impl FnOnce&amp;lt;(&amp;amp;i32)&amp;gt; for AnonymousType {
+    type Output = i32;
+    fn call_once(self, args: (&amp;amp;i32)) -&amp;gt; Self::Output {
+        args + 1
+    }
+}
+
+if (opt != nullPointer) {
+    let fn_once: FnOnce = AnonymousType;
+    fn_once.call_once(opt)
+};
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;思ったよりも複雑…。さて、問題は&lt;code&gt;let fn_once: FnOnce = AnonymousType;&lt;/code&gt;としているので一旦元の無名関数の情報が抜けてしまいます。
+となるとコンパイル時に具体的なメソッドを決定出来ないので&lt;code&gt;fn_once.call_once(opt);&lt;/code&gt;は以下のような雰囲気のコードになってしまいます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let call_once_fn = fn_once.get_call_once_fn();
+call_once_fn(opt);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;毎回呼び出すべき関数の取得が入るのは面倒ですね。&lt;/p&gt;
+
+&lt;p&gt;しかしなががらクロージャのドキュメントをよく読むと無名関数は静的ディスパッチされると書いてあります。つまり、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let call_once_fn = fn_once.get_call_once_fn();
+call_once_fn(opt);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と2段ではなく&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;the_call_once_fn_of_AnonymousType(opt);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;とコンパイル時に畳み込まれ、1段で済みます。&lt;/p&gt;
+
+&lt;p&gt;よって&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let opt = Some(&amp;amp;v);
+opt.map(|x| x + 1);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;は&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn the_call_once_fn_of_AnonymousType(x: &amp;amp;i32) -&amp;gt; i32 {
+    x + 1
+}
+
+
+let opt = &amp;amp;v;
+if (opt != nullPointer) {
+  the_call_once_fn_of_AnonymousType(opt)
+};
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と同値ということです。&lt;/p&gt;
+
+&lt;p&gt;ここからは私の推測ですが、&lt;code&gt;the_call_once_fn_of_AnonymousType&lt;/code&gt;は本体が小さい上に1回しか呼ばれないのでインライン化されるのではないかと思います。
+よってこの推測が正しければ&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let opt = Some(&amp;amp;v);
+opt.map(|x| x + 1);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;は&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let opt = &amp;amp;v;
+if (opt != nullPointer) {
+  opt + 1
+};
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;となる筈です。&lt;/p&gt;
+
+&lt;p&gt;ゼロコスト抽象化すごい!&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>RustのHigher-Kinded type Trait</title>
