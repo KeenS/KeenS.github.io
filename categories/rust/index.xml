@@ -6,8 +6,54 @@
     <description>Recent content in Rust on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Tue, 01 Mar 2016 23:32:12 +0900</lastBuildDate>
+    <lastBuildDate>Wed, 02 Mar 2016 00:05:03 +0900</lastBuildDate>
     <atom:link href="/categories/rust/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>リージョンとRustの返り値</title>
+      <link>/blog/2016/03/02/ri_jontorustnokaerichi</link>
+      <pubDate>Wed, 02 Mar 2016 00:05:03 +0900</pubDate>
+      
+      <guid>/blog/2016/03/02/ri_jontorustnokaerichi</guid>
+      <description>&lt;p&gt;Rustにおいては返り値ポインタで返すよりもそのまま返して、受け取る側でポインタで受け取るかそのまま受け取るかを指定するのが良い選択肢だ、といっています。
+しかし初めて見る時にはどうしてそんなことが出来るのかわからず、びっくりしますよね。
+それをRustがリージョンを使ってメモリ管理をしていると分かればどうなっているのか分かったのですこしばかり。&lt;/p&gt;
+
+&lt;p&gt;Rustにおいては以下のように関数が値を返す時にポインタを返すコードは好ましくなく、（というかコンパイル出来ない）&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn new_value() -&amp;gt; &amp;amp;BigStruct {
+    &amp;amp;BigStruct{ .... }
+}
+
+let bs = new_value();
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;関数が返す値はスタックに載らないような大きな値でもそのまま返して、受け取り側でヒープに保存してあげるのが良いスタイルとされています。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn new_value() -&amp;gt; BigStruct {
+    BigStruct{ .... }
+}
+
+let bs = Box::new(new_value());
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;今までの言語の感覚だとRustにおいて良いとされるスタイルは大きな値を一旦スタックに載せた後で&lt;code&gt;Box&lt;/code&gt;によって作られたヒープ領域に確保されているように見えます。&lt;/p&gt;
+
+&lt;p&gt;これはリージョンについて理解すると動作が理解できます。&lt;/p&gt;
+
+&lt;p&gt;リージョンについては以前のブログを参照して下さい。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://keens.github.io/blog/2015/12/09/ri_jonnitsuite/&#34;&gt;リージョンについて | κeenのHappy Hacκing Blog&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;さて、リージョンによるメモリ管理は「メモリを確保すべき場所」が先にあって、値はそこに置かれます。
+特に、関数呼び出しにおいて、関数の「返り値を確保すべき場所」は関数の外から与えます。&lt;/p&gt;
+
+&lt;p&gt;ここまで説明したらお分りかと思いますが、&lt;code&gt;Box::new(new_value());&lt;/code&gt;というコードは&lt;code&gt;new_value()&lt;/code&gt;の返り値を保存する場所としてヒープ領域を渡していて、
+関数内部でそのヒープ領域にBigStructの値を書き込んでいるのです。&lt;/p&gt;
+
+&lt;p&gt;もやもやしていたものがスッキリしたし返り値のサイズが決まってないと関数から返せないのも分かるようになった。&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>Rustのゼロコスト抽象化</title>
@@ -2856,482 +2902,6 @@ impl Handler for MyHandler {
 &lt;li&gt;シングルスレッドでミュータブルなフィールドが欲しいなら&lt;code&gt;Cell&lt;/code&gt;/&lt;code&gt;RefCell&lt;/code&gt;&lt;/li&gt;
 &lt;li&gt;マルチスレッドなら&lt;code&gt;Mutex&lt;/code&gt;&lt;/li&gt;
 &lt;/ul&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>静的なメモリ管理の話。リージョン推論とλ計算からRustまで</title>
-      <link>/slide/seitekinamemorikanrinohanashi.ri%5EjonsuirontolambdakeisankaraRustmade/</link>
-      <pubDate>Tue, 21 Apr 2015 00:25:56 +0900</pubDate>
-      
-      <guid>/slide/seitekinamemorikanrinohanashi.ri%5EjonsuirontolambdakeisankaraRustmade/</guid>
-      <description>&lt;section data-markdown
-    data-separator=&#34;\n\n&#34;
-    data-vertical=&#34;\n\n&#34;
-    data-notes=&#34;^Note:&#34;&gt;
-&lt;script type=&#34;text/template&#34;&gt;
-# 静的なメモリ管理の話。リージョン推論とλ計算からRustまで
-----------------------
-サイバーエージェント新卒エンジニア勉強会
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# About Me
----------
-![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
-
- * κeen
- * [@blackenedgold](https://twitter.com/blackenedgold)
- * Github: [KeenS](https://github.com/KeenS)
- * 大学では非情報系学科。趣味のプログラマ。
-   + 非ガチ勢なので優しくして下さい&gt;&lt;
- * Lisp, Ruby, OCaml, Shell Scriptあたりを書きます
-
-
-# メモリ管理の話
----------------
-(一般的ではない用語)
-
-* 弱い静的メモリ管理
-* 強い動的メモリ管理
-* (弱い動的メモリ管理)
-* 強い静的メモリ管理
-
-
-# メモリ管理の話
----------------
-## 弱い静的メモリ管理
-### 特徴
-
-* 弱い = ユーザがミスるとメモリ周りのエラーやリークが実行時に起きる
-* 静的 = コンパイル時にメモリ管理が決定する
-
-### 例
-
-* C言語
-
-
-# メモリ管理の話
----------------
-## 弱い静的メモリ管理
-### 利点
-
-* 実行時は安定している
-
-### 欠点
-* バグる
-* 面倒
-* 危険
-
-
-# メモリ管理の話
----------------
-## 強い動的メモリ管理
-### 特徴
-
-* 強い = 基本的にメモリでエラーやリークが起きない
-* 動的 = 実行時になるまでメモリの使われ方が分からない
-
-### 例
-
-* GCのある言語全般
-
-# メモリ管理の話
----------------
-## 強い動的メモリ管理
-### 利点
-
-* メモリ管理からの開放
-
-### 欠点
-
-* 動作が不安定 (cf [これがCassandra](http://www.slideshare.net/TakehiroTorigaki/cassandra-21191674))
-* パフォーマンスの問題
-* リアルタイム性の問題
-
-
-# メモリ管理の話
----------------
-## (弱い動的メモリ管理)
-### 特徴
-
-* 弱い = ユーザがミスるとメモリ周りのエラーやリークが実行時に起きる
-* 動的 = 実行時になるまでメモリの使われ方が分からない
-
-### 例
-
-* バグったGC
-  + 普通はない
-  + (参照カウント？)
-
-
-# メモリ管理の話
----------------
-## 強い静的メモリ管理
-### 特徴
-
-* 強い = 基本的にメモリでエラーやリークが起きない
-* 静的 = コンパイル時にメモリ管理が決定する
-
-
-# メモリ管理の話
----------------
-## 強い静的メモリ管理
-### 利点
-
-* メモリ管理からの開放
-* 実行時は安定している
-* リアルタイム
-* パフォーマンスが出る
-
-### 欠点
-
-* 実現可能性は？
-
-
-# 強い静的メモリ管理の話をしよう
-
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# 強い静的メモリ管理の話をしよう
-------------------------------
-
-* まずは可能性の議論が必要
-* 実現可能性
-* 実用性
-
-
-# 可能性の議論
--------------
-
-* プログラミング言語の理論 ≒ λ計算
-* そもそもλ計算はメモリのことを考慮してない
-  + GCがあるかのように記述される
-
-
-# 可能性の議論
--------------
-
-* λ計算にメモリ管理まで含めて理論を立てたものは存在する（静的なメモリ管理）
-  + リージョンというものをベースにしている [参考](http://www.elsman.com/mlkit/pdf/popl94.pdf)
-* さらにリージョンを自動で推論する理論もある（強いメモリ管理）
-  + リージョン推論という
-
-
-# 軽くリージョンの話
--------------------
-
-* 型と同じようにプログラム全体を伝わるメタデータ。
-* データが保存される場所を指す。リージョンはいくつもある。
-* リージョン推論でデータがどのリージョンに入るかが分かる
-* さらにリージョンのサイズもある程度予想がつくので静的に管理出来る
-* 関数などは引数のリージョンに対して多相になる「リージョン多相」などもある
-* この辺は[Martin Elsmanの論文たち](http://www.elsman.com/mlkit/papers.html)を参考にして下さい
-  + [A Brief Introduction to Regions](http://www.elsman.com/mlkit/pdf/ismm98.pdf)とか。
-
-
-
-# 強い静的メモリ管理の話をしよう
-------------------------------
-
-* ✓ まずは可能性の議論が必要
-* 実現可能性
-* 実用性
-
-# 実現可能性
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# 実現可能性
------------
-
-* &lt;!--.element: class=&#34;fragment&#34; data-fragment-index=&#34;1&#34; --&gt;Martin ElsmanによるSML処理系、[ML Kitに一部導入された](http://www.elsman.com/mlkit/pdf/pldi2002.pdf)（多分世界初）
-  + 但し完全ではなく、GCと組み合わせてある
-  + 動的型付き言語に無理矢理静的型を付けても完全には上手くいかないようなもの？
-  + 多分リージョン推論を前提とした言語を設計する必要がある
-* &lt;!--.element: class=&#34;fragment&#34; data-fragment-index=&#34;2&#34; --&gt;Cyclone というC likeな文法の言語が完全に[リージョン推論のみでメモリ管理を実現した](http://www.cs.umd.edu/projects/cyclone/papers/cyclone-regions.pdf)
-
-
-# 強い静的メモリ管理の話をしよう
-------------------------------
-
-* ✓ まずは可能性の議論が必要
-* ✓ 実現可能性
-* 実用性
-
-
-# 実用性
-
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# Rust言語
-----------
-
-* Mozillaが開発した言語
-* 2008~
-* Cycloneを参考にしたらしい。
-* 活発に開発される
-* 大きなプロジェクトに現行のレンダリングエンジン、Geckoを置き換えるべく開発された[Servo](https://github.com/servo/servo)がある
-  + 既にC++製のGockoの3倍速い
-  + 並列レンダリングすればさらに速い。
-
-
-# Rust言語
-----------
-
-* リージョン推論(ライフタイム)でメモリを管理する
-  - かなり賢くて、ヒープにアロケートする必要なけばスタックを使う。
-* mallocとfreeは全てコンパイル時に自動で挿入される
-* (多分)リージョン推論のみでメモリ管理するために所有権という概念がある。
-  + 所有権自体は並列性の導入などにも有用だと思われる。
-    -  競合状態の回避とか
-* その他
-  + 代数的データ型とパターンマッチ
-  + トレイトベース(non-nominal)のジェネリクス
-
-詳細は[公式ページ](http://www.rust-lang.org/)から
-
-
-# 強い静的メモリ管理の話をしよう
-------------------------------
-
-* ✓ まずは可能性の議論が必要
-* ✓ 実現可能性
-* ✓ 実用性
-
-
-# Rustのライフタイムと所有権
--------------------------
-
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-
-# Cの例
--------
-
-```c
-{
-    int *x = malloc(sizeof(int));
-
-    // we can now do stuff with our handle x
-    *x = 5;
-
-    free(x);
-}
-```
-
-
-# Rustに翻訳
-------------
-
-```rust
-{
-    let x = Box::new(5);
-}
-```
-
-
-# 少しいじってみる
----------------
-
-trivialに見える
-
-```rust
-fn main() {
-    let x = Box::new(5);
-
-    add_one(x);
-}
-
-fn add_one(mut num: Box&lt;i32&gt;) {
-    *num += 1;
-}
-```
-
-
-# 少しいじってみる
----------------
-
-printlnを追加してみる
-
-```rust
-fn main() {
-    let x = Box::new(5);
-
-    add_one(x);
-
-    println!(&#34;{}&#34;, x);
-}
-
-fn add_one(mut num: Box&lt;i32&gt;) {
-    *num += 1;
-}
-```
-
-
-# 少しいじってみる
-----------------
-
-エラーになる。
-
-```
-error: use of moved value: `x`
-   println!(&#34;{}&#34;, x);
-                  ^
-```
-
-
-# 所有権
--------
-
-`add_one` を呼んだ時点で所有権が `add_one` に移るので `println!` では使えない。
-
-```rust
-fn main() {
-  let x = Box::new(5);
-
-  add_one(x);
-
-  println!(&#34;{}&#34;, x);
-}
-
-fn add_one(mut num: Box&lt;i32&gt;) {
-    *num += 1;
-}
-```
-
-
-# 所有権
--------
-新たに値を返してもらえば使える。
-
-```rust
-fn main() {
-  let x = Box::new(5);
-
-  let y = add_one(x);
-
-  println!(&#34;{}&#34;, y);
-}
-
-fn add_one(mut num: Box&lt;i32&gt;) -&gt; Box&lt;i32&gt; {
-  *num += 1;
-
-  num
-}
-```
-
-
-# 所有権の貸し借り
----------------
-
-* さっきの例は面倒。
-* `add_one` が `x` を奪ったのが問題。
-* `x` を「借り」ることが出来る。
-
-
-# 所有権の貸し借り
-----------------
-
-```rust
-fn main() {
-  let mut x = 5;
-
-  add_one(&amp;mut x);
-
-  println!(&#34;{}&#34;, x);
-}
-
-fn add_one(num: &amp;mut i32) {
-  *num += 1;
-}
-```
-
-
-# ライフタイム
-------------
-
-先の `add_one` はライフタイム(リージョン)アノテーションを省略していた。  
-省略せずに書くとこうなる。(リージョン多相)
-
-```rust
-fn add_one&lt;&#39;a&gt;(num: &amp;&#39;a mut i32) {
-  *num += 1;
-}
-```
-
-
-# ライフタイム
-------------
-
-スコープの終わりでライフタイムが終わる。
-
-```rust
-fn main() {
-  let y = &amp;5;     // -+ y goes into scope
-                  //  |
-  // stuff        //  |
-                  //  |
-}                 // -+ y goes out of scope
-```
-
-
-# LTの明示的宣言
---------------
-こんな構造体を宣言したとする。 `x` はコンストラクタに渡された値のライフタイムを引き継ぐ。
-
-```rust
-struct Foo&lt;&#39;a&gt; {
-    x: &amp;&#39;a i32,
-}
-```
-
-
-# LTの明示的宣言
---------------
-`f.x`のライフタイムが `y` のライフタイムに制限されるので
-`y` より広いスコープにある `x` には代入出来ない。
-
-```rust
-fn main() {
-  let x;                  // -+ x goes into scope
-                          //  |
-  {                       //  |
-    let y = &amp;5;           // ---+ y goes into scope
-    let f = Foo { x: y }; // ---+ f goes into scope
-    x = &amp;f.x;             //  | | error here
-  }                       // ---+ f and y go out of scope
-                          //  |
-  println!(&#34;{}&#34;, x);      //  |
-}                         // -+ x goes out of scope
-```
-
-
-# まとめ
--------
-
-* メモリ管理の性質についてまとめた
-* 静的メモリ管理が出来れば
-  + メモリ管理からの開放
-  + 実行時は安定している
-  + リアルタイム
-  + パフォーマンスが出る
-* 強い静的メモリ管理の手法としてリージョン推論がある
-* Rust言語がリージョン推論を利用している。
-* Rustをみんな使おう!
-
-
-# 参考
-* [ML Kit](http://www.elsman.com/mlkit/)
-* [Rust](http://www.rust-lang.org/)
-* [Allocators in Rust - Baby Steps](http://smallcultfollowing.com/babysteps/blog/2014/11/14/allocators-in-rust/)
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-&lt;/script&gt;
-&lt;/section&gt;
 </description>
     </item>
     
