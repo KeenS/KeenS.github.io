@@ -6,8 +6,97 @@
     <description>Recent content in Posts on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Sun, 28 Feb 2016 14:40:59 +0900</lastBuildDate>
+    <lastBuildDate>Tue, 01 Mar 2016 22:49:23 +0900</lastBuildDate>
     <atom:link href="/post/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>テストについて考えてみた</title>
+      <link>/blog/2016/03/01/tesutonitsuitekangaetemita</link>
+      <pubDate>Tue, 01 Mar 2016 22:49:23 +0900</pubDate>
+      
+      <guid>/blog/2016/03/01/tesutonitsuitekangaetemita</guid>
+      <description>
+
+&lt;p&gt;κeenです。
+普段はテストをあまり書かない人なのですが業務では流石に書く必要があって、馴れないことをしていると色々と考えることがあったのでまとめます。
+まだ私はテストのセオリーとかには詳しくないので勝手気儘に考えたことです。&lt;/p&gt;
+
+&lt;p&gt;今まではテストは「とりあえずエッジケースとかをカバー出来てればいいんでしょ」くらいにしか考えてませんでした。
+しかしオブジェクト指向をしていて他のオブジェクトの振舞いに依存するだとか関数の引数が複雑だとかの時には適切なケースを書くのが困難でした。&lt;/p&gt;
+
+&lt;p&gt;チームの人とかとどう書くのが適切かと話しているとなんとなくまとまってきました。&lt;/p&gt;
+
+&lt;h1 id=&#34;ホーア理論:a6610a259e229e09be210cb3df2778c4&#34;&gt;ホーア理論&lt;/h1&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://proofcafe.org/sf/Hoare_J.html&#34;&gt;ホーア理論&lt;/a&gt;的にはソフトウェアの振舞/性質を表すのには3つの要素が必要です。事前条件、操作、事後条件です。&lt;/p&gt;
+
+&lt;p&gt;「事前条件Pが満たされるときに操作Oを行い、それが停止するならば事後条件Qが満たされる」&lt;/p&gt;
+
+&lt;p&gt;エンジニアリング的には以下のように読み替えられます。&lt;/p&gt;
+
+&lt;p&gt;事前条件とは、メソッドを実行するまでのお善立て。引数を用意する、依存するオブジェクトのモックを用意する、などなど。
+操作が実際のメソッドの実行。
+事後条件こそがassertなどを使ったテストケース群です。&lt;/p&gt;
+
+&lt;h1 id=&#34;テストフレームワークとホーア理論:a6610a259e229e09be210cb3df2778c4&#34;&gt;テストフレームワークとホーア理論&lt;/h1&gt;
+
+&lt;p&gt;テストを書く時にもこの考え方は役に立つな、と思いました。事前条件 x 操作 x 事後条件を網羅していけばいい訳です。&lt;/p&gt;
+
+&lt;p&gt;ところで、テストフレームワークにはテストをグルーピングしたりといくつかのスコープをネスト出来る機能を持っているものもあります。
+ホーア理論では要素が3つある訳ですから3段にネストするのが適切な気がするのは納得いくと思います。しかしどの順番でネストするかは議論の余地がありそうです。&lt;/p&gt;
+
+&lt;p&gt;勿論、ホーア理論に従うなら操作の時系列的に事前条件&amp;gt;操作&amp;gt;事後条件のネストの仕方が一番自然かと思います。
+しかしテストしたい主役は振舞、メソッドなのでそれを階層の最上位に持ってくる方が可読性、ひいてはテストの意味が高まりそうです。&lt;/p&gt;
+
+&lt;p&gt;あるいは、4段にネストして最上位にだたのグルーピング目的にメソッドを、そしてその下に事前条件&amp;gt;操作&amp;gt;事後条件を持っていく手法もありそうです。
+しかしこれだとネストが深すぎますね。また、後述するように操作の子階層を作ると例外がどこ由来なのか分かりづらいという問題もあります。&lt;/p&gt;
+
+&lt;p&gt;これの改良版は最上位にだたのグルーピング目的にメソッドを、そして事前条件&amp;gt;(操作+事後条件)という形のネストの仕方をする方法です。
+これは例外の出所を明確に出来る他、多くのテストフレームワークで操作に対する表明と事後条件に対する表明を区別しない問題もクリア出来るという利点があります。
+1つある欠点は、操作と事後条件のスコープが分かれているので操作の返り値に対して事後条件で表明したい時にどうにかしてスコープの外に出してやる必要がある点です。
+副作用を容易に許す言語なら外のスコープの変数に代入すればいいだけですが、純粋な言語だと簡単ではありません。
+そういう意味でも操作に対する表明と事後条件に対する表明は分けたいなと思う次第。&lt;/p&gt;
+
+&lt;h1 id=&#34;操作に対する表明:a6610a259e229e09be210cb3df2778c4&#34;&gt;操作に対する表明&lt;/h1&gt;
+
+&lt;p&gt;本来のホーア理論的には事後条件で表明すれば十分ですが、実際には不十分な点があります。もう一度ホーア理論の表明について思い出しましょう。&lt;/p&gt;
+
+&lt;p&gt;「事前条件pが満たされるときに操作oを行い、 &lt;strong&gt;それが停止するならば&lt;/strong&gt; 事後条件qが満たされる」&lt;/p&gt;
+
+&lt;p&gt;現実的に、関数が正しく停止することも保証したいです。「無限ループを書く方が悪い」という訳ではありません。関数が停止しないのは何も無限ループだけでなく、例外などで脱出した場合も含みます。&lt;/p&gt;
+
+&lt;p&gt;なので例外を出す/出さないの表明も欲しくなる訳です。
+もう少し踏み込んで考えると、多くのテストフレームワークでassertと例外の送出の有無を同列扱いますが、前者は事後条件に対する表明、後者は操作に対する表明なので本来は分かれるべきです。&lt;/p&gt;
+
+&lt;p&gt;また、操作に対する表明はスコープを作るとしても操作の返り値を返す手段を用意してくれると事後条件の表明がやりやすくなるな、と思いました。まる。&lt;/p&gt;
+
+&lt;h1 id=&#34;まとめ:a6610a259e229e09be210cb3df2778c4&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;p&gt;テストをする時には3つの要素に分けて考えると考えやすくなります。その3つとは事前条件、操作、事後条件で、それぞれの組み合わせがあるのでテストケースのネストは合理的です。
+しかしながら人間の認識のためにネストの順番は入れ替えた方がよいのですが、そうするとコード上いくつか問題が発生します。&lt;/p&gt;
+
+&lt;p&gt;グルーピング目的にメソッドを、そして事前条件&amp;gt;(操作+事後条件)というネストの仕方が最終案に思えますが、それを的確に表現出来、かつコード上の問題をクリア出来るテストフレームワークが中々ないのが現状です。&lt;/p&gt;
+
+&lt;h1 id=&#34;付録a:a6610a259e229e09be210cb3df2778c4&#34;&gt;付録A&lt;/h1&gt;
+
+&lt;p&gt;考えがまとまるまでの過程&lt;/p&gt;
+
+&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;テスト書いててなぜテストライブラリがテストスートを階層構造にしてるのか考えたけど1つの事前条件に対して複数の操作が考えれてそれぞれの操作に対して保証したい不変条件と事後条件があるから少なくとも3段にネストしないと上手くグルーピング出来ないのかな。&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/704586009464311808&#34;&gt;2016年3月1日&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;しかしネストする順番はどうだろう。メソッドに対するテストでグルーピングしたいからメソッド&amp;gt;事前条件&amp;gt;事後/不変条件になるのかな。&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/704586479427670016&#34;&gt;2016年3月1日&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;事前条件を最上位に持ってきた方が理解しやすいし事前条件の使い回しもしやすいけど並行にテストを走らせようと思ったらやっぱり操作毎に事前条件用意してあげた方がいいし事前条件と事後条件が近い方が性質を理解しやすい?&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/704587239402008576&#34;&gt;2016年3月1日&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;あれ?もしかして操作ってメソッドじゃなくてメソッド+引数になる?&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/704588326175551488&#34;&gt;2016年3月1日&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;うーん。操作を行うパートと条件の準備/確認のパートを分けたいんだけど難しい。例えば操作によって例外が出ることを確認したいとかが非常にやりづらい。&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/704601381605232640&#34;&gt;2016年3月1日&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;いや?やっぱり操作と事後/不変条件のパートは分けれるな?&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/704602157148872704&#34;&gt;2016年3月1日&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;そしてやはり操作をネストのトップレベルにもってくると操作の引数とかが事前条件/前提条件に依存するのでやりづらい。&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/704602629737811968&#34;&gt;2016年3月1日&lt;/a&gt;&lt;/blockquote&gt;
+&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>RustのHigher-Kinded type Trait</title>
@@ -2158,126 +2247,6 @@ end
 &lt;p&gt;余談ですが&lt;code&gt;std::fs::File&lt;/code&gt;の実体はCの&lt;code&gt;FILE&lt;/code&gt;構造体ではなくファイルディスクリプタなのでバッファリングはしてません。のでこちらは気にする必要はありません。&lt;/p&gt;
 
 &lt;p&gt;という訳で小ネタでした。&lt;/p&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>2016年注目していきたい技術</title>
-      <link>/blog/2016/01/01/2016nenchuumokushiteikitaigijutsu</link>
-      <pubDate>Fri, 01 Jan 2016 20:09:36 +0900</pubDate>
-      
-      <guid>/blog/2016/01/01/2016nenchuumokushiteikitaigijutsu</guid>
-      <description>
-
-&lt;p&gt;2016年個人的に注目したいというか力を入れたいというか成行を見守りたいというか、そんな技術達を書き連ねていく。ものによっては「何を今更」と思うかもしれないがあくまで私にとって、だ。&lt;/p&gt;
-
-&lt;p&gt;順不同。&lt;/p&gt;
-
-&lt;h1 id=&#34;apache-drill:1c55afff208b866183fc0b210a2a3f36&#34;&gt;Apache Drill&lt;/h1&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://drill.apache.org/&#34;&gt;公式&lt;/a&gt;。様々なデータソースに対してANSI SQLでクエリを投げれるやつ。
-ビッグデータの時代にETL無しで迅速にデータを分析出来るようにするために開発されてるらしい。&lt;/p&gt;
-
-&lt;p&gt;様々なデータソースというのは本当に凄くて、CSVとJSONをJOIN出来たりする。
-あるいはTSVの生ログとRDBにあるマスタデータをJOIN出来たりする。
-個人的にはデータベースから抽出したCSVにクエリを投げたい時に便利かな、と思って注目してる。viewや一時テーブルを作る権限がないデータベースだってある。&lt;/p&gt;
-
-&lt;p&gt;あるいは、Zookeeperを使って分散モードで実行も出来るのでBigQueryみたいなのをオンプレ環境で動かすのにも使えるようだ。
-その時はデータフォーマットは&lt;a href=&#34;https://drill.apache.org/docs/parquet-format/&#34;&gt;Parquet&lt;/a&gt;で保存すると速いらしい。&lt;/p&gt;
-
-&lt;h1 id=&#34;rust:1c55afff208b866183fc0b210a2a3f36&#34;&gt;Rust&lt;/h1&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://www.rust-lang.org/&#34;&gt;公式&lt;/a&gt;。言わずもがな。去年の5月に1.0が出て、今年で一周年を迎える。そろそろ安全なシステムプログラミング言語としての地位を築いて欲しい。
-今までは安全なシステムプログラミング言語が不在で、不適切にも関らずJavaで代用されることが多かったように思える。&lt;/p&gt;
-
-&lt;p&gt;やっぱりGCがあると安定性に心配が残るし、フルマネージングなランタイムシステムを持ってると他のランタイム、例えばlibuvなんかと相性が悪い。&lt;/p&gt;
-
-&lt;p&gt;かといってC++やCだと安全でない。システムが巨大になった時にデバッグがつらくなる。&lt;/p&gt;
-
-&lt;p&gt;Rustには是非Javaより速くて実行が安定しててC++よりも安全でCよりも抽象力があってマルチスレッドを使い始めても開発効率が落ちない言語として活躍して欲しい。&lt;/p&gt;
-
-&lt;h1 id=&#34;kafka:1c55afff208b866183fc0b210a2a3f36&#34;&gt;Kafka&lt;/h1&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://kafka.apache.org/&#34;&gt;公式&lt;/a&gt;。「ただのキュー」と言ってしまえばそれまでだが高トラフィックを捌ける信頼性の高いキューだ。
-OSのキャッシュを上手く使ってるだとかJavaだからといって富豪的プログラミングをしてないだとか分かってる人が作った感じがしてすごくいい。&lt;/p&gt;
-
-&lt;p&gt;fluentdとかでデータを流すにしてもバックプレッシャーをやりたい、流す先が落ちてた時の事を考えたい、バッチじゃなくてストリーム（ミニバッチでもいいけど）でやりたい、とかの要望に応えてくれる。&lt;/p&gt;
-
-&lt;h1 id=&#34;floki:1c55afff208b866183fc0b210a2a3f36&#34;&gt;floki&lt;/h1&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/arthurprs/floki&#34;&gt;Github&lt;/a&gt;。Rustで作られているキュー。
-kafkaに言及しているがRedisプロトコルをベースとしていて、色々コマンドがあるようなのでkafkaとは少し毛色が違いそう。&lt;/p&gt;
-
-&lt;p&gt;別にこれが次世代キューだ！なんて思ってる訳ではなくてRustで作られたミドルウェアがどうなっていくのか興味があるので観察対象に入っている。&lt;/p&gt;
-
-&lt;h1 id=&#34;robots:1c55afff208b866183fc0b210a2a3f36&#34;&gt;RobotS&lt;/h1&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/gamazeps/RobotS&#34;&gt;Github&lt;/a&gt;。RustのActor System。ほぼakkaの移植みたいだ。&lt;/p&gt;
-
-&lt;p&gt;Rustにアクターシステムが必要かは置いておいて、アクターシステムをRustの上に作るのは正解だと思ってる。
-何故ならJVMや.NETのようにStop The Worldはないし、Erlangとは比べものにならないくらい速い。
-さらに、もしかしたらだが、Rustなら所有権があるのでうまくすればメッセージを送るのにメモリコピーが起きないかもしれない。
-まあ、Go使えばいいじゃんと言えばそれまでである。&lt;/p&gt;
-
-&lt;h1 id=&#34;redox:1c55afff208b866183fc0b210a2a3f36&#34;&gt;Redox&lt;/h1&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://www.redox-os.org/&#34;&gt;公式&lt;/a&gt;。Rustで開発されているOS。まだまだ開発途上だがゆくゆくはMINIXくらいの地位は築いて欲しい。
-コマンドは全然ないのにGUIは動いていたりZFSをサポートしていたりする。開発者は「本気でやってる」と言っていたのでそれなりのものは出来るんだろうと期待している。&lt;/p&gt;
-
-&lt;p&gt;コマンド群は、Rustでcoreutilsを書き直そうという&lt;a href=&#34;https://github.com/uutils/coreutils&#34;&gt;coreutils&lt;/a&gt;というプロジェクトがある。それを使えると面白いんじゃないかと思っている。
-こういう時ってまずはRustのコンパイラの移植をしないといけないのかな？よく分かってない。&lt;/p&gt;
-
-&lt;h1 id=&#34;ats2:1c55afff208b866183fc0b210a2a3f36&#34;&gt;ATS2&lt;/h1&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://www.ats-lang.org/&#34;&gt;公式&lt;/a&gt;。線形型が肌で感じられる体になりたい。そのために修行したい。&lt;/p&gt;
-
-&lt;p&gt;SML likeなシンタックスなので学習コストが低い。依存型の部分もCoqに似てる気がするのでそこも学習コストが低い。つまり線形型の学習に集中出来る。
-ほとんど実用ではなく修行のために学習したい。もしかしたらアプリケーションくらい作れるのでは、とも思っている。
-あとCとの相互連携が出来るのも良い。&lt;/p&gt;
-
-&lt;h1 id=&#34;r:1c55afff208b866183fc0b210a2a3f36&#34;&gt;R&lt;/h1&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://www.r-project.org/&#34;&gt;公式&lt;/a&gt;。最近データを扱うことが多くなった。そういう時に簡単に可視化が出来るこの言語は素晴しい。
-まだほとんどコピペでしか動かしてないが、ちょこっとした分析くらいなら自分の手で書けるようになりたい。&lt;/p&gt;
-
-&lt;h1 id=&#34;異常検知:1c55afff208b866183fc0b210a2a3f36&#34;&gt;異常検知&lt;/h1&gt;
-
-&lt;p&gt;機械学習というとぼんやりしてるので絞ってみる。時系列データにスパイクがあったり、集団から外れた値があるのを検出する。
-これが出来れば職人が手作業で検査していたものを自動化出来る。こういうのをやってみたいなぁとぼんやり願ってはいるがまだ遠い。&lt;/p&gt;
-
-&lt;h1 id=&#34;coq:1c55afff208b866183fc0b210a2a3f36&#34;&gt;Coq&lt;/h1&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://coq.inria.fr/&#34;&gt;公式&lt;/a&gt;。&lt;a href=&#34;http://proofcafe.org/sf/&#34;&gt;ソフトウェアの基礎&lt;/a&gt;をずっとやっていたが、ProofGeneralのバグなのか、とある証明を食わせるとProofGeneralがフリーズするようになって以来途絶えている。
-バグを直すか回避策を見付けるかして先に進みたい。こちらが終わったら次は&lt;a href=&#34;http://www.amazon.co.jp/Interactive-Theorem-Proving-Program-Development/dp/3540208542&#34;&gt;CoqArt&lt;/a&gt;がある。
-&lt;a href=&#34;https://twitter.com/search?q=%23readcoqart&amp;amp;src=typd&amp;amp;lang=ja&#34;&gt;#readcoqart&lt;/a&gt;にも行く行く詐欺をしてるので行かねば。&lt;/p&gt;
-
-&lt;h1 id=&#34;isabelle:1c55afff208b866183fc0b210a2a3f36&#34;&gt;Isabelle&lt;/h1&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://isabelle.in.tum.de/&#34;&gt;公式&lt;/a&gt;。SMLユーザとしてはCoqをやるならIsabelleもやらないとな、と思っている。
-&lt;a href=&#34;http://qiita.com/myuon_myon/items/11bb5bfc2e274fdaea7c&#34;&gt;ここ&lt;/a&gt;によるとCoqとはまた違った証明のやりかたらしいのでそういう意味でもやる意味あるのかな、とか。
-Coqが終わってさらに手が空いてたら、くらい。&lt;/p&gt;
-
-&lt;h1 id=&#34;prolog:1c55afff208b866183fc0b210a2a3f36&#34;&gt;Prolog&lt;/h1&gt;
-
-&lt;p&gt;修行の1つとしてPrologをやりたい。というか、作りたい。その前にまずはPrologを書けるようになりたい。
-少しやってみているが、GNU PrologもSWI PrologもただのPrologとしか呼ばれていなくて情報を見付けるのに苦難している。
-Lispみたくそれっぽい見た目と挙動をしていたらPrologを主張出来るのだろう。&lt;/p&gt;
-
-&lt;p&gt;今気になっているのは制約ソルバとPrologの関係。
-もし制約ソルバでPrologを実装出来るなら実装をサボれるし制約ソルバを触ってみれる。ただ、制約ソルバがチューリング完全な気がしないので使えるとしても部分的な気がする。&lt;/p&gt;
-
-&lt;h1 id=&#34;fortran:1c55afff208b866183fc0b210a2a3f36&#34;&gt;Fortran&lt;/h1&gt;
-
-&lt;p&gt;神託の言語。&lt;/p&gt;
-
-&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;κeen が 2016 年に新たに学ぶべき言語は『Fortran』です。&amp;#10;&lt;a href=&#34;https://twitter.com/hashtag/1year1lang?src=hash&#34;&gt;#1year1lang&lt;/a&gt;&amp;#10;&lt;a href=&#34;https://t.co/sDP4Kk2Vfx&#34;&gt;https://t.co/sDP4Kk2Vfx&lt;/a&gt;&amp;#10;&amp;#10;うっ。。ぐ。。。&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/682535448124637184&#34;&gt;2015, 12月 31&lt;/a&gt;&lt;/blockquote&gt;
-&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
-
-&lt;p&gt;まあ、ベクトル計算楽そうだし機械学習の手習いついでにアルゴリズムを実装してみるのも悪くないのかな、と思えてきた。&lt;/p&gt;
-
-&lt;hr /&gt;
-
-&lt;p&gt;思ったより言語の話題が多かった。&lt;/p&gt;
 </description>
     </item>
     

@@ -6,8 +6,97 @@
     <description>Recent content on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Sun, 28 Feb 2016 14:40:59 +0900</lastBuildDate>
+    <lastBuildDate>Tue, 01 Mar 2016 22:49:23 +0900</lastBuildDate>
     <atom:link href="/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>テストについて考えてみた</title>
+      <link>/blog/2016/03/01/tesutonitsuitekangaetemita</link>
+      <pubDate>Tue, 01 Mar 2016 22:49:23 +0900</pubDate>
+      
+      <guid>/blog/2016/03/01/tesutonitsuitekangaetemita</guid>
+      <description>
+
+&lt;p&gt;κeenです。
+普段はテストをあまり書かない人なのですが業務では流石に書く必要があって、馴れないことをしていると色々と考えることがあったのでまとめます。
+まだ私はテストのセオリーとかには詳しくないので勝手気儘に考えたことです。&lt;/p&gt;
+
+&lt;p&gt;今まではテストは「とりあえずエッジケースとかをカバー出来てればいいんでしょ」くらいにしか考えてませんでした。
+しかしオブジェクト指向をしていて他のオブジェクトの振舞いに依存するだとか関数の引数が複雑だとかの時には適切なケースを書くのが困難でした。&lt;/p&gt;
+
+&lt;p&gt;チームの人とかとどう書くのが適切かと話しているとなんとなくまとまってきました。&lt;/p&gt;
+
+&lt;h1 id=&#34;ホーア理論:a6610a259e229e09be210cb3df2778c4&#34;&gt;ホーア理論&lt;/h1&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://proofcafe.org/sf/Hoare_J.html&#34;&gt;ホーア理論&lt;/a&gt;的にはソフトウェアの振舞/性質を表すのには3つの要素が必要です。事前条件、操作、事後条件です。&lt;/p&gt;
+
+&lt;p&gt;「事前条件Pが満たされるときに操作Oを行い、それが停止するならば事後条件Qが満たされる」&lt;/p&gt;
+
+&lt;p&gt;エンジニアリング的には以下のように読み替えられます。&lt;/p&gt;
+
+&lt;p&gt;事前条件とは、メソッドを実行するまでのお善立て。引数を用意する、依存するオブジェクトのモックを用意する、などなど。
+操作が実際のメソッドの実行。
+事後条件こそがassertなどを使ったテストケース群です。&lt;/p&gt;
+
+&lt;h1 id=&#34;テストフレームワークとホーア理論:a6610a259e229e09be210cb3df2778c4&#34;&gt;テストフレームワークとホーア理論&lt;/h1&gt;
+
+&lt;p&gt;テストを書く時にもこの考え方は役に立つな、と思いました。事前条件 x 操作 x 事後条件を網羅していけばいい訳です。&lt;/p&gt;
+
+&lt;p&gt;ところで、テストフレームワークにはテストをグルーピングしたりといくつかのスコープをネスト出来る機能を持っているものもあります。
+ホーア理論では要素が3つある訳ですから3段にネストするのが適切な気がするのは納得いくと思います。しかしどの順番でネストするかは議論の余地がありそうです。&lt;/p&gt;
+
+&lt;p&gt;勿論、ホーア理論に従うなら操作の時系列的に事前条件&amp;gt;操作&amp;gt;事後条件のネストの仕方が一番自然かと思います。
+しかしテストしたい主役は振舞、メソッドなのでそれを階層の最上位に持ってくる方が可読性、ひいてはテストの意味が高まりそうです。&lt;/p&gt;
+
+&lt;p&gt;あるいは、4段にネストして最上位にだたのグルーピング目的にメソッドを、そしてその下に事前条件&amp;gt;操作&amp;gt;事後条件を持っていく手法もありそうです。
+しかしこれだとネストが深すぎますね。また、後述するように操作の子階層を作ると例外がどこ由来なのか分かりづらいという問題もあります。&lt;/p&gt;
+
+&lt;p&gt;これの改良版は最上位にだたのグルーピング目的にメソッドを、そして事前条件&amp;gt;(操作+事後条件)という形のネストの仕方をする方法です。
+これは例外の出所を明確に出来る他、多くのテストフレームワークで操作に対する表明と事後条件に対する表明を区別しない問題もクリア出来るという利点があります。
+1つある欠点は、操作と事後条件のスコープが分かれているので操作の返り値に対して事後条件で表明したい時にどうにかしてスコープの外に出してやる必要がある点です。
+副作用を容易に許す言語なら外のスコープの変数に代入すればいいだけですが、純粋な言語だと簡単ではありません。
+そういう意味でも操作に対する表明と事後条件に対する表明は分けたいなと思う次第。&lt;/p&gt;
+
+&lt;h1 id=&#34;操作に対する表明:a6610a259e229e09be210cb3df2778c4&#34;&gt;操作に対する表明&lt;/h1&gt;
+
+&lt;p&gt;本来のホーア理論的には事後条件で表明すれば十分ですが、実際には不十分な点があります。もう一度ホーア理論の表明について思い出しましょう。&lt;/p&gt;
+
+&lt;p&gt;「事前条件pが満たされるときに操作oを行い、 &lt;strong&gt;それが停止するならば&lt;/strong&gt; 事後条件qが満たされる」&lt;/p&gt;
+
+&lt;p&gt;現実的に、関数が正しく停止することも保証したいです。「無限ループを書く方が悪い」という訳ではありません。関数が停止しないのは何も無限ループだけでなく、例外などで脱出した場合も含みます。&lt;/p&gt;
+
+&lt;p&gt;なので例外を出す/出さないの表明も欲しくなる訳です。
+もう少し踏み込んで考えると、多くのテストフレームワークでassertと例外の送出の有無を同列扱いますが、前者は事後条件に対する表明、後者は操作に対する表明なので本来は分かれるべきです。&lt;/p&gt;
+
+&lt;p&gt;また、操作に対する表明はスコープを作るとしても操作の返り値を返す手段を用意してくれると事後条件の表明がやりやすくなるな、と思いました。まる。&lt;/p&gt;
+
+&lt;h1 id=&#34;まとめ:a6610a259e229e09be210cb3df2778c4&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;p&gt;テストをする時には3つの要素に分けて考えると考えやすくなります。その3つとは事前条件、操作、事後条件で、それぞれの組み合わせがあるのでテストケースのネストは合理的です。
+しかしながら人間の認識のためにネストの順番は入れ替えた方がよいのですが、そうするとコード上いくつか問題が発生します。&lt;/p&gt;
+
+&lt;p&gt;グルーピング目的にメソッドを、そして事前条件&amp;gt;(操作+事後条件)というネストの仕方が最終案に思えますが、それを的確に表現出来、かつコード上の問題をクリア出来るテストフレームワークが中々ないのが現状です。&lt;/p&gt;
+
+&lt;h1 id=&#34;付録a:a6610a259e229e09be210cb3df2778c4&#34;&gt;付録A&lt;/h1&gt;
+
+&lt;p&gt;考えがまとまるまでの過程&lt;/p&gt;
+
+&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;テスト書いててなぜテストライブラリがテストスートを階層構造にしてるのか考えたけど1つの事前条件に対して複数の操作が考えれてそれぞれの操作に対して保証したい不変条件と事後条件があるから少なくとも3段にネストしないと上手くグルーピング出来ないのかな。&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/704586009464311808&#34;&gt;2016年3月1日&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;しかしネストする順番はどうだろう。メソッドに対するテストでグルーピングしたいからメソッド&amp;gt;事前条件&amp;gt;事後/不変条件になるのかな。&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/704586479427670016&#34;&gt;2016年3月1日&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;事前条件を最上位に持ってきた方が理解しやすいし事前条件の使い回しもしやすいけど並行にテストを走らせようと思ったらやっぱり操作毎に事前条件用意してあげた方がいいし事前条件と事後条件が近い方が性質を理解しやすい?&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/704587239402008576&#34;&gt;2016年3月1日&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;あれ?もしかして操作ってメソッドじゃなくてメソッド+引数になる?&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/704588326175551488&#34;&gt;2016年3月1日&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;うーん。操作を行うパートと条件の準備/確認のパートを分けたいんだけど難しい。例えば操作によって例外が出ることを確認したいとかが非常にやりづらい。&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/704601381605232640&#34;&gt;2016年3月1日&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;いや?やっぱり操作と事後/不変条件のパートは分けれるな?&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/704602157148872704&#34;&gt;2016年3月1日&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;そしてやはり操作をネストのトップレベルにもってくると操作の引数とかが事前条件/前提条件に依存するのでやりづらい。&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/704602629737811968&#34;&gt;2016年3月1日&lt;/a&gt;&lt;/blockquote&gt;
+&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>RustのHigher-Kinded type Trait</title>
@@ -2444,126 +2533,6 @@ Coqも3つくらいの言語が混ってるらしいのでその内のGallinaの
 &lt;p&gt;逆引きしたい。見た目からコマンドを知りたい。&lt;/p&gt;
 
 &lt;p&gt;なんかまとまりないけどそんな所で。頭痛い。&lt;/p&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>SML#のpthreadバインディング作った</title>
-      <link>/blog/2016/01/11/sml_nopthreadbaindingutsukutta</link>
-      <pubDate>Mon, 11 Jan 2016 00:57:20 +0900</pubDate>
-      
-      <guid>/blog/2016/01/11/sml_nopthreadbaindingutsukutta</guid>
-      <description>
-
-&lt;p&gt;κeenです。またしても深夜になってしまいましたがSML#のpthreadバインディングを作ったのでその報告を。&lt;/p&gt;
-
-&lt;p&gt;SML#はC FFIを簡単に書け、さらにランタイムがnon Moving GCなのでSML#自体はサポートしていないもののランタイムそのものはマルチスレッドに対応しているという大変興味深い特徴を持っています。
-処理系側としてもマルチスレッドが欲しいならpthreadのFFIを使って好きにやってくれというスタンスのようです。&lt;/p&gt;
-
-&lt;p&gt;ということでさまざまなマルチスレッドアプリケーションの下地になるべくpthreadのバインディングを作りました。とはいってもまだ不完全ですが。&lt;/p&gt;
-
-&lt;p&gt;どういうものが用意出来ているかは&lt;a href=&#34;https://github.com/KeenS/smlsharp_pthread/blob/master/src/pthread.smi&#34;&gt;こちら&lt;/a&gt;が一覧として機能しています。&lt;/p&gt;
-
-&lt;p&gt;SML的には改善の余地がある(例えば、排他的なフラグをdatatypeで定義するとか)のですが、あくまで低レベルなバインディングに徹するためにintのままで残してあります。&lt;/p&gt;
-
-&lt;p&gt;他にはCのマクロで実現されていたものはインポート出来ないのでどうにかしてあったりどうにかしてなかったりしてます。
-例えば&lt;code&gt;PTHREAD_XXX_INITIALIZER&lt;/code&gt;はマクロで定義された初期値ですが、SMLからは参照出来ないのであきらめました。
-代わりに&lt;code&gt;pthread_xxx_new&lt;/code&gt;関数を用意したので&lt;code&gt;pthread_xxx_init&lt;/code&gt;と併せて使うことでそれらの値を初期化出来ます。
-メモリ確保と初期化同時にやれよとの声が聞こえてきそうですが繰り返すとあくまで低レベルなバインディングなのでそういうのは他に譲ることにします。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;pthread_cleanup_{pop/push}&lt;/code&gt;はバインディングが書けませんでした。
-それらはマクロとして実現されていて、しかも&lt;code&gt;pthread_cleanup_push&lt;/code&gt;で開き括弧を挿入して&lt;code&gt;pthread_cleanup_pop&lt;/code&gt;で閉じるというエグい実装なので移植は無理でしょう。
-POSIX的にもマクロとして実現して良いことになっているので文句は言えません。&lt;/p&gt;
-
-&lt;h1 id=&#34;サンプルコード:2d3ca0e3b6ad5447c7ddca19d53be02a&#34;&gt;サンプルコード&lt;/h1&gt;
-
-&lt;p&gt;レポジトリにも入ってますが、スレッドを作る小さな例だとこうなります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;open PThread
-fun exit reason = (
-    print (reason ^ &amp;quot;\n&amp;quot;);
-    OS.Process.exit OS.Process.failure
-)
-
-
-val fromUnitPtr = SMLSharp_Builtin.Pointer.fromUnitPtr
-val toUnitPtr = SMLSharp_Builtin.Pointer.toUnitPtr
-(* durty hack *)
-val sml_str_new = _import &amp;quot;sml_str_new&amp;quot;: (string) -&amp;gt; char ptr
-
-fun threadFunc (arg:unit ptr): unit ptr = let
-    val cp: char ptr = fromUnitPtr arg
-    val s = Pointer.importString cp
-    val () = print s
-    (* val ret =ref _NULL *)
-    (* val () = ret := (String.size s) *)
-in
-    (* ret *)
-    _NULL
-end
-                   
-val () = let
-    val tattr = ref (pthread_attr_new())
-    val s = pthread_attr_init(tattr)
-    val () = if s &amp;lt;&amp;gt; 0
-             then exit &amp;quot;pthread_attr_init&amp;quot;
-             else ()
-    val thread_ref = ref (pthread_new())
-    val arg = sml_str_new &amp;quot;Hello world\n&amp;quot;
-    val s = pthread_create(thread_ref, tattr, threadFunc, toUnitPtr arg)
-    val t1 = !thread_ref
-    val () = if s &amp;lt;&amp;gt; 0
-             then exit &amp;quot;thread creation failed&amp;quot;
-             else ()
-    val s = pthread_attr_destroy(tattr)
-    val () = if s &amp;lt;&amp;gt; 0
-             then exit &amp;quot;pthread_attr_destroy&amp;quot;
-             else ()
-    val () = print &amp;quot;Message from main()\n&amp;quot;;
-    val resRef = ref (Pointer.NULL ())
-    val s = pthread_join(t1, resRef)
-    val () = if s &amp;lt;&amp;gt; 0
-             then exit &amp;quot;thread creation failed&amp;quot;
-             else ()
-    (* val () = print (&amp;quot;Thread returned&amp;quot; ^ Int.toString  (!resRef) ^ &amp;quot;\n&amp;quot;) *)
-in
-    ()
-end
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;言わずとも雰囲気で読み取れそうですがこの例はCのサンプルをそのまま移植しました。Cだと&lt;code&gt;(void *)&lt;/code&gt;と文字列で相互変換が出来るのですがSML#だと一筋縄では出来ないので内部APIを叩くとかのかなりアレなハックしてます。
-&lt;a href=&#34;https://github.com/smlsharp/smlsharp/issues/45&#34;&gt;SML#にイシューに上げ&lt;/a&gt;ましたが&lt;code&gt;(void *)&lt;/code&gt;が強敵ですね。&lt;/p&gt;
-
-&lt;h1 id=&#34;可搬性の話:2d3ca0e3b6ad5447c7ddca19d53be02a&#34;&gt;可搬性の話&lt;/h1&gt;
-
-&lt;p&gt;ところで、pthreadはp(POSIX)の名が付いている通り様々なプラットフォームで利用出来、そしてそれぞれのプラットフォーム毎に実装が異なります。
-勿論、POSIXで定められているのでAPIレベルでは互換性がある(≒関数のバインディングは問題ない)のですが、ABI、データの表現に互換性がありません(≒データ型のバインディングに問題がある)&lt;/p&gt;
-
-&lt;p&gt;実はその辺で苦労がありました。今のところ手元の環境(Linux)でしか移植が済んでません。しかし他のプラットフォームの移植は書ける形になっています。
-これは&lt;a href=&#34;//KeenS.github.io/blog/2015/12/26/sml_tocpuripurosessanorenkei/&#34;&gt;以前&lt;/a&gt;書いたSMLのファイルにCのプリプロセッサを適用するというなんともいえないハックを使うことで実現しています。
-他のプラットフォームに移植するには&lt;/p&gt;
-
-&lt;ol&gt;
-&lt;li&gt;どういうマクロが定義されている時にどのプラットフォームのpthreadを使っているかの対応を調べる&lt;/li&gt;
-&lt;li&gt;そのプラットフォームの&lt;code&gt;pthread.h&lt;/code&gt;を入手してデータ型を移植する&lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;p&gt;手順が必要です。私は手元の環境で動かすのが精一杯なのでMacとかで動かしたい方がいればプルリクを頂けると。
-前述の通り、関数のバインディングは可搬性があるので必要なのはデータ型と定数の移植です。ある程度はプリプロセッサも使えるのでほぼヘッダファイルを移植する感じですね。&lt;/p&gt;
-
-&lt;p&gt;まあ、実をいうと関数の移植も細々したものが面倒なので放置していたりします。ここら辺は作業ゲーなので気が向いたらやります。&lt;/p&gt;
-
-&lt;p&gt;あとは若干迷っているのが必ずしも実装されているとは限らないオプショナルな機能の移植ですね。
-バリアやリードライトロック、スピンロックがそれにあたります。
-可搬性とはいってもSML#自身が動く環境が限られているのでMacでもそれらが使えるなら移植してしまおうかと思っていますがまだ調べきれてません。&lt;/p&gt;
-
-&lt;h1 id=&#34;まとめ:2d3ca0e3b6ad5447c7ddca19d53be02a&#34;&gt;まとめ&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;pthreadのバインディング作ったよ&lt;/li&gt;
-&lt;li&gt;まだバインドが書かれてない関数もあるよ&lt;/li&gt;
-&lt;li&gt;Macの移植パッチ待ってるよ&lt;/li&gt;
-&lt;/ul&gt;
 </description>
     </item>
     
