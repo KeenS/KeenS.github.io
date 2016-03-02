@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+    <head>
+        
+        <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+
+        <title>Rustでstructのmutableなfieldあれこれ | </title>
+        <link rel="stylesheet" href='http://fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css' />
+        <link rel="stylesheet" href="/libraries/normalize.3.0.1.css" />
+        <link rel="stylesheet" href="/css/liquorice.css" />
+        <link rel="shortcut icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon-144-precomposed.png" sizes="144x144" />
+        <link rel="alternate" href="" type="application/rss+xml" title="" />
+        
+        <link rel="stylesheet" href="/highlight.js/styles/xcode.css" />
+<script src="/highlight.js/highlight.min.js"></script>
+<script>hljs.initHighlightingOnLoad();</script>
+<script type="text/x-mathjax-config">
+ MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
+</script>
+<script type="text/javascript"
+        src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML">
+</script>
+<meta http-equiv="X-UA-Compatible" CONTENT="IE=EmulateIE7" />
+
+    </head>
+    <body class="li-body">
+
+<header class="li-page-header">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-brand li-left">
+                <a href="/"></a></div>
+                <div class="li-menu li-right">
+                    <span class="li-menu-icon" onclick="javascript:toggle('menu');">&#9776;</span>
+                    <ul id="menu2" class="li-menu-items">
+                        
+                            <li><a href="/about/"> About </a></li>
+                        
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="sixteen columns">
+                <ul id="menu" class="li-menu-items li-menu-mobile">
+                    
+                        <li><a href="/about/"> About </a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+
+
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <article class="li-article">
+                    <header class="li-article-header">
+                        <h1 class="li-article-title">Rustでstructのmutableなfieldあれこれ</h1>
+                        <div class="li-article-meta">
+    <time class="li-article-date">
+                    </header>
+                    <section>
+                        
+
+<p>κeenです。人々にRustを薦めておきながら本人は昨日ようやく入門しました。その時に困ったことをメモ。タイトルがルー語になってますが気にしない。</p>
+
+<p>因みにこれはRust 1.0の情報です。</p>
+
+<h1 id="導入:3ab5e7833b8f9de647371db38dc333a5">導入</h1>
+
+<p>Rustを知らない人のために説明すると、Rustの値はデフォルトでイミュータブルです。デフォルトで、というのはもちろんミュータブルにすることも出来ます。
+標準ライブラリにも値がイミュータブルであることを要求するものもあります。
+そしてミュータビリティは<code>mut</code>として型にも現れます。厳密に同じかは知りませんが<code>const</code>の逆、と思えばいいでしょう。</p>
+
+<pre><code class="language-rust">struct Point {
+    x: isize,
+    y: isize
+}
+
+fn double(p: &amp;mut Point) {
+    p.x = p.x * 2;
+    p.y = p.y * 2;
+}
+
+fn main(){
+    let mut p1 = Point{x: 1, y: 2};
+    let p2 = Point{x: 1, y: 2};
+    double(&amp;mut p1);
+    double(&amp;mut p2); // error! p2 is immutable
+}
+</code></pre>
+
+<p>イミュータビリティは継承します。親のstructがイミュータブルなら子もイミュータルになります。因みにフィールドに<code>mut</code>を指定することは出来ないようです。</p>
+
+<pre><code class="language-rust">use std::collections::HashMap;
+
+struct IntHashMap {
+    hash: HashMap&lt;isize, isize&gt;
+}
+fn main(){
+    let h = IntHashMap{hash: HashMap::new()};
+    h.hash.insert(1, 2);        // error! h.hash is immutable
+}
+</code></pre>
+
+<p>最後に、少し本筋とずれますがtraitについて。他の言語でいうインターフェースのようなものです。今回これで困ったので。</p>
+
+<p>例えばHTTPライブラリの<a href="http://hyper.rs/hyper/hyper/server/trait.Handler.html">hyper</a>では次のようなトレイトを実装しているstructをrequest handlerとして登録できます。</p>
+
+<pre><code class="language-rust">pub trait Handler: Sync + Send {
+    fn handle&lt;'a, 'k&gt;(&amp;'a self, Request&lt;'a, 'k&gt;, Response&lt;'a, Fresh&gt;);
+
+    fn check_continue(&amp;self, _: (&amp;Method, &amp;RequestUri, &amp;Headers)) -&gt; StatusCode { ... }
+}
+</code></pre>
+
+<p>これを見て下さい。</p>
+
+<pre><code class="language-rust">fn handle&lt;'a, 'k&gt;(&amp;'a self, Request&lt;'a, 'k&gt;, Response&lt;'a, Fresh&gt;);
+</code></pre>
+
+<p><code>self</code>に<code>mut</code>がついてませんね。つまりhandlerはイミュータブルな値として渡されます。例えば先の例のようにフィールドにハッシュマップを持っていても更新出来ません。ちょっと困りますね。</p>
+
+<h1 id="cell-refcell:3ab5e7833b8f9de647371db38dc333a5">Cell/RefCell</h1>
+
+<p>ということでフィールドにミュータビリティを入れるのが <code>std::cell::{Cell, RefCell}</code> です。この辺のブログを参考に。</p>
+
+<p><a href="http://saneyukis.hatenablog.com/entry/2014/05/30/230351">#rustlang における構造体のmutabilityと<code>Cell/RefCell</code> - snyk_s log</a></p>
+
+<p>で、喜び勇んで使ったのですが次なるエラーが。</p>
+
+<pre><code class="language-rust">struct MyHandler {
+    cache: RefCell&lt;HashMap&lt;String, Vec&lt;u8&gt;&gt;&gt;
+}
+
+impl Handler for MyHandler {
+    fn handle&lt;'a, 'k&gt;(&amp;'a self, Request&lt;'a, 'k&gt;, Response&lt;'a, Fresh&gt;){
+        ....
+    }
+}
+</code></pre>
+
+<pre><code>the trait `core::marker::Sync` is not implemented for the type `core::cell::UnsafeCell&lt;...
+</code></pre>
+
+<p>どうも、hyperは複数スレッドでも動かせるのでハンドラにスレッドセーフであることが要求されるようです。そしてRustコンパイラはRefCellがスレッドセーフでない事を知っているのでコンパイルを弾きます。怖いですね。</p>
+
+<h1 id="mutex:3ab5e7833b8f9de647371db38dc333a5">Mutex</h1>
+
+<p>無理っぽいので最早別の手段を捜し始めます。</p>
+
+<p><blockquote class="twitter-tweet" lang="ja"><p lang="ja" dir="ltr">キャッシュ用のアクター走らせるのが良い気がしてきた</p>&mdash; κeen (@blackenedgold) <a href="https://twitter.com/blackenedgold/status/609471732970209280">2015, 6月 12</a></blockquote>
+<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script></p>
+
+<p>これはちょっと無理がありそうですね。</p>
+
+<p>しかし、別の方法があるようでした。<a href="https://doc.rust-lang.org/std/sync/struct.Mutex.html">std::sync::Mutex</a>です。</p>
+
+<pre><code class="language-rust">struct MyHandler {
+    cache: Mutex&lt;HashMap&lt;String, Vec&lt;u8&gt;&gt;&gt;
+}
+</code></pre>
+
+<p>こんな感じで<code>lock().unwrap()</code>するだけで使えます。</p>
+
+<pre><code class="language-rust">let mut cache = self.cache.lock().unwrap();
+</code></pre>
+
+<p>因みにロックの解除は不要です。Rustコンパイラは値の生存期間を知っているので値がこれ以上使われなくなった箇所にコンパイラがunlockを挟みます。(正確に言うとdrop(デストラクタ)が挿入され、dropがリソースの開放を行なう)</p>
+
+<h1 id="まとめ:3ab5e7833b8f9de647371db38dc333a5">まとめ</h1>
+
+<ul>
+<li>rustのイミュータビリティは継承する</li>
+<li>structのfieldに直接<code>mut</code>は指定出来ない</li>
+<li>シングルスレッドでミュータブルなフィールドが欲しいなら<code>Cell</code>/<code>RefCell</code></li>
+<li>マルチスレッドなら<code>Mutex</code></li>
+</ul>
+
+                    </section>
+                </article>
+            </div>
+        </div>
+
+        <div class="row li-author">
+    <div class="sixteen columns">
+        Written by <strong></strong>
+    </div>
+</div>
+
+
+        <div class="row li-pagination">
+            <div class="eight columns">
+                <div class="li-pagination-previous">
+                    
+                        Later article<br />
+                        <a href="/post/Shell_Scriptwokakutokinikiwotsuketaikoto/"> Shell Scriptを書くときのテクニック10選</a>
+                    
+                </div>
+            </div>
+            <div class="eight columns">
+                <div class="li-pagination-next">
+                    
+                        Older article<br />
+                        <a href="/post/ClojuredeOpenCV3_0totawamureru/"> ClojureでOpenCV 3.0と戯れる</a>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+<footer class="li-page-footer">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-page-footer-legal">
+                    &copy; 2016. All rights reserved. 
+                </div>
+                <div class="li-page-footer-theme">
+                    <span class=""><a href="https://github.com/eliasson/liquorice/">liquorice</a> is a theme for <a href="http://hugo.spf13.com">hugo</a></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+
+    <script type="text/javascript">
+    <!--
+    function toggle(id) {
+        var e = document.getElementById(id);
+        e.style.display == 'block' ? e.style.display = 'none' : e.style.display = 'block';
+    }
+    
+    </script>
+    <script type="text/javascript">
+    <!--
+        var _gaq = _gaq || [];
+        _gaq.push(['_setAccount', ""]);
+        _gaq.push(['_trackPageview']);
+
+        (function() {
+        var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+        ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+        var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+        })();
+    -->
+    </script>
+    </body>
+</html>
+
