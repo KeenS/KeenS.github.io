@@ -94,7 +94,7 @@ if (opt != nullPointer) {
 
 ```
 
-思ったよりも複雑…。さて、問題は`let fn_once: FnOnce = AnonymousType;`としているので一旦元の無名関数の情報が抜けてしまいます。
+思ったよりも複雑…。さて、問題は`let fn_once: FnOnce = AnonymousType;`としているので一旦元の無名関数の情報が抜けてしまいそうな気がします。
 となるとコンパイル時に具体的なメソッドを決定出来ないので`fn_once.call_once(opt);`は以下のような雰囲気のコードになってしまいます。
 
 ``` rust
@@ -118,7 +118,7 @@ call_once_fn(opt);
 the_call_once_fn_of_AnonymousType(opt);
 ```
 
-とコンパイル時に畳み込まれ、1段で済みます。
+とコンパイルされ、
 
 よって
 
