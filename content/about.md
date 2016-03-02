@@ -10,45 +10,38 @@ menu: "main"
 ---
 ## Me
 
-- サイバーエージェントのエンジニア(2015年入社)
-- 合気道、剣道、弓道やってる。
-- ゲーム作るサークルに居るけどゲームは作ってない。
-- [Shibuya.lisp](http://shibuya.lisp-users.org/)の運営。
-- [Amazon欲しいものリスト](http://www.amazon.co.jp/registry/wishlist/TA077537OIUP)
+- 2011-04 - 2013-03 東京大学理科I類
+- 2013-04 - 2015-03 東京大学理学部数学科
+- 2015-04 - 現在    サイバーエージェント(エンジニア)
+
+
+## Activities
+
+- 2014-06 - 現在     [Shibuya.lisp](http://shibuya.lisp-users.org/)の運営
+- 2016-02 - 現在     [Rustドキュメント翻訳プロジェクト](https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/)
+- 2013 [ISUCON3](http://isucon.net) 学生賞
+- 2014 [ISUCON4](http://isucon.net) 学生賞
+
+その他いくつかのOSSの開発者/コミッタ/コントリビュータ
 
 ## SNS accounts
+
 - Twitter: [@blackenedgold](http://twitter.com/blackenedgold)
 - GitHub: [KeenS](https://github.com/KeenS)
-- COOKPAD: [keenさん](http://cookpad.com/kitchen/3303629)
+- COOKPAD: [κeen](http://cookpad.com/kitchen/3303629)
 - Qiita: [blackenedgold](https://qiita.com/blackenedgold)
 - SlideShare: [blackenedgold](http://www.slideshare.net/blackenedgold)
+- [LinkedIn](https://www.linkedin.com/in/%E8%88%9C%E7%90%B3-%E5%BF%97%E6%9D%91-765b4310a?trk=hp-identity-headline)
 
-## Environment {#env}
+## Main Interests
 
-- Machine:  
-  <pre>
-  CPU: Intel(R) Core(TM) i5 CPU       M 450  @ 2.40GHz (2394.47-MHz K8-class CPU)
-    Origin = "GenuineIntel"  Id = 0x20655  Family = 0x6  Model = 0x25  Stepping = 5
-    Features=0xbfebfbff&le;FPU,VME,DE,PSE,TSC,MSR,PAE,MCE,CX8,APIC,SEP,MTRR,PGE,MCA,CMOV,PAT,PSE36,CLFLUSH,DTS,ACPI,MMX,FXSR,SSE,SSE2,SS,HTT,TM,PBE&ge;
-    Features2=0x9ae3bd&le;SSE3,DTES64,MON,DS_CPL,VMX,EST,TM2,SSSE3,CX16,xTPR,PDCM,PCID,SSE4.1,SSE4.2,POPCNT&ge;
-    AMD Features=0x28100800&le;SYSCALL,NX,RDTSCP,LM&ge;
-    AMD Features2=0x1&le;LAHF&ge;
-    VT-x: PAT,HLT,MTF,PAUSE,EPT,UG,VPID
-    TSC: P-state invariant, performance statistics
-  real memory  = 8589934592 (8192 MB)
-  avail memory = 8052379648 (7679 MB)
-  Event timer "LAPIC" quality 600
-  ACPI APIC Table: &le;TOSCPL TOSCPL00&ge;
-  FreeBSD/SMP: Multiprocessor System Detected: 4 CPUs
-  FreeBSD/SMP: 1 package(s) x 2 core(s) x 2 SMT threads
-   cpu0 (BSP): APIC ID:  0
-   cpu1 (AP): APIC ID:  1
-   cpu2 (AP): APIC ID:  4
-   cpu3 (AP): APIC ID:  5
-  </pre>
-- OS : FreeBSD
-- Window Manager : KDE
-- shell : zsh
-- terminal : Konsole
-- IDE : Emacs
-- Language : 日本語, Ruby, Lisp, OCaml, Shell Script
+- Emacs
+- Lisp
+- 言語処理系(主にインタプリタ)
+  - GC
+  - 最適化
+  - CPU
+  - λ計算
+  - 継続
+- Linux
+- システムプログラミング
