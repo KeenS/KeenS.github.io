@@ -4,12 +4,8 @@ date: 2016-03-06T05:27:39+09:00
 description: "異種プログラミング言語格闘勉強会での発表用。
 主に初心者/使ったことのない人にRustを紹介する内容
 "
-draft: true
 title: Rustとは何か。どんな言語か。
 ---
-
-TODO:
- * もうちょっと内容増やせる？
 
 <section data-markdown
     data-separator="\n\n"
@@ -72,6 +68,7 @@ TODO:
 * データ競合が起きない
   + 所有権システム
   + だいたいコンパイル時Read Writeロック
+  + Read only参照複数 or Write可能参照1つ
 * LLVMベースの強力な最適化
 * スレッド周辺のAPIが揃ってる
 
@@ -105,6 +102,7 @@ TODO:
 * 標準ライブラリとかはバリバリ手続的
 * Lispよりも函数型言語っぽくない。
 * とはいえ抽象力は高いのでそこまで煩雑にはならない
+
 
 ## GCがなくて大丈夫?
 
@@ -112,6 +110,7 @@ TODO:
 * コンパイル時にメモリ管理
   + コンパイラが必要なところにmalloc/freeを挟むイメージ
 * むしろメモリ以外(fd、ロックなど)も自動管理
+  + GCがある言語よりリソース管理の自動化が徹底してる
 * [リージョンについて | κeenのHappy Hacκing Blog](http://keens.github.io/blog/2015/12/09/ri_jonnitsuite/)
 
 
@@ -162,8 +161,17 @@ TODO:
 * Rustパッケージのセントラルレポジトリ
 * 必ずビルドが通るような工夫
   + cargo yank
+  + 同じライブラリの違うバージョンがいても大丈夫
 * Cargoとの連携
 * Cargoからpublishも可能
+
+
+# [Rust Playground](https://play.rust-lang.org/)
+---------------------------------------
+
+* webからRustを試せる
+* とりあえず試すと色々分かる
+  + 所有権難しいとか
 
 
 # [The Rust Programming Language](https://doc.rust-lang.org/book/)
@@ -174,6 +182,7 @@ TODO:
 * [和訳版](https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/)もある
   + [GitHub](https://github.com/rust-lang-ja/the-rust-programming-language-ja)で作業中
   + これの宣伝しに来ただけ
+* 1.6ほぼ終わり、1.7はまだ
 
 
 # ライブラリ紹介
@@ -183,6 +192,7 @@ TODO:
 * [mio](https://github.com/carllerche/mio)
 * 低レベルな非同期IOライブラリ
   + libuvやlibev2相当
+  + イベントスレッドではなくイベントループ
 * これを純Rustで実装
 * つまり(比較的)高水準なAPIで使える
 * 色んなライブラリの下地になっている
@@ -199,6 +209,24 @@ TODO:
   + DBにアクセスしてスキーマ情報抜いて
   + コード生成
 * モデルもCRUDでちゃんと使い分けている
+
+
+# 所有権難しい
+--------------
+下記のコードは動かない。
+
+``` rust
+fn main(){
+    let hello = "Hello, ".to_owned();
+    let world = "World!";
+    let hello_world =  hello + world;
+    println!("{}", hello);
+    println!("{}", world);
+    println!("{}", hello_world);
+}
+
+```
+
 
 
 # まとめ
