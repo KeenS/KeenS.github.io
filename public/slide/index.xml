@@ -6,8 +6,201 @@
     <description>Recent content in Slides on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Sun, 06 Mar 2016 14:54:30 +0900</lastBuildDate>
+    <lastBuildDate>Tue, 29 Mar 2016 01:44:39 +0900</lastBuildDate>
     <atom:link href="/slide/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>SMLで函数型的正規表現マッチ</title>
+      <link>/slide/SMLdekansuukatatekiseikihyougenmatchi/</link>
+      <pubDate>Tue, 29 Mar 2016 01:44:39 +0900</pubDate>
+      
+      <guid>/slide/SMLdekansuukatatekiseikihyougenmatchi/</guid>
+      <description>&lt;section data-markdown
+    data-separator=&#34;\n\n&#34;
+    data-vertical=&#34;\n\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+&lt;script type=&#34;text/template&#34;&gt;
+# SMLで函数型的正規表現マッチ
+----------------------
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# About Me
+---------
+![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
+
+ + κeen
+ + [@blackenedgold](https://twitter.com/blackenedgold)
+ + Github: [KeenS](https://github.com/KeenS)
+ + サイバーエージェントのエンジニア
+ + Lisp, ML, Rust, Shell Scriptあたりを書きます
+
+
+# 元ネタ
+--------
+[関数型的正規表現マッチ | Preferred Research](https://research.preferred.jp/2010/11/regexp-play/)
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# 正規表現
+----------
+
+必要最小限の要素は5つだけ
+
+1. 空文字
+2. アルファベット1つ
+3. 正規表現のOR結合
+4. 正規表現のAND結合
+5. 正規表現の繰り返し
+
+
+# SMLで表してみる
+-----------------
+
+``` sml
+datatype  reg
+  = Empty
+  | Sym of t
+  | Or of reg * reg
+  | And of reg * reg
+  | Rep of reg
+```
+
+# 本当に大丈夫？
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+
+# `/(a|b)*c/`
+-----------
+
+``` sml
+And(Rep(Or(Sym &#34;a&#34;, Sym &#34;b&#34;)), Sym &#34;c&#34;)
+```
+
+
+# `/https?:\/\/[a-z]*/`
+-----------
+
+``` sml
+val a_z = Or(Sym&#34;a&#34;, Or(Sym &#34;b&#34;, Or(Sym &#34;d&#34;, ...)))
+And(Sym &#34;http&#34;, And(Or(Sym &#34;s&#34;, Empty), And(Sym &#34;://&#34;, Rep a_z)))
+```
+
+
+# 実装してみる
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+
+# `Empty`, `Sym`, `Or`
+----------------
+trivial
+
+``` sml
+fun match Empty u = isEmpty u
+  | match (Sym a) u = a = u
+  | match (Or(p, q)) u = match p u orelse match q u
+```
+
+
+# `And`
+--------
+
+`And(p, q)` に入力が`u`の時`p`がどこまでマッチするか分からないので
+
+* `u` から一部取ってきて`p`にマッチするか確認
+* 残りの文字列が`q`にマッチするか確認
+
+
+# `And`
+--------
+`match (And (Sym &#34;a&#34;, Sym &#34;b&#34;)) &#34;abd&#34;` の時
+
+* (Sym &#34;a&#34;と&#34;&#34;)、(Sym &#34;b&#34;と&#34;abd&#34;)
+* (Sym &#34;a&#34;と&#34;a&#34;)、(Sym &#34;b&#34;と&#34;bd&#34;)
+* (Sym &#34;a&#34;と&#34;ab&#34;)、(Sym &#34;b&#34;と&#34;d&#34;)
+* (Sym &#34;a&#34;と&#34;abd&#34;)、(Sym &#34;b&#34;と&#34;&#34;)
+
+
+
+# `And`
+--------
+
+``` sml
+  | match (And(p, q)) u = 
+    withSprits u (fn (u1, u2) =&gt; 
+      match p u1 andalso match q u2)
+
+```
+
+`withSprits u f` は`u`を2分割するパターン全通りに対して`f`を呼び、最初に`true`になったものを返す。
+
+
+# `Rep`
+-------
+
+`Rep(r)` に入力が`u`の時、`r`がどこまでマッチするかも`Rep`が何回繰り返すかも分からないので
+
+* `u` を任意の個数に分割し
+* その全てが`r`にマッチするか確認
+
+
+
+# `Rep`
+--------
+`match (Rep (Sym &#34;a&#34;)) &#34;abd&#34;` の時
+
+* (Sym &#34;a&#34;と&#34;abd&#34;)
+* (Sym &#34;a&#34;と&#34;a&#34;)、(Sym &#34;a&#34;と&#34;bd&#34;)
+* (Sym &#34;a&#34;と&#34;ab&#34;)、(Sym &#34;a&#34;と&#34;d&#34;)
+* (Sym &#34;a&#34;と&#34;a&#34;)、(Sym &#34;a&#34;と&#34;b&#34;)、(Sym &#34;a&#34;と&#34;d&#34;)
+
+
+
+
+# `Rep`
+--------
+
+``` sml
+  | match (Rep(r)) u =
+    withParts u (fn input =&gt;
+      List.all (match r) input)
+```
+
+`withParts u f` は`u`を分割するパターン全通りに対して`f`を呼び、最初に`true`になったものを返す。
+
+
+
+# チェック
+----------
+
+```
+# match (And(Rep(Or(Sym &#34;a&#34;, Sym &#34;b&#34;)), Sym &#34;c&#34;)) &#34;ababbca&#34;;
+val it = false : bool
+# match (And(Rep(Or(Sym &#34;a&#34;, Sym &#34;b&#34;)), Sym &#34;c&#34;)) &#34;ababbc&#34;;
+val it = true : bool
+# match (And(Rep(Or(Sym &#34;a&#34;, Sym &#34;b&#34;)), Sym &#34;c&#34;)) &#34;c&#34;;
+val it = true : bool
+```
+
+
+# まとめ
+--------
+
+* 適当に実装したら正規表現も簡単に実装出来るよ
+* SMLで正規表現実装したよ
+
+
+# 参考
+------
+
+* [KeenS/regexp](https://github.com/KeenS/regexp)
+
+&lt;/script&gt;
+&lt;/section&gt;
+</description>
+    </item>
     
     <item>
       <title>ビッグデータしないDrill、ローカルで快適に使うために</title>
@@ -3192,138 +3385,6 @@ FRESH勉強会
 * [ISUCONの話(夏期講習2014)](http://www.slideshare.net/tagomoris/isucon2014)
 * [kamipoさんはすごい人](https://twitter.com/search?q=kamipo%E3%81%95%E3%82%93%E3%81%AF%E3%81%99%E3%81%94%E3%81%84%E4%BA%BA&amp;src=typd&amp;vertical=default&amp;f=tweets)
 
-&lt;/script&gt;
-&lt;/section&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>Transducerについて</title>
-      <link>/slide/transducernitsuite/</link>
-      <pubDate>Wed, 03 Jun 2015 22:29:50 +0900</pubDate>
-      
-      <guid>/slide/transducernitsuite/</guid>
-      <description>&lt;section data-markdown
-    data-separator=&#34;\n\n&#34;
-    data-vertical=&#34;\n\n&#34;
-    data-notes=&#34;^Note:&#34;&gt;
-&lt;script type=&#34;text/template&#34;&gt;
-# Transducerについて
-----------------------
-サイバーエージェント  
-朝の3分スピーチ
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# About Me
----------
-![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
-
- + κeen
- + [@blackenedgold](https://twitter.com/blackenedgold)
- + Github: [KeenS](https://github.com/KeenS)
- + 渋谷のエンジニア
- + Lisp, ML, Shell Scriptあたりを書きます
-
-# Transducerって？
-------------------
-
-* Clojure 1.7で入るフレームワーク
-* 関数のパイプライン化を簡単にする
-* 入力、出力には依存しない
-
-
-# Reduce関数について
--------------------
-
-* `reduce: (&#39;a -&gt; &#39;b -&gt; &#39;a) &#39;a -&gt; &#39;b list`
-* `(&#39;a -&gt; &#39;b -&gt; &#39;a)` でシーケンスを集約する
-* `(reduce + 0 &#39;(1 2 3)) ;=&gt; 6`
-* 要はreduceは関数を使って集約する。
-
-# Transducerについて
--------------------
-
-* `transduce:((&#39;a -&gt; &#39;b -&gt; &#39;a) -&gt; (&#39;a -&gt; &#39;b -&gt; &#39;a)) (&#39;a -&gt; &#39;b -&gt; &#39;a) &#39;a -&gt; &#39;b list`
-* 集約関数を変換する関数もとる
-* `(transduce xf + 0 &#39;(1 2 3))`
-* transducerで集約する前に処理を挟める
-
-# すごいところ
--------------------------
-## コンポーサビリティ
-
-* `((&#39;a -&gt; &#39;b -&gt; &#39;a) -&gt; (&#39;a -&gt; &#39;b -&gt; &#39;a))`
-* 変換関数は入力と出力が同じ。
-* つまり変換関数を合成出来る
-* ex) `(comp (filter odd?) (map inc))`
-
-
-# すごいところ2
---------------------------
-## 汎用性
-
-* 各関数は入力や出力について知る必要はない
-  + シーケンスではなく要素に対して定義される
-* シーケンスだけでなく遅延シーケンス、ストリーム、チャネルなどなどにも使える
-* 中間シーケンスを作らない
-  + 遅延シーケンスやストリームには大きなメリット
-* 集約先をシーケンスなどにすることも出来る
-  + 関数の汎用性が上がる
-
-# すごいところ3
---------------
-## 並列/非同期
-
-* core.asyncもtransducerをサポート
-* 各変換関数を並列/非同期に実行が可能
-* さらに各関数に割り当てるプロセッサの数も細かく制御出来る
-
-
-&lt;span style=&#34;font-size: 500%;&#34;&gt;変換して&lt;/span&gt;
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-&lt;span style=&#34;font-size: 500%;&#34;&gt;集約する&lt;/span&gt;
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-&lt;span style=&#34;font-size: 300%;&#34;&gt;何かに似てない？&lt;/span&gt;
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-&lt;span style=&#34;font-size: 600%;&#34;&gt;MapReduce&lt;/span&gt;
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-&lt;blockquote class=&#34;twitter-tweet&#34; data-conversation=&#34;none&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;&lt;a href=&#34;https://twitter.com/oza_x86&#34;&gt;@oza_x86&lt;/a&gt; ozaさんの近しい環境というとHadoop...多段Mapreduceをtransdecerみたいにしようってはなしとかですか？&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/605368356393218048&#34;&gt;2015, 6月 1&lt;/a&gt;&lt;/blockquote&gt;
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-&lt;blockquote class=&#34;twitter-tweet&#34; data-conversation=&#34;none&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;&lt;a href=&#34;https://twitter.com/blackenedgold&#34;&gt;@blackenedgold&lt;/a&gt; まさにその通りです．MapReduce には Combiner という中間集約をする API があるのですが，それをもっと汎用的にしようという話です． &lt;a href=&#34;http://t.co/injEiPjePG&#34;&gt;http://t.co/injEiPjePG&lt;/a&gt;&lt;/p&gt;&amp;mdash; oza (@oza_x86) &lt;a href=&#34;https://twitter.com/oza_x86/status/605369771505221633&#34;&gt;2015, 6月 1&lt;/a&gt;&lt;/blockquote&gt;
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-&lt;blockquote class=&#34;twitter-tweet&#34; data-conversation=&#34;none&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;&lt;a href=&#34;https://twitter.com/oza_x86&#34;&gt;@oza_x86&lt;/a&gt; すごい楽しそうですね。Clojure向けのAPIがtransducerのバッグエンドになって普段書いてるコードがそのままHadoopで動いたりしたら、とか夢が無限に広がります&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/605370461476646912&#34;&gt;2015, 6月 1&lt;/a&gt;&lt;/blockquote&gt;
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-&lt;blockquote class=&#34;twitter-tweet&#34; data-conversation=&#34;none&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;&lt;a href=&#34;https://twitter.com/blackenedgold&#34;&gt;@blackenedgold&lt;/a&gt; おお，その案は良いですね！！&lt;/p&gt;&amp;mdash; oza (@oza_x86) &lt;a href=&#34;https://twitter.com/oza_x86/status/605370619509637121&#34;&gt;2015, 6月 1&lt;/a&gt;&lt;/blockquote&gt;
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-&lt;span style=&#34;font-size: 200%;&#34;&gt;Clojure 1.7 + Transducer&lt;/span&gt;
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-&lt;span style=&#34;font-size: 400%;&#34;&gt;Comming Soon&lt;/span&gt;
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# 参考
-------
-* [Clojure 1.7のtransducersを動かしてみよう - Qiita](http://qiita.com/tokomakoma123/items/1ca3fb0dddc5b901b032)
-* [core.async+transducers Shibuya.lisp #21](http://www.slideshare.net/ktsujister/coreasynctransducers-shibuyalisp-21)
-* [Hadoop Combinerメモ(Hishidama&#39;s Hadoop Combiner Memo)](http://www.ne.jp/asahi/hishidama/home/tech/apache/hadoop/Combiner.html)
 &lt;/script&gt;
 &lt;/section&gt;
 </description>
