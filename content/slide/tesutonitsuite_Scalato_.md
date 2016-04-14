@@ -1,7 +1,9 @@
 ---
 categories: [Scala, Scala Meet Up, テスト, 社内]
 date: 2016-04-12T22:31:51+09:00
-description: ""
+description: "社内勉強会での発表用。
+社内だとSpecs2を使ってるプロダクトも多いのでScalaTestの紹介からテスト手法、Gatlingの改造なんかについて
+"
 title: テストについて、Scalaと。
 ---
 
