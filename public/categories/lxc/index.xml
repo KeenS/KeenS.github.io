@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Lxc on κeenのHappy Hacκing Blog</title>
+    <link>/categories/lxc/</link>
+    <description>Recent content in Lxc on κeenのHappy Hacκing Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>ja-jp</language>
+    <lastBuildDate>Thu, 14 Apr 2016 22:51:20 +0900</lastBuildDate>
+    <atom:link href="/categories/lxc/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>LXDがリリースされたらしい</title>
+      <link>/blog/2016/04/14/lxc_2_0_0gariri_susaretarashii</link>
+      <pubDate>Thu, 14 Apr 2016 22:51:20 +0900</pubDate>
+      
+      <guid>/blog/2016/04/14/lxc_2_0_0gariri_susaretarashii</guid>
+      <description>&lt;p&gt;κeenです。頭痛い。LXDがリリースされたようなので1つ記事をば。
+LXDはLinuxで動く軽量仮想化コンテナ、LXDのラッパでREST APIとCLIが提供されています。&lt;/p&gt;
+
+&lt;p&gt;LXC、LXD共にUbuntuの開発元、Canonicalが開発しています。
+LXCについては初期のDockerがバックエンドに使っていたので知名度もそこそこあるかと思いますが、
+そのラッパであるLXDはこの度ようやく正式リリースされました。&lt;/p&gt;
+
+&lt;p&gt;既にDockerがあるのになぜわざわざ新たにLXDを使うんだって気もしますが、対象とするレイヤーが違います。
+Dockerはアプリケーションコンテナ、つまりアプリケーションを動かすためのプロセスより強い分離環境を提供するために使われますが
+LXDはシステムコンテナ、つまり仮想マシンより軽い仮想化環境を提供します。
+なのでファイルシステムはCopy on Writeしませんし一度終了したコンテナは破棄されず、再起動出来ます。
+詳しくはここら辺に書いてあります。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.stgraber.org/2016/03/11/lxd-2-0-blog-post-series-012/&#34;&gt;LXD 2.0: Blog post series [0/12] | Stéphane Graber&amp;rsquo;s website&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;1つDockerとLXDの違いの分かりやすい例を出すと、それぞれのOpenStackでの立ち位置を見ると面白そうです。
+Dockerは&lt;a href=&#34;https://wiki.openstack.org/wiki/Magnum&#34;&gt;OpenStack Magnum&lt;/a&gt;でOpenStack上で扱えますが、OpenStackのコンピュートノード &lt;strong&gt;上&lt;/strong&gt; で動作します。
+一方LXDは&lt;a href=&#34;https://insights.ubuntu.com/2015/05/06/introduction-to-nova-compute-lxd/&#34;&gt;nova-compute-lxd&lt;/a&gt;でOpenStack上で扱えますが、 OpenStackのコンピュートノード &lt;strong&gt;として&lt;/strong&gt; 動作します。
+なんだかんだ重いVMがコンテナのお陰で軽くなる訳です。そして勿論のこと、Docker in LXDなんかも出来るのでちゃんと共存出来ます。&lt;/p&gt;
+
+&lt;p&gt;今のところUbuntu 14.04あるいは未来の16.04でリリースされているようです。Ubuntu 15.10をお使いの方は&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;add-apt-repository ppa:ubuntu-lxc/lxd-stable
+apt-get update
+apt-get dist-upgrade
+apt-get install lxd
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;でインストール出来るようです(&lt;a href=&#34;https://linuxcontainers.org/ja/lxd/getting-started-cli/&#34;&gt;マニュアル&lt;/a&gt;より)。
+LXDはLXCのラッパでありながらもliblxcにしか依存しないのでlxc自体はインストールする必要はありません。&lt;/p&gt;
+
+&lt;p&gt;さてこれでLXDがインストールされた訳ですが、LXDはコンテナなどのリソースを管理するデーモンとそのCLIから成ります。
+CLIのコマンド名はなんと&lt;code&gt;lxc&lt;/code&gt;です。LXCのコマンド群が&lt;code&gt;lxc-*&lt;/code&gt;なので非常に勘違いしやすいですね。&lt;/p&gt;
+
+&lt;p&gt;詳しいコマンド群は&lt;a href=&#34;https://linuxcontainers.org/ja/lxd/getting-started-cli/&#34;&gt;マニュアル&lt;/a&gt;を読めばいいのですがそれだけだとお粗末なので多少紹介します。&lt;/p&gt;
+
+&lt;p&gt;インストール直後は新規に作ったグループを今のログインセッションに反映させる必要があるので&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;newgrp lxd
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;とする必要があります。その次は初期化が必要になります。&lt;code&gt;lxd init&lt;/code&gt;です。いくつか質問されますがデフォルトの回答を選んでいけば問題なさそうです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ sudo lxd init
+Name of the storage backend to use (dir or zfs): zfs
+error: The requested backend &#39;zfs&#39; isn&#39;t available on your system (missing tools).
+Name of the storage backend to use (dir or zfs): dir
+Would you like LXD to be available over the network (yes/no)? yes
+Address to bind LXD to (not including port): 0.0.0.0
+Port to bind LXD to (8443 recommended): 
+Invalid input, try again.
+
+Port to bind LXD to (8443 recommended): 8443
+Trust password for new clients: 
+Again: 
+Do you want to configure the LXD bridge (yes/no)? yes
+Warning: Stopping lxd.service, but it can still be activated by:
+  lxd.socket
+LXD has been successfully configured.
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Ubuntuでzfsが使えるのは16.04からなので15.10では使えませんでした。また、ブリッジのコンフィギュアにはウィザードが出てきます。&lt;/p&gt;
+
+&lt;p&gt;これで初期化が終わり、コンテナを立ち上げる準備が出来ました。&lt;/p&gt;
+
+&lt;p&gt;コンテナはイメージを元に立ち上げるのですが、今回はイメージはネット上のものから立ち上げます。
+インストール時点でいくつかサーバが登録されているので名前で指定してあげるだけでよいようです。
+他にイメージを使う方法はリモートのLXDをサーバとして使う、手動でファイルからインポートするなどがあるようです。&lt;/p&gt;
+
+&lt;p&gt;ということでコンテナの立ち上げはこうです。折角なので未来のUbuntu 16.04を使ってみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;sudo lxc launch ubuntu:16.04 future-ubuntu
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このコマンドでビルトインの&amp;rdquo;Ubuntu&amp;rdquo;サーバにある16.04バージョンのイメージをfuture-ubuntuという名前のコンテナで立ち上げます。&lt;/p&gt;
+
+&lt;p&gt;これでコンテナが立ち上がりました。確認してみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;sudo lxc list
++---------------+---------+--------------------------------+----------------------------------------------+------------+-----------+
+|     NAME      |  STATE  |              IPV4              |                     IPV6                     |    TYPE    | SNAPSHOTS |
++---------------+---------+--------------------------------+----------------------------------------------+------------+-----------+
+| future-ubuntu | RUNNING | 10.197.202.251 (eth0)          | fdc:d0ef:6a90:89f5:216:3eff:fe42:fb45 (eth0) | PERSISTENT | 0         |
+|               |         | 10.0.3.1 (lxcbr0)              |                                              |            |           |
++---------------+---------+--------------------------------+----------------------------------------------+------------+-----------+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ついでにローカルにあるイメージも確認しましょう。インポートまで終わっているようです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;sudo lxc image list
++-------+--------------+--------+-------------------------------------------+--------+----------+------------------------------+
+| ALIAS | FINGERPRINT  | PUBLIC |                DESCRIPTION                |  ARCH  |   SIZE   |         UPLOAD DATE          |
++-------+--------------+--------+-------------------------------------------+--------+----------+------------------------------+
+|       | 6cb0ba80a5fe | no     | ubuntu 16.04 LTS amd64 (beta2) (20160322) | x86_64 | 140.43MB | Apr 14, 2016 at 3:55pm (UTC) |
++-------+--------------+--------+-------------------------------------------+--------+----------+------------------------------+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;立ち上げたコンテナにログインしてみましょう。これはDockerをお使いの方は馴染があるんじゃないでしょうか。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;sudo lxc exec future-ubuntu -- /bin/bash
+root@future-ubuntu:~# lsb_release -a
+No LSB modules are available.
+Distributor ID:	Ubuntu
+Description:	Ubuntu Xenial Xerus (development branch)
+Release:	16.04
+Codename:	xenial
+root@future-ubuntu:~# exit
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ちゃんと16.04になっているようです。&lt;/p&gt;
+
+&lt;p&gt;コンテナの停止は&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;sudo lxc stop future-ubuntu
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;です。ちゃんと止まったか確認してみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;sudo lxc list
++---------------+---------+------+------+------------+-----------+
+|     NAME      |  STATE  | IPV4 | IPV6 |    TYPE    | SNAPSHOTS |
++---------------+---------+------+------+------------+-----------+
+| future-ubuntu | STOPPED |      |      | PERSISTENT | 0         |
++---------------+---------+------+------+------------+-----------+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ちゃんとSTATEがSTOPPEDになってますね&lt;/p&gt;
+
+&lt;p&gt;もう一度起動してみます&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;sudo lxc start future-ubuntu
+sudo lxc list
++---------------+---------+--------------------------------+----------------------------------------------+------------+-----------+
+|     NAME      |  STATE  |              IPV4              |                     IPV6                     |    TYPE    | SNAPSHOTS |
++---------------+---------+--------------------------------+----------------------------------------------+------------+-----------+
+| future-ubuntu | RUNNING | 10.197.202.251 (eth0)          | fdc:d0ef:6a90:89f5:216:3eff:fe42:fb45 (eth0) | PERSISTENT | 0         |
+|               |         | 10.0.3.1 (lxcbr0)              |                                              |            |           |
++---------------+---------+--------------------------------+----------------------------------------------+------------+-----------+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;次はコンテナを削除します&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;sudo lxc stop future-ubuntu
+sudo lxc delete future-ubuntu
+sudo lxc list
++------+-------+------+------+------+-----------+
+| NAME | STATE | IPV4 | IPV6 | TYPE | SNAPSHOTS |
++------+-------+------+------+------+-----------+
+sudo lxc image list
++-------+--------------+--------+-------------------------------------------+--------+----------+------------------------------+
+| ALIAS | FINGERPRINT  | PUBLIC |                DESCRIPTION                |  ARCH  |   SIZE   |         UPLOAD DATE          |
++-------+--------------+--------+-------------------------------------------+--------+----------+------------------------------+
+|       | 6cb0ba80a5fe | no     | ubuntu 16.04 LTS amd64 (beta2) (20160322) | x86_64 | 140.43MB | Apr 14, 2016 at 3:55pm (UTC) |
++-------+--------------+--------+-------------------------------------------+--------+----------+------------------------------+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;コンテナが消えただけでイメージは残るんですね。&lt;/p&gt;
+
+&lt;p&gt;さて、いかがでしょうか。軽量なVMと考えれば非常に手軽で中々面白いんじゃないでしょうか。
+因みにコンテナとホスト間でのファイルのやりとりも簡単(&lt;code&gt;lxc file pull/push&lt;/code&gt;)なようなのでコンテナ内でコンパイラを動かしてホストにもってくるとかをすれば開発環境の隔離環境としても使えそうです。&lt;/p&gt;
+
+&lt;p&gt;時間があればもう少し詳細に検証してみます。SNAPSHOTとかも試してみたかった。それでは今日はこの辺で。&lt;/p&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>
