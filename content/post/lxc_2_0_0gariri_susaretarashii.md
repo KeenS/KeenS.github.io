@@ -5,7 +5,7 @@ title: LXDがリリースされたらしい
 ---
 
 κeenです。頭痛い。LXDがリリースされたようなので1つ記事をば。
-LXDはLinuxで動く軽量仮想化コンテナ、LXDのラッパでREST APIとCLIが提供されています。
+LXDはLinuxで動く軽量仮想化コンテナ、LXCのラッパでREST APIとCLIが提供されています。
 <!--more-->
 
 LXC、LXD共にUbuntuの開発元、Canonicalが開発しています。
