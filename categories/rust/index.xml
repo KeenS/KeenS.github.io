@@ -6,8 +6,432 @@
     <description>Recent content in Rust on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Sun, 06 Mar 2016 05:27:39 +0900</lastBuildDate>
+    <lastBuildDate>Wed, 04 May 2016 11:43:26 +0900</lastBuildDate>
     <atom:link href="/categories/rust/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>RustでベアメタルRaspberry PiのLチカ</title>
+      <link>/blog/2016/05/04/rustdebeametaruraspberry_pinolchika</link>
+      <pubDate>Wed, 04 May 2016 11:43:26 +0900</pubDate>
+      
+      <guid>/blog/2016/05/04/rustdebeametaruraspberry_pinolchika</guid>
+      <description>
+
+&lt;p&gt;κeenです。GWもくもく会で机の片隅で埃被ってたRSPiのベアメタルを触ってみたのでその成果報告を。
+ベアメタルについて知らない人でも読めるように書きます。そしてアセンブラもCも出てきませんし、半田付けも必要ありません。
+Rustしか使いません。&lt;/p&gt;
+
+&lt;p&gt;Rustは分かるけどLチカは全く知らない、けど興味のある方は是非読んでみて下さい。&lt;/p&gt;
+
+&lt;h1 id=&#34;ベアメタルって:491c584db4092bf0e3567730a02ae671&#34;&gt;ベアメタルって？&lt;/h1&gt;
+
+&lt;p&gt;普段我々が使っているパソコンはOSの上で動いています。
+OSはざっくりいうとハードウェアへのアクセスを抽象化し、プロセスという単位でプログラムの実行を分離します。
+ベアメタルはそのOSがない状態、ハードウェアの初期化やプロトコルなどは自分でやるしメモリ管理だとかも自分でやる環境です。
+丁度ハードウェアが抽象化されてなくて機械が生で見えているようなのでこう呼ぶようです。&lt;/p&gt;
+
+&lt;p&gt;OSがないのは中々イメージつきづらいですが、標準出力なんてものはないのでHello Worldも動きませんしメモリも仮想化されていないのでmallocも発効出来ません。
+さらにはスタックとヒープみたいな区別もOSが与えてくれるものなので、自分で作らない限りスタック領域も使えません。
+自分で書いたプログラムが唯一走るプログラムなのでプロセスの感覚でプログラムを終了させてはいけません。&lt;/p&gt;
+
+&lt;p&gt;なんでそんな環境でプログラムしたいかというといくつかモチベーションがありそうです。1つはOSそのものを作ってみたい人が練習がてら。
+もう1つにはOSが動かないような小さな環境だとそれしか選択肢がない。&lt;/p&gt;
+
+&lt;p&gt;RSPiの場合はOSが動くので選択肢がないという訳ではないのですが私はそういう小さなデバイスを持っていないので実験台としてRSPiを使いました。&lt;/p&gt;
+
+&lt;p&gt;さて、Hello Worldすら動かないシステムでの入門的なプログラムは信号のON/OFFを切り替えてあげるだけで出来るLEDをチカチカさせるプログラムという訳です。&lt;/p&gt;
+
+&lt;h1 id=&#34;raspberry-pi:491c584db4092bf0e3567730a02ae671&#34;&gt;Raspberry Pi&lt;/h1&gt;
+
+&lt;p&gt;言わずと知れた名刺サイズの小型コンピュータ、Raspberry Piです。
+Raspberry Piと一口にいっても&lt;a href=&#34;https://ja.wikipedia.org/wiki/Raspberry_Pi&#34;&gt;色々種類がある&lt;/a&gt;のですが、私が持っているのはRaspberry Pi 1 Model Bの後期モデルです(Raspberry Pi 1 Model Bは販売途中で仕様がアップグレードしてメモリが増えた)。&lt;/p&gt;
+
+&lt;p&gt;ARMv6アーキテクチャのチップ(ARM1176JZF-S)で動いていて、SDカードから起動します。特別なライターなどは必要なく、PCからSDカードに書き込んでRSPiに挿して電源を繋ぐだけで簡単に起動出来る訳です。
+さらに配線とかが必要なGPIOに加えてボードにLEDもついているので物理の知識必要なくて今回のようにLチカだけをやりたいなら手軽に遊べます。&lt;/p&gt;
+
+&lt;h1 id=&#34;準備:491c584db4092bf0e3567730a02ae671&#34;&gt;準備&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Raspberry Pi 1 Model B&lt;/li&gt;
+&lt;li&gt;USB - micro USBケーブル(Raspberry Piへの給電用)&lt;/li&gt;
+&lt;li&gt;SDカード(FAT32でフォーマットしておく)&lt;/li&gt;
+&lt;li&gt;GCCのARM向けクロスコンパイラ(後述)&lt;/li&gt;
+&lt;li&gt;RustのARM向けクロスコンパイラ(後述)&lt;/li&gt;
+&lt;li&gt;ブートローダ(後述)&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;gccのクロスコンパイラ:491c584db4092bf0e3567730a02ae671&#34;&gt;GCCのクロスコンパイラ&lt;/h2&gt;
+
+&lt;p&gt;GCCのクロスコンパイラは&lt;a href=&#34;https://launchpad.net/gcc-arm-embedded&#34;&gt;GCC ARM Embedded in Launchpad&lt;/a&gt;というプロジェクトがあるので簡単に用意出来ます。Ubuntu環境なら&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;sudo apt install gcc-arm-linux-gnueabihf
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;でインストールできます。どうやらRSPiには不動小数点数計算ユニット(FPU)がついているようなのでhf(Hardware Float)で大丈夫みたいです。
+HomebrewやPacmanにもパッケージはあるようです。&lt;/p&gt;
+
+&lt;h2 id=&#34;rustのクロスコンパイラ:491c584db4092bf0e3567730a02ae671&#34;&gt;Rustのクロスコンパイラ&lt;/h2&gt;
+
+&lt;p&gt;次にRustのクロスコンパイラですが、&lt;a href=&#34;https://github.com/brson/multirust&#34;&gt;multirust&lt;/a&gt;を使うと簡単にインストール出来ます。今回はunstable機能も使うのでnightlyコンパイラを使います。
+因みに私が昔インストールしたmultirustだと古くて以下のコマンドが実行出来なかったので出来ない方はmultirustをアップデートして試してみて下さい。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;# インストール可能なターゲットを確認
+$ multirust list-available-targets nightly
+aarch64-apple-ios
+aarch64-unknown-linux-gnu
+arm-linux-androideabi
+arm-unknown-linux-gnueabi
+arm-unknown-linux-gnueabihf
+armv7-apple-ios
+armv7-unknown-linux-gnueabihf
+armv7s-apple-ios
+i386-apple-ios
+i586-pc-windows-msvc
+i586-unknown-linux-gnu
+i686-apple-darwin
+i686-pc-windows-gnu
+i686-pc-windows-msvc
+i686-unknown-linux-gnu
+mips-unknown-linux-gnu
+mips-unknown-linux-musl
+mipsel-unknown-linux-gnu
+mipsel-unknown-linux-musl
+powerpc-unknown-linux-gnu
+powerpc64-unknown-linux-gnu
+powerpc64le-unknown-linux-gnu
+x86_64-apple-darwin
+x86_64-apple-ios
+x86_64-pc-windows-gnu
+x86_64-pc-windows-msvc
+x86_64-rumprun-netbsd
+x86_64-unknown-freebsd
+x86_64-unknown-linux-gnu
+x86_64-unknown-linux-musl
+x86_64-unknown-netbsd
+# インストール
+$ multirust add-target nightly arm-unknown-linux-gnueabihf
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;ブートローダ:491c584db4092bf0e3567730a02ae671&#34;&gt;ブートローダ&lt;/h2&gt;
+
+&lt;p&gt;まず、ブートローダが何をするものなのかから説明しましょう。興味がない人は飛ばして下さい。&lt;/p&gt;
+
+&lt;h3 id=&#34;説明:491c584db4092bf0e3567730a02ae671&#34;&gt;説明&lt;/h3&gt;
+
+&lt;p&gt;Raspberry PiにはCPUとGPUが両方ついているのでやや面倒です。&lt;/p&gt;
+
+&lt;p&gt;CPU/GPUは電源がONになってすぐは何の機能もない、ただの命令を実行する機械です。メモリにすらアクセス出来ません。RSPiにSDカードを挿したところでSDカードのプロトコルを喋らないとそこに書いてあるプログラムが読めません。
+SDカードのプロトコルを喋るプログラム(BIOS)は、RSPiに組込みで入っています。これは普段我々が使うメモリ(RAM)とは別の場所(ROM)に入っています。&lt;/p&gt;
+
+&lt;p&gt;最初はGPUがそいつを起動し、(この時点ではCPUは起動してない)SDカードを読みにいきます。名前決め打ちでbootcode.binという名前のプログラムを、RAMではなくGPU(のL2キャッシュ)に直接ロードして実行します(メモリはまだ使えません)。
+GPUのキャッシュは非常に小さいのでbootcode.binは小さなプログラムでないといけません。&lt;/p&gt;
+
+&lt;p&gt;bootcode.binはRAMを有効にしてstart.elfをRAMに読み込み、GPUがそれを実行します。start.elfはRAMを使えるのである程度大きくても構いません。&lt;/p&gt;
+
+&lt;p&gt;start.elfはconfig.txt、cmdline.txtとkernel.imgを読みにいき、kernel.imgを0x8000番地のメモリに配置します。そしてconfgやcmdlineに基いてCPUを設定してkernel.imgに引数を渡しつつ実行します。&lt;/p&gt;
+
+&lt;p&gt;このkernel.imgは普段はLinuxカーネルなどのカーネル、今回は我々が作るLチカのプログラムです。&lt;/p&gt;
+
+&lt;p&gt;参考: &lt;a href=&#34;http://kernhack.hatenablog.com/entry/2014/01/11/102237&#34;&gt;Raspberry Piのブートプロセスメモ - φ(・・*)ゞ ｳｰﾝ　カーネルとか弄ったりのメモ&lt;/a&gt;
+昔はloader.binもあったようですが今はなくて大丈夫なようです。&lt;/p&gt;
+
+&lt;h3 id=&#34;インストール:491c584db4092bf0e3567730a02ae671&#34;&gt;インストール&lt;/h3&gt;
+
+&lt;p&gt;bootcode.bin, start.elfは&lt;a href=&#34;https://github.com/raspberrypi/firmware/tree/master/boot&#34;&gt;こちら&lt;/a&gt;から入手出来ます。config.txtとcmdline.txtはなくていいようです。&lt;/p&gt;
+
+&lt;p&gt;こいつらはSDカードに放り込んでおきます。&lt;/p&gt;
+
+&lt;h1 id=&#34;環境確認:491c584db4092bf0e3567730a02ae671&#34;&gt;環境確認&lt;/h1&gt;
+
+&lt;p&gt;まずはコンパイラツールチェーンが正常に動くか確認しましょう。
+以下にrustコードを。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;#![feature(lang_items, asm)]
+#![crate_type = &amp;quot;staticlib&amp;quot;]
+#![no_std]
+
+#[no_mangle]
+pub extern fn main() {
+    loop{}
+}
+
+
+#[no_mangle]
+pub extern fn _sbrk() {}
+#[no_mangle]
+pub extern fn _exit() {}
+#[no_mangle]
+pub extern fn _kill() {}
+#[no_mangle]
+pub extern fn _getpid() {}
+
+
+#[lang = &amp;quot;eh_personality&amp;quot;]
+extern fn eh_personality() {}
+
+#[lang = &amp;quot;panic_fmt&amp;quot;]
+extern fn panic_fmt() {}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;さて、今回作るのは &lt;code&gt;#![crate_type = &amp;quot;staticlib&amp;quot;]&lt;/code&gt; を使って静的リンクライブラリを作れと指定しています。そして &lt;code&gt;#[no_mangle] pub extern fn main() {&lt;/code&gt; でC言語と同じような規則でmain関数を定義する(アセンブラからmain関数を実行出来るようにする)と指定しています。
+ベアメタル環境なのでファイルだとか諸々のものはなく、stdを使えないので &lt;code&gt;#![no_std]&lt;/code&gt; を指定してstdを使わずにcoreライブラリを使うようにしました。その代わり&lt;code&gt;#[lang = &amp;quot;eh_personality&amp;quot;] extern fn eh_personality() {}&lt;/code&gt; と &lt;code&gt;#[lang = &amp;quot;panic_fmt&amp;quot;] extern fn panic_fmt() {}&lt;/code&gt; を実装してあげないといけません(この実装はあまりよろしくないのですが今回はとりあえずコンパイルが通るようにということでこうしてます)。&lt;/p&gt;
+
+&lt;p&gt;そしてよく分かってないのですがRustが &lt;code&gt;_sbrk&lt;/code&gt; 、 &lt;code&gt;_exit&lt;/code&gt; 、 &lt;code&gt;_kill&lt;/code&gt; 、 &lt;code&gt;_getpid&lt;/code&gt; のシンボルを捜しにいくのでとりあえずスタブを挿してます。&lt;/p&gt;
+
+&lt;p&gt;no_mangle, no_std, lang_itemsについて詳しくは&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/&#34;&gt;ドキュメント&lt;/a&gt;をご覧下さい。
+&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/ffi.html&#34;&gt;他言語関数インターフェイス&lt;/a&gt;、&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/no-stdlib.html&#34;&gt;No stdlib&lt;/a&gt;、&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/lang-items.html&#34;&gt;言語アイテム&lt;/a&gt;あたりが参考になるかと思います。&lt;/p&gt;
+
+&lt;p&gt;以下のようにコンパイル出来ればRustはOKです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;rustc --target arm-unknown-linux-gnueabihf --emit=obj test.rs
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;次に、elfファイルを作ります。これは以下のコマンドで出来ます。Cのクロスコンパイラを使っていますね。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ arm-none-eabi-gcc -O2 -mfpu=vfp -mfloat-abi=hard -march=armv6zk -mtune=arm1176jzf-s -nostartfiles test.o -o kernel.elf
+/usr/lib/gcc/arm-none-eabi/4.9.3/../../../arm-none-eabi/bin/ld: warning: cannot find entry symbol _start; defaulting to 0000000000008000
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;-mで始まるオプションはRaspberry Piのチップ固有の指定、 -nostartfiles はベアメアルで動かすのに必要な指定ですね。&lt;/p&gt;
+
+&lt;p&gt;最後にelfファイルからimgファイルを作ります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;arm-none-eabi-objcopy kernel.elf -O binary kernel.img
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;私もよく分かってないのですがobjファイルが不完全なバイナリファイル、elfが完全なバイナリファイル、imgがelfを実際のメモリに展開した時のものそのままなんですかね。
+逆にいうとOSのない環境で動かすには生のimgが欲しいけどそれを作るのは難しいから一旦elfを作ってそこからimgを生成している？&lt;/p&gt;
+
+&lt;p&gt;さて、とりあえずここまで来れば環境は整いました。あとはプログラムを書くだけです。&lt;/p&gt;
+
+&lt;h1 id=&#34;lチカ:491c584db4092bf0e3567730a02ae671&#34;&gt;Lチカ&lt;/h1&gt;
+
+&lt;p&gt;RSPiにくっついているLEDはデバイスとしてはGPIOのように見えるみたいです。
+そしてGPIOはMemory Mapped IO、特定の位置のメモリを読み書きすることでデバイスをいじれるようになってるみたいです。
+このセットアップは誰がやったんだって気になりますがBIOSなんですかね。&lt;/p&gt;
+
+&lt;p&gt;さて、この「特定の位置のメモリ」ですが、Raspberry Pi 1だと &lt;code&gt;0x20200000&lt;/code&gt; から始まるアドレス、のようです。2だと &lt;code&gt;3F200000&lt;/code&gt; のよう。&lt;/p&gt;
+
+&lt;p&gt;そして0x20200000からいくつかの32bitレジスタが配列のように並んでいる訳ですがこれまたRSPi+やRSP 2とRSPi 1はLEDに対応するレジスタがやや違うようです。&lt;/p&gt;
+
+&lt;p&gt;面倒なのでコピペで済ませると(私はCのコードからRustに移植しました。)&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;// Raspberry Pi2
+//pub const GPIO_BASE: u32 = 0x3F200000;
+// other
+pub const GPIO_BASE: u32 = 0x20200000;
+
+
+
+// Raspberrp Pi+ or Raspberry Pi2
+//pub const LED_GPFSEL: isize   = GPIO_GPFSEL4;
+//pub const LED_GPFBIT: i32     = 21;
+//pub const LED_GPSET: isize    = GPIO_GPSET1;
+//pub const LED_GPCLR: isize    = GPIO_GPCLR1;
+//pub const LED_GPIO_BIT: isize = 15;
+//  other
+pub const LED_GPFSEL: isize = GPIO_GPFSEL1;
+pub const LED_GPFBIT: i32 = 18;
+pub const LED_GPCLR: isize = GPIO_GPCLR0;
+pub const LED_GPSET: isize = GPIO_GPSET0;
+pub const LED_GPIO_BIT: i32 = 16;
+
+pub const GPIO_GPFSEL0: isize   = 0;
+pub const GPIO_GPFSEL1: isize   = 1;
+pub const GPIO_GPFSEL2: isize   = 2;
+pub const GPIO_GPFSEL3: isize   = 3;
+pub const GPIO_GPFSEL4: isize   = 4;
+pub const GPIO_GPFSEL5: isize   = 5;
+pub const GPIO_GPSET0: isize    = 7;
+pub const GPIO_GPSET1: isize    = 8;
+pub const GPIO_GPCLR0: isize    = 10;
+pub const GPIO_GPCLR1: isize    = 11;
+pub const GPIO_GPLEV0: isize    = 13;
+pub const GPIO_GPLEV1: isize    = 14;
+pub const GPIO_GPEDS0: isize    = 16;
+pub const GPIO_GPEDS1: isize    = 17;
+pub const GPIO_GPREN0: isize    = 19;
+pub const GPIO_GPREN1: isize    = 20;
+pub const GPIO_GPFEN0: isize    = 22;
+pub const GPIO_GPFEN1: isize    = 23;
+pub const GPIO_GPHEN0: isize    = 25;
+pub const GPIO_GPHEN1: isize    = 26;
+pub const GPIO_GPLEN0: isize    = 28;
+pub const GPIO_GPLEN1: isize    = 29;
+pub const GPIO_GPAREN0: isize   = 31;
+pub const GPIO_GPAREN1: isize   = 32;
+pub const GPIO_GPAFEN0: isize   = 34;
+pub const GPIO_GPAFEN1: isize   = 35;
+pub const GPIO_GPPUD: isize     = 37;
+pub const GPIO_GPPUDCLK0: isize = 38;
+pub const GPIO_GPPUDCLK1: isize = 39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;こうなります(cfgを使ってないです。ごめんなさい。)。&lt;/p&gt;
+
+&lt;p&gt;次にLチカですが、
+LEDに対応するGPIOをwriteに初期化する→ループ{LEDに対応するGPIOをセットする → スリープ → LEDに対応するGPIOをクリアする → スリープ}&lt;/p&gt;
+
+&lt;p&gt;のプログラムを書きます。&lt;/p&gt;
+
+&lt;p&gt;色々試したのですが簡単なプログラムだと最適化で消えてしまうので消えないように工夫する必要があります。&lt;/p&gt;
+
+&lt;p&gt;スリープはとりあえずタイマーを使わずに空ループを回すのですが、ループの中身は空インラインアセンブラを使うと消えないようです。&lt;/p&gt;
+
+&lt;p&gt;また、メモリへの書き込みは&lt;a href=&#34;https://doc.rust-lang.org/core/intrinsics/&#34;&gt;intrinsic&lt;/a&gt;の&lt;a href=&#34;https://doc.rust-lang.org/core/intrinsics/fn.volatile_store.html&#34;&gt;volatile_store&lt;/a&gt;を使います。&lt;/p&gt;
+
+&lt;p&gt;ということでコードは以下です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;#![feature(lang_items, asm, core_intrinsics)]
+#![crate_type = &amp;quot;staticlib&amp;quot;]
+#![no_std]
+
+use core::intrinsics::volatile_store;
+
+// Raspberry Pi2
+//pub const GPIO_BASE: u32 = 0x3F200000;
+// other
+pub const GPIO_BASE: u32 = 0x20200000;
+
+
+
+// Raspberrp Pi+ or Raspberry Pi2
+//pub const LED_GPFSEL: isize   = GPIO_GPFSEL4;
+//pub const LED_GPFBIT: i32     = 21;
+//pub const LED_GPSET: isize    = GPIO_GPSET1;
+//pub const LED_GPCLR: isize    = GPIO_GPCLR1;
+//pub const LED_GPIO_BIT: isize = 15;
+//  other
+pub const LED_GPFSEL: isize = GPIO_GPFSEL1;
+pub const LED_GPFBIT: i32 = 18;
+pub const LED_GPCLR: isize = GPIO_GPCLR0;
+pub const LED_GPSET: isize = GPIO_GPSET0;
+pub const LED_GPIO_BIT: i32 = 16;
+
+pub const GPIO_GPFSEL0: isize   = 0;
+pub const GPIO_GPFSEL1: isize   = 1;
+pub const GPIO_GPFSEL2: isize   = 2;
+pub const GPIO_GPFSEL3: isize   = 3;
+pub const GPIO_GPFSEL4: isize   = 4;
+pub const GPIO_GPFSEL5: isize   = 5;
+pub const GPIO_GPSET0: isize    = 7;
+pub const GPIO_GPSET1: isize    = 8;
+pub const GPIO_GPCLR0: isize    = 10;
+pub const GPIO_GPCLR1: isize    = 11;
+pub const GPIO_GPLEV0: isize    = 13;
+pub const GPIO_GPLEV1: isize    = 14;
+pub const GPIO_GPEDS0: isize    = 16;
+pub const GPIO_GPEDS1: isize    = 17;
+pub const GPIO_GPREN0: isize    = 19;
+pub const GPIO_GPREN1: isize    = 20;
+pub const GPIO_GPFEN0: isize    = 22;
+pub const GPIO_GPFEN1: isize    = 23;
+pub const GPIO_GPHEN0: isize    = 25;
+pub const GPIO_GPHEN1: isize    = 26;
+pub const GPIO_GPLEN0: isize    = 28;
+pub const GPIO_GPLEN1: isize    = 29;
+pub const GPIO_GPAREN0: isize   = 31;
+pub const GPIO_GPAREN1: isize   = 32;
+pub const GPIO_GPAFEN0: isize   = 34;
+pub const GPIO_GPAFEN1: isize   = 35;
+pub const GPIO_GPPUD: isize     = 37;
+pub const GPIO_GPPUDCLK0: isize = 38;
+pub const GPIO_GPPUDCLK1: isize = 39;
+
+#[no_mangle]
+pub extern fn main() {
+    // GPIO_BASEを符号無し32bit整数を指すポインタにキャストする
+    let gpio = GPIO_BASE as *const u32;
+    // offsetを使うことでCの配列のようにポインタの何番地か先のメモリを指せる
+    let init   = unsafe {gpio.offset(LED_GPFSEL) as *mut u32};
+    let led_on = unsafe { gpio.offset(LED_GPSET) as *mut u32 };
+    let led_off = unsafe { gpio.offset(LED_GPCLR) as *mut u32 };
+
+    // LEDのGPIOを書き込みに設定
+    unsafe{
+        volatile_store(init, *(init) | 1 &amp;lt;&amp;lt; LED_GPFBIT);
+    }
+
+    loop {
+        // LEDをOFFにする
+        unsafe {
+            volatile_store(led_off, 1 &amp;lt;&amp;lt; LED_GPIO_BIT);
+        }
+        // 適当な長さbusy loopで時間を空ける
+        for _ in 1..500000 {
+            unsafe { asm!(&amp;quot;&amp;quot;); }
+        }
+
+        // LEDをONにする
+        unsafe {
+            volatile_store(led_on, 1 &amp;lt;&amp;lt; LED_GPIO_BIT);
+        }
+        // また適当な長さ空ける
+        for _ in 1..500000 {
+            unsafe { asm!(&amp;quot;&amp;quot;); }
+        }
+    }
+}
+
+
+#[no_mangle]
+pub extern fn _sbrk() {}
+#[no_mangle]
+pub extern fn _exit() {}
+#[no_mangle]
+pub extern fn _kill() {}
+#[no_mangle]
+pub extern fn _getpid() {}
+
+
+#[lang = &amp;quot;eh_personality&amp;quot;]
+extern fn eh_personality() {}
+
+#[lang = &amp;quot;panic_fmt&amp;quot;]
+extern fn panic_fmt() {}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これをkernel.rsとして保存し、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;rustc  -O --target arm-unknown-linux-gnueabihf --emit=obj kernel.rs
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;でコンパイルします。どうやら使っていないのにrustが余計なシンボルを付けるようで、-Oをつけてそいつらをoptimize outさせないとコンパイルが通りませんでした。
+この辺、コンパイラのバージョンに依存しそうで怖いですね。&lt;/p&gt;
+
+&lt;p&gt;さて、あとは先程と同じく&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ arm-none-eabi-gcc -O2 -mfpu=vfp -mfloat-abi=hard -march=armv6zk -mtune=arm1176jzf-s -nostartfiles kernel.o -o kernel.elf
+$ arm-none-eabi-objcopy kernel.elf -O binary kernel.img
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;でイメージを作ってあげます。&lt;/p&gt;
+
+&lt;p&gt;そしたらこのkernel.imgをSDカードに放り込みます。&lt;/p&gt;
+
+&lt;p&gt;SDカードの中身はこうなっている筈です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ls  /media/kim/6F6F-DCD9
+bootcode.bin  kernel.img  start.elf
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このSDカードをRSPiに挿して、電源を繋いであげるとLEDがすごい勢いでチカチカする筈です。そうなったら成功です。おめでとうございます。&lt;/p&gt;
+
+&lt;h1 id=&#34;おわりに:491c584db4092bf0e3567730a02ae671&#34;&gt;おわりに&lt;/h1&gt;
+
+&lt;p&gt;今回のコードは&lt;a href=&#34;https://github.com/KeenS/RaspPi&#34;&gt;ここ&lt;/a&gt;に置いておきます。とはいってもそのままではなくてCargo化したりMakefileを書いたり色々しています。&lt;/p&gt;
+
+&lt;p&gt;今回の作業をするにあたって参考にした資料のURLを挙げておきます。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.valvers.com/open-software/raspberry-pi/step01-bare-metal-programming-in-cpt1/&#34;&gt;Step01 – Bare Metal Programming in C Pt1 – Valvers&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.valvers.com/open-software/raspberry-pi/step02-bare-metal-programming-in-c-pt2/&#34;&gt;Step02 – Bare Metal Programming in C Pt2 – Valvers&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://blog.thiago.me/raspberry-pi-bare-metal-programming-with-rust/&#34;&gt;Raspberry Pi Bare Metal Programming with Rust&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://blog.bobuhiro11.net/2014/01-13-baremetal.html&#34;&gt;piでベアメタルプログラミング - bobuhiro11&amp;rsquo;s diary&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
     
     <item>
       <title>Rustとは何か。どんな言語か。</title>
@@ -2709,317 +3133,6 @@ pub fn create(dir: &amp;amp;Path) -&amp;gt; io::Result&amp;lt;File&amp;gt; {
 &lt;/ul&gt;
 
 &lt;p&gt;作業中のコードをpushし忘れて土日に進捗出来なかったのでまたお茶を濁すはめになった。&lt;/p&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>rust初心者へのガイド</title>
-      <link>/blog/2015/09/23/rustwokakutokinochiken</link>
-      <pubDate>Wed, 23 Sep 2015 22:43:14 +0900</pubDate>
-      
-      <guid>/blog/2015/09/23/rustwokakutokinochiken</guid>
-      <description>
-
-&lt;p&gt;シルバーウィークの進捗が芳しくなかったので雑な記事書いてお茶を濁しとく。rustをそれなりに（といっても1000行くらい）書いて溜まった知見をとりあえず出す。rust1.3時点。&lt;/p&gt;
-
-&lt;p&gt;最初の方で熱く語ってるが多くの人にとって欲しい情報は下の方にあると思う。&lt;/p&gt;
-
-&lt;h1 id=&#34;どんな言語:64b642c20ac103c85395c6858549d1b9&#34;&gt;どんな言語&lt;/h1&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://www.rust-lang.org/&#34;&gt;公式&lt;/a&gt;から持ってくるとこんな感じ。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;zero-cost abstractions
-
-&lt;ul&gt;
-&lt;li&gt;C++くらいの性能と思えばいい。&lt;/li&gt;
-&lt;/ul&gt;&lt;/li&gt;
-&lt;li&gt;move semantics
-
-&lt;ul&gt;
-&lt;li&gt;他にはない難しい概念。しかしこれのおかげで様々な機能を教授出来る。&lt;/li&gt;
-&lt;/ul&gt;&lt;/li&gt;
-&lt;li&gt;guaranteed memory safety
-
-&lt;ul&gt;
-&lt;li&gt;move semanticsにより安全でない操作はコンパイル時に弾ける。&lt;/li&gt;
-&lt;/ul&gt;&lt;/li&gt;
-&lt;li&gt;threads without data races
-
-&lt;ul&gt;
-&lt;li&gt;move semanticsその他により安全でない操作は(ry&lt;/li&gt;
-&lt;/ul&gt;&lt;/li&gt;
-&lt;li&gt;trait-based generics
-
-&lt;ul&gt;
-&lt;li&gt;継承ベースとは違って開いている。型を定義した後に機能を追加出来る。&lt;/li&gt;
-&lt;/ul&gt;&lt;/li&gt;
-&lt;li&gt;pattern matching
-
-&lt;ul&gt;
-&lt;li&gt;便利だよねー。&lt;/li&gt;
-&lt;/ul&gt;&lt;/li&gt;
-&lt;li&gt;type inference
-
-&lt;ul&gt;
-&lt;li&gt;(超)重量級言語ながらタイプ数は少なめ。&lt;/li&gt;
-&lt;/ul&gt;&lt;/li&gt;
-&lt;li&gt;minimal runtime
-
-&lt;ul&gt;
-&lt;li&gt;move semanticsのお陰でGCがないので本当に小さい。hello, worldが277KBだった。&lt;/li&gt;
-&lt;/ul&gt;&lt;/li&gt;
-&lt;li&gt;efficient C bindings
-
-&lt;ul&gt;
-&lt;li&gt;ABI的に良い感じなのでブリッジングコストがほぼない。&lt;/li&gt;
-&lt;/ul&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;さて、ここでは足りないことを書いておくと、現在Mozillaで開発されている言語で、LLVMバックエンドのネイティブコンパイル言語。LLVMにトラウマがある人もバイナリ配布されているので気軽に使える。
-rustを使った大きなプロジェクトはレンダリングエンジンの&lt;a href=&#34;https://github.com/servo/servo&#34;&gt;Servo&lt;/a&gt;がある。&lt;/p&gt;
-
-&lt;p&gt;レンダリングエンジンに使われているだけあって対応OS/アーキテクチャは広く、iOSやAndroidでも動く。C FFIもC APIもある。&lt;/p&gt;
-
-&lt;p&gt;コミュニティは非常に活発で、インフラやライブラリは一通り揃った感じはする。マイナー言語を見てきた身としては1000ライラリくらい集まると一通りのことは出来るようになるかな、と思っているがrustは若い言語ながら3000ある。増えるペースも速いので欲しいものはまずあると思っていい。&lt;/p&gt;
-
-&lt;p&gt;長らくAPIの破壊的変更をガンガンやる時期があって、1ヶ月前のhello worldが動かないとかもザラだったが2015年5月に1.0が出て以来見違えたように大人しくなって人が増え始めている。APIについてはunstable, stableだとかのラベルを付けるようになったので安心して使える。&lt;/p&gt;
-
-&lt;p&gt;開発フローについてはFirefoxと同じく6週間毎に上流から新しいバージョンが降ってくる。ので今はもう1.3が出ている。1.0から1.3はコンパイル/実行時のパフォーマンス改善が主。新しい機能はPythonのPEPみたいにRFCで管理している。&lt;/p&gt;
-
-&lt;p&gt;所有権や生存期間など新しい概念を導入していてとっつきにくいがこれらの概念のお陰で並列化しても安全だし、何よりメモリ管理を静的に解決出来るのでGCがなくてパフォーマンスが出るわ安定するわStop the Worldがないわで非常に良い言語。個人的にはデータベースとかのパフォーマンスと信頼性が必要なミドルウェアを書くのに向いてるのではと思っている。&lt;/p&gt;
-
-&lt;p&gt;何指向言語かと言われると難しい。安全指向？継承はないがオブジェクト指向といえばそうだし函数型っぽくなくもない。並行を意識して作ってあるから並行指向と言えなくもない。継承を止めたC++のような所有権と副作用を入れたHaskellのような言語。副作用はバリバリ使うのであまり函数型言語として見ない方が幸せになれると思っている。&lt;/p&gt;
-
-&lt;p&gt;traitがどんなものかというとHaskellの型クラスに（多分）同じ。しかもHaskellの&lt;code&gt;deriving Show&lt;/code&gt;みたいに&lt;code&gt;#[derive(Debug)]&lt;/code&gt;とかも書ける。便利。&lt;/p&gt;
-
-&lt;p&gt;生存期間と所有権がどういうものかというと、&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let foo = Foo::new(1);
-println!(&amp;quot;{:?}&amp;quot;, foo);
-let foo = Foo::new(2);
-println!(&amp;quot;{:?}&amp;quot;, foo);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;で&lt;code&gt;foo&lt;/code&gt;を&lt;code&gt;Foo::new(2)&lt;/code&gt;にバインドした時、&lt;code&gt;Foo::new(1)&lt;/code&gt;は所有者が居なくなるのでその時点で開放される。GCと違う点は、GCはその時点ではゴミになるだけで、次にGCが走った時にようやく開放されるが、rustはその場で開放される、&lt;code&gt;free&lt;/code&gt;を自動で挟む。そうなると、コンパイラは最適化で同じサイズを&lt;code&gt;free&lt;/code&gt;してまたアロケートするのを同じ領域を使うようにする筈だ。これで領域の節約とかアロケーションコストの節約の他に、「今使った」メモリを再利用出来るのでキャッシュに載ったままメモリを使える。ここまでの効率化を「自動で」やってくれるのはrustだけではないかと思っている。&lt;/p&gt;
-
-&lt;p&gt;このように素晴しい言語機能があってコミュニティも活発で安定した言語なので流行ればいいなと思っている。とはいっても気軽に書ける言語ではないのであらゆる所で使われる言語とは思っていない。先に言ったようにデータベースとかのパフォーマンスと信頼性が必要なミドルウェアを書くのに向いてるのではと思っている。goがnext Cならrustはnext C++かな、と。&lt;/p&gt;
-
-&lt;p&gt;rustは難しい。学習曲線が急峻だ。しかし手を動かしてその急峻な崖を乗り越えるだけの価値はある言語だと思うので是非試してみて欲しい。&lt;/p&gt;
-
-&lt;hr /&gt;
-
-&lt;p&gt;さて、情報セクションだ。&lt;/p&gt;
-
-&lt;h1 id=&#34;ドキュメント:64b642c20ac103c85395c6858549d1b9&#34;&gt;ドキュメント&lt;/h1&gt;
-
-&lt;h2 id=&#34;入門:64b642c20ac103c85395c6858549d1b9&#34;&gt;入門&lt;/h2&gt;
-
-&lt;p&gt;trplと略される&lt;a href=&#34;https://doc.rust-lang.org/stable/book/&#34;&gt;The Rust Programming Language&lt;/a&gt;を読むととりあえず基本的な概念を一通り学習出来る。&lt;/p&gt;
-
-&lt;h2 id=&#34;書き始めた:64b642c20ac103c85395c6858549d1b9&#34;&gt;書き始めた&lt;/h2&gt;
-
-&lt;p&gt;文法とかをサクっと確認したいなら&lt;a href=&#34;https://doc.rust-lang.org/stable/reference.html&#34;&gt;The Rust Reference&lt;/a&gt;がある。&lt;/p&gt;
-
-&lt;p&gt;標準ライブラリを調べたいなら&lt;a href=&#34;https://doc.rust-blang.org/stable/std/&#34;&gt;APIドキュメント&lt;/a&gt;がある。一見分かりづらいが一番上に検索窓があるので全体検索が出来る。&lt;/p&gt;
-
-&lt;p&gt;コード例が欲しいなら&lt;a href=&#34;http://rustbyexample.com/&#34;&gt;Rust by Example&lt;/a&gt;がある。&lt;/p&gt;
-
-&lt;h1 id=&#34;軽く試す:64b642c20ac103c85395c6858549d1b9&#34;&gt;軽く試す&lt;/h1&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://play.rust-lang.org/&#34;&gt;Rust Playground&lt;/a&gt;を使えばWeb上で試せる。質問とか投げる時にサンプルコードをここに載せて渡すと捗る。&lt;/p&gt;
-
-&lt;h1 id=&#34;開発環境:64b642c20ac103c85395c6858549d1b9&#34;&gt;開発環境&lt;/h1&gt;
-
-&lt;h2 id=&#34;コンパイラ:64b642c20ac103c85395c6858549d1b9&#34;&gt;コンパイラ&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://www.rust-lang.org/&#34;&gt;公式&lt;/a&gt;から簡単にバイナリ落としてこれる。Macだとbrewでも入った気がする。FreeBSDだとpkgで入る。Debianのパッケージも出来たらしい(&lt;sup&gt;9&lt;/sup&gt;&amp;frasl;&lt;sub&gt;23&lt;/sub&gt;)がUbuntuにはまだ(&lt;sup&gt;9&lt;/sup&gt;&amp;frasl;&lt;sub&gt;23&lt;/sub&gt;)きてない。すぐ来るだろう。&lt;/p&gt;
-
-&lt;p&gt;しかし後述のracerのためにソースが必要なので別途ソースはダウンロードする必要がある。&lt;/p&gt;
-
-&lt;h2 id=&#34;エディタ:64b642c20ac103c85395c6858549d1b9&#34;&gt;エディタ&lt;/h2&gt;
-
-&lt;p&gt;Emacs, Vim, Atomだったら&lt;a href=&#34;https://github.com/phildawes/racer&#34;&gt;racer&lt;/a&gt;を使う。
-racerのソースを持ってきてコンパイルしてエディタプラグインをエディタに入れてrustコンパイラのソース持ってきて2行設定書けば使える。ソース補完と定義元ジャンプがある。ちゃんと型を見て補完候補出してくれるし標準ライブラリのソースにもジャンプ出来るので中々便利。&lt;/p&gt;
-
-&lt;p&gt;gofmtのrust版、&lt;a href=&#34;https://github.com/nrc/rustfmt&#34;&gt;rustfmt&lt;/a&gt;は開発版のコンパイラを持ってこないとコンパイル出来ないので私は諦めているが使いたい人は試すといいと思う。少なくともEmacs向けのプラグインはある。&lt;/p&gt;
-
-&lt;h1 id=&#34;ビルドツール:64b642c20ac103c85395c6858549d1b9&#34;&gt;ビルドツール&lt;/h1&gt;
-
-&lt;p&gt;コンパイラと一緒に配布される(FreeBSDのpkgでは別になってる)Cagroがある。雛形作成、依存解決、ビルド、テスト、ベンチマークなどのタスクが出来る。クロスコンパイルとかも。&lt;/p&gt;
-
-&lt;h1 id=&#34;パッケージ管理:64b642c20ac103c85395c6858549d1b9&#34;&gt;パッケージ管理&lt;/h1&gt;
-
-&lt;p&gt;クライアント側はCargo。セントラルレポジトリ的なのは&lt;a href=&#34;https://crates.io/&#34;&gt;crates.io&lt;/a&gt;。crates.ioに登録されてなくてもCargoはgitから取ってくるとかも出来るので野良パッケージも使える。&lt;/p&gt;
-
-&lt;h1 id=&#34;テスト:64b642c20ac103c85395c6858549d1b9&#34;&gt;テスト&lt;/h1&gt;
-
-&lt;p&gt;関数に&lt;code&gt;#[test]&lt;/code&gt;アノテーションを付ければ良い。つまり、ソースとテストを同じファイルに書ける。結構便利。テスト用ビルドでのみコンパイルされて他のビルドだと無視される（と思う。）。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn fib(n:isize) -&amp;gt; isize{
-    if n &amp;lt; 2 {
-       1 
-    }
-    else {
-        fib(n - 1) + fib(n - 2)
-    }
-}
-
-#[test]
-fn test_fib(){
-    assert(fib(1) == 1);
-}
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;hr /&gt;
-
-&lt;p&gt;これ便利とかここ躓いたとか。&lt;/p&gt;
-
-&lt;h1 id=&#34;所有権:64b642c20ac103c85395c6858549d1b9&#34;&gt;所有権&lt;/h1&gt;
-
-&lt;p&gt;分かってたけどやっぱり躓いた。局所的には「あ、ここ所有権必要だわ」とか分かるのだが大域的には難しい。&lt;/p&gt;
-
-&lt;p&gt;例えばボトムアップで作っていくと、小さな関数で所有権が必要だがそれを呼び出そうとしたら呼出元が所有権を持っていなくて困るとか。小さな値とか状態を持たない値だったら&lt;code&gt;clone&lt;/code&gt;して渡すのだがそうでなければ手戻りが発生する。この辺は実際に書いて経験を積むしかなさそう。&lt;/p&gt;
-
-&lt;p&gt;因みに代数的データ型と所有権でも困っている。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;
-enum Value {
-   Str(String),
-   Int(isize)
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;とかすると&lt;code&gt;Str&lt;/code&gt;データコンストラクタがStringの所有権を持っているのでパターンマッチで取り出す時に所有権が貰えず、&lt;code&gt;match{Value::Str(ref str) =&amp;gt; ...,}&lt;/code&gt;と、&lt;code&gt;ref&lt;/code&gt;を使って借りるしかない。&lt;/p&gt;
-
-&lt;p&gt;まだ経験が足りないので困ったまま。&lt;/p&gt;
-
-&lt;h1 id=&#34;サイズ:64b642c20ac103c85395c6858549d1b9&#34;&gt;サイズ&lt;/h1&gt;
-
-&lt;p&gt;rustはコンパイル時にメモリ管理を決定するのでコンパイル時にデータのメモリサイズが決まってないといけない。例えば以下のコードはコンパイルが通らない。Bazにおいて、fooのサイズが決定出来ないと言われる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Foo {
-
-}
-
-
-struct Bar {
-}
-
-impl Foo for Bar {
-
-}
-
-
-struct Baz {
-  foo: Foo
-}
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これは&lt;code&gt;Foo&lt;/code&gt;はただのインターフェースの定義であって、データを定義してないので実際にFooを実装したデータ型のサイズが分からないからだ(今後変更がある模様。)。次のようにパラメータにすれば解決出来る。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct Baz&amp;lt;T&amp;gt; {
-  foo: T
-}
-
-impl &amp;lt;T:Foo&amp;gt; Baz&amp;lt;T&amp;gt;{
-
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;因みに元の定義とは変わってデータの時点ではTで、implを書く時にFooに絞っているのは不要な所では不要な条件を付けないようにしているからだろうか。
-変な値を入れられて困りそうだが、構造体のフィールドを公開しなければ勝手に値が作られることはなく、impl内に書いたコンストラクタを通してのみ値が作られるので心配無用である。&lt;/p&gt;
-
-&lt;h1 id=&#34;t-と-vec-t-str-と-string:64b642c20ac103c85395c6858549d1b9&#34;&gt;&lt;code&gt;&amp;amp;[T]&lt;/code&gt;と&lt;code&gt;Vec&amp;lt;T&amp;gt;&lt;/code&gt;, &lt;code&gt;&amp;amp;str&lt;/code&gt;と&lt;code&gt;String&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;使い分けは&lt;a href=&#34;http://qiita.com/kondei/items/4a3496786fce0c1a1b43&#34;&gt;Rustの文字列のガイド - Qiita&lt;/a&gt;を見て欲しいが、相互変換で困ることがあったので。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;String&lt;/code&gt;から&lt;code&gt;&amp;amp;str&lt;/code&gt;に変換する時に「&lt;code&gt;as_slice&lt;/code&gt;はunstable」と言われる。こうしてやれば良いようだ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let string = &amp;quot;String&amp;quot;.to_string();
-let lent_str = &amp;amp;string[..]
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;Vectorも同じ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let vector = vec![1, 2, 3];
-let lent_slice = &amp;amp;vector[..]
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;hashmap:64b642c20ac103c85395c6858549d1b9&#34;&gt;HashMap&lt;/h1&gt;
-
-&lt;p&gt;所有権周りで困る。例えば次のコードはコンパイルが通らない。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;match hash.get(key) {
-    Some(v) =&amp;gt; v,
-    None =&amp;gt; {hash.insert(key, default); default}
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;matchの中でhashがborrowされてると判断されるのでNone節でhashにinsert出来ない。&lt;a href=&#34;http://stackoverflow.com/questions/28512394/how-to-lookup-from-and-insert-into-a-hashmap-efficiently&#34;&gt;ワークアラウンド&lt;/a&gt;
-もあるが、どう考えてもイケてないので&lt;a href=&#34;http://blog.rust-lang.org/2015/08/14/Next-year.html&#34;&gt;改善される模様&lt;/a&gt;&lt;/p&gt;
-
-&lt;h1 id=&#34;データ型と参照:64b642c20ac103c85395c6858549d1b9&#34;&gt;データ型と参照&lt;/h1&gt;
-
-&lt;p&gt;データ型の中で参照を使いづらい。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct Value {
-   Str(&amp;amp;str),
-   Int(isize)
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;とすると、怒られる。&lt;code&gt;&amp;amp;str&lt;/code&gt;は自分の物ではないので生存期間が分からないからパラメータで受け取らないといけない。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct &amp;lt;&#39;a&amp;gt;Value&amp;lt;&#39;a&amp;gt; {
-   Str(&amp;amp;&#39;a str),
-   Int(isize)
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;そして、やはり所有権を持っていないので次のようなメソッドを定義出来ない。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;impl &amp;lt;&#39;a&amp;gt;Value&amp;lt;&#39;a&amp;gt; {
-    fn empty_str() -&amp;gt; &amp;lt;&#39;a&amp;gt; {
-        Value::Str(&amp;quot;&amp;quot;)
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;…と思ったらなんか出来ちゃった。今まで使い方が悪かったのかも。これはナシ。&lt;/p&gt;
-
-&lt;h1 id=&#34;モナド:64b642c20ac103c85395c6858549d1b9&#34;&gt;モナド&lt;/h1&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/TeXitoi/rust-mdo&#34;&gt;mdo&lt;/a&gt;というdo記法っぽく書けるマクロがあるがクロージャを作るとそのクロージャが変数の所有権を持っていって面倒だったのでそんなに良くなかった。optionモナドに関しては素直にmapとandThenを使った方が良い。&lt;/p&gt;
-
-&lt;h1 id=&#34;try:64b642c20ac103c85395c6858549d1b9&#34;&gt;try!&lt;/h1&gt;
-
-&lt;p&gt;rustのコードでは至る所でResult(Either)型が返ってくる。それに対して毎回パターンマッチするのはやってられない。かといって安全でない&lt;code&gt;unwrap()&lt;/code&gt;を各所で使うのも精神衛生に良くない。Errに対してunwrapを使うとpanicになるが、rustにはpanicをハンドルする方法はない。&lt;/p&gt;
-
-&lt;p&gt;そこで&lt;code&gt;try!&lt;/code&gt;。返り値がErrだったらそのままErrで関数から抜け、Okだったらその値を返すマクロ。多分展開結果はこんな形になってる:&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let v = try!(foo());
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;が&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let v = match foo() {
-   Ok(v) =&amp;gt; v,
-   e @ Err(_) =&amp;gt; return e
-};
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;。&lt;/p&gt;
-
-&lt;p&gt;これの逆、成功したらその値で抜け、ErrだったらErrを返して処理を継続するやつとかオプション版とかも欲しい。&lt;/p&gt;
-
-&lt;h1 id=&#34;最後に:64b642c20ac103c85395c6858549d1b9&#34;&gt;最後に&lt;/h1&gt;
-
-&lt;p&gt;Lisp処理系作ろうとしたけど完成しなかったのでそっとここに置いときますね&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/KeenS/kappaLisp&#34;&gt;κLisp&lt;/a&gt;&lt;/p&gt;
 </description>
     </item>
     
