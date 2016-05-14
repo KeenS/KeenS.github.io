@@ -6,8 +6,214 @@
     <description>Recent content in Posts on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Wed, 04 May 2016 11:43:26 +0900</lastBuildDate>
+    <lastBuildDate>Sat, 14 May 2016 20:59:13 +0900</lastBuildDate>
     <atom:link href="/post/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>cargo-profilerを試す</title>
+      <link>/blog/2016/05/14/cargo_profilerwotamesu</link>
+      <pubDate>Sat, 14 May 2016 20:59:13 +0900</pubDate>
+      
+      <guid>/blog/2016/05/14/cargo_profilerwotamesu</guid>
+      <description>
+
+&lt;p&gt;κeenです。先日Rustのニュースに流れてきたcargo profilerを試してみます。
+元の紹介記事はこちら&lt;a href=&#34;http://www.suchin.co/2016/05/11/Introducing-Cargo-Profiler/&#34;&gt;Introducing Cargo Profiler · suchin&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;GitHubレポジトリはこちら&lt;a href=&#34;https://github.com/pegasos1/cargo-profiler&#34;&gt;pegasos1/cargo-profiler: cargo subcommand to profile binaries&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;Profilerとはいっても自身でプロファイラを持っている訳ではなくて外部のプロファイラ（現状valgrind）を呼び出して整形してくれるツールのようです。
+Rust向けに関数をモジュールパス付きで表示してくれたりするのでRustから使うにはvalgrind生より便利そうです。&lt;/p&gt;
+
+&lt;h1 id=&#34;インストール:c9a67fd2ebaec3ab35855c9653734324&#34;&gt;インストール&lt;/h1&gt;
+
+&lt;p&gt;READMEに従って&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ sudo apt install valgrind
+$ cargo install cargo-profiler
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;とします。&lt;/p&gt;
+
+&lt;h1 id=&#34;プロジェクトの準備:c9a67fd2ebaec3ab35855c9653734324&#34;&gt;プロジェクトの準備&lt;/h1&gt;
+
+&lt;p&gt;適当なものがないので手元の[κLisp]()でフィボナッチ数列を動かしてみます。(と思ったらκLispに比較演算子がなかったのでそれを作るところから始まりましたがそれはまた別の話)。&lt;/p&gt;
+
+&lt;p&gt;main.rsはこんな感じ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;extern crate kappa_lisp;
+use kappa_lisp::kappa_lisp::{run, init};
+use kappa_lisp::env::Env;
+
+fn main() {
+    let mut env = Env::new();
+    init(&amp;amp;mut env).unwrap();
+    run(&amp;amp;mut env, r&amp;quot;
+(defun fib (n)
+  (if (&amp;lt; n 2)
+      1
+      (+ (fib (- n 1)) (fib (- n 2)))))
+&amp;quot;).unwrap();
+    let expr = run(&amp;amp;mut env, r&amp;quot; (fib 20) &amp;quot;).unwrap();
+    println!(&amp;quot;{}&amp;quot;, expr);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;割と遅いので20くらいで限界でした。&lt;/p&gt;
+
+&lt;p&gt;さて、これを&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;cargo build --release
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;としてビルドします。&lt;/p&gt;
+
+&lt;h1 id=&#34;プロファイル:c9a67fd2ebaec3ab35855c9653734324&#34;&gt;プロファイル&lt;/h1&gt;
+
+&lt;p&gt;今のところcallgrindとcachegrindが実装されているようです。1つづづ試してみます。&lt;/p&gt;
+
+&lt;h2 id=&#34;callgrind:c9a67fd2ebaec3ab35855c9653734324&#34;&gt;callgrind&lt;/h2&gt;
+
+&lt;p&gt;よく分かってないのですが多分実行時間に占める関数毎の割合を出してくれるんですかね。-nで上位何件を表示するか指定出来ます。&lt;/p&gt;
+
+&lt;p&gt;とりあえず上位10件出してみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cargo profiler callgrind --bin ./target/release/kappa_lisp -n 10
+Profiling kappa_lisp with callgrind...
+
+Total Instructions...571,437,255
+
+142,527,726 (24.9%) ???:collections::hash::table::make_hash
+-----------------------------------------------------------------------
+107,551,309 (18.8%) ???:hash::sip::SipHasher.Hasher::write
+-----------------------------------------------------------------------
+39,749,571 (7.0%) ???:collections::hash::map::HashMap..K$C$..V$C$..S..::get
+-----------------------------------------------------------------------
+38,693,006 (6.8%) ???:sdallocx
+-----------------------------------------------------------------------
+37,670,732 (6.6%) ???:mallocx
+-----------------------------------------------------------------------
+34,608,049 (6.1%) ???:expr..Expr::drop.9629
+-----------------------------------------------------------------------
+26,539,906 (4.6%) ???:eval::eval
+-----------------------------------------------------------------------
+19,887,024 (3.5%) ???:util::f_foldr
+-----------------------------------------------------------------------
+16,634,175 (2.9%) ???:eval::feval
+-----------------------------------------------------------------------
+14,353,992 (2.5%) ???:util::kcons
+-----------------------------------------------------------------------
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;はい、こんな感じです。ハッシュテーブル関連が時間喰ってますね。これは関数呼び出しの度に行われてます。
+ちょっと実装が雑すぎるので直さなきゃ…。&lt;/p&gt;
+
+&lt;h1 id=&#34;cachegrind:c9a67fd2ebaec3ab35855c9653734324&#34;&gt;cachegrind&lt;/h1&gt;
+
+&lt;p&gt;キャッシュミスを表示してくれます。本気出してチューニングする時に必要ですね。&lt;/p&gt;
+
+&lt;p&gt;同じく -nで件数を絞り込めます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;cargo profiler cachegrind --bin ./target/release/kappa_lisp -n 10  
+
+
+Profiling kappa_lisp with cachegrind...
+
+Total Memory Accesses...800,070,388	
+
+Total L1 I-Cache Misses...100,068 (0%)	
+Total LL I-Cache Misses...422 (0%)	
+Total L1 D-Cache Misses...4,346,335 (0%)	
+Total LL D-Cache Misses...7,724 (0%)	
+
+ Ir  I1mr ILmr  Dr  D1mr DLmr  Dw  D1mw DLmw
+0.25 0.00 0.02 0.09 0.00 0.01 0.11 0.05 0.06 ???:collections::hash::table::make_hash
+-----------------------------------------------------------------------
+0.19 0.00 0.03 0.13 0.00 0.00 0.11 0.01 0.01 ???:hash::sip::SipHasher.Hasher::write
+-----------------------------------------------------------------------
+0.07 0.00 0.01 0.13 0.06 0.01 0.07 0.00 0.00 ???:expr..Expr::drop.9629
+-----------------------------------------------------------------------
+0.07 0.00 0.01 0.10 0.08 0.00 0.12 0.03 0.04 ???:collections::hash::map::HashMapK$C$V$C$S::get
+-----------------------------------------------------------------------
+0.07 0.00 0.03 0.09 0.01 0.00 0.03 0.00 0.00 ???:sdallocx
+-----------------------------------------------------------------------
+0.07 0.02 0.03 0.11 0.02 0.01 0.04 0.01 0.01 ???:mallocx
+-----------------------------------------------------------------------
+0.05 0.06 0.20 0.06 0.29 0.21 0.09 0.25 0.16 ???:eval::eval
+-----------------------------------------------------------------------
+0.03 0.00 0.03 0.04 0.14 0.15 0.09 0.13 0.09 ???:util::f_foldr
+-----------------------------------------------------------------------
+0.03 0.02 0.05 0.04 0.05 0.00 0.02 0.06 0.05 ???:eval::feval
+-----------------------------------------------------------------------
+0.03 0.00 0.02 0.03 0.00 0.01 0.08 0.05 0.09 ???:util::kcons
+-----------------------------------------------------------------------
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;やはりハッシュテーブルが酷いですが同じコードを繰り返し実行するタイプのマイクロベンチマークなのでキャッシュミスは少ないです。&lt;/p&gt;
+
+&lt;p&gt;因みにそれぞれの列はこういう意味だそうです。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Ir -&amp;gt; Total Instructions&lt;/li&gt;
+&lt;li&gt;I1mr -&amp;gt; Level 1 I-Cache misses&lt;/li&gt;
+&lt;li&gt;ILmr -&amp;gt; Last Level I-Cache misses&lt;/li&gt;
+&lt;li&gt;Dr -&amp;gt; Total Memory Reads&lt;/li&gt;
+&lt;li&gt;D1mr -&amp;gt; Level 1 D-Cache read misses&lt;/li&gt;
+&lt;li&gt;DLmr -&amp;gt; Last Level D-cache read misses&lt;/li&gt;
+&lt;li&gt;Dw -&amp;gt; Total Memory Writes&lt;/li&gt;
+&lt;li&gt;D1mw -&amp;gt; Level 1 D-Cache write misses&lt;/li&gt;
+&lt;li&gt;DLmw -&amp;gt; Last Level D-cache write misses&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;&lt;code&gt;--sort&lt;/code&gt; オプションでどの列をみるのか指定出来るようです。全メモリアクセスのミスレートを見てみましょうか。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cargo profiler cachegrind --bin ./target/release/kappa_lisp -n 10 --sort dr
+
+
+Profiling kappa_lisp with cachegrind...
+
+Total Memory Accesses...800,082,686	
+
+Total L1 I-Cache Misses...100,083 (0%)	
+Total LL I-Cache Misses...420 (0%)	
+Total L1 D-Cache Misses...4,321,895 (0%)	
+Total LL D-Cache Misses...7,721 (0%)	
+
+ Ir  I1mr ILmr  Dr  D1mr DLmr  Dw  D1mw DLmw
+0.19 0.00 0.03 0.13 0.00 0.00 0.11 0.01 0.01 ???:hash::sip::SipHasher.Hasher::write
+-----------------------------------------------------------------------
+0.07 0.00 0.01 0.13 0.06 0.01 0.07 0.00 0.00 ???:expr..Expr::drop.9629
+-----------------------------------------------------------------------
+0.07 0.02 0.03 0.11 0.02 0.01 0.04 0.01 0.01 ???:mallocx
+-----------------------------------------------------------------------
+0.07 0.00 0.01 0.10 0.08 0.00 0.12 0.03 0.04 ???:collections::hash::map::HashMapK$C$V$C$S::get
+-----------------------------------------------------------------------
+0.25 0.00 0.02 0.09 0.00 0.01 0.11 0.05 0.06 ???:collections::hash::table::make_hash
+-----------------------------------------------------------------------
+0.07 0.00 0.03 0.09 0.01 0.00 0.03 0.00 0.00 ???:sdallocx
+-----------------------------------------------------------------------
+0.05 0.06 0.20 0.06 0.29 0.21 0.09 0.25 0.16 ???:eval::eval
+-----------------------------------------------------------------------
+0.03 0.00 0.03 0.04 0.14 0.15 0.09 0.13 0.09 ???:util::f_foldr
+-----------------------------------------------------------------------
+0.03 0.02 0.05 0.04 0.04 0.00 0.02 0.06 0.05 ???:eval::feval
+-----------------------------------------------------------------------
+0.03 0.00 0.02 0.03 0.00 0.01 0.08 0.05 0.09 ???:util::kcons
+-----------------------------------------------------------------------
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;やっぱりハッシュテーブル関連が重い…。&lt;/p&gt;
+
+&lt;h1 id=&#34;まとめ:c9a67fd2ebaec3ab35855c9653734324&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;p&gt;私にとっては薮蛇にκLispの実装の筋が悪いことが分かったりしてショックでしたがまあ、簡単にプロファイルをとれるツールを紹介しました。&lt;/p&gt;
+
+&lt;p&gt;Rustで高速なアプリケーションを作りたい方、利用してみては如何でしょうか。&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>RustでベアメタルRaspberry PiのLチカ</title>
@@ -2111,44 +2317,6 @@ documentation = http://KeenS.github.io/file_logger/file_logger/
 &lt;li&gt;Cargoを使えば簡単にパッケージを登録出来るよ&lt;/li&gt;
 &lt;li&gt;Cargoってすごいね&lt;/li&gt;
 &lt;/ul&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>Lisp Meetup3周年に寄せて</title>
-      <link>/blog/2016/01/27/lisp_meetup3shuunenniyosete</link>
-      <pubDate>Wed, 27 Jan 2016 23:40:11 +0900</pubDate>
-      
-      <guid>/blog/2016/01/27/lisp_meetup3shuunenniyosete</guid>
-      <description>&lt;p&gt;κeenです。昨日、&lt;a href=&#34;http://lisp.connpass.com/event/25546/&#34;&gt;Lisp Meetup #36&lt;/a&gt;が行なわれました。1回テックトークを挟んでるのでこれでちょうど丸3年、毎月Lisp Meetupが行われたことになります。&lt;/p&gt;
-
-&lt;p&gt;Lisp Meetupは&lt;a href=&#34;http://shibuya.lisp-users.org/&#34;&gt;Shibuya.lisp&lt;/a&gt;が基本、毎月開催している草の根活動で、Lisper同士の交流を目的として主に希望者によるトークをメインとした会です。&lt;/p&gt;
-
-&lt;p&gt;毎月Common Lisp、Clojure、Scheme回でローテーションしていて、近頃はScheme回にSchemerが来ないことからScheme回を減らして運用されています。
-最初に述べた通りLisp Meetupだけで36回、丸3年活動してきました。ここ最近は定員にギリギリまで人が集まるくらいの盛況で何よりです。
-ここまで継続したことを祝って記念ステッカーを作りました。私はほとんど何もしてませんが。@potix2さんに感謝。&lt;/p&gt;
-
-&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;今日のLisp Meet Upは3周年記念ですね。先程ステッカー届きました。 &lt;a href=&#34;https://t.co/IRKkKVnkeU&#34;&gt;pic.twitter.com/IRKkKVnkeU&lt;/a&gt;&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/691875297940148224&#34;&gt;2016, 1月 26&lt;/a&gt;&lt;/blockquote&gt;
-
-&lt;p&gt;私が初めて参加したのは第7回から、運営になったのが1年後の第19回から(の筈)。
-2年半サイバーエージェントの会場に通って気付いたらサイバーエージェントの社員になって、一勉強会がここまで大きく人生に影響するのかと感慨に耽る次第です。
-何を大袈裟に、と思うかもしれませんがプログラミング経験が調子に乗ってきた時とLisp Meetupに参加し始めた時期が重なるので個人的には感慨に耽るだけのものがあるのです。&lt;/p&gt;
-
-&lt;p&gt;さて、他のメジャーな言語の勉強会でも中々聞かない3周年ともなるとまた別種の問題も出てくる訳です。
-その1つが「固定化」問題です。1度もLisp Meetupに来たことのない方はこう思う訳です: 何度も回を重ねる内にメンバーが固定化されて一見さんお断りな雰囲気になってるんじゃないかと。
-実際のところLisp Meetupにはそんな雰囲気はなく、何度も来てる人もいれば久しぶりに来た人、最近よく来る人、初めて来る人色々いる訳です。
-実情がどうあれ、お尻の数字が大きいだけで一番来て欲しい初心者が来なくなるならと、一度は名前を変えて連番をリセットしようかとも話されましたが結局今のLisp Meetupのままでいます。
-Lisp Meetupといえば私のようによく分からない発表をしてても暖かく受け入れてくれる優しい人達の集りなのですが、とはいえ外から見て「初めての勉強会でLisp Meetupは怖い」などと言われると中々考えることがあります。
-まあ、それでも初心者や初参加の人は毎回数人は来てるのでこれ以上増やそうとするとこれより大きな会場を確保する必要があって中々ハードルは高いのですが。初心者は大歓迎ということは伝えておこうかと思います。&lt;/p&gt;
-
-&lt;p&gt;さて、次回はClojure回です。そろそろScheme回を…と思ったのですが発表者が集りそうにないので見送られました。&lt;/p&gt;
-
-&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;少し気の早い話ですが来月2月の &lt;a href=&#34;https://twitter.com/hashtag/lispmeetup?src=hash&#34;&gt;#lispmeetup&lt;/a&gt; でSchemeをテーマにするとしたらみなさんどうですか&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/688627343112278017&#34;&gt;2016, 1月 17&lt;/a&gt;&lt;/blockquote&gt;
-&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
-
-&lt;p&gt;3月には開催しようかと話し合われている最中なのでSchemer各位、SICP読書中の各位は準備をして開催して欲しいオーラを出して頂けると開催決定の後押しになります。&lt;/p&gt;
-
-&lt;p&gt;ということで来月以降もLisp Meetupをよろしくお願いします。&lt;/p&gt;
 </description>
     </item>
     
