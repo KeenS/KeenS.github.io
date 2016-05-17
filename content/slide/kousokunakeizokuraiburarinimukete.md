@@ -84,17 +84,20 @@ title: 高速な継続ライブラリに向けて
 # CPS変換
 ----------
 
-Q. いくつの構文に対して定義が必要?
+Q. Common Lispだといくつの構文に対して定義が必要?
+
+1. 1つ
+2. 26つ
+3. 42つ
+4. 無数
 
 
-<!-- .slide: class="center" -->
 
 # CPS変換
 ----------
 
-A. スペシャルフォーム25+funcall
+A. 26つ (スペシャルフォーム25+funcall)
 
-<!-- .slide: class="center" -->
 
 # Common Lispのプリミティブ
 --------------------------
@@ -105,6 +108,7 @@ A. スペシャルフォーム25+funcall
 * この中に関数定義だとか例外だとかは入っていない
   + マクロで定義されている
 
+
 # マクロ
 --------
 
@@ -112,6 +116,7 @@ A. スペシャルフォーム25+funcall
 * 新しい構文を作れる
 * CPS変換は?????
 
+
 # `macroexpand`
 -------------
 
@@ -120,7 +125,7 @@ A. スペシャルフォーム25+funcall
 * 雑にいうと普段pre-orderなマクロ展開をin-orderやpost-orderにする時に使う
 * 本来はあまり使いたくない
   + 処理系の展開器に任せた方が間違いが少ない
-* これでマクロを排した生の(?)Common Lispの構文木にアクセス出来る
+* これでマクロを排したプリミティブのCommon Lispの構文木にアクセス出来る
 
 
 # cl-cont
@@ -131,13 +136,105 @@ A. スペシャルフォーム25+funcall
 * [Common Lispで限定継続と遊ぶ | κeenのHappy Hacκing Blog](http://keens.github.io/slide/Common_Lispdegenteikeizokutoasobu_/)
 
 
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">「shift/resetがわからない時にあげる声」</p>&mdash; かず(原材料に小麦粉を含む) (@kazzna) <a href="https://twitter.com/kazzna/status/674026894602309632">2015年12月8日</a></blockquote>
+
+<!-- .slide: class="center" -->
+
+
+# cl-contの使用例
+
+``` common-lisp
+(with-call/cc
+  (+ 1 (call/cc
+        (lambda (k)
+          (funcall k 2)))))
+
+```
+
+
+# cl-contの使用例
+
+``` common-lisp
+(FUNCALL
+ (LAMBDA (&OPTIONAL #:G542 &REST #:G543)
+   (DECLARE (IGNORABLE #:G542))
+   (DECLARE (IGNORE #:G543))
+   (FUNCALL
+    (LAMBDA (&OPTIONAL #:G544 &REST #:G545)
+      (DECLARE (IGNORABLE #:G544))
+      (DECLARE (IGNORE #:G545))
+      (FUNCALL (LAMBDA (K) (FUNCALL K 1))
+               (LAMBDA (&OPTIONAL #:G546 &REST #:G547)
+                 (DECLARE (IGNORABLE #:G546))
+                 (DECLARE (IGNORE #:G547))
+                 (FUNCALL (CL-CONT::FDESIGNATOR-TO-FUNCTION/CC #:G542) #'VALUES
+                          #:G544 #:G546))))
+    1))
+ #'+)
+```
+
+
+
 # cl-contへの不満
 -----------------
 
-遅い
-lambda多い。憎い。lambda禁止おじさんもびっくり
-cl-fast-cont
-  →完成させたい…
+* 遅い
+* lambda多い。
+  + 多分コンパイラと相性が悪い
+* lambda禁止おじさんと分かりあえる
+
+
+# cl-fast-cont
+
+
+<!-- .slide: class="center" -->
+
+# cl-fast-cont
+--------------
+
+* [KeenS/cl-fast-cont: faster partial contiuation library of common lisp](https://github.com/KeenS/cl-fast-cont)
+* とりあえずレポジトリ作っただけ
+* 完成させたい…
+
+
+# アプローチ1
+<!-- .slide: class="center" -->
+
+
+# SSA使う
+---------
+
+* CPSと等価
+* だけどSSAだったらlambda出てこない
+* Common Lispならgotoあるしいけるんじゃね？
+
+
+```common-lisp
+(let (x y z)
+ (tagbody
+    (setq x 1)
+  :call/cc
+    (setq y 1)
+    (setq z (+ x y))))
+```
+
+
+
+# 問題
+-------
+
+* ネイティブスタックとは別に自分でスタック作らないといけない
+  + 例外とかでスタック巻き戻されるとつらい
+* gotoのタグをtagbodyの外に持ち出せない(=継続を外に持ち出せない)
+* 変数を準備するのが面倒orパフォーマンスに影響しそう
+* そもそもtagbodyそこまで柔軟じゃなかった
+
+
+# アプローチ2
+<!-- .slide: class="center" -->
+
+
+# SSA+CPS
 SSAコンパイラとCPSコンパイラ
 SSAからの継続じゃだめなの？
  →gotoを使って自分でコールスタック組み立てる必要があった
