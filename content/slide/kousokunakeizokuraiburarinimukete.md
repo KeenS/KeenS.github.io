@@ -26,15 +26,114 @@ title: 高速な継続ライブラリに向けて
  + サイバーエージェントのエンジニア
  + Lisp, ML, Rust, Shell Scriptあたりを書きます
 
-継続欲しい
-  非同期プログラミング
-  ゲームのコルーチン
-  モナド記法
-CPS変換
-スペシャルフォーム25+funcall
-関数定義とかもマクロだよって話
-そのマクロを解くマクロ展開器もあるよって話
-cl-cont
+# 継続欲しい
+-----------
+
+* 色々な場面で便利
+* Schemeで使い回してるのうらやましい
+* Common Lispでも使いたい
+* 現実には限定継続が欲しい
+  +  Common Lispには大域脱出はある
+
+
+# 限定継続を使う例
+-----------------
+## 非同期プログラミング
+
+* コールバック形式だと厳しい
+* 限定継続を使うと綺麗に書き直せる
+
+
+# 限定継続を使う例
+-----------------
+## ゲームのコルーチン
+
+* 複数のオブジェクトを制御するのにコルーチンが欲しい
+* cf [コルーチンをCommon Lispで簡単に定義 - さくらんぼのlambda日記](http://lambdasakura.hatenablog.com/entry/20111026/1319598590)
+
+
+# 限定継続を使う例
+-----------------
+## do記法
+
+* モナドのdo記法は限定継続を使って実装出来る
+* [Operational monad in scheme](http://www.slideshare.net/yuichinishiwaki/operational-monad-in-scheme)
+
+
+
+# Common Lispでの限定継続の実現
+---------------
+
+1. 仕様に入れてもらう
+2. 処理系に手を入れる
+3. ユーザレベルで(限定)継続ライブラリを作る
+   + 柔軟なCommon Lispでは可能
+
+
+# CPS変換
+---------
+
+* (限定)継続の実現方法の1つ
+  + スタックを切り取る方式とかもある
+* 機械的にも出来る
+* グローバルな変換なのとプリミティブな式しか書けないでコンパイラ内部でやることが多い
+  + 継続関係なしに中間形式として採用されることが多い
+* 関数定義/呼び出し以外にも諸々の構文とかに対しても定義が必要
+
+
+# CPS変換
+----------
+
+Q. いくつの構文に対して定義が必要?
+
+
+<!-- .slide: class="center" -->
+
+# CPS変換
+----------
+
+A. スペシャルフォーム25+funcall
+
+<!-- .slide: class="center" -->
+
+# Common Lispのプリミティブ
+--------------------------
+
+* スペシャルフォームと呼ばれる
+* 仕様で25個定められている
+* [CLHS: Section 3.1.2.1.2.1](http://www.lispworks.com/documentation/HyperSpec/Body/03_ababa.htm)
+* この中に関数定義だとか例外だとかは入っていない
+  + マクロで定義されている
+
+# マクロ
+--------
+
+* 構文木 to 構文木(S式to S式)変換器( = 普通のLispの関数)
+* 新しい構文を作れる
+* CPS変換は?????
+
+# `macroexpand`
+-------------
+
+*[CLHS: Function MACROEXPAND, MACROEXPAND-1](http://clhs.lisp.se/Body/f_mexp_.htm)
+* マクロを手動展開する関数
+* 雑にいうと普段pre-orderなマクロ展開をin-orderやpost-orderにする時に使う
+* 本来はあまり使いたくない
+  + 処理系の展開器に任せた方が間違いが少ない
+* これでマクロを排した生の(?)Common Lispの構文木にアクセス出来る
+
+
+# cl-cont
+---------
+
+* 上記のことを全てやったライブラリ
+* デファクトというか唯一のライブラリ
+* [Common Lispで限定継続と遊ぶ | κeenのHappy Hacκing Blog](http://keens.github.io/slide/Common_Lispdegenteikeizokutoasobu_/)
+
+
+# cl-contへの不満
+-----------------
+
 遅い
 lambda多い。憎い。lambda禁止おじさんもびっくり
 cl-fast-cont
@@ -46,7 +145,8 @@ Selective CPS
 2pass transformation
 ※詳しい図解
 load-time-value, catch, block, tagbody, special variableつらい
-関数定義と引数の話
+変換は会議室でおきてるんじゃない、現場で起きてるんだ
+関数定義と引数の話 -> まだ決めきれてない
 計測
 
 
