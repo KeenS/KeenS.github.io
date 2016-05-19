@@ -120,7 +120,7 @@ A. 26つ (スペシャルフォーム25+funcall)
 # `macroexpand`
 -------------
 
-*[CLHS: Function MACROEXPAND, MACROEXPAND-1](http://clhs.lisp.se/Body/f_mexp_.htm)
+* [CLHS: Function MACROEXPAND, MACROEXPAND-1](http://clhs.lisp.se/Body/f_mexp_.htm)
 * マクロを手動展開する関数
 * 雑にいうと普段pre-orderなマクロ展開をin-orderやpost-orderにする時に使う
 * 本来はあまり使いたくない
@@ -148,7 +148,6 @@ A. 26つ (スペシャルフォーム25+funcall)
   (+ 1 (call/cc
         (lambda (k)
           (funcall k 2)))))
-
 ```
 
 
@@ -228,6 +227,7 @@ A. 26つ (スペシャルフォーム25+funcall)
 * gotoのタグをtagbodyの外に持ち出せない(=継続を外に持ち出せない)
 * 変数を準備するのが面倒orパフォーマンスに影響しそう
 * そもそもtagbodyそこまで柔軟じゃなかった
+* 関数が消し飛ぶ
 
 
 # アプローチ2
@@ -235,16 +235,188 @@ A. 26つ (スペシャルフォーム25+funcall)
 
 
 # SSA+CPS
-SSAコンパイラとCPSコンパイラ
-SSAからの継続じゃだめなの？
- →gotoを使って自分でコールスタック組み立てる必要があった
-Selective CPS
-2pass transformation
-※詳しい図解
-load-time-value, catch, block, tagbody, special variableつらい
-変換は会議室でおきてるんじゃない、現場で起きてるんだ
-関数定義と引数の話 -> まだ決めきれてない
-計測
+---------
+
+* SSAとCPSを組み合わせる
+* 基本はSSA
+* スタックを使う/継続が必要な所でだけCPS
+
+# 問題
+-------
+
+* SSAの部分意味なくね？
+* そもそも継続を取り出すのが目的なので関係ない所で変換しても意味がない
+
+
+# アプローチ3
+<!-- .slide: class="center" -->
+
+# Selective CPS
+----------------
+
+* 継続が必要な部分でのみ変換
+* 2 pass transformation
+* [A Selective CPS Transformation](http://www.sciencedirect.com/science/article/pii/S1571066104809691)
+
+
+```common-lisp
+(with-call/cc
+  (let ((x 3) y)
+    (setq y (* x x))
+    (+ 1 (call/cc
+          (lambda (k)
+            (funcall k y))))))
+
+```
+
+
+
+```common-lisp
+(with-call/cc
+  (let ((x 3) y)
+    (setq y (* x x))
+    (+ 1 @(call/cc
+          (lambda (k)
+            (funcall k y))))))
+
+```
+
+
+
+```common-lisp
+(with-call/cc
+  (let ((x 3) y)
+    (setq y (* x x))
+    @(+ 1 @(call/cc
+          (lambda (k)
+            (funcall k y))))))
+
+```
+
+
+
+```common-lisp
+(with-call/cc
+  @(let ((x 3) y)
+    (setq y (* x x))
+    @(+ 1 @(call/cc
+          (lambda (k)
+            (funcall k y))))))
+
+```
+
+
+# そもそもCommon Lispのつらい話
+-------------------------------
+* セマンティクスが動的
+  + load-time-value, catch, block, tagbody, special variable
+  + 変換は静的なのでどう頑張っても追い付かない
+* multiple valueが面倒
+
+
+# load-time-value
+-----------------
+
+* Common Lispの式が評価されうるタイミングは複数ある
+* その内のロード時に実行する
+  + 乱数の初期化とかで便利
+* その時に継続を取り出したら???
+
+
+# ダイナミック!!
+----------------
+
+``` common-lisp
+(block name
+ (let ((f
+        (lambda (x) (return-from name x))))
+   (with-call/cc
+       (funcall
+        f
+        (call/cc
+         (lambda (k)
+           (funcall k 2)))))))
+```
+
+
+# スペシャル変数
+---------------
+
+* Common Lispにはレキシカルスコープとダイナミックスコープ両方ある
+* CPS変換すると継続の全てがスコープ下に入る
+  + 関数の呼び出し関係が木だったのが線型になる
+  + ダイナミックスコープだと困る
+
+
+```
+   +
+  / \
+  *  3
+ / \
+1   2
+```
+
+```
+  *
+ /|\
+1 2 *
+   /|\
+  x 3 ...
+
+```
+
+
+
+```
+(defvar *x* 1)
+(with-call/cc
+  (progn
+    (let ((*x* 2))
+      (call/cc ..)
+      (format t "~a~%" *x*)) ; *x* = 2
+    (format t "~a~%" *x*))) ; *x* = 1
+
+```
+
+
+
+```
+(defvar *x* 1)
+(with-call/cc
+  (progn
+    (let ((*x* 2))
+      (...
+       (lambda (ignore)
+         (funcall
+           (lambda (ignore)
+             (format t "~a~%" *x*)) ; *x* = 2!!
+           (format t "~a~%" *x*))))))) ; *x* = 1
+```
+
+
+# 多値
+------
+
+* Common Lispの多値はGoと違って無視出来る
+* 変換が空気読む必要がある
+* 下手するとプログラムを壊す
+  1. 本当は多値を返してるのに変換で無視された
+  2. 意図的に無視してるのに変換で加えられた
+
+
+# 関数定義と引数の数
+-----------------
+
+* **Selective** CPS
+* 関数をCPS変換するときとしない時がある
+* 呼び出す時にどっちか分かんなくね？
+  1. 統一的に変換してしまう
+  2. Selectiveに変換して関数にメタデータつける
+
+-> まだ決めきれてない
+
+
+# パフォーマンス
 
 
 </script>
