@@ -216,6 +216,543 @@ Total LL D-Cache Misses...7,721 (0%)
     </item>
     
     <item>
+      <title>高速な継続ライブラリに向けて</title>
+      <link>/slide/kousokunakeizokuraiburarinimukete/</link>
+      <pubDate>Sun, 08 May 2016 21:26:32 +0900</pubDate>
+      
+      <guid>/slide/kousokunakeizokuraiburarinimukete/</guid>
+      <description>&lt;section data-markdown
+    data-separator=&#34;\n\n&#34;
+    data-vertical=&#34;\n\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+&lt;script type=&#34;text/template&#34;&gt;
+# 高速な継続ライブラリに向けて
+----------------------
+[継続勉強会](http://connpass.com/event/28150/) 2016-05-22
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+
+# About Me
+---------
+![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
+
+ + κeen
+ + [@blackenedgold](https://twitter.com/blackenedgold)
+ + Github: [KeenS](https://github.com/KeenS)
+ + サイバーエージェントのエンジニア
+ + Lisp, ML, Rust, Shell Scriptあたりを書きます
+
+# 継続欲しい
+-----------
+
+* 色々な場面で便利
+* Schemeで使い回してるのうらやましい
+* Common Lispでも使いたい
+* 現実には限定継続が欲しい
+  +  Common Lispには大域脱出はある
+
+
+# 限定継続を使う例
+-----------------
+## 非同期プログラミング
+
+* コールバック形式だと厳しい
+* 限定継続を使うと綺麗に書き直せる
+
+
+# 限定継続を使う例
+-----------------
+## ゲームのコルーチン
+
+* 複数のオブジェクトを制御するのにコルーチンが欲しい
+* cf [コルーチンをCommon Lispで簡単に定義 - さくらんぼのlambda日記](http://lambdasakura.hatenablog.com/entry/20111026/1319598590)
+
+
+# 限定継続を使う例
+-----------------
+## do記法
+
+* モナドのdo記法は限定継続を使って実装出来る
+* [Operational monad in scheme](http://www.slideshare.net/yuichinishiwaki/operational-monad-in-scheme)
+
+
+
+# Common Lispでの限定継続の実現
+---------------
+
+1. 仕様に入れてもらう
+2. 処理系に手を入れる
+3. ユーザレベルで(限定)継続ライブラリを作る
+   + 柔軟なCommon Lispでは可能
+
+
+# CPS変換
+---------
+
+* (限定)継続の実現方法の1つ
+  + スタックを切り取る方式とかもある
+* 機械的にも出来る
+* グローバルな変換なのとプリミティブな式しか書けないでコンパイラ内部でやることが多い
+  + 継続関係なしに中間形式として採用されることが多い
+* 関数定義/呼び出し以外にも諸々の構文とかに対しても定義が必要
+
+
+# CPS変換
+----------
+
+Q. Common Lispだといくつの構文に対して定義が必要?
+
+1. 1つ
+2. 26つ
+3. 42つ
+4. 無数
+
+
+
+# CPS変換
+----------
+
+A. 26つ (スペシャルフォーム25+funcall)
+
+
+# Common Lispのプリミティブ
+--------------------------
+
+* スペシャルフォームと呼ばれる
+* 仕様で25個定められている
+* [CLHS: Section 3.1.2.1.2.1](http://www.lispworks.com/documentation/HyperSpec/Body/03_ababa.htm)
+* この中に関数定義だとか例外だとかは入っていない
+  + マクロで定義されている
+
+
+# マクロ
+--------
+
+* 構文木 to 構文木(S式to S式)変換器( = 普通のLispの関数)
+* 新しい構文を作れる
+* CPS変換は?????
+
+
+# `macroexpand`
+-------------
+
+* [CLHS: Function MACROEXPAND, MACROEXPAND-1](http://clhs.lisp.se/Body/f_mexp_.htm)
+* マクロを手動展開する関数
+* 雑にいうと普段pre-orderなマクロ展開をin-orderやpost-orderにする時に使う
+* 本来はあまり使いたくない
+  + 処理系の展開器に任せた方が間違いが少ない
+* これでマクロを排したプリミティブのCommon Lispの構文木にアクセス出来る
+
+
+# cl-cont
+---------
+
+* 上記のことを全てやったライブラリ
+* デファクトというか唯一のライブラリ
+* [Common Lispで限定継続と遊ぶ | κeenのHappy Hacκing Blog](http://keens.github.io/slide/Common_Lispdegenteikeizokutoasobu_/)
+
+
+&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;「shift/resetがわからない時にあげる声」&lt;/p&gt;&amp;mdash; かず(原材料に小麦粉を含む) (@kazzna) &lt;a href=&#34;https://twitter.com/kazzna/status/674026894602309632&#34;&gt;2015年12月8日&lt;/a&gt;&lt;/blockquote&gt;
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+
+# cl-contの使用例
+
+``` common-lisp
+(with-call/cc
+  (+ 1 (call/cc
+        (lambda (k)
+          (funcall k 2)))))
+```
+
+
+# cl-contの使用例
+
+``` common-lisp
+(FUNCALL
+ (LAMBDA (&amp;OPTIONAL #:G542 &amp;REST #:G543)
+   (DECLARE (IGNORABLE #:G542))
+   (DECLARE (IGNORE #:G543))
+   (FUNCALL
+    (LAMBDA (&amp;OPTIONAL #:G544 &amp;REST #:G545)
+      (DECLARE (IGNORABLE #:G544))
+      (DECLARE (IGNORE #:G545))
+      (FUNCALL (LAMBDA (K) (FUNCALL K 1))
+               (LAMBDA (&amp;OPTIONAL #:G546 &amp;REST #:G547)
+                 (DECLARE (IGNORABLE #:G546))
+                 (DECLARE (IGNORE #:G547))
+                 (FUNCALL (CL-CONT::FDESIGNATOR-TO-FUNCTION/CC #:G542) #&#39;VALUES
+                          #:G544 #:G546))))
+    1))
+ #&#39;+)
+```
+
+
+
+# cl-contへの不満
+-----------------
+
+* 遅い
+* lambda多い。
+  + 多分コンパイラと相性が悪い
+* lambda禁止おじさんと分かりあえる
+
+
+# cl-fast-cont
+
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# cl-fast-cont
+--------------
+
+* [KeenS/cl-fast-cont: faster partial contiuation library of common lisp](https://github.com/KeenS/cl-fast-cont)
+* とりあえずレポジトリ作っただけ
+* 完成させたい…
+
+
+# アプローチ1
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+
+# SSA使う
+---------
+
+* CPSと等価
+* だけどSSAだったらlambda出てこない
+* Common Lispならgotoあるしいけるんじゃね？
+
+
+```common-lisp
+(let (x y z)
+ (tagbody
+    (setq x 1)
+  :call/cc
+    (setq y 1)
+    (setq z (+ x y))))
+```
+
+
+
+# 問題
+-------
+
+* ネイティブスタックとは別に自分でスタック作らないといけない
+  + 例外とかでスタック巻き戻されるとつらい
+* gotoのタグをtagbodyの外に持ち出せない(=継続を外に持ち出せない)
+* 変数を準備するのが面倒orパフォーマンスに影響しそう
+* そもそもtagbodyそこまで柔軟じゃなかった
+* 関数が消し飛ぶ
+
+
+# アプローチ2
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+
+# SSA+CPS
+---------
+
+* SSAとCPSを組み合わせる
+* 基本はSSA
+* スタックを使う/継続が必要な所でだけCPS
+
+# 問題
+-------
+
+* SSAの部分意味なくね？
+* そもそも継続を取り出すのが目的なので関係ない所で変換しても意味がない
+
+
+# アプローチ3
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# Selective CPS
+----------------
+
+* 継続が必要な部分でのみ変換
+* 2 pass transformation
+* [A Selective CPS Transformation](http://www.sciencedirect.com/science/article/pii/S1571066104809691)
+
+
+```common-lisp
+(with-call/cc
+  (let ((x 3) y)
+    (setq y (* x x))
+    (+ 1 (call/cc
+          (lambda (k)
+            (funcall k y))))))
+
+```
+
+
+
+```common-lisp
+(with-call/cc
+  (let ((x 3) y)
+    (setq y (* x x))
+    (+ 1 @(call/cc
+          (lambda (k)
+            (funcall k y))))))
+
+```
+
+
+
+```common-lisp
+(with-call/cc
+  (let ((x 3) y)
+    (setq y (* x x))
+    @(+ 1 @(call/cc
+          (lambda (k)
+            (funcall k y))))))
+
+```
+
+
+
+```common-lisp
+(with-call/cc
+  @(let ((x 3) y)
+    (setq y (* x x))
+    @(+ 1 @(call/cc
+          (lambda (k)
+            (funcall k y))))))
+
+```
+
+
+# そもそもCommon Lispのつらい話
+-------------------------------
+* セマンティクスが動的
+  + catch, block, tagbody
+  + special variable
+  + 変換は静的なのでどう頑張っても追い付かない
+* multiple valueが面倒
+
+
+
+# ダイナミック!!
+----------------
+
+``` common-lisp
+(block name
+ (let ((f
+        (lambda (x) (return-from name x))))
+   (with-call/cc
+       (funcall
+        f
+        (call/cc
+         (lambda (k)
+           (funcall k 2)))))))
+```
+
+
+# スペシャル変数
+---------------
+
+* Common Lispにはレキシカルスコープとダイナミックスコープ両方ある
+* CPS変換すると継続の全てがスコープ下に入る
+  + 関数の呼び出し関係が木だったのが線型になる
+  + ダイナミックスコープだと困る
+
+![CPS前のAST](/images/cps/pre-cps.png)
+
+
+
+![CPS後のAST](/images/cps/post-cps.png)
+
+
+
+```
+(defvar *x* 1)
+(with-call/cc
+  (progn
+    (let ((*x* 2))
+      (call/cc ..)
+      (format t &#34;~a~%&#34; *x*)) ; *x* = 2
+    (format t &#34;~a~%&#34; *x*))) ; *x* = 1
+
+```
+
+
+
+```
+(defvar *x* 1)
+(with-call/cc
+  (progn
+    (let ((*x* 2))
+      (...
+       (lambda (ignore)
+         ((lambda (ignore)
+            (format t &#34;~a~%&#34; *x*)) ; *x* = 2!!
+          (format t &#34;~a~%&#34; *x*))))))) ; *x* = 1
+```
+
+
+# 多値
+------
+
+* Common Lispの多値はGoと違って無視出来る
+* 変換が空気読む必要がある
+* 下手するとプログラムを壊す
+  1. 本当は多値を返してるのに変換で無視された
+  2. 意図的に無視してるのに変換で加えられた
+
+
+# 関数定義と引数の数
+-----------------
+
+* **Selective** CPS
+* 関数をCPS変換するときとしない時がある
+* 呼び出す時にどっちか分かんなくね？
+  1. 統一的に変換してしまう
+  2. Selectiveに変換して関数にメタデータつける
+
+-&gt; まだ決めきれてない
+
+
+# パフォーマンス
+----------------
+
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+
+# フィボナッチ数列
+-----------------
+* とりえあずのフィボナッチ数列で計測
+  + Full CPS変換に割と不利
+  + 何も考えずにライブラリを使うとこうなるよって例
+* Selective CPSは何もしない=普通の定義と同じ
+
+
+
+```common-lisp
+(defun fib (n)
+  (if (&lt;= n 1)
+      1
+      (+ (fib (- n 1)) (fib (- n 2)))))
+```
+
+``` common-lisp
+(defun/cc fib-cont (n)
+  (if (&lt;= n 1)
+      1
+      (+ (fib-cont (- n 1)) (fib-cont (- n 2)))))
+```
+
+
+# Selective
+
+
+```
+Evaluation took:
+  1.517 seconds of real time
+  1.516000 seconds of total run time (1.516000 user, 0.000000 system)
+  99.93% CPU
+  4,388,993,782 processor cycles
+  0 bytes consed
+```
+
+# Full
+
+```
+Evaluation took:
+  18.347 seconds of real time
+  18.576000 seconds of total run time (18.248000 user, 0.328000 system)
+  [ Run times consist of 1.396 seconds GC time, and 17.180 seconds non-GC time. ]
+  101.25% CPU
+  53,149,416,888 processor cycles
+  22,922,853,904 bytes consed
+```
+
+# コルーチン
+------------
+
+* そこまでFull CPSに不利じゃない
+* 割と実用しそうな例
+* Selective CPSは少しだけラムダが少ない
+
+
+# Selective
+-----------
+
+``` common-lisp
+(let ((*standard-output* (make-broadcast-stream)))
+ (loop repeat 10000000 do
+      (let (c)
+        (setf c ((lambda ()
+                   (write-line &#34;in thread A 1&#34;)
+                   (lambda ()
+                    (write-line &#34;in thread A 2&#34;)
+                    (lambda ()
+                      (write-line &#34;in thread A 3&#34;))))))
+        (write-line &#34;in main thread 1&#34;)
+        (setq c (funcall c))
+        (write-line &#34;in main thread 2&#34;)
+        (setq c (funcall c))
+        (write-line &#34;in main thread 3&#34;))))
+```
+
+
+
+# full
+
+```common-lisp
+(let ((*standard-output* (make-broadcast-stream)))
+ (loop repeat 10000000 do
+      (let (c)
+        (setf c (with-call/cc
+                  (write-line &#34;in thread A 1&#34;)
+                  (let/cc k k)
+                  (write-line &#34;in thread A 2&#34;)
+                  (let/cc k k)
+                  (write-line &#34;in thread A 3&#34;)))
+        (write-line &#34;in main thread 1&#34;)
+        (setq c (funcall c))
+        (write-line &#34;in main thread 2&#34;)
+        (setq c (funcall c))
+        (write-line &#34;in main thread 3&#34;))))
+```
+
+# Selective
+
+```
+Evaluation took:
+  0.905 seconds of real time
+  0.904000 seconds of total run time (0.904000 user, 0.000000 system)
+  99.89% CPU
+  2,617,396,241 processor cycles
+  0 bytes consed
+
+```
+
+# full
+
+```
+Evaluation took:
+  1.272 seconds of real time
+  1.272000 seconds of total run time (1.272000 user, 0.000000 system)
+  100.00% CPU
+  3,681,362,466 processor cycles
+  0 bytes consed
+```
+
+# まとめ
+--------
+
+* 限定継続便利だよ
+* マクロを使えばCPS変換で限定継続実装出来るよ
+* でもパフォーマンや言語の問題もあるよ
+* Selective CPSを使えばパフォーマンスの問題解決出来るよ
+
+&lt;/script&gt;
+&lt;/section&gt;
+</description>
+    </item>
+    
+    <item>
       <title>RustでベアメタルRaspberry PiのLチカ</title>
       <link>/blog/2016/05/04/rustdebeametaruraspberry_pinolchika</link>
       <pubDate>Wed, 04 May 2016 11:43:26 +0900</pubDate>
@@ -2372,261 +2909,6 @@ curl 0.0.0.0:3000で結果が返ってきた(0.0.0.0が自身を指す)ことに
 
 &lt;p&gt;Bind Addressは本当にBindするAddressでした。足りないのはBind Addressに対する知識ではなくネットワークに対する知識でした。
 世の中知らないといけないことが多い。&lt;/p&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>ClojureでSSPを作った話</title>
-      <link>/slide/ClojuredeSSPwotsukuttahanashi/</link>
-      <pubDate>Mon, 22 Feb 2016 20:19:11 +0900</pubDate>
-      
-      <guid>/slide/ClojuredeSSPwotsukuttahanashi/</guid>
-      <description>&lt;section data-markdown
-    data-separator=&#34;\n\n&#34;
-    data-vertical=&#34;\n\n&#34;
-    data-notes=&#34;^Note:&#34;&gt;
-&lt;script type=&#34;text/template&#34;&gt;
-# ClojureでSSPを作った話
-----------------------
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# About Me
----------
-![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
-
- + κeen
- + [@blackenedgold](https://twitter.com/blackenedgold)
- + Github: [KeenS](https://github.com/KeenS)
- + サイバーエージェントのエンジニア
- + Lisp, ML, Rust, Shell Scriptあたりを書きます
-
-
-# SSPとは
--------
-※今回作ったものの話なので実際は少し違う
-
-* Supplier Side Platform
-* メディアからの広告リクエストを受けて表示権をオークションに掛け、落札された広告を表示する
-  0. 広告リクエストを受け取って
-  1. 各DSPに競りの通知を投げて
-  2. 入札を受け取って
-  3. 落札者と落札価格を決めて
-  4. 落札通知を出す
-
-
-# アドテクコンペ
----------------
-
-* [ビジネスモデルもエンジニアリングも学べるアドテクスタジオの育成プログラムとは | 株式会社サイバーエージェント](https://www.cyberagent.co.jp/techinfo_detail/id=11380)
-* サイバーエージェントの学生向けインターン
-* 3日間、3、4人のチームで **DSP** を作る
-* 学生は7チーム、1チームあたり2000q/sを捌くことになってる
-* 学生のDSPを繋ぐための **SSP** が必要になったので作ることに。
-
-
-&lt;iframe src=&#34;//www.slideshare.net/slideshow/embed_code/key/92I5tQt6q6IjII&#34; width=&#34;425&#34; height=&#34;355&#34; frameborder=&#34;0&#34; marginwidth=&#34;0&#34; marginheight=&#34;0&#34; scrolling=&#34;no&#34; style=&#34;border:1px solid #CCC; border-width:1px; margin-bottom:5px; max-width: 100%;&#34; allowfullscreen&gt; &lt;/iframe&gt; &lt;div style=&#34;margin-bottom:5px&#34;&gt; &lt;strong&gt; &lt;a href=&#34;//www.slideshare.net/prir/ss-35918532&#34; title=&#34;日本におけるアドテク市場とサイバーエージェントのアドテク事業について&#34; target=&#34;_blank&#34;&gt;日本におけるアドテク市場とサイバーエージェントのアドテク事業について&lt;/a&gt; &lt;/strong&gt; from &lt;strong&gt;&lt;a href=&#34;//www.slideshare.net/prir&#34; target=&#34;_blank&#34;&gt;CyberAgent, Inc.&lt;/a&gt;&lt;/strong&gt; &lt;/div&gt;
-
-
-# 作るもの
-----------
-
-* 各DSPに競りの通知(HTTPリクエスト)を投げる大規模HTTPクライアント
-  + 各DSPが2000q/s x 7チーム + 落札通知 = 16000q/s
-  + 丁度2000q/sになるような制御も必要
-* 入札を受けてのオークション、結果のロギングなど
-* 管理画面
-
-
-# s7pについて
--------------
-
-* 今回作ったSSP
-* [KeenS/s7p](https://github.com/KeenS/s7p)
-* Clojure製
-* 3日くらいで作った
-* やや粗い部分も
-
-
-# 今日話すこと
---------------
-
-* なぜClojureか
-* 16000q/s出すための工夫
-* 16000q/sに抑えるための制御
-* 運用して困った話とか
-
-
-
-# なぜClojureか
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-
-# なぜClojureか
----------------
-
-* リクエストの数が多いので非同期IOは必須
-* 100msでタイムアウトする仕様なのでタイムアウト処理も
-* もともとはScala(akka)で作ったs6pがあった
-* Actorの設計が良くなかったので遅かった
-* あと非同期HTTPクライアントにタイムアウトがなかった
-* プロダクションコードを流用したのでインターンが終わった後公開出来なかった
-* 別言語で書き直すにあたってGo, Clojure, Common Lisp, Rust, Erlangが検討された
-
-# なぜClojureか
----------------
-
-* Common Lisp: 一番慣れてるが、非同期HTTPクライアント(とfutureライブラリ)が使いづらそうなのでやめた
-* Rust: とりあえずパフォーマンスは出そうだし使いたかったが非同期HTTPクライアントが見付からなかった
-* Clojure: そこそこ慣れてるし速そうな非同期HTTPクライアントがあった。core.asyncで非同期プログラミングもし易い
-* Erlang: 恐らく一番向いてるが、ほとんど経験がない
-* Go: 結構向いてそうだがあまり経験がないのでClojureを選んだ
-
-
-# 16kq/s出すための工夫
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# 16kq/s出すための工夫
-------------------------
-非同期IO（一部同期しちゃったけど）
-
-``` clojure
-(defn work [test req result]
-  (-&gt;&gt; @dsps
-       (sequence (comp
-       ;; 全DSPにPOSTしてから(timeout 100ms)
-                  (map (fn [dsp] {:dsp dsp :response (http/post (:url dsp) (json-request-option req))}))
-       ;; 結果を待ち合わせる
-                  (map destruct)
-                  ...))
-       ...))
-    ....
-```
-
-
-# 16kq/s出すための工夫2
-------------------------
-一部同期したのでとにかくスレッド。スレッドへのディスパッチはチャネルで一発解決。
-
-``` clojure
-(defn worker [c]
-  (thread
-   ...))
-```
-
-```clojure
-(defn make-workers [ch n]
-  (doall (map (fn [_] (core/worker ch)) (range n))))
-```
-
-``` clojure
- workers (manage/make-workers ch 1024)
-```
-
-
-# 16kq/s出すための工夫3
-------------------------
-ZeroMQを使ったmaster-slave構成
-(最終的にSlave18台)
-
-![master-slave構成図](/images/s7p/s7p.svg)
-
-
-
-# &lt;span style=&#34;font-size: 90%&#34;&gt;16kq/sに抑えるための制御&lt;/span&gt;
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# &lt;span style=&#34;font-size: 90%&#34;&gt;16kq/sに抑えるための制御&lt;/span&gt;
----------------------------
-
-* DSPの買い付け能力というビジネス的な問題ではなくサーバの負荷という技術的な問題による制御
-* 1秒で160kクエリ投げて9秒休むとかは出来ない。もう少し細かく制御する必要がある。
-* しかし制御をあまり細かくしすぎると今度はそこで遅くなりそう。
-* リクエストを実際に投げるSlaveは分散してるけど統一した制御が必要
-
-
-# &lt;span style=&#34;font-size: 90%&#34;&gt;16kq/sに抑えるための制御&lt;/span&gt;
----------------------------
-Master側で100ms毎にに200個だけZeroMQのキューに積む
-
-![QPS制御の図](/images/s7p/qps_control.svg)
-
-
-# &lt;span style=&#34;font-size: 90%&#34;&gt;16kq/sに抑えるための制御&lt;/span&gt;
----------------------------
-実装にはcore.asyncの `chan` と `timeout` を使用。(非同期プログラミング便利!)
-
-```Clojure
-(defn start-query [sender reqs]
-  (let [timer (timer 100)]
-    (go-loop []
-      (let [t (&lt;! timer)
-            took (take @qp100ms @reqs)]
-        (doall
-         (doseq [req took]
-           (zmq/send-str sender (json/generate-string req))))
-        (swap! reqs #(drop @qp100ms %))
-        (if (and t (not (empty? took)))
-          (recur)
-          (println &#34;request done&#34;))))
-    timer))
-```
-
-
-# 運用して困った話とか
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-
-# 運用して困った話とか
----------------------
-## &lt;span style=&#34;font-size: 50%&#34;&gt;レスポンスが遅いDSPにSSPのパフォーマンスが引き摺られる&lt;/span&gt;
-* DSPが速ければ余裕を見ても10台あれば十分だった
-* DSPのパフォーマンスに仮定をおけないので上限ギリギリの18台
-* 同期: 「DSP作ってる時はちょっとくらい待ってくれよ、って思ってたけどSSP運用したら遅いDSPガンガン切りたくなる気持分かった」
-
-# 運用して困った話とか
----------------------
-## パフォーマンス検証が大変
-* リクエストを捌くサーバのパフォーマンスをどうするか悩む
-* サーバをチューニングすればSSPも速くなるが、検証にならない
-* かといって投げたクエリを捌けないサーバに対して検証する訳にもいかない
-* 結局安全側に倒したパフォーマンス見積りに。
-
-
-# 運用して困った話とか
----------------------
-## &lt;span style=&#34;font-size: 80%&#34;&gt;Masterがログ吐きすぎてDisk Full&lt;/span&gt;
-* 最初の予定ではMasterはディスクをそんなに使わなかったのでディスクの小さいインスタンスだった
-* ディスクスペース空けてMaster再起動で復旧。焦った。
-
-# 運用して困った話とか
----------------------
-## &lt;span style=&#34;font-size: 60%&#34;&gt;timeoutし続けるDSPがいてSlave完全沈黙&lt;/span&gt;
-* コネクションのクローズ待ちで固まってた
-* 該当DSPを切った上でSlaveの再起動で復旧
-  * カーネルのチューニングかtimeout頻度の検知が必要そう
-* timeoutを考慮に入れた構成にしてた筈なので想定外だった
-
-# まとめ
----------
-
-* ClojureでSSP作ったよ
-* Clojure使えば非同期プログラミングが簡単に出来るよ
-* 運用って大変だよ
-
-
-# 参考
--------
-
-* [KeenS/s7p: sexp version of s6p; a toy SSP.](https://github.com/KeenS/s7p)
-* [ClojureでDSPを作った話 | κeenのHappy Hacκing Blog](http://keens.github.io/slide/ClojuredeDSPwotsukuttahanashi/)
-* [KeenS/b11d: A toy DSP](https://github.com/KeenS/b11d)
-* [アドテクコンペ | 株式会社サイバーエージェント](https://www.cyberagent.co.jp/recruit/fresh/program_detail/id=11303&amp;season=2016)
-* [ビジネスモデルもエンジニアリングも学べるアドテクスタジオの育成プログラムとは | 株式会社サイバーエージェント](https://www.cyberagent.co.jp/techinfo_detail/id=11380)
-
-&lt;/script&gt;
-&lt;/section&gt;
 </description>
     </item>
     
