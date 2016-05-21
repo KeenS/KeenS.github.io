@@ -440,6 +440,7 @@ Evaluation took:
   0 bytes consed
 ```
 
+
 # Full
 
 ```
@@ -461,23 +462,20 @@ Evaluation took:
 
 
 # Selective
------------
 
 ``` common-lisp
-(let ((*standard-output* (make-broadcast-stream)))
- (loop repeat 10000000 do
-      (let (c)
-        (setf c ((lambda ()
-                   (write-line "in thread A 1")
-                   (lambda ()
-                    (write-line "in thread A 2")
-                    (lambda ()
-                      (write-line "in thread A 3"))))))
-        (write-line "in main thread 1")
-        (setq c (funcall c))
-        (write-line "in main thread 2")
-        (setq c (funcall c))
-        (write-line "in main thread 3"))))
+(let (c)
+  (setf c ((lambda ()
+             (write-line "in thread A 1")
+             (lambda ()
+              (write-line "in thread A 2")
+              (lambda ()
+                (write-line "in thread A 3"))))))
+  (write-line "in main thread 1")
+  (setq c (funcall c))
+  (write-line "in main thread 2")
+  (setq c (funcall c))
+  (write-line "in main thread 3"))
 ```
 
 
@@ -485,20 +483,18 @@ Evaluation took:
 # full
 
 ```common-lisp
-(let ((*standard-output* (make-broadcast-stream)))
- (loop repeat 10000000 do
-      (let (c)
-        (setf c (with-call/cc
-                  (write-line "in thread A 1")
-                  (let/cc k k)
-                  (write-line "in thread A 2")
-                  (let/cc k k)
-                  (write-line "in thread A 3")))
-        (write-line "in main thread 1")
-        (setq c (funcall c))
-        (write-line "in main thread 2")
-        (setq c (funcall c))
-        (write-line "in main thread 3"))))
+(let (c)
+  (setf c (with-call/cc
+            (write-line "in thread A 1")
+            (let/cc k k)
+            (write-line "in thread A 2")
+            (let/cc k k)
+            (write-line "in thread A 3")))
+  (write-line "in main thread 1")
+  (setq c (funcall c))
+  (write-line "in main thread 2")
+  (setq c (funcall c))
+  (write-line "in main thread 3"))
 ```
 
 # Selective
@@ -513,6 +509,7 @@ Evaluation took:
 
 ```
 
+
 # full
 
 ```
