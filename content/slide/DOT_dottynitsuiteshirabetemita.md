@@ -10,12 +10,14 @@ title: DOT/dottyについて調べてみた
     data-vertical="\n\n"
     data-notes="^Note:">
 <script type="text/template">
+
 # DOT/dottyについて調べてみた
 ----------------------
 サイバーエージェント Scala Meet Up  
 2016-05-27
 
 <!-- .slide: class="center" -->
+
 
 # About Me
 ---------
@@ -26,6 +28,8 @@ title: DOT/dottyについて調べてみた
  + Github: [KeenS](https://github.com/KeenS)
  + 基盤開発グループ
  + Lisp, ML, Rust, Shell Scriptあたりを書きます
+ + Scala初心者
+   + Scala歴1年未満&gt;&lt;
 
 
 # Scalaコンパイラ
@@ -40,6 +44,7 @@ title: DOT/dottyについて調べてみた
   e.g.) `if(x) 1 else "a"`
 * そもそものScalaの設計に起因する点が多い
   + 抜本的変更が必要
+
 
 # Scala基礎
 -----------
@@ -98,6 +103,7 @@ title: DOT/dottyについて調べてみた
 * 交差型と合併型
   + `A extends B` -> `A & B`
   + 合併型は主に型推論の結果に出てくる
+
 
 ```scala
 package scala.collection.immutable trait List[+A] {
@@ -138,7 +144,6 @@ object scala_collection_immutable { sci =>
 }
 ```
 
-
 
 # dotty
 --------
@@ -147,7 +152,7 @@ object scala_collection_immutable { sci =>
 * いくつかの新しい機能
   + DOTの交差型、合併型も
   + Nullable = `T | Null`
-  + `if (x) 1 else "a"` は `Int | String` に
+  + `if (x) 1 else "a"` は `Int | String` にアノテーション可能
 * `forSome` が消えた
   + DOTのお陰
 
@@ -162,9 +167,27 @@ object scala_collection_immutable { sci =>
 * 型推論のアルゴリズムを改善
   + DOTのお陰
   + 特にサブタイピングが交差/合併型で楽に
-* コンパイルパスをいくつか融合して高速化
-* 値クラスについての改良
-  + `implicit class(val x: T) extends AnyVal`
+* コンパイルパスを融合して高速化
+  + 中間木がなくなってGCにやさしい
+* 他にも一杯改善が
+
+
+
+```scala
+object DaysOfTheWeek{
+  object Mon
+  object Tue
+  object Wed
+  object Thu
+  object Fri
+  object Sat
+  object Sun
+
+  type Weekend = Sat.type | Sun.type
+  type Workweek = Mon.type | Tue.type | Wed.type | Thu.type | Fri.type
+  type All = Weekend | Workweek
+}
+```
 
 
 # TASTY/Linker
@@ -177,8 +200,7 @@ object scala_collection_immutable { sci =>
   + Scalaは型推論が遅いのでそこをスキップ出来るだけでそこそこ速くなる
 * classファイルを跨げるようになったのでユーザが最適化とかも書ける
 * Scala/Scala.js/Scala Native共通プラットフォーム化への布石？
-* Javaエコシステムとの関係どうなるんだろう。
-  + TASTY配布 vs class配布
+* どうやらclassファイルにバイトコードとTASTYを埋め込む??
 
 
 # まとめ
@@ -190,7 +212,7 @@ object scala_collection_immutable { sci =>
 * ついでにTASTY/Linkerについて話したよ
 
 
-# 参考
+# 参考1
 ------
 
 * [The Essence of Dependent Object Types](https://infoscience.epfl.ch/record/215280/files/paper_1.pdf)
@@ -198,10 +220,17 @@ object scala_collection_immutable { sci =>
 * [Dependent Object Types](http://www.cs.uwm.edu/~boyland/fool2012/papers/fool2012_submission_3.pdf)
 * [Why is the Scala compiler so slow? - Quora](https://www.quora.com/Why-is-the-Scala-compiler-so-slow)
 * [performance - Java compile speed vs Scala compile speed - Stack Overflow](http://stackoverflow.com/questions/3490383/java-compile-speed-vs-scala-compile-speed/3612212#3612212)
+
+
+# 参考2
+-------
+
 * [GHC doesn't do subtyping. I suspect that is the main reason why Scala is slow - ... | Hacker News](https://news.ycombinator.com/item?id=5008761)
 * [A Core Calculus for Scala Type Checking](http://lampwww.epfl.ch/~odersky/papers/mfcs06.pdf)
 * [namin/dot: formalization of the Dependent Object Types (DOT) calculus](https://github.com/namin/dot)
 * [The DOT Calculus](http://lampwww.epfl.ch/%7Eamin/dot/current_rules.pdf)
+* [Dotty: exploring the future of scala](https://d-d.me/talks/scalaworld2015/)
+* [Dotty and types: the story so far](http://guillaume.martres.me/talks/typelevel-summit-oslo/)
 
 </script>
 </section>
