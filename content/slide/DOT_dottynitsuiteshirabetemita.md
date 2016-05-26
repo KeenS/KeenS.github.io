@@ -53,7 +53,7 @@ title: DOT/dottyについて調べてみた
 * コア言語
 
 
-# Feather Light Scala
+# Featherlight Scala
 ---------------------
 
 * Scalaのシンタックスシュガーを減らした感じ
