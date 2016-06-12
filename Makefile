@@ -1,4 +1,4 @@
-HUGO?=hugo0.15
+HUGO?=hugo0.16
 GIT?=git
 THEME=liquorice-k
 
