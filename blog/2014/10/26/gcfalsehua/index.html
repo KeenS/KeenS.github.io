@@ -7,8 +7,8 @@
 
         <title>GCの話 | κeenのHappy Hacκing Blog</title>
         <link rel="stylesheet" href='http://fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css' />
-        <link rel="stylesheet" href="//libraries/normalize.3.0.1.css" />
-        <link rel="stylesheet" href="//css/liquorice.css" />
+        <link rel="stylesheet" href="/libraries/normalize.3.0.1.css" />
+        <link rel="stylesheet" href="/css/liquorice.css" />
         <link rel="shortcut icon" href="/favicon.ico" />
         <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon-144-precomposed.png" sizes="144x144" />
         <link rel="alternate" href="" type="application/rss+xml" title="κeenのHappy Hacκing Blog" />
@@ -24,8 +24,8 @@
 
         </script>
         
-        <link rel="stylesheet" href="//highlight.js/styles/xcode.css" />
-<script src="//highlight.js/highlight.min.js"></script>
+        <link rel="stylesheet" href="/highlight.js/styles/xcode.css" />
+<script src="/highlight.js/highlight.min.js"></script>
 <script>hljs.initHighlightingOnLoad();</script>
 <script type="text/x-mathjax-config">
  MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
@@ -43,12 +43,12 @@
         <div class="row">
             <div class="sixteen columns">
                 <div class="li-brand li-left">
-                <a href="//">κeenのHappy Hacκing Blog</a> | Lispエイリアンの狂想曲</div>
+                <a href="/">κeenのHappy Hacκing Blog</a> | Lispエイリアンの狂想曲</div>
                 <div class="li-menu li-right">
                     <span class="li-menu-icon" onclick="javascript:toggle('menu');">&#9776;</span>
                     <ul id="menu2" class="li-menu-items">
                         
-                            <li><a href="/about/"> About </a></li>
+                            <li><a href=""> About </a></li>
                         
                             <li><a href="/index.xml"> Atom </a></li>
                         
@@ -64,7 +64,7 @@
             <div class="sixteen columns">
                 <ul id="menu" class="li-menu-items li-menu-mobile">
                     
-                        <li><a href="/about/"> About </a></li>
+                        <li><a href=""> About </a></li>
                     
                         <li><a href="/index.xml"> Atom </a></li>
                     
@@ -107,7 +107,7 @@
 
 <p>#関数型なんたら でGCの話を聴いて、<a href="http://www.pllab.riec.tohoku.ac.jp/papers/icfp2011UenoOhoriOtomoAuthorVersion.pdf">SML#のGCの論文</a>を読んで色々感じたのでエントリー。</p>
 
-<h1 id="snapshot-gc">Snapshot GC</h1>
+<h1 id="snapshot-gc:574dd6de2647876f3340f949e3c099e0">Snapshot GC</h1>
 
 <p>まず、湯浅先生のSnapshot GC (<a href="http://seesaawiki.jp/w/author_nari/d/GC/extend/%A5%B9%A5%CA%A5%C3%A5%D7%A5%B7%A5%E7%A5%C3%A5%C8%B7%BFGC">解説</a>)。並列、並行、インクリメンタルにGCが出来る。恐らく一番性能が出るとのこと。解説ではmark &amp; sweepだけど私が聴いたのはCopyingだった。</p>
 
@@ -117,7 +117,7 @@
 
 <p>ただ、全ての場合で速くなる訳ではない。Copying GCはオブジェクトを移動するため、オブジェクトのアドレスが変わる。普通の参照ならGCのアルゴリズムが書き換えてくれるのだがそうはいかないのがハッシュ。ハッシュは多くの場合オブジェクトのアドレスをハッシュ値に使うため、GCが走ったらハッシュ値の再計算が必要になる。しかもハッシュの操作には破壊的なものが多いため、ライトバリアの影響も受ける。その場合、 <strong>ハッシュマップよりもツリーマップの方がパフォーマンスが出る</strong> ことがある。勿論、アルゴリズムのオーダが違うので要素数がケタ違いに大きくなるとハッシュに軍配が上がるが、通常そこまで要素を入れない。ようやく関数型言語でツリーマップが使われる理由が分かった。</p>
 
-<h1 id="bitmap-gc">Bitmap GC</h1>
+<h1 id="bitmap-gc:574dd6de2647876f3340f949e3c099e0">Bitmap GC</h1>
 
 <p>関数型言語と相性の良いCopying GCだけど問題もある。Stop the Worldの話は世代別化やらそれこそSnopsht GCでどうにでもなるからそれはいい。Copying GCに本質的な問題。オブジェクトのアドレスの問題。GCが走ると現在のポインタが無効になる。処理系内部だけならまだ開発者が頑張れば良いんだけどC拡張を許すとそうもいかない。普通のポインタの問題だけじゃなくて構造体にポインタがあったら、とかそもそも外部ライブラリの内部のポインタをとか考えてるとどこかで割り切る必要がある。</p>
 
@@ -127,7 +127,7 @@
 
 <p>局所性が上がるとはいっても単にキャッシュが効くとかではない。ビット列になることでCPU命令で操作出来るようになって$O(n)$が$O(n/32)$になったりする。そして何より、Mark &amp; SweepじゃなくてSweep &amp; Markになる。Sweepはビット列を0で埋める論理削除。ほぼ一瞬。なので実質Markのコストしかかからない。</p>
 
-<h2 id="構成">構成</h2>
+<h2 id="構成:574dd6de2647876f3340f949e3c099e0">構成</h2>
 
 <p>勿論、ただのbit列でオブジェクトの生死を管理するにはヒープをサイズ毎に用意する必要がある。8bitのオブジェクト用のサブヒープ、16bitのオブジェクト用のサブヒープ…という風に。そしてそれぞれのヒープ毎にビットマップをつける。ただそれだと無限に大きいサイズのヒープが必要になるのでどこかで切ってそれ以降は普通のMark &amp; Sweepで管理するらしい。因みにSML#では4096bitが上限。32bit専用アーキテクチャなので64bitだと少し違うのかもしれない。以下、32bitアーキテクチャを仮定する。64bitでも適切に読み替えれば問題ない。</p>
 
@@ -145,7 +145,7 @@
 
 <p>オブジェクトをサイズ毎に管理することでSweepを論理削除で済ませているところが良い。</p>
 
-<h2 id="世代別化">世代別化</h2>
+<h2 id="世代別化:574dd6de2647876f3340f949e3c099e0">世代別化</h2>
 
 <p>論文には世代別化の話もある。ライトバリアが必要なのは一緒だけど世代の管理が面白かった。安直には世代毎にサブヒープを分ける方法が思い付くが、それだとオブジェクトの移動が発生する。論文では世代毎にbitmap treeを持っている。ある世代のbitmap treeはその世代とそれより古い世代全ての生きているオブジェクトのbitmapになっている。</p>
 
@@ -155,7 +155,7 @@
 
 <p>全て完了したら若い世代達にも反映する(どう反映するかは論文には載ってない。差分をとって…とかかな？)。面白いのはある世代狙い撃ちでGC走らせられる点。あるいはいくつかの世代でも可能だろう。多くのアルゴリズムはある世代&rdquo;以下&rdquo;な気がする。これによって、マイナーGCでダメならミドルGCして、それでもダメならメジャーGCしてってなってたのが若年、中年、高年で別々に可能になる。まあ、ライトバリアの数がものすごいことになるからやらないだろうけど。なんでかっていうと若い世代から古い世代への参照もトレースする必要が出てくるから。論文に詳しく載ってないのはそんなに多くの世代を作っても現実的でないからだろう。勿論、ある世代以下を全てsweepも出来るので普通はそうする筈。</p>
 
-<h2 id="リメンバーセットとライトバリア">リメンバーセットとライトバリア</h2>
+<h2 id="リメンバーセットとライトバリア:574dd6de2647876f3340f949e3c099e0">リメンバーセットとライトバリア</h2>
 
 <p>さて、さっきからライトバリアの話は出てたのに具体的になんなのかが出てこなかった。</p>
 
@@ -177,7 +177,7 @@
 
 <p>そこまでやらないのは性能に問題があるからかな。あとそもそも世代別GC自体正確にはオブジェクトを回収しないから正確にやってもあまり意味がないのもある。</p>
 
-<h2 id="sticky-mark世代別化">Sticky Mark世代別化</h2>
+<h2 id="sticky-mark世代別化:574dd6de2647876f3340f949e3c099e0">Sticky Mark世代別化</h2>
 
 <p>Sticky Mark世代別GCというのは世代別GCを世代2つ、生存回数の閾値1とするときの簡単な実装方法。本当に簡単で、前回のMarkを残しておけば良い。それが旧世代の目印になる。あとはライトバリアとリメンバーセットを用意するだけ。元々Markのときに既にMarkされているオブジェクトはスルーされるのでアルゴリズムはほぼ変更が要らない。普通のMark &amp; Sweepでも出来るし、Bitmap GCでもアロケーションのときにbitmap treeをいじってないのでbitmap treeを0にする処理をしなければ良い。</p>
 
@@ -203,15 +203,15 @@ contents is the remembered set</p>
 
 <p>誰か分かる人教えて下さい。</p>
 
-<h2 id="複数mutater対応">複数mutater対応</h2>
+<h2 id="複数mutater対応:574dd6de2647876f3340f949e3c099e0">複数mutater対応</h2>
 
 <p>要はアプリケーションでスレッドを使ったときの話。1スレッドにつき1セグメント割り当てて新たなセグメントを確保するときだけロックとればアロケーション速いよねって言ってる。GCはStop the Worldしないようにするとか言ってるけど出来るのかな。</p>
 
-<h2 id="パフォーマンス">パフォーマンス</h2>
+<h2 id="パフォーマンス:574dd6de2647876f3340f949e3c099e0">パフォーマンス</h2>
 
 <p>Bitmap GC、sticky bit世代別Bitmap GC、シンプルなCopying GC、2世代、5世代の世代別Copying GCでの比較が載ってる。Copying GCは2世代が最もパフォーマンスが良く、世代別Bitmap GCもそんなに負けてない。少くともシンプルなCopying GCには勝ってる。アロケーションは及びもつかないものの、世代別Bitmap GCはGCのStop the Worldは圧倒的に短いみたい。</p>
 
-<h1 id="picrinの話">picrinの話</h1>
+<h1 id="picrinの話:574dd6de2647876f3340f949e3c099e0">picrinの話</h1>
 
 <p>picrinのGCは超シンプルなMark &amp; Sweep。んで、picrinのボトルネック。どうにかしたい。先述の理由からMark &amp; Sweepなのは維持なんだけどどう拡張しようねという話。</p>
 
