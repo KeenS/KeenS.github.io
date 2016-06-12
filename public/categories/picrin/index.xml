@@ -19,7 +19,7 @@
 
 &lt;p&gt;今、picrinのcodegenプロセスに手を入れる機運が高まってます。picrinはバイトコードインタプリタなのでS式を渡されたらそれをバイトコードに変換する作業が必要です。それがcodegen。本当はcompileなんだけどpicrinのCのソースコードのコンパイルと紛らわしいからcodegen。私も完全にはプロセスを理解してないので説明して理解度を試しつつ問題点を洗い出します。&lt;/p&gt;
 
-&lt;h1 id=&#34;関連ファイル:693fca136e4ca5c28a91dc5895343393&#34;&gt;関連ファイル&lt;/h1&gt;
+&lt;h1 id=&#34;関連ファイル&#34;&gt;関連ファイル&lt;/h1&gt;
 
 &lt;ul&gt;
 &lt;li&gt;extlib/benz/codegen.c&lt;/li&gt;
@@ -28,7 +28,7 @@
 &lt;li&gt;(extlib/benz/vm.c)&lt;/li&gt;
 &lt;/ul&gt;
 
-&lt;h1 id=&#34;おおまかな流れ:693fca136e4ca5c28a91dc5895343393&#34;&gt;おおまかな流れ&lt;/h1&gt;
+&lt;h1 id=&#34;おおまかな流れ&#34;&gt;おおまかな流れ&lt;/h1&gt;
 
 &lt;ol&gt;
 &lt;li&gt;(&lt;code&gt;read&lt;/code&gt;する)&lt;/li&gt;
@@ -40,7 +40,7 @@
 
 &lt;p&gt;今回説明するのは2~4です。&lt;/p&gt;
 
-&lt;h1 id=&#34;マクロ展開:693fca136e4ca5c28a91dc5895343393&#34;&gt;マクロ展開&lt;/h1&gt;
+&lt;h1 id=&#34;マクロ展開&#34;&gt;マクロ展開&lt;/h1&gt;
 
 &lt;p&gt;入力:Schemeの式&lt;br /&gt;
 出力:マクロ展開済みのS式&lt;br /&gt;
@@ -101,11 +101,11 @@ macroexpand_node(pic_state *pic, pic_value expr, struct pic_senv *senv)
 
 &lt;p&gt;ここに1つ問題があります。&lt;code&gt;find_macro&lt;/code&gt;です。&lt;a href=&#34;https://github.com/picrin-scheme/picrin/issues/234&#34;&gt;イシューにも挙げられて&lt;/a&gt;いますが、マクロを定義したあと同じ名前の手続を定義したら手続で上書きされる筈なのにマクロとして展開されてしまいます。これはマクロと手続きで別のテーブルを持っていることに起因します。ちゃんと上書きされるようにするにはマクロも変数束縛テーブルに登録すれば解決出来るのかなと思ってます。&lt;/p&gt;
 
-&lt;h2 id=&#34;シンボル:693fca136e4ca5c28a91dc5895343393&#34;&gt;シンボル&lt;/h2&gt;
+&lt;h2 id=&#34;シンボル&#34;&gt;シンボル&lt;/h2&gt;
 
 &lt;p&gt;変なことはしてません。スコープを遡っていき、最初に見付かったインターンされたシンボルを返します。見付からなかった(=未定義のシンボルだった)ときは新たなgensymを返します。&lt;/p&gt;
 
-&lt;h2 id=&#34;define-syntax:693fca136e4ca5c28a91dc5895343393&#34;&gt;&lt;code&gt;define-syntax&lt;/code&gt;&lt;/h2&gt;
+&lt;h2 id=&#34;define-syntax&#34;&gt;&lt;code&gt;define-syntax&lt;/code&gt;&lt;/h2&gt;
 
 &lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;static pic_value
 macroexpand_defsyntax(pic_state *pic, pic_value expr, struct pic_senv *senv)
@@ -154,7 +154,7 @@ macroexpand_defsyntax(pic_state *pic, pic_value expr, struct pic_senv *senv)
 
 &lt;p&gt;改善案は&lt;code&gt;define&lt;/code&gt;と同じようにすること。そのためにはマクロ展開後の処理(analyze、codegen、VM命令)にも&lt;code&gt;define-syntax&lt;/code&gt;用の処理を入れる必要があって、面倒。&lt;/p&gt;
 
-&lt;h2 id=&#34;lambda:693fca136e4ca5c28a91dc5895343393&#34;&gt;&lt;code&gt;lambda&lt;/code&gt;&lt;/h2&gt;
+&lt;h2 id=&#34;lambda&#34;&gt;&lt;code&gt;lambda&lt;/code&gt;&lt;/h2&gt;
 
 &lt;p&gt;&lt;code&gt;lambda&lt;/code&gt;の扱いは面倒です。一番分かり易い例は再帰マクロですかね。マクロの定義中に定義中のマクロが見えてる必要があります。この解決策として&lt;code&gt;lambda&lt;/code&gt;だけはマクロ展開を遅延(defer)します。じゃあいつ遅延されたマクロが展開されるかというと&lt;/p&gt;
 
@@ -196,19 +196,19 @@ pic_macroexpand(pic_state *pic, pic_value expr, struct pic_lib *lib)
 
 &lt;p&gt;遅延されたマクロ展開は&lt;code&gt;senv-&amp;gt;defer&lt;/code&gt;にpushされ、&lt;code&gt;macroexpand_deferred&lt;/code&gt;で1つずつ&lt;code&gt;macroexpand_lambda&lt;/code&gt;されます。&lt;code&gt;macroexpand_lambda&lt;/code&gt;はまあ、想像通りです。formalをα変換したあとformalとbodyをマクロ展開します。α変換は&lt;code&gt;senv&lt;/code&gt;にシンボル -&amp;gt; gensymのキーペアを突っ込むだけです。返り値は&lt;code&gt;(lambda formal body)&lt;/code&gt;。&lt;/p&gt;
 
-&lt;h2 id=&#34;define:693fca136e4ca5c28a91dc5895343393&#34;&gt;define&lt;/h2&gt;
+&lt;h2 id=&#34;define&#34;&gt;define&lt;/h2&gt;
 
 &lt;p&gt;比較的単純です。&lt;code&gt;(define name value)&lt;/code&gt;の他に&lt;code&gt;(define (name formal) body)&lt;/code&gt;のMIT記法にも対応する必要があるのでマクロ展開時に特別扱いされてます。&lt;code&gt;(define name value)&lt;/code&gt;を返り値として返します。MIT記法もこの形に正規化されます。&lt;/p&gt;
 
-&lt;h2 id=&#34;quote:693fca136e4ca5c28a91dc5895343393&#34;&gt;quote&lt;/h2&gt;
+&lt;h2 id=&#34;quote&#34;&gt;quote&lt;/h2&gt;
 
 &lt;p&gt;特に語る事はないです。&lt;/p&gt;
 
-&lt;h2 id=&#34;他のマクロ:693fca136e4ca5c28a91dc5895343393&#34;&gt;他のマクロ&lt;/h2&gt;
+&lt;h2 id=&#34;他のマクロ&#34;&gt;他のマクロ&lt;/h2&gt;
 
 &lt;p&gt;Schemeのマクロ展開は簡単で、マクロ手続をbody、展開場所の環境、定義場所の環境の3つを引数として呼び出せば終りです。勿論&lt;code&gt;macroexpand_node&lt;/code&gt;を見て分かるように最後まで展開します。picrinはCommon Lisp風の伝統的マクロもサポートしてるので伝統的マクロだった時はbodyだけを引数として呼び出します。&lt;/p&gt;
 
-&lt;h2 id=&#34;蛇足:693fca136e4ca5c28a91dc5895343393&#34;&gt;蛇足&lt;/h2&gt;
+&lt;h2 id=&#34;蛇足&#34;&gt;蛇足&lt;/h2&gt;
 
 &lt;p&gt;&lt;code&gt;define-syntax&lt;/code&gt;だけを指摘しましたが、マクロ展開後にnoneになるマクロは他にもあります。library関係全部です。個人的にはやつらもVM命令まで残すべきだと思ってます。&lt;/p&gt;
 
@@ -229,7 +229,7 @@ picrin: fooのマクロ展開-&amp;gt;barのマクロ展開-&amp;gt;fooの解析
 
 &lt;p&gt;picrinのコンパイル順序だとマクロ展開を先にやってしまうのでマクロ展開中に同じ&lt;code&gt;begin&lt;/code&gt;内で&lt;code&gt;define&lt;/code&gt;されたシンボルが見えなくなってしまいます。尚、後述しますが今のpicrinはこのコンパイル順序のおかげで手続の相互参照が可能になってます。ここもどうにかしないといけない。&lt;/p&gt;
 
-&lt;h1 id=&#34;コード解析:693fca136e4ca5c28a91dc5895343393&#34;&gt;コード解析&lt;/h1&gt;
+&lt;h1 id=&#34;コード解析&#34;&gt;コード解析&lt;/h1&gt;
 
 &lt;p&gt;入力:マクロ展開済みのS式&lt;br /&gt;
 出力:中間表現&lt;br /&gt;
@@ -247,7 +247,7 @@ picrin: fooのマクロ展開-&amp;gt;barのマクロ展開-&amp;gt;fooの解析
 
 &lt;p&gt;さて、本体はやはり&lt;code&gt;analyze_node&lt;/code&gt;ですが30命令分のifを持つので少し大きいですね。載せるのをやめて面白いやつだけ取り上げましょうか。どうでもいいけどこれ、caseじゃなくてif elseなので並び換えたら高速化しそうですね。&lt;/p&gt;
 
-&lt;h2 id=&#34;変数:693fca136e4ca5c28a91dc5895343393&#34;&gt;変数&lt;/h2&gt;
+&lt;h2 id=&#34;変数&#34;&gt;変数&lt;/h2&gt;
 
 &lt;p&gt;&lt;code&gt;analyze_var&lt;/code&gt;がスコープの深さでgref、lref、crefに振り分けます。&lt;code&gt;analyze_*_var&lt;/code&gt;はgref、lref、crefを返すだけの関数。&lt;/p&gt;
 
@@ -283,7 +283,7 @@ analyze_var(analyze_state *state, pic_sym sym)
 
 &lt;p&gt;改善案は見付からなかった変数は一旦NOWHEREとかに束縛しておいてanalyze時にはエラーを出さない。実行時にNOWHEREに束縛された変数が出てくればエラー。&lt;/p&gt;
 
-&lt;h2 id=&#34;define-1:693fca136e4ca5c28a91dc5895343393&#34;&gt;define&lt;/h2&gt;
+&lt;h2 id=&#34;define-1&#34;&gt;define&lt;/h2&gt;
 
 &lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;static pic_value
 analyze_define(analyze_state *state, pic_value obj)
@@ -336,7 +336,7 @@ analyze_define(analyze_state *state, pic_value obj)
 
 &lt;p&gt;また、&lt;code&gt;define&lt;/code&gt;された手続に名前をつける(シンボルと手続を関連付けるのではない)役割もあります。&lt;/p&gt;
 
-&lt;h2 id=&#34;lambda-1:693fca136e4ca5c28a91dc5895343393&#34;&gt;lambda&lt;/h2&gt;
+&lt;h2 id=&#34;lambda-1&#34;&gt;lambda&lt;/h2&gt;
 
 &lt;p&gt;また例の再帰定義とかで面倒なやつです。&lt;code&gt;analyze_lambda&lt;/code&gt;が引数のチェックだけしたら&lt;code&gt;analyze_defer&lt;/code&gt;に丸投げして、&lt;code&gt;analyze_defer&lt;/code&gt;はモックのエントリーポイントだけ返してdeferリストに処理をpushします。&lt;/p&gt;
 
@@ -344,7 +344,7 @@ analyze_define(analyze_state *state, pic_value obj)
 
 &lt;p&gt;&lt;code&gt;analyze_procedure&lt;/code&gt;が本体になるのですが、スコープを作るので少しややこしいことになってます。&lt;/p&gt;
 
-&lt;h3 id=&#34;スコープと変数:693fca136e4ca5c28a91dc5895343393&#34;&gt;スコープと変数&lt;/h3&gt;
+&lt;h3 id=&#34;スコープと変数&#34;&gt;スコープと変数&lt;/h3&gt;
 
 &lt;p&gt;スコープの解説をしてませんでしたね。変数を参照するときはスコープの関係で4種類出てきます。&lt;/p&gt;
 
@@ -413,7 +413,7 @@ analyze_procedure(analyze_state *state, pic_value name, pic_value formals, pic_v
 
 &lt;p&gt;因みにvargというのはCommon Lispでいう&amp;amp;restや&amp;amp;optionalを引っ括めたものです。&lt;/p&gt;
 
-&lt;h2 id=&#34;begin:693fca136e4ca5c28a91dc5895343393&#34;&gt;begin&lt;/h2&gt;
+&lt;h2 id=&#34;begin&#34;&gt;begin&lt;/h2&gt;
 
 &lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;static pic_value
 analyze_begin(analyze_state *state, pic_value obj, bool tailpos)
@@ -446,7 +446,7 @@ analyze_begin(analyze_state *state, pic_value obj, bool tailpos)
 
 &lt;p&gt;&lt;code&gt;begin&lt;/code&gt;自身が末尾位置にいれば&lt;code&gt;begin&lt;/code&gt;の最後の式は末尾位置になりますがそれ以外は必ず非末尾位置になるよねーってコードです。&lt;/p&gt;
 
-&lt;h1 id=&#34;バイトコード生成:693fca136e4ca5c28a91dc5895343393&#34;&gt;バイトコード生成&lt;/h1&gt;
+&lt;h1 id=&#34;バイトコード生成&#34;&gt;バイトコード生成&lt;/h1&gt;
 
 &lt;p&gt;入力:中間表現&lt;br /&gt;
 出力:バイトコード&lt;br /&gt;
@@ -456,9 +456,9 @@ analyze_begin(analyze_state *state, pic_value obj, bool tailpos)
 
 &lt;p&gt;ここの処理では中間表現をスタックベースのpicrin VM命令に変換します。&lt;/p&gt;
 
-&lt;h2 id=&#34;vm命令やlambdaの内部表現:693fca136e4ca5c28a91dc5895343393&#34;&gt;VM命令やlambdaの内部表現&lt;/h2&gt;
+&lt;h2 id=&#34;vm命令やlambdaの内部表現&#34;&gt;VM命令やlambdaの内部表現&lt;/h2&gt;
 
-&lt;h3 id=&#34;vm命令フォーマット:693fca136e4ca5c28a91dc5895343393&#34;&gt;VM命令フォーマット&lt;/h3&gt;
+&lt;h3 id=&#34;vm命令フォーマット&#34;&gt;VM命令フォーマット&lt;/h3&gt;
 
 &lt;p&gt;フォーマットは3種類あります。&lt;/p&gt;
 
@@ -485,7 +485,7 @@ analyze_begin(analyze_state *state, pic_value obj, bool tailpos)
 
 &lt;p&gt;になっています。因みに普通使われるのは1. intで、2. charはOP_PUSHCHARのみ、3. int2つはOP_CREFとOP_CSETのみに使われます。また、引数(?)を全く持たない命令もあります(スタックマシンなため)。&lt;/p&gt;
 
-&lt;h3 id=&#34;愉快なvm命令たち:693fca136e4ca5c28a91dc5895343393&#34;&gt;愉快なVM命令たち&lt;/h3&gt;
+&lt;h3 id=&#34;愉快なvm命令たち&#34;&gt;愉快なVM命令たち&lt;/h3&gt;
 
 &lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;enum pic_opcode {
   OP_NOP,
@@ -527,7 +527,7 @@ analyze_begin(analyze_state *state, pic_value obj, bool tailpos)
 
 &lt;p&gt;大体名前から分かるかと思います。&lt;code&gt;quote&lt;/code&gt;は&lt;code&gt;OP_PUSH*&lt;/code&gt;系になります。&lt;code&gt;OP_STOP&lt;/code&gt;はあるのに&lt;code&gt;OP_START&lt;/code&gt;がないのは分かりますね。開始はユーザーの操作から始まるのに対して停止はプログラム側が行うからです。&lt;/p&gt;
 
-&lt;h3 id=&#34;lambdaとか:693fca136e4ca5c28a91dc5895343393&#34;&gt;lambdaとか&lt;/h3&gt;
+&lt;h3 id=&#34;lambdaとか&#34;&gt;lambdaとか&lt;/h3&gt;
 
 &lt;p&gt;lambdaとかのエントリポイント付きのコード1まとまりはirepと呼ばれています。&lt;/p&gt;
 
@@ -556,11 +556,11 @@ analyze_begin(analyze_state *state, pic_value obj, bool tailpos)
 
 &lt;p&gt;スコープを作るので変数を格納するpoolを持ちます。そしてlambdaだけは定数プールとは別にirepに格納します。&lt;/p&gt;
 
-&lt;h2 id=&#34;コード生成:693fca136e4ca5c28a91dc5895343393&#34;&gt;コード生成&lt;/h2&gt;
+&lt;h2 id=&#34;コード生成&#34;&gt;コード生成&lt;/h2&gt;
 
 &lt;p&gt;本体は&lt;code&gt;codegen&lt;/code&gt;なんですがこれまた長いので掻い摘んで。帰りがけ順でコード生成します。&lt;/p&gt;
 
-&lt;h3 id=&#34;cons:693fca136e4ca5c28a91dc5895343393&#34;&gt;cons&lt;/h3&gt;
+&lt;h3 id=&#34;cons&#34;&gt;cons&lt;/h3&gt;
 
 &lt;p&gt;まずは肩馴らし。&lt;/p&gt;
 
@@ -575,7 +575,7 @@ analyze_begin(analyze_state *state, pic_value obj, bool tailpos)
 
 &lt;p&gt;引数1と引数2を生成する命令を吐いてから&lt;code&gt;OP_CONS&lt;/code&gt;命令を吐きます。引数1と引数2は自ら値をスタックにPUSHします。&lt;/p&gt;
 
-&lt;h3 id=&#34;quote-1:693fca136e4ca5c28a91dc5895343393&#34;&gt;quote&lt;/h3&gt;
+&lt;h3 id=&#34;quote-1&#34;&gt;quote&lt;/h3&gt;
 
 &lt;p&gt;少し長いですが。&lt;/p&gt;
 
@@ -623,7 +623,7 @@ analyze_begin(analyze_state *state, pic_value obj, bool tailpos)
 
 &lt;p&gt;リテラルや定数をPUSHする命令を吐いてますね。&lt;/p&gt;
 
-&lt;h3 id=&#34;ref系:693fca136e4ca5c28a91dc5895343393&#34;&gt;REF系&lt;/h3&gt;
+&lt;h3 id=&#34;ref系&#34;&gt;REF系&lt;/h3&gt;
 
 &lt;p&gt;local、captureはirep構造体についてるのpoolを参照します。globalはVMのシンボルテーブルから直接引きます。因みにpicrinのシンボルはただのintです。&lt;/p&gt;
 
@@ -665,7 +665,7 @@ analyze_begin(analyze_state *state, pic_value obj, bool tailpos)
 
 &lt;p&gt;因みにset系もほぼ同じようなコードです。&lt;/p&gt;
 
-&lt;h3 id=&#34;lambda-2:693fca136e4ca5c28a91dc5895343393&#34;&gt;lambda&lt;/h3&gt;
+&lt;h3 id=&#34;lambda-2&#34;&gt;lambda&lt;/h3&gt;
 
 &lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;  else if (sym == pic-&amp;gt;sLAMBDA) {
     int k;
@@ -714,7 +714,7 @@ codegen_lambda(codegen_state *state, pic_value obj)
 
 &lt;p&gt;単純に本体に対して&lt;code&gt;codegen&lt;/code&gt;を呼んで出来た命令を取り出してるだけです。&lt;/p&gt;
 
-&lt;h3 id=&#34;if:693fca136e4ca5c28a91dc5895343393&#34;&gt;if&lt;/h3&gt;
+&lt;h3 id=&#34;if&#34;&gt;if&lt;/h3&gt;
 
 &lt;p&gt;schemeはほとんどの制御を継続に任せているのでなんとjmp命令を吐くのはifだけです。&lt;/p&gt;
 
@@ -740,7 +740,7 @@ codegen_lambda(codegen_state *state, pic_value obj)
   }
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;h3 id=&#34;call:693fca136e4ca5c28a91dc5895343393&#34;&gt;call&lt;/h3&gt;
+&lt;h3 id=&#34;call&#34;&gt;call&lt;/h3&gt;
 
 &lt;p&gt;思ったより短いです。単純に引数を評価する命令を吐いたあと引数の数を指定して呼ぶだけです。&lt;/p&gt;
 
@@ -758,7 +758,7 @@ codegen_lambda(codegen_state *state, pic_value obj)
   }
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;h1 id=&#34;最後に:693fca136e4ca5c28a91dc5895343393&#34;&gt;最後に&lt;/h1&gt;
+&lt;h1 id=&#34;最後に&#34;&gt;最後に&lt;/h1&gt;
 
 &lt;p&gt;これを書くのに半日掛かりましたがちゃんとコンパイルプロセスを理解して問題を洗い出すことが出来ました。良かった。&lt;/p&gt;
 
@@ -796,21 +796,21 @@ codegen_lambda(codegen_state *state, pic_value obj)
 
 &lt;p&gt;κeenです。タイトルの通りです。&lt;/p&gt;
 
-&lt;h1 id=&#34;h2oとは:690b2abdf7ac2fac599d62c94dd0ea87&#34;&gt;H2Oとは&lt;/h1&gt;
+&lt;h1 id=&#34;h2oとは&#34;&gt;H2Oとは&lt;/h1&gt;
 
 &lt;p&gt;水。&lt;/p&gt;
 
-&lt;h1 id=&#34;picrinとは:690b2abdf7ac2fac599d62c94dd0ea87&#34;&gt;picrinとは&lt;/h1&gt;
+&lt;h1 id=&#34;picrinとは&#34;&gt;picrinとは&lt;/h1&gt;
 
 &lt;p&gt;&lt;a href=&#34;http://ja.wikipedia.org/wiki/%E3%83%94%E3%82%AF%E3%83%AA%E3%83%B3%E9%85%B8&#34;&gt;Wikipedia&lt;/a&gt;にあるように、フェノールのトリニトロ化合物で、水溶性があります。&lt;/p&gt;
 
-&lt;h1 id=&#34;ではなくて:690b2abdf7ac2fac599d62c94dd0ea87&#34;&gt;ではなくて&lt;/h1&gt;
+&lt;h1 id=&#34;ではなくて&#34;&gt;ではなくて&lt;/h1&gt;
 
 &lt;p&gt;H2OはHTTP1, HTTP2, WebsocketをサポートするNginXより速いHTTPサーバです。&lt;a href=&#34;https://github.com/h2o/h2o&#34;&gt;Github&lt;/a&gt;で開発されています。開発者は@kazuhoさん。&lt;/p&gt;
 
 &lt;p&gt;picrinは「速い、軽い、高機能」を目指して作られているScheme処理系です。&lt;a href=&#34;https://github.com/picrin-scheme/picrin&#34;&gt;Github&lt;/a&gt;で開発されています。開発者は@wasabizさん。&lt;/p&gt;
 
-&lt;h1 id=&#34;混ぜる:690b2abdf7ac2fac599d62c94dd0ea87&#34;&gt;混ぜる&lt;/h1&gt;
+&lt;h1 id=&#34;混ぜる&#34;&gt;混ぜる&lt;/h1&gt;
 
 &lt;p&gt;picrinのように組込み向けで開発されている処理系は&lt;/p&gt;
 
@@ -823,14 +823,14 @@ codegen_lambda(codegen_state *state, pic_value obj)
 
 &lt;p&gt;まあ、Apatch HTTPDやNginX宜しくmod_picrinを作れば済むでしょう。&lt;/p&gt;
 
-&lt;h1 id=&#34;絶望:690b2abdf7ac2fac599d62c94dd0ea87&#34;&gt;絶望&lt;/h1&gt;
+&lt;h1 id=&#34;絶望&#34;&gt;絶望&lt;/h1&gt;
 
 &lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p&gt;&lt;a href=&#34;https://twitter.com/blackenedgold&#34;&gt;@blackenedgold&lt;/a&gt; モジュラーにできるようにはしてるけど、まだsoをロードする仕組みはないです。というか、APIがまだunstableだし&lt;/p&gt;&amp;mdash; Kazuho Oku (@kazuho) &lt;a href=&#34;https://twitter.com/kazuho/status/540692011003559936&#34;&gt;2014, 12月 5&lt;/a&gt;&lt;/blockquote&gt;
 &lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
 
 &lt;p&gt;つらい&lt;/p&gt;
 
-&lt;h1 id=&#34;solシステムの導入:690b2abdf7ac2fac599d62c94dd0ea87&#34;&gt;solシステムの導入&lt;/h1&gt;
+&lt;h1 id=&#34;solシステムの導入&#34;&gt;solシステムの導入&lt;/h1&gt;
 
 &lt;p&gt;mod_xxxにしようと思ったんですけど水だし溶液ってことでsol_xxxにします。&lt;/p&gt;
 
@@ -1090,11 +1090,11 @@ Hello, Wold
 
 &lt;p&gt;ヤッタ！&lt;/p&gt;
 
-&lt;h1 id=&#34;標準出力かよ:690b2abdf7ac2fac599d62c94dd0ea87&#34;&gt;標準出力かよ&lt;/h1&gt;
+&lt;h1 id=&#34;標準出力かよ&#34;&gt;標準出力かよ&lt;/h1&gt;
 
 &lt;p&gt;ううっ。ごめんなさい。&lt;/p&gt;
 
-&lt;h1 id=&#34;で-httpレスポンス版は:690b2abdf7ac2fac599d62c94dd0ea87&#34;&gt;で、HTTPレスポンス版は？&lt;/h1&gt;
+&lt;h1 id=&#34;で-httpレスポンス版は&#34;&gt;で、HTTPレスポンス版は？&lt;/h1&gt;
 
 &lt;p&gt;ごめんなさい、まだです。&lt;/p&gt;
 
@@ -1127,7 +1127,7 @@ Hello, Wold
 
 &lt;p&gt;プレミアム会員は放送後7日は生放送の内容を見れるそうですね。見れる方々は&lt;a href=&#34;http://live.nicovideo.jp/gate/lv196879029&#34;&gt;コチラ&lt;/a&gt;からどうぞ。次回からはタイムシフト予約しておこう。&lt;/p&gt;
 
-&lt;h1 id=&#34;話した内容:2e493419d503b3224d2e59e7d010df63&#34;&gt;話した内容&lt;/h1&gt;
+&lt;h1 id=&#34;話した内容&#34;&gt;話した内容&lt;/h1&gt;
 
 &lt;p&gt;&lt;a href=&#34;/slide/c6h6-plus-hno3.html&#34;&gt;C6H6+HNO3&lt;/a&gt;というタイトルで、picrinのbenzとnitrosについて。本当はnitrosの依存関係解決器sulfuricを完成させてそれについて話し、nitroを書こう!って言う予定だったんですが着手が遅れて完成しないまま発表になりました。&lt;/p&gt;
 
@@ -1139,19 +1139,19 @@ Hello, Wold
 
 &lt;p&gt;wasabizの名前に反応した人が多かったようですね。やっぱ有名人なのかぁ。&lt;/p&gt;
 
-&lt;h1 id=&#34;興味深かった話:2e493419d503b3224d2e59e7d010df63&#34;&gt;興味深かった話&lt;/h1&gt;
+&lt;h1 id=&#34;興味深かった話&#34;&gt;興味深かった話&lt;/h1&gt;
 
-&lt;h2 id=&#34;エンジニアとモナド-http-www-slideshare-net-ruiccrail-engineerusesmonads-ref-http-connpass-com-event-8634-presentation:2e493419d503b3224d2e59e7d010df63&#34;&gt;&lt;a href=&#34;http://www.slideshare.net/RuiccRail/engineerusesmonads?ref=http://connpass.com/event/8634/presentation/&#34;&gt;エンジニアとモナド&lt;/a&gt;&lt;/h2&gt;
+&lt;h2 id=&#34;エンジニアとモナド-http-www-slideshare-net-ruiccrail-engineerusesmonads-ref-http-connpass-com-event-8634-presentation&#34;&gt;&lt;a href=&#34;http://www.slideshare.net/RuiccRail/engineerusesmonads?ref=http://connpass.com/event/8634/presentation/&#34;&gt;エンジニアとモナド&lt;/a&gt;&lt;/h2&gt;
 
 &lt;p&gt;またモナドで殴る話かと思ったら全然違いました。トップダウンで設計するときにそれぞれを小さなDSLに分割してそれらをモナドで実装し、モナド変換子で組み合わせると良いよねとのこと。タスクアサインもモナド単位になるし分かり易い。スピードのために実際には単相化すると良いとか現実的な話をしてて非常に良かったです。&lt;/p&gt;
 
 &lt;p&gt;Lispで考えるとこうはいかないなと思います。トップダウンで設計するのが他の言語以上に向いてない気がします。というか、ボトムアップに向きすぎてる。小っさく始めて抽象が欲しければマクロを書いて…って。オブジェクト指向で作るにしてもオブジェクトとメソッドが分離してるのでボトムアップと相性が良い。この辺はポールグレアムの「ハッカーと画家」に詳しいです。&lt;/p&gt;
 
-&lt;h2 id=&#34;shapelessの紹介-http-xuwei-k-github-io-slides-functional-something-shapeless-0:2e493419d503b3224d2e59e7d010df63&#34;&gt;&lt;a href=&#34;http://xuwei-k.github.io/slides/functional-something-shapeless/#0&#34;&gt;shapelessの紹介&lt;/a&gt;&lt;/h2&gt;
+&lt;h2 id=&#34;shapelessの紹介-http-xuwei-k-github-io-slides-functional-something-shapeless-0&#34;&gt;&lt;a href=&#34;http://xuwei-k.github.io/slides/functional-something-shapeless/#0&#34;&gt;shapelessの紹介&lt;/a&gt;&lt;/h2&gt;
 
 &lt;p&gt;興味を持ったのはshaplessそのものではなくてヘテロなリストやヘテロなハッシュに型をつける話。&lt;code&gt;{ 1 =&amp;gt; &amp;quot;foo&amp;quot;, &amp;quot;bar&amp;quot; =&amp;gt; 2}&lt;/code&gt;に型がつくのは面白すぎます。「高度に多相化された静的型は動的型と区別がつかなくなる」っぽかったです。&lt;/p&gt;
 
-&lt;h2 id=&#34;パターンマッチいろいろ:2e493419d503b3224d2e59e7d010df63&#34;&gt;パターンマッチいろいろ&lt;/h2&gt;
+&lt;h2 id=&#34;パターンマッチいろいろ&#34;&gt;パターンマッチいろいろ&lt;/h2&gt;
 
 &lt;p&gt;議論を呼んだ発表。パターンマッチを拡張する話。例えば年月日に対して&lt;code&gt;YMD(y, 12 25)&lt;/code&gt;でクリスマスならそのときの年を取り出せるだとかさらにアンドを使えばHMSも一緒にマッチ出来るだとか。
 そこからEgisonに話が飛んでEgisonの例のようにポーカーの役をScalaでパターンマッチする例の紹介。&lt;/p&gt;
@@ -1162,7 +1162,7 @@ Hello, Wold
 
 &lt;p&gt;パターンが複雑になるとメモリが爆発するとの指摘がありましたがそれに直面した人がいるらしく、パターンによる分岐の枝を実行時に伸ばしていくようなパターンマッチライブラリも存在します。（Lispは実行時にもマクロが動いていて、実行時にコードを生成することも可能なのです。）&lt;/p&gt;
 
-&lt;h1 id=&#34;懇親会その他:2e493419d503b3224d2e59e7d010df63&#34;&gt;懇親会その他&lt;/h1&gt;
+&lt;h1 id=&#34;懇親会その他&#34;&gt;懇親会その他&lt;/h1&gt;
 
 &lt;p&gt;名古屋の&lt;s&gt;型々&lt;/s&gt;方々と色々喋れました。偶々でこれきさん、みずぴーさんと同じテーブルに座り、昼御飯も一緒に。普段休日出勤してる印象が強く、名古屋に行かないと会えないと思っていたブレイスさんといよさんも一緒でした。でこれき先生はやっぱり大先生だった。&lt;/p&gt;
 
@@ -1172,7 +1172,7 @@ Hello, Wold
 
 &lt;p&gt;Schemeのネイティブコンパイラを作ってる方とも話しました。Schemeの実装について喋ったり、GCについて喋ったり。GCについては興味深いことを聴いたのでもう1本エントリー書きます。あとはプロセス代数とかモデル検査とか。&lt;/p&gt;
 
-&lt;h1 id=&#34;まとめ:2e493419d503b3224d2e59e7d010df63&#34;&gt;まとめ&lt;/h1&gt;
+&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
 
 &lt;p&gt;楽しかった。どうしてもLispは関数型とはあまり言われない（し、私も関数型言語とは思ってない）のでLisperが少なかったのですが私自身はMLも好きなので楽しめました。GCとTaPLとHaskellとScalaとEgisonに対するモチベーションが上がりました。&lt;/p&gt;
 
@@ -1468,7 +1468,7 @@ C APIの項目があることにも触れる。
 
 &lt;p&gt;20人の募集に19人参加予定。会場は今回初めてのところでした。&lt;/p&gt;
 
-&lt;h1 id=&#34;lt:5c76b21db64f9b2b4b6771d0db2da268&#34;&gt;LT&lt;/h1&gt;
+&lt;h1 id=&#34;lt&#34;&gt;LT&lt;/h1&gt;
 
 &lt;p&gt;LTはTOYOZUMIさんが仕事で来れなくなったので私の1件のみ。内容はpicrinのチューニングの話と思わせてほとんどがその前振りのGCの話。&lt;/p&gt;
 
@@ -1478,7 +1478,7 @@ C APIの項目があることにも触れる。
 
 &lt;p&gt;TOYOZUMIさんのdocstringの話聞きたかった&lt;/p&gt;
 
-&lt;h2 id=&#34;飛び入り:5c76b21db64f9b2b4b6771d0db2da268&#34;&gt;飛び入り&lt;/h2&gt;
+&lt;h2 id=&#34;飛び入り&#34;&gt;飛び入り&lt;/h2&gt;
 
 &lt;ul&gt;
 &lt;li&gt;ブラウザ上でbiwa schemeの環境(REPLだけでなくオートインデントとか)を作ってる&lt;/li&gt;
@@ -1487,13 +1487,13 @@ C APIの項目があることにも触れる。
 なんかの話がありました。&lt;/li&gt;
 &lt;/ul&gt;
 
-&lt;h1 id=&#34;余った時間:5c76b21db64f9b2b4b6771d0db2da268&#34;&gt;余った時間&lt;/h1&gt;
+&lt;h1 id=&#34;余った時間&#34;&gt;余った時間&lt;/h1&gt;
 
 &lt;p&gt;chikuさんが前でGCの話してました。んで話が尽きたあたりで私がpicrinの宣伝しました。&lt;code&gt;(picrin control list)&lt;/code&gt;の話です。非同期プロミス然りpicrinにはトリッキーな機能が多いですね。&lt;/p&gt;
 
 &lt;p&gt;結局ライブコーディングはしませんでしたね。&lt;/p&gt;
 
-&lt;h1 id=&#34;懇親会:5c76b21db64f9b2b4b6771d0db2da268&#34;&gt;懇親会&lt;/h1&gt;
+&lt;h1 id=&#34;懇親会&#34;&gt;懇親会&lt;/h1&gt;
 
 &lt;p&gt;Raspberry Piの話とかちょいとGCの話とかVarnishの話とかaltJSとか。ブログの話題が出たのでOctopress推しといたり。なんでみんなGithub Pages + Octopress使わないん？便利ですやん。&lt;/p&gt;
 
