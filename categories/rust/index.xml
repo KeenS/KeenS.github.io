@@ -6,8 +6,124 @@
     <description>Recent content in Rust on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Sun, 12 Jun 2016 15:23:06 +0900</lastBuildDate>
+    <lastBuildDate>Sun, 19 Jun 2016 20:42:14 +0900</lastBuildDate>
     <atom:link href="/categories/rust/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Rustの所有権/ミュータビリティの分割</title>
+      <link>/blog/2016/06/19/rustnoshoyuuken_myu_tabiriteinobunkatsu</link>
+      <pubDate>Sun, 19 Jun 2016 20:42:14 +0900</pubDate>
+      
+      <guid>/blog/2016/06/19/rustnoshoyuuken_myu_tabiriteinobunkatsu</guid>
+      <description>
+
+&lt;p&gt;κeenです。昔所有権/ミュータビリティを分割したくなったけどぱっと方法が思いつかなくて困ったことがあるので今更ながら備忘録として残しておきます。&lt;/p&gt;
+
+&lt;h1 id=&#34;ミュータビリティ&#34;&gt;ミュータビリティ&lt;/h1&gt;
+
+&lt;p&gt;例えば、HTTPパーサを作ろうとしてるとしましょう。
+受け取ったバイト列のバッファをパースしてヘッダやらボディやらのサブスライスを返します。この時、返り値のサブスライスはユーザへの自由を与えるために &lt;code&gt;mut&lt;/code&gt; にしたいですよね。&lt;/p&gt;
+
+&lt;p&gt;そう思ってこういうコードを書くと&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::io;
+
+fn parse(buf: &amp;amp;mut [u8]) -&amp;gt; io::Result&amp;lt;(&amp;amp;mut [u8], &amp;amp;mut [u8])&amp;gt; {
+    ...
+    Ok((&amp;amp;mut buf[hstart..hend], &amp;amp;mut buf[bstart..bend]))
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;エラーになります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;mutability_split.rs:4:31: 4:34 error: cannot borrow `*buf` as mutable more than once at a time [E0499]
+mutability_split.rs:4     Ok((&amp;amp;mut buf[hstart..hend], &amp;amp;mut buf[bstart..bend]))
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;普通にやろうとすると
+1つ1つミュータブルなサブスライスを作ることになり、2つ目以降でborrow checkに引っ掛かってしまいます。2つのバッファがオーバーラップしてなくても。難儀ですね。コピーするくらいしかないのでしょうか。いいえ。rustはちゃんと助けになるAPIを用意してくれています。&lt;/p&gt;
+
+&lt;h2 id=&#34;split-at-mut-https-doc-rust-lang-org-std-primitive-slice-html-method-split-at-mut&#34;&gt;&lt;a href=&#34;https://doc.rust-lang.org/std/primitive.slice.html#method.split_at_mut&#34;&gt;&lt;code&gt;split_at_mut&lt;/code&gt;&lt;/a&gt;&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn split_at_mut(&amp;amp;mut self, mid: usize) -&amp;gt; (&amp;amp;mut [T], &amp;amp;mut [T])
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;スライスを2つに分割してくれます。重要なのが、ミュータビリティも分割してくれるところです。返り値の2つ共に &lt;code&gt;mut&lt;/code&gt; がついています。ということで、次のように実装出来ます。（実行してないので結果が正しいかは確認してませんが）&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn parse(buf: &amp;amp;mut [u8]) -&amp;gt; io::Result&amp;lt;(&amp;amp;mut [u8], &amp;amp;mut [u8])&amp;gt; {
+    ...
+
+    let (h, b) = buf.split_at_mut(bstart);
+    let h = {
+        let (_, h) = h.split_at_mut(hstart);
+        let (_, h) = h.split_at_mut(hend - hstart);
+        h
+    };
+
+    let (_, b) = b.split_at_mut(bend - bstart);
+
+    Ok((h, b))
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;所有権&#34;&gt;所有権&lt;/h1&gt;
+
+&lt;p&gt;似たような話で、構造体の所有権というか、貸与権(?)を分割したい時もあります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct PersonDB {
+    name: String,
+    age: usize,
+    address: String,
+}
+
+
+fn use_immutable(s: &amp;amp;str) {
+    // empty
+}
+
+fn use_mutable(s: &amp;amp;mut str) {
+    // empty
+}
+
+
+
+fn from_db(person: PersonDB) {
+    let name = &amp;amp;person.name;
+    let mut address = &amp;amp;mut person.address;
+    use_immutable(name);
+    use_mutable(address);
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;イミュータブルとミュータブル両方の借用があるのでエラーになってしまいます。実際は別のフィールドなので問題は起きないのですが、コンパイラに怒られます。理不尽ですね。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;mutability_split.rs:36:28: 36:42 error: cannot borrow immutable field `person.address` as mutable
+mutability_split.rs:36     let mut address = &amp;amp;mut person.address;
+                                                  ^~~~~~~~~~~~~~
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そういう時は、パターンマッチによる分配束縛でクリア出来ます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn from_db(person: PersonDB) {
+    let PersonDB {name, mut address, ..} = person;
+    use_immutable(&amp;amp;name);
+    use_mutable(&amp;amp;mut address);
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;p&gt;Rustの所有権やミュータブルな参照など、1つしか存在出来ないとされるものが分割出来ることを示しました。
+地味に悩む所なので誰かの助けになれば幸いです。&lt;/p&gt;
+
+&lt;p&gt;蛇足を足すと、本当は所有権の分割についても書く予定でしたがエラーになる筈のコードがあっさりコンパイルを通ってしまったのでナシになりました。コンパイラも進化してますね。&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>multirustが非推奨になったようなのでrustupに移行する</title>
@@ -2746,390 +2862,6 @@ main &amp;quot;$@&amp;quot;
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;まだ洗練されていませんがお気に入りのタスクです。誰かCLIからCargo.tomlをいじれるツール作ってくれないかな。&lt;/p&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>Rustで小さなツールを作ってみる(後編)</title>
-      <link>/blog/2015/11/29/rustdechiisanatsu_ruwotsukuttemiru_kouhen_</link>
-      <pubDate>Sun, 29 Nov 2015 13:54:39 +0900</pubDate>
-      
-      <guid>/blog/2015/11/29/rustdechiisanatsu_ruwotsukuttemiru_kouhen_</guid>
-      <description>
-
-&lt;p&gt;この記事は&lt;a href=&#34;http://qiita.com/advent-calendar/2015/rust-lang&#34;&gt;Rust Advent Calendar 2015&lt;/a&gt; 2日目の記事です。&lt;br /&gt;
-前 &lt;a href=&#34;/blog/2015/11/14/rustdechiisanatsu_ruwotsukuttemiru/&#34;&gt;Rustで小さなツールを作ってみる(前編)&lt;/a&gt;&lt;br /&gt;
-次 &lt;a href=&#34;/blog/2015/11/29/cargonotsukaikata/&#34;&gt;Cargoの使い方&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;κeenです。昨日の記事で作りかけだったIRCの生ログのDBへのインポートの続きです。今日はDBへのインポートをやります。&lt;/p&gt;
-
-&lt;p&gt;とはいってもRustでDBを扱った経験がないので探り探りです。&lt;/p&gt;
-
-&lt;h1 id=&#34;要件&#34;&gt;要件&lt;/h1&gt;
-
-&lt;p&gt;今回は簡単なのでORMは要らない気がしますが、サンプルということでORMも使いましょう。さらに、サンプルということでクエリビルダも使いましょう。&lt;/p&gt;
-
-&lt;p&gt;…と思ったのですが中々良いライブラリがありませんでした。ドキュメントもろくにないまま放置されてる&lt;a href=&#34;https://github.com/deuterium-orm/deuterium&#34;&gt;deuterium&lt;/a&gt;と開発途中でまだpostgresしかサポートされていない&lt;a href=&#34;https://github.com/ivanceras/rustorm&#34;&gt;rustorm&lt;/a&gt;/&lt;a href=&#34;https://github.com/ivanceras/codegenta&#34;&gt;codegenta&lt;/a&gt;くらいしかないようです。うぅ。
-最近話題になった&lt;a href=&#34;https://github.com/sgrif/diesel&#34;&gt;diesel&lt;/a&gt;もまだ若すぎるようです。&lt;/p&gt;
-
-&lt;p&gt;ということでシンプルなDBIを使います。そろそろ牡蠣の美味しい季節ですしSQL生書きしましょう。当たると怖いですが。で、テスト用にsqlite3を、（今回は使いませんが）本番用（？）にMySQLを使える奴を捜しましょう。&lt;/p&gt;
-
-&lt;h1 id=&#34;ライブラリ捜し&#34;&gt;ライブラリ捜し&lt;/h1&gt;
-
-&lt;p&gt;まずは&lt;a href=&#34;https://crates.io&#34;&gt;crates.io&lt;/a&gt;を捜します。&amp;rdquo;sqlite&amp;rdquo;で捜せばいいでしょうか。&lt;/p&gt;
-
-&lt;p&gt;MySQLとSQLite3をサポートしているライブラリ…&lt;a href=&#34;https://github.com/sfackler/r2d2&#34;&gt;r2d2&lt;/a&gt;がそれのようです。
-コネクションプールのライブラリなので何か違う気がしますが、mysqlもsqlite3も扱えて、結果コネクションを抽象化してくれるので大体大丈夫です。&lt;/p&gt;
-
-&lt;p&gt;蛇足ですが、名前はJavaにc3p0というコネクションプールがあるのでそこから来ているのでしょう。&lt;/p&gt;
-
-&lt;h1 id=&#34;スキーマ定義&#34;&gt;スキーマ定義&lt;/h1&gt;
-
-&lt;p&gt;SQLiteを使い慣れないのですが大したことやってないので大丈夫でしょう。&lt;code&gt;DATETIME&lt;/code&gt; 型がないのが苦しいですね。&lt;/p&gt;
-
-&lt;p&gt;自然キーが文字列や複合キーなのでサロゲートキーを使って自然キーにUNIQUE制約をかけてますがちょっと気持悪いですね。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sql&#34;&gt;-- _*_ mode: sql; sql-product: &#39;sqlite _*_
-
-CREATE TABLE servers(
-        id   INTEGER PRIMARY KEY,
-        name  TEXT NOT NULL UNIQUE,
-        address TEXT
-        );
-m
-CREATE TABLE channels(
-        id INTEGER PRIMARY KEY,
-        server_id INTEGER REFERENCES servers(id) ON UPDATE CASCADE,
-        name TEXT NOT NULL,
-        UNIQUE(server_id, name)
-        );
-
-CREATE TABLE entries(
-        id INTEGER PRIMARY KEY,
-        channel_id INTEGER REFERENCES channels(id) ON UPDATE CASCADE,
-        user_id INTEGER REFERENCES users(i) ON UPDATE CASCADE,
-        type TEXT NOT NULL,
-        body TEXT NOT NULL,
-        created_at TEXT NOT NULL
-        );
-
-CREATE TABLE users(
-        id INTEGER PRIMARY KEY,
-        server_id INTEGER REFERENCES servers(id) ON UPDATE CASCADE,
-        name TEXT NOT NULL,
-        UNIQUE(server_id, name)
-        );
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これをetc/schema.sqlに保存します。&lt;/p&gt;
-
-&lt;h1 id=&#34;モデル定義&#34;&gt;モデル定義&lt;/h1&gt;
-
-&lt;p&gt;折角シンプルなツールを作っているのでモデルは使わない。&lt;/p&gt;
-
-&lt;h1 id=&#34;コネクションまで&#34;&gt;コネクションまで&lt;/h1&gt;
-
-&lt;p&gt;あらかじめ&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ sqlite test.db &amp;lt; etc/schema.sql
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;としてDBを作っておきましょう。&lt;/p&gt;
-
-&lt;p&gt;Cargo.tomlのdependenciesには&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-toml&#34;&gt;r2d2_sqlite = &amp;quot;0.0.3&amp;quot;
-r2d2 = &amp;quot;0.6.1&amp;quot;
-rusqlite = &amp;quot;0.4.0&amp;quot;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;を追記。&lt;/p&gt;
-
-&lt;p&gt;src/main.rsの先頭部分に&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;extern crate r2d2;
-extern crate r2d2_sqlite;
-extern crate rusqlite;
-use std::sync::Arc;
-use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::SqliteError;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;を追記しましょう。&lt;/p&gt;
-
-&lt;p&gt;そしてmainの中に次を追加。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let manager = SqliteConnectionManager::new(&amp;quot;test.db&amp;quot;).unwrap();
-    let config = r2d2::Config::builder().pool_size(16).build();
-    let pool = Arc::new(r2d2::Pool::new(config, manager).unwrap());
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これで一旦コンパイル。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo build
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これが通れば良いです。&lt;/p&gt;
-
-&lt;h1 id=&#34;はじめての挿入&#34;&gt;はじめての挿入&lt;/h1&gt;
-
-&lt;p&gt;INSERTを発行してみましょう。&lt;code&gt;on_channel_dir&lt;/code&gt;の引数を変える必要があります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn on_channel_dir(path: &amp;amp;Path, pool: Arc&amp;lt;r2d2::Pool&amp;lt;SqliteConnectionManager&amp;gt;&amp;gt;) 
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;併せて、呼び出しも&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        on_channel_dir(&amp;amp;path, pool.clone());
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;となります。&lt;/p&gt;
-
-&lt;p&gt;そうしたら&lt;code&gt;on_channel_dir&lt;/code&gt;の中で&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let channel = &amp;amp;dirname[..at];
-    let server = &amp;amp;dirname[at+1..];
-    println!(&amp;quot;{} at {}&amp;quot;, channel, server);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;としていた辺でまずはserversへのインサートを発行しましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let conn = pool.get().unwrap();
-    let server_id = match conn.execute(&amp;quot;INSERT INTO servers (name) VALUES ($1)&amp;quot;, &amp;amp;[&amp;amp;server]) {
-        // unique constraint failed
-        Err(SqliteError{code: 19, message:_}) =&amp;gt; conn.query_row(&amp;quot;SELECT id FROM servers WHERE name = $1&amp;quot;, &amp;amp;[&amp;amp;server], |r| r.get(0)).unwrap(),
-        Ok(_) =&amp;gt; conn.last_insert_rowid(),
-        e =&amp;gt; {e.unwrap(); return}
-    };
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;プールからコネクションを持ってきて&lt;code&gt;INSERT&lt;/code&gt;を発行します。成功するか既にUNIQUEな名前が存在していて失敗したらサーバのidを持ってきます。それ以外の失敗だったらそのままパニックしていいでしょう。&lt;/p&gt;
-
-&lt;p&gt;しかしラッパがちょっと雑すぎやしませんかね。エラーステータスくらいenumでラップして欲しかった。&lt;/p&gt;
-
-&lt;p&gt;同じくチャネルもインサートしましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let channel_id = match conn.execute(&amp;quot;INSERT INTO channels (name, server_id) VALUES ($1, $2)&amp;quot;, &amp;amp;[&amp;amp;channel, &amp;amp;server_id]) {
-        // unique constraint failed
-        Err(SqliteError{code: 19, message:_}) =&amp;gt; conn.query_row(&amp;quot;SELECT id FROM channels WHERE name = $1&amp;quot;, &amp;amp;[&amp;amp;channel], |r| r.get(0)).unwrap(),
-        Ok(_) =&amp;gt; conn.last_insert_rowid(),
-        e =&amp;gt; {e.unwrap(); return}
-
-    };
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;こういうupsertというかinsert or get_idってどうやるのが正解なんでしょう。DB力が低い…&lt;/p&gt;
-
-&lt;h1 id=&#34;エントリのインサート&#34;&gt;エントリのインサート&lt;/h1&gt;
-
-&lt;p&gt;同じく&lt;code&gt;on_log&lt;/code&gt;の引数を増やします。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn on_log(log: &amp;amp;Path, channel_id: i64,  pool: Arc&amp;lt;r2d2::Pool&amp;lt;SqliteConnectionManager&amp;gt;&amp;gt;) {
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;呼び出し側も。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        let pool_ = pool.clone();
-        Builder::new().name(pathname).spawn(move|| on_log(&amp;amp;log, channel_id, pool_))
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;move&lt;/code&gt;する前に&lt;code&gt;clone&lt;/code&gt;しないとダメですね。所有権難しい。&lt;/p&gt;
-
-&lt;p&gt;さて、今度は色々することがあります。
-まず、dateとtimeをくっつけてdatetimeにしましょう。timeがイミュータブルだったので&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        let mut time = ...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;とし、その下で&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        time.tm_mday = date.tm_mday;
-        time.tm_mon = date.tm_mon;
-        time.tm_year = date.tm_year;
-        let created_at = time.to_timespec();
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;とします。わざわざ&lt;code&gt;to_timespec&lt;/code&gt;で変換してるのは&lt;code&gt;Timespec&lt;/code&gt;だとDBライブラリが良い感じに変換してくれるからですね。&lt;/p&gt;
-
-&lt;p&gt;次にメッセージの抜き出し部分も値を返すように変更。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        let (user, type_, body) = match &amp;amp;msg[0..1] {
-            &amp;quot;!&amp;quot; =&amp;gt; (&amp;quot;server&amp;quot;, &amp;quot;sysmsg&amp;quot;, &amp;amp;msg[1..]),
-            &amp;quot;+&amp;quot; =&amp;gt; (&amp;quot;server&amp;quot;, &amp;quot;join&amp;quot;, &amp;amp;msg[1..]),
-            &amp;quot;-&amp;quot; =&amp;gt; (&amp;quot;server&amp;quot;, &amp;quot;part&amp;quot;, &amp;amp;msg[1..]),
-            &amp;quot;&amp;lt;&amp;quot; =&amp;gt; match msg.find(&#39;&amp;gt;&#39;).map(|e| (&amp;amp;msg[1..e], &amp;amp;msg[e+1..])) {
-                Some((user, body)) =&amp;gt; (user, &amp;quot;msg&amp;quot;, body),
-                None =&amp;gt; {
-                    warn!(&amp;quot;cannot parse the entry; skipping&amp;quot;);
-                    continue;
-                }
-            },
-            _ =&amp;gt; (&amp;quot;server&amp;quot;, &amp;quot;notice&amp;quot;, &amp;amp;msg[1..]),
-        };
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ここまで来たらあとはユーザとエントリをインサートするだけですね。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        let conn = pool.get().unwrap();
-        let user_id = match conn.execute(&amp;quot;INSERT INTO users (name) VALUES ($1)&amp;quot;, &amp;amp;[&amp;amp;user]) {
-            // unique constraint failed
-            Err(SqliteError{code: 19, message:_}) =&amp;gt; conn.query_row(&amp;quot;SELECT id FROM users WHERE name = $1&amp;quot;, &amp;amp;[&amp;amp;user], |r| r.get(0)).unwrap(),
-            Ok(_) =&amp;gt; conn.last_insert_rowid(),
-            e =&amp;gt; {e.unwrap(); return}
-        };
-        conn.execute(&amp;quot;INSERT INTO entries (channel_id, user_id, type, body, created_at) VALUES ($1, $2, $3, $4, $5)&amp;quot;, &amp;amp;[&amp;amp;channel_id, &amp;amp;user_id, &amp;amp;type_, &amp;amp;body, &amp;amp;created_at]);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;一旦これで走らせてみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo run --release
-...
-thread &#39;/home/kim/log/#hongo@utmc/2015-02-15.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2015-08-18.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-12-13.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2015-10-13.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-02-26.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-05-23.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2015-04-30.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2013-10-18.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2015-10-14.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-01-19.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-08-12.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: GetTimeout(())&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-06-03.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: GetTimeout(())&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2015-02-05.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: GetTimeout(())&#39;, ../src/libcore/result.rs:736
-...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;あちゃー。マルチスレッドでINSERTしてるのでロックが掛かってますね。SQLiteはファイルロックしか持たないので並列インサートはつらそう。&lt;/p&gt;
-
-&lt;h1 id=&#34;トランザクション&#34;&gt;トランザクション&lt;/h1&gt;
-
-&lt;p&gt;はい、そういう時のトランザクションですよ。&lt;/p&gt;
-
-&lt;p&gt;最後のユーザやエントリーをインサートしてる部分で使ってみます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        let conn = pool.get().unwrap();
-        let trx = conn.transaction().unwrap();
-        let user_id = match conn.execute(&amp;quot;INSERT INTO users (name) VALUES ($1)&amp;quot;, &amp;amp;[&amp;amp;user]) {
-            // unique constraint failed
-            Err(SqliteError{code: 19, message:_}) =&amp;gt; conn.query_row(&amp;quot;SELECT id FROM users WHERE name = $1&amp;quot;, &amp;amp;[&amp;amp;user], |r| r.get(0)).unwrap(),
-            Ok(_) =&amp;gt; conn.last_insert_rowid(),
-            e =&amp;gt; {e.unwrap(); return}
-        };
-        trx.commit();
-        let trx = conn.transaction().unwrap();
-        conn.execute(&amp;quot;INSERT INTO entries (channel_id, user_id, type, body, created_at) VALUES ($1, $2, $3, $4, $5)&amp;quot;, &amp;amp;[&amp;amp;channel_id, &amp;amp;user_id, &amp;amp;type_, &amp;amp;body, &amp;amp;created_at]);
-        trx.commit();
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;排他制御が目的なのでトランザクションを2回取ってます。&lt;/p&gt;
-
-&lt;p&gt;これだとどうなるかというと&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;$ cargo run --release
-...
-thread &#39;/home/kim/log/#hongo@utmc/2015-02-15.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2015-08-18.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-12-13.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2015-10-13.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-02-26.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-05-23.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2015-04-30.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2013-10-18.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2015-10-14.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-01-19.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-08-12.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: GetTimeout(())&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-06-03.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: GetTimeout(())&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2015-02-05.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: GetTimeout(())&#39;, ../src/libcore/result.rs:736
-...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;エラーは減ったもののまだ出ます。&lt;/p&gt;
-
-&lt;h1 id=&#34;その他&#34;&gt;その他&lt;/h1&gt;
-
-&lt;p&gt;他にスレッドプールを使って並列度を下げる、ワーカースレッドを使ってSQLiteへの書き込みを1スレッドにするなども試したのですが上手く行きませんでした。&lt;/p&gt;
-
-&lt;p&gt;スレッドプールについては、今回エラーハンドリングのためにスレッドを立てている訳ですが、パニックを出してスレッドが死ぬとあまり思わしくない挙動をするのでダメでした。&lt;/p&gt;
-
-&lt;p&gt;ワーカースレッドは書き込んだ後にまたchannel_idなどを受け取らないといけないのでやめました。promiseなどを使えば上手くいきそうな気もしますが色々面倒そうなので止めておきます。&lt;/p&gt;
-
-&lt;h1 id=&#34;コネクション&#34;&gt;コネクション&lt;/h1&gt;
-
-&lt;p&gt;並列度を下げる方法はもう1つあります。&lt;/p&gt;
-
-&lt;p&gt;mainの中で&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let config = r2d2::Config::builder().pool_size(16).build();
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;としていたのを覚えていますでしょうか。これはコネクションプールに16個のコネクションを持っています。この数を落とせばなんとかならないでしょうか。&lt;/p&gt;
-
-&lt;p&gt;結論からいうとダメでした。今度は複数スレッドがコネクションを取り合ってタイムアウトが発生してしまいます。&lt;/p&gt;
-
-&lt;h1 id=&#34;並列度を下げる&#34;&gt;並列度を下げる&lt;/h1&gt;
-
-&lt;p&gt;最後の最後、本当に並列度を下げる方法があります。スレッドを立てていた部分で&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let threads = logs.map(|log| {
-        let log = log.unwrap().path();
-        let pathname = log.to_string_lossy().to_string();
-        Builder::new().name(pathname).spawn(move|| on_log(&amp;amp;log))
-    }).collect::&amp;lt;Vec&amp;lt;_&amp;gt;&amp;gt;();
-    for thread in threads {
-        let _ = thread.unwrap().join();
-    }
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;としていました。これはファイル数分並列に実行してしまいます。ここを抑えましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    for log in logs {
-        let log = log.unwrap().path();
-        let pathname = log.to_string_lossy().to_string();
-        let pool_ = pool.clone();
-        let _ = Builder::new().name(pathname).spawn(move|| on_log(&amp;amp;log, channel_id, pool_)).unwrap().join();
-    }
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;spawn&lt;/code&gt;してそのまま&lt;code&gt;join&lt;/code&gt;します。こうすれば並列度を抑えつつパニックをスレッドに分離出来ます。&lt;/p&gt;
-
-&lt;p&gt;これで実行するとどうなるかというと&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo run --release
-...
-thread &#39;/home/kim/log/#lisp-ja@freenode/2015-04-08.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: GetTimeout(())&#39;, ../src/libcore/result.rs:736
-...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;いくつかタイムアウトを出します。えー。並列度1でこれならもうどうしようもないでしょう。&lt;/p&gt;
-
-&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
-
-&lt;p&gt;さて、小さなツールを作るというタイトルにしては後半(執筆が)重い内容になってしまいました。というか、sqlite3の問題もしますが。&lt;/p&gt;
-
-&lt;p&gt;このブログの内容としては&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;rustでディレクトリを扱った&lt;/li&gt;
-&lt;li&gt;ファイルを扱った&lt;/li&gt;
-&lt;li&gt;文字列を扱った&lt;/li&gt;
-&lt;li&gt;日付を扱った&lt;/li&gt;
-&lt;li&gt;スレッドを扱った&lt;/li&gt;
-&lt;li&gt;ロガーライブラリを扱った&lt;/li&gt;
-&lt;li&gt;エラーハンドリングをした&lt;/li&gt;
-&lt;li&gt;パニックのハンドリングをした&lt;/li&gt;
-&lt;li&gt;DBを扱った&lt;/li&gt;
-&lt;li&gt;sqlite3に並列書き込みはつらい&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;ボツ案も含めれば私個人はORMやスレッドプール、チャネルも扱いましたが関係ないですね。&lt;/p&gt;
-
-&lt;p&gt;こういう簡単なツールでも思ったより色々な機能を触れるのでみなさん試してみてはいかがでしょうか。&lt;/p&gt;
-
-&lt;p&gt;ソースコード全体は&lt;a href=&#34;https://github.com/KeenS/irc_log&#34;&gt;ここ&lt;/a&gt;においておきます。&lt;/p&gt;
-
-&lt;p&gt;因みに本筋とは外れますが、今回のSQLiteの問題を扱うには一旦CSVファイルに書き出してからCSVインポートでバルクインサートが考えられます。
-CSVに書き出すのはちまちまやってもいいし今回のデータ量ならオンメモリ構築して一気に書き出しも出来るでしょう。あるいはSQLiteをやめてMySQLを使う。&lt;/p&gt;
 </description>
     </item>
     
