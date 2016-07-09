@@ -146,6 +146,304 @@ Android OSがActivityを管理する時に様々なコールバック(&lt;code&g
     </item>
     
     <item>
+      <title>Socket on SML#</title>
+      <link>/slide/Socket_on_SML_/</link>
+      <pubDate>Sat, 02 Jul 2016 15:25:24 +0900</pubDate>
+      
+      <guid>/slide/Socket_on_SML_/</guid>
+      <description>&lt;section data-markdown
+    data-separator=&#34;\n\n&#34;
+    data-vertical=&#34;\n\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+&lt;script type=&#34;text/template&#34;&gt;
+# Socket on SML&amp;#x23;
+----------------------
+[ML勉強会](http://connpass.com/event/32752/) 2016-07-09
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# About Me
+---------
+![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
+
+ + κeen
+ + [@blackenedgold](https://twitter.com/blackenedgold)
+ + Github: [KeenS](https://github.com/KeenS)
+ + サイバーエージェントのエンジニア
+ + Lisp, ML, Rust, Shell Scriptあたりを書きます
+
+
+# HTTP on SML&amp;#x23;?
+-------------
+
+* SML#にJSONサポートが入った
+  + REST API簡単に叩けるのでは？
+* SML#にFully Concurrent GCが入った
+  + HTTPサーバ書くとレイテンシ抑えられて嬉しいのでは？
+  * スレッドも使えるしスループットも高い筈
+* SML#でHTTPの機運
+* しかしHTTPサポートはないので自前実装するしかない
+
+
+# Socket on SML&amp;#x23;?
+------------------
+
+* HTTPサポートに必要
+* Basisにはある (Optional)
+  + SML#のBasisはサポートしてない
+* FFIあるしユーザランドで実装するか
+* [KeenS/SmlSharpSocketSupport](https://github.com/KeenS/SmlSharpSocketSupport)
+
+
+# TCP/IP、ソケットなど
+---------------------------
+
+* ソケットアドレス - 自分、相手の居場所。これがないと通信出来ない
+  + 複数のアドレスファミリ(AF)がある
+  + IP v4, IP v6, UNIXドメインなど。
+* ソケット - 通信の仕組み。プログラムからはfdとして見える。
+  + AFやtype(stream/diagram)の属性を持つ
+* INet - インターネットドメインソケット
+  + TCPとUDP
+  + IP v4/v6アドレスで通信
+
+
+# 主要なstructure
+-----------------
+
+* Socket
+* NetHostDB
+* INetSock
+* (UnixSock)
+
+
+# [NetHostDB](http://sml-family.org/Basis/net-host-db.html#SIG:NET_HOST_DB)
+-----------
+
+* ドメイン名からIPアドレスを調べたり逆をやったり
+* Cの古い(現在では非推奨な)APIに合わせた設計
+  + IPがv4/v6が混じることを考慮してない
+  + 非推奨どころか脆弱性もあったり CF [glibc の脆弱性 CVE-2015-0235（通称：GHOST）についてまとめてみた - piyolog](http://d.hatena.ne.jp/Kango/20150128/1422409960)
+* 新しいAPIで実装するのが面倒
+
+
+# [Socket](http://sml-family.org/Basis/socket.html#SIG:SOCKET.accept:VAL:SPEC)
+---------
+
+* まあまあでかいけどsend/receive関数の変種が一杯あるだけ
+* ドメインに依らないソケット操作
+* typeには依る
+  + stream socketとdgramソケットで送受信関数が別
+
+
+# Socket.AF
+------------
+
+* ソケットのアドレスファミリ関連
+* 仕様では具体的なファミリを定義しない
+
+
+# Socket.SOCK
+-------------
+
+* ソケットにも種類がある
+  + stream/diagram
+* さらにstreamにはactive/passiveがある
+* それらの型。
+
+
+# [INetSock](http://sml-family.org/Basis/inet-sock.html#INetSock:STR:SPEC)
+--------------
+
+* IP - TCP/UDPのソケットを作る/操作するやつ。
+* ここの関数はインターネットドメインソケットしか受け付けない
+
+
+# Socketについて整理
+----------------
+
+* sockにはtypeとafの属性がある
+* afは色々ある
+* typeはstreamとdgramがある
+* streamにはさらにactiveとpassiveがある
+* 特定のaf, 特定のtypeしか受け付けない関数がある
+
+
+# Socketについて整理
+----------------
+
+```
+   (AF_UN)
+        v
+     [unix sock]...
+         |                       (Active)
+[socket]-+           [TCP(stream)]-+
+         |             |         (Passive)
+     [inet/inet6 sock]-+
+        ^              |
+   (AF_INET/INET6)   [UDP(dgram)]
+```
+
+
+&lt;span style=&#34;font-size:500%;&#34;&gt;幽霊型&lt;/sapn&gt;
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+
+# Socketの幽霊型
+---------------
+
+```sml
+type (&#39;af,&#39;sock_type) sock
+type &#39;af sock_addr
+type dgram
+type &#39;mode stream
+type passive
+type active
+```
+
+# サーバのSocket操作(stream)
+---------------------------
+
+* INetSock(UnixSock)でソケットを作る(af, sock typeの選択, プロセス側の準備)
+* bindでソケットをsock_addrにバインドする(アドレスの割り当て)
+* listenでソケットの特定のポートを開ける(TCPの開始)
+  + passive streamしか受け付けない
+* acceptでクライアントからの入力を受け付ける(接続)
+  + passive streamしか受け付けない
+  + passive streamがactive streamになる
+  + 一度acceptしたsockはlisten/accept出来ない
+
+# データの送受信
+---------------
+
+* `send` / `recv`
+* それぞれArraySlice/VectorSliceの制御フラグ有り/無しがある
+  + 実装がまあまあ面倒
+
+
+# SML# でのバインディング
+------------------------
+
+* sock - fd = int
+* sock_addr - AFによってサイズが違う。ヤバい。
+ + 任意のsock_addrを格納出来るsockaddr_storageを使う
+ + Solarisだとsockaddr_unを格納出来ないらしい（任意のaddrを格納出来るとは）
+   - SML#はSolarisでは動かないので問題ない。
+* AF_* とか - Cではただのint。SML#は関数しかインポート出来ない。
+ + C側で定数関数でラップしてSML#で呼び出した値を束縛
+* その他 - straitforward
+
+
+# 非同期IO
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+
+# 非同期IO
+----------
+
+* HTTPサーバは複数のクライアントとのコネクションを持つ
+* それらのコネクションを要領良く扱わないといけない
+* 相手の処理速度や通信速度によって即座にデータを読み書き出来ない時がある
+  + 勿論クライアント毎に状況が異なる
+* 読み書き出来ない時にやったらブロック(CPU時間の無駄遣い)する
+* 「読み書き出来るならする」/「読み書き出来るクライアントを選ぶ」APIが必要
+
+
+# 非同期API
+----------
+
+* select - 複数のクライアントを登録して、読み書き出来るやつを選ぶ
+* \*NB - 読み書き出来るならやって、出来ないならブロックせずにリターンする
+* poll - selectと同じような（ちょっと速い）API。SocketではなくIOにある。
+  + pollがあるのに何故Socketにselectがあるの…。
+
+
+
+# 非同期APIのFFI
+----------------
+
+* select - Cに対応する関数が。構造体の変換でメモリアロケーションが起きて遅い
+* \*NB - O_NONBLOCKを付けたsend/recv。
+* poll - SML#にある
+
+
+# 非同期HTTPサーバ概略
+---------------------
+
+```sml
+bind(sock, addr);
+listen(sock, port);
+create_thread(n, fn i =&gt; let
+  val clientList = makeClientList()
+  fun loop () = let
+    val clientList =
+      Option.map (acceptNB(sock))
+      (fn client =&gt; addReadClient clientList client)
+      handle SysErr =&gt; ...
+    val {rds, wds, exs} = select (makeSelectList clientList)
+  in
+    recvAndParseHTTPThenCallHandler clientList rds;
+    sendResponse clientList wds;
+    loop ()
+  end
+end)
+```
+
+
+# Cバインディングの憂鬱
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# importとメモリ割り当て
+-----------------------
+
+* SML#にはポインタかワードサイズ以下の値しか渡せない
+  + stringとかはポインタからインポートする関数がある
+  + インポートしたものはSML#のヒープに **コピーされる**
+* cでポインタを返すにはmallocが必要
+* **すぐコピーされてfreeされるもののためにmalloc??**
+* SML#からコールバックを渡してCのスタックの変数をインポート
+* CF https://github.com/KeenS/SmlSharpSocketSupport/blob/master/lib/net_host_db.c#L74
+
+
+# メモリ管理
+------------
+
+* SML#にインポート出来る型は限られている
+  + array, string
+* 他の型はポインタのまま扱う。
+* ポインタはGCされない
+* `sockaddr` は仕様的にファイナライザを持っていない
+  + 現状 **メモリリークする**
+* SML#側でどうにかしてもらわないとダメ？
+  + パンドラの壷(sml_alloc)使う？
+
+
+# 型隠蔽
+-------
+
+* sockは本来はioDescに変換出来ないといけない
+ + SML#でioDescはsockと同じくint
+* しかし型隠蔽のせいでintをioDescに変換出来ない
+* 手詰まり
+
+
+# まとめ
+--------
+
+* socketとかその辺を解説したよ
+* SML#向けにSocket関連Basisのバインディング作ってるよ
+* BasisのAPI使うと非同期HTTPサーバ作れるよ
+* SML#のFFIはやっぱりつらいよ
+
+&lt;/script&gt;
+&lt;/section&gt;
+</description>
+    </item>
+    
+    <item>
       <title>Rustの所有権/ミュータビリティの分割</title>
       <link>/blog/2016/06/19/rustnoshoyuuken_myu_tabiriteinobunkatsu</link>
       <pubDate>Sun, 19 Jun 2016 20:42:14 +0900</pubDate>
@@ -3242,152 +3540,6 @@ let bs = Box::new(new_value());
 関数内部でそのヒープ領域にBigStructの値を書き込んでいるのです。&lt;/p&gt;
 
 &lt;p&gt;もやもやしていたものがスッキリしたし返り値のサイズが決まってないと関数から返せないのも分かるようになった。&lt;/p&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>Rustのゼロコスト抽象化</title>
-      <link>/blog/2016/03/01/rustnozerokosutochuushouka</link>
-      <pubDate>Tue, 01 Mar 2016 23:32:12 +0900</pubDate>
-      
-      <guid>/blog/2016/03/01/rustnozerokosutochuushouka</guid>
-      <description>&lt;p&gt;κeenです。今日Twitter上でのやりとりから少し面白いことが分かったのでそれについて。&lt;/p&gt;
-
-&lt;p&gt;最近1.0が出たKotlinについて、水島さんがツイートしてました。&lt;/p&gt;
-
-&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;nullableに対してはmapとかの高階関数を一切使えないのが痛い。 ?. でカバーできるケースは一部だけだ。zero-overhead null-safetyと唄っとるが、代わりにnullチェックお化けになるわけで、どこがzero-overheadだ &lt;a href=&#34;https://twitter.com/hashtag/kotlin_dis?src=hash&#34;&gt;#kotlin_dis&lt;/a&gt;&lt;/p&gt;&amp;mdash; 水島 宏太(Klassic作成中) (@kmizu) &lt;a href=&#34;https://twitter.com/kmizu/status/704453235277324288&#34;&gt;2016年2月29日&lt;/a&gt;&lt;/blockquote&gt;
-
-&lt;p&gt;それについて私が無関係なツイートを。&lt;/p&gt;
-
-&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;全く無関係だけどRustはOptionみたいな0-1の型をnull or valueに最適化するそうな。これこそがゼロコスト抽象かな &lt;a href=&#34;https://t.co/5Y7cBEyrMe&#34;&gt;https://t.co/5Y7cBEyrMe&lt;/a&gt;&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/704453898996547584&#34;&gt;2016年2月29日&lt;/a&gt;&lt;/blockquote&gt;
-
-&lt;p&gt;これはRustのnomiconに書かれています。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://doc.rust-lang.org/nomicon/repr-rust.html&#34;&gt;repr(Rust)&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;そうすると水島さんからお返事が。&lt;/p&gt;
-
-&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;&lt;a href=&#34;https://twitter.com/blackenedgold&#34;&gt;@blackenedgold&lt;/a&gt; Rust詳しくないですけど、Optionにmapとかした場合インライン展開されるんですかね？だとしたらとても理想的。&lt;/p&gt;&amp;mdash; 水島 宏太(Klassic作成中) (@kmizu) &lt;a href=&#34;https://twitter.com/kmizu/status/704455185125408768&#34;&gt;2016年2月29日&lt;/a&gt;&lt;/blockquote&gt;
-&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
-
-&lt;p&gt;確かにそうなると面白そう。ということで少し調べてみました。&lt;/p&gt;
-
-&lt;p&gt;まず、上記の話をまとめると、Rustの&lt;code&gt;Option&lt;/code&gt;に対する&lt;code&gt;map&lt;/code&gt;&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub fn map&amp;lt;U, F: FnOnce(T) -&amp;gt; U&amp;gt;(self, f: F) -&amp;gt; Option&amp;lt;U&amp;gt; {
-    match self {
-        Some(x) =&amp;gt; Some(f(x)),
-        None =&amp;gt; None,
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;は&lt;code&gt;x&lt;/code&gt;がポインタ型だった時に以下と同値です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub fn map&amp;lt;U, F: FnOnce(T) -&amp;gt; U&amp;gt;(self, f: F) -&amp;gt; Option&amp;lt;U&amp;gt; {
-    if (self != nullPointer ) {
-        f(x)
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;さらに、&lt;a href=&#34;https://github.com/rust-lang/rust/blob/master/src/libcore/option.rs#L386&#34;&gt;&lt;code&gt;map&lt;/code&gt;はインライン宣言されている&lt;/a&gt;ので以下のコード&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let opt = Some(&amp;amp;v);
-opt.map(|x| x + 1);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;は以下と同値です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let opt = &amp;amp;v;
-if (opt != nullPointer) {
-  (|x| x + 1)(opt)
-};
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;さて、ここで無名関数がどうコンパイルされるかという問題が出てきますが、&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/closures.html&#34;&gt;クロージャのドキュメント&lt;/a&gt;によるとこういう雰囲気のコードになるらしいです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let opt = &amp;amp;v;
-struct AnonymousType;
-
-impl FnOnce&amp;lt;(&amp;amp;i32)&amp;gt; for AnonymousType {
-    type Output = i32;
-    fn call_once(self, args: (&amp;amp;i32)) -&amp;gt; Self::Output {
-        args + 1
-    }
-}
-
-if (opt != nullPointer) {
-    let fn_once: FnOnce = AnonymousType;
-    fn_once.call_once(opt)
-};
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;思ったよりも複雑…。さて、問題は&lt;code&gt;let fn_once: FnOnce = AnonymousType;&lt;/code&gt;としているので一旦元の無名関数の情報が抜けてしまいそうな気がします。
-となるとコンパイル時に具体的なメソッドを決定出来ないので&lt;code&gt;fn_once.call_once(opt);&lt;/code&gt;は以下のような雰囲気のコードになってしまいます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let call_once_fn = fn_once.get_call_once_fn();
-call_once_fn(opt);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;毎回呼び出すべき関数の取得が入るのは面倒ですね。&lt;/p&gt;
-
-&lt;p&gt;しかしなががらクロージャのドキュメントをよく読むと無名関数は静的ディスパッチされると書いてあります。つまり、&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let call_once_fn = fn_once.get_call_once_fn();
-call_once_fn(opt);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;と2段ではなく&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;the_call_once_fn_of_AnonymousType(opt);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;とコンパイルされ、&lt;/p&gt;
-
-&lt;p&gt;よって&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let opt = Some(&amp;amp;v);
-opt.map(|x| x + 1);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;は&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn the_call_once_fn_of_AnonymousType(x: &amp;amp;i32) -&amp;gt; i32 {
-    x + 1
-}
-
-
-let opt = &amp;amp;v;
-if (opt != nullPointer) {
-  the_call_once_fn_of_AnonymousType(opt)
-};
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;と同値ということです。&lt;/p&gt;
-
-&lt;p&gt;ここからは私の推測ですが、&lt;code&gt;the_call_once_fn_of_AnonymousType&lt;/code&gt;は本体が小さい上に1回しか呼ばれないのでインライン化されるのではないかと思います。
-よってこの推測が正しければ&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let opt = Some(&amp;amp;v);
-opt.map(|x| x + 1);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;は&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let opt = &amp;amp;v;
-if (opt != nullPointer) {
-  opt + 1
-};
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;となる筈です。&lt;/p&gt;
-
-&lt;p&gt;ゼロコスト抽象化すごい!&lt;/p&gt;
 </description>
     </item>
     
