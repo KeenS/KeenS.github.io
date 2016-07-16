@@ -6,8 +6,383 @@
     <description>Recent content on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Wed, 13 Jul 2016 23:34:03 +0900</lastBuildDate>
+    <lastBuildDate>Sat, 16 Jul 2016 02:53:49 +0900</lastBuildDate>
     <atom:link href="/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>型クラスを越えて</title>
+      <link>/slide/katakurasuwokoete/</link>
+      <pubDate>Sat, 16 Jul 2016 02:53:49 +0900</pubDate>
+      
+      <guid>/slide/katakurasuwokoete/</guid>
+      <description>&lt;section data-markdown
+    data-separator=&#34;\n\n&#34;
+    data-vertical=&#34;\n\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+&lt;script type=&#34;text/template&#34;&gt;
+# 型クラスを越えて
+----------------------
+[歌舞伎座.tech#10「型クラス勉強会」](http://kbkz.connpass.com/event/32420/)
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+# About Me
+---------
+![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
+
+ + κeen
+ + [@blackenedgold](https://twitter.com/blackenedgold)
+ + Github: [KeenS](https://github.com/KeenS)
+ + サイバーエージェントのエンジニア
+ + Lisp, ML, Rust, Shell Scriptあたりを書きます
+
+
+# Rustとは
+----------
+
+* システムプログラミング言語
+* GCなし！でもメモリ管理は自動
+* **Zero-Cost Abstraction**
+* **Trait-Based Generics**
+* パターンマッチ、代数的データ型などなど
+
+
+# Rustのトレイト的なの
+----------------
+
+* 型に固有のメソッド
+  + オブジェクト指向的な
+* トレイト
+  + 型クラス
+
+
+# 型クラスじゃない方
+-------------------
+
+``` rust
+struct Person {
+  name: String,
+}
+impl Person {
+  // Static constructor
+  fn new(name: String) -&gt; Self {
+    Person{name: name}
+  }
+
+  // method
+  fn hello(&amp;self) {
+    println!(&#34;Hello, {}&#34;, self.name);
+  }
+}
+```
+
+
+``` rust
+let person = Person::new(&#34;κeen&#34;);
+person.hello();
+```
+
+
+# 多相型と制約
+--------------
+
+``` rust
+struct Temp&lt;T&gt;(T);
+
+impl &lt;T: Celsius&gt; Temp&lt;T&gt; {
+  fn fromCelsius(t: isize) -&gt; Self {
+    Temp(Celsius(t))
+  }
+}
+
+impl &lt;T: Fahrenheit&gt; Temp&lt;T&gt; {
+  fn fromFahrenheit(t: isize) -&gt; Self {
+    Temp(Fahrenheit(t))
+  }
+}
+
+```
+
+
+# 型クラス
+---------
+
+* 便利
+* 他の言語にも取り入れてほしい
+* 型クラスを入れることで言語設計がどうなるか
+* ユーザランドより言語機能的な部分フォーカス
+
+
+# Rustの型クラスの実装
+---------------------
+
+* 動的ディスパッチと静的ディスパッチ両方がある
+* 動的ディスパッチ
+  + implicit parameterを渡すやつ
+* 静的ディスパッチ
+  + コンパイル時に解決してしまうやつ
+* デフォフォルト静的
+  + 動的を選ぶことも出来る
+
+
+# 静的ディスパッチの意味
+-----------------------
+
+* Zero-Cost Abstraction
+* ユーザはパフォーマンスのために設計を曲げる必要がなくなる
+* インライン化などの最適化も出来る
+* 逆の見方をすればZero-Cost Abstraction出来るからシステムプログラミング言語に高級な機能を入れれた
+
+
+# 型クラス+α
+-----------
+それぞれ面白い特徴が。
+
+* `FromStr`
+* `Write`
+* `Add`
+* `Default`, `Zero`
+* `Iterator`
+
+
+# 型クラス+関数
+--------------
+
+* 関連関数
+* `FromStr`
+* static関数的なものになる
+
+```rust
+pub trait FromStr {
+    type Err;
+    fn from_str(s: &amp;str) -&gt; Result&lt;Self, Self::Err&gt;;
+}
+```
+
+
+``` rust
+use std::str::FromStr;
+
+let s = &#34;5&#34;;
+let x = i32::from_str(s).unwrap();
+
+assert_eq!(5, x);
+```
+
+
+# 型クラス+構文
+--------------
+
+* = メソッド
+* 第一引数が `self` な関数はメソッド構文で呼び出せる
+* クラスがなくても継承がなくてもオブジェクト指向
+* `Write`
+
+``` rust
+trait Write {
+  fn write(&amp;mut self, buf: &amp;[u8]) -&gt; Result&lt;usize&gt;;
+}
+```
+
+
+``` rust
+impl Write for Foo {
+  fn write(&amp;mut self, buf: &amp;[u8]) -&gt; Result&lt;usize&gt; {
+    ...
+  }
+}
+
+let foo = Foo::new();
+foo.write(aa);
+```
+
+
+# 型クラス+UFCS
+---------------
+
+* = 実質オーバーロード
+* 中身の違うメソッドを複数定義出来る
+* どのメソッドを呼ぶかを決定する構文がある
+  + = Universal Function Call Syntax
+
+
+```rust
+trait Foo {
+    fn foo() -&gt; i32;
+}
+
+struct Bar;
+
+impl Bar {
+    fn foo() -&gt; i32 {
+        20
+    }
+}
+
+impl Foo for Bar {
+    fn foo() -&gt; i32 {
+        10
+    }
+}
+
+```
+
+
+```rust
+&lt;Bar as Foo&gt;::foo();
+Bar::foo();
+```
+
+
+
+# 型クラス+演算子
+-----------------
+
+* = 演算子オーバーロード
+* `Add`
+
+``` rust
+pub trait Add&lt;RHS = Self&gt; {
+    type Output;
+    fn add(self, rhs: RHS) -&gt; Self::Output;
+}
+```
+
+
+
+``` rust
+use std::ops::Add;
+
+struct Foo;
+
+impl Add for Foo {
+    type Output = Foo;
+
+    fn add(self, _rhs: Foo) -&gt; Foo {
+        println!(&#34;Adding!&#34;);
+        self
+    }
+}
+
+fn main() {
+    Foo + Foo;
+}
+```
+
+
+# 型クラス+値
+-------------
+
+* = 関連定数
+* unstable...
+* `Zero`, `Default`
+
+``` rust
+// current
+pub trait Zero {
+    fn zero() -&gt; Self;
+}
+```
+
+``` rust
+// ideal
+#![feature(associated_consts)]
+pub trait Zero {
+    const ZERO: Self;
+}
+```
+
+
+```rust
+trait Monoid: Add&lt;Self&gt; + Zero
+  where Self::Output : Add&lt;Self&gt; + Zero {
+}
+
+```
+
+
+# 型クラス+型
+-------------
+
+* 関連型
+* 型族…？
+  + あまり違いを分かっていない
+  + 関連型を持った型をまとめたのが型族？
+* `Iterator`
+
+```rust
+pub trait Iterator {
+  type Item;
+  ....
+}
+```
+
+
+``` rust
+trait Iterator {
+  ...
+  fn next(&amp;mut self) -&gt; Option&lt;Self::Item&gt;;
+}
+```
+
+
+# 型クラス+暗黙のルール
+---------------------
+
+* オーバーライド
+* `Drop`
+  + 暗黙に呼ばれるデストラクタをオーバーライド出来る
+
+```rust
+pub trait Drop {
+    fn drop(&amp;mut self);
+}
+```
+
+
+``` rust
+impl Drop for Lock {
+    fn drop(&amp;mut self) {
+        self.free();
+    }
+}
+```
+
+
+# 型クラス+アノテーション
+------------------------
+
+* 単純に便利
+* `derive`(`Debug` , `Eq`)
+
+``` rust
+#[derive(Debug, Eq)]
+struct Foo(usize);
+```
+
+
+
+``` rust
+let foo1 = Foo(1);
+let foo2 = Foo(2);
+println!(&#34;{:?} == {:?} ?: {:?}&#34;,
+         foo1,
+         foo2,
+         foo1 == foo2);
+```
+
+
+# まとめ
+--------
+
+* 型クラスは便利だよ
+* 型クラスの実装は効率的に出来るよ
+* 型クラスを使うと言語設計も変わるよ
+
+&lt;/script&gt;
+&lt;/section&gt;
+</description>
+    </item>
     
     <item>
       <title>シェル芸十八般</title>
@@ -3434,249 +3809,6 @@ drill-web() {
 * ローカルでデータ分析したい時があるよ
 * その時にDrillは便利だよ
 * Emacs向けのDrillプラグイン作ったよ
-
-&lt;/script&gt;
-&lt;/section&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>Rustとは何か。どんな言語か。</title>
-      <link>/slide/Rusttohananika_donnagengoka_/</link>
-      <pubDate>Sun, 06 Mar 2016 05:27:39 +0900</pubDate>
-      
-      <guid>/slide/Rusttohananika_donnagengoka_/</guid>
-      <description>&lt;section data-markdown
-    data-separator=&#34;\n\n&#34;
-    data-vertical=&#34;\n\n&#34;
-    data-notes=&#34;^Note:&#34;&gt;
-&lt;script type=&#34;text/template&#34;&gt;
-# Rustとは何か。どんな言語か。
-----------------------
-[異種プログラミング言語格闘勉強会](http://kbkz.connpass.com/event/26677/)  
-2016-03-20
-
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# About Me
----------
-![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
-
- + κeen
- + [@blackenedgold](https://twitter.com/blackenedgold)
- + Github: [KeenS](https://github.com/KeenS)
- + サイバーエージェントのエンジニア
- + Lisp, ML, Rust, Shell Scriptあたりを書きます
-
-
-# Rustって?
-----------
-
-* システムプログラミング言語
-* だけど函数型言語から影響を受けた
-* 安全かつ高速
-* ゼロコスト抽象化
-
-
-## システムプログラミング言語
----------------------------
-
-* スレッドはネイティブ、Cとの相互呼び出し、小さなバイナリサイズ
-* ゲームエンジンとか作れる([piston](https://github.com/PistonDevelopers/piston))
-* レンダリングエンジンとか作れる([Servo](https://github.com/servo/servo))
-* Lチカとか出来る
-* OSとか作れる([Redox](https://github.com/redox-os/redox))
-
-
-## 函数型言語的からの影響
------------------------
-
-最近ではめずらしくなくなった
-
-
-* デフォルトイミュータブル
-* 代数的データ型
-* コンビネータ
-* トレイト (型クラス)
-
-
-## 安全かつ高速
---------------
-
-* データ競合が起きない
-  + 所有権システム
-  + だいたいコンパイル時Read Writeロック
-  + Read only参照複数 or Write可能参照1つ
-* LLVMベースの強力な最適化
-* スレッド周辺のAPIが揃ってる
-
-
-## ゼロコスト抽象化
-------------------
-省略
-
-* [Rustのゼロコスト抽象化 | κeenのHappy Hacκing Blog](http://keens.github.io/blog/2016/03/01/rustnozerokosutochuushouka/)
-
-
-# Rustの誤解
------------
-
-* 安定してないって聞いたよ
-* 函数型言語ってホント?
-* GCがなくて大丈夫?
-* 継承がなくて大丈夫?
-
-
-## 安定してないって聞いたよ
-
-* 1.0以前の話
-* 1.0(2015-05以降)はAPIの変更がルール化された
-* 新規APIのstablizeはあれどdeprecateはまれ
-
-
-## 函数型言語ってホント?
-
-* 函数型言語の機能をつまみぐいしてるだけ
-* 標準ライブラリとかはバリバリ手続的
-* Lispよりも函数型言語っぽくない。
-* とはいえ抽象力は高いのでそこまで煩雑にはならない
-
-
-## GCがなくて大丈夫?
-
-* GCはなくてもメモリ管理は自動でする
-* コンパイル時にメモリ管理
-  + コンパイラが必要なところにmalloc/freeを挟むイメージ
-* むしろメモリ以外(fd、ロックなど)も自動管理
-  + GCがある言語よりリソース管理の自動化が徹底してる
-* [リージョンについて | κeenのHappy Hacκing Blog](http://keens.github.io/blog/2015/12/09/ri_jonnitsuite/)
-
-
-## 継承がなくて大丈夫?
-
-* むしろ継承必要？インターフェースだけでよくない？
-* Rustはデータ型とメソッドを分離するので継承のメリットそんなにない
-  + トレイトが強力ともいう
-* 逆にサブタイプ関係による複雑さの上昇のデメリットが多い
-  + 3回以上継承してるの全部把握出来るの？
-* ジェネリクスとかはあるよ
-
-
-# Rustをとりまく環境
--------------------
-
-* racer/rustfmt
-* Cargo
-* crates.io
-* [Rust Playground](https://play.rust-lang.org/)
-* The Rust Programming Language
-
-
-
-# racer/rustfmt
----------------
-
-* racerがコーディング支援ツール
-  + 補完
-  + 定義元ジャンプ
-  + 型情報
-  + 各種エディタプラグインあり
-* rustfmtがコードフォーマッタ
-  + エディタプラグインあり
-  + ビルドツール連携あり
-
-
-# Cargo
--------
-
-* Rustのビルドツール兼パッケージマネージャ
-* これだけ覚えとけば困らない
-
-
-# crates.io
------------
-
-* Rustパッケージのセントラルレポジトリ
-* 必ずビルドが通るような工夫
-  + cargo yank
-  + 同じライブラリの違うバージョンがいても大丈夫
-* Cargoとの連携
-* Cargoからpublishも可能
-
-
-# [Rust Playground](https://play.rust-lang.org/)
----------------------------------------
-
-* webからRustを試せる
-* とりあえず試すと色々分かる
-  + 所有権難しいとか
-
-
-# [The Rust Programming Language](https://doc.rust-lang.org/book/)
-------------------------------
-
-* Rustの入門用ドキュメント
-* とりあえずこれ読めば始められる
-* [和訳版](https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/)もある
-  + [GitHub](https://github.com/rust-lang-ja/the-rust-programming-language-ja)で作業中
-  + これの宣伝しに来ただけ
-* 1.6ほぼ終わり、1.7はまだ
-
-
-# ライブラリ紹介
-----------------
-## MIO
-
-* [mio](https://github.com/carllerche/mio)
-* 低レベルな非同期IOライブラリ
-  + libuvやlibev2相当
-  + イベントスレッドではなくイベントループ
-* これを純Rustで実装
-* つまり(比較的)高水準なAPIで使える
-* 色んなライブラリの下地になっている
-
-
-# ライブラリ紹介
-----------------
-## diesel
-
-* [diesel](https://github.com/sgrif/diesel)
-* ORM &amp; クエリビルダ
-  + mioとはうってかわって高水準なライブラリ
-* `infer_schema!(dotenv!(&#34;DATABASE_URL&#34;));` でコンパイル時に
-  + DBにアクセスしてスキーマ情報抜いて
-  + コード生成
-* モデルもCRUDでちゃんと使い分けている
-
-
-# 所有権難しい
---------------
-下記のコードは動かない。
-
-``` rust
-fn main(){
-    let hello = &#34;Hello, &#34;.to_owned();
-    let world = &#34;World!&#34;;
-    let hello_world =  hello + world;
-    println!(&#34;{}&#34;, hello);
-    println!(&#34;{}&#34;, world);
-    println!(&#34;{}&#34;, hello_world);
-}
-
-```
-
-
-
-# まとめ
---------
-
-* Rustはシステムプログラミング言語だよ
-* 面白い機能いっぱいあるよ
-* もう「安定待ち」じゃないよ
-* Try it now!
-
-
 
 &lt;/script&gt;
 &lt;/section&gt;
