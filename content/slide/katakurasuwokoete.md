@@ -37,6 +37,7 @@ title: 型クラスを越えて
 * **Zero-Cost Abstraction**
 * **Trait-Based Generics**
 * パターンマッチ、代数的データ型などなど
+* [プログラミング言語Rust](https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/README.html)
 
 
 # Rustのトレイト的なの
@@ -260,6 +261,10 @@ fn main() {
     Foo + Foo;
 }
 ```
+
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">for (my_int i = 0; i &lt; 10; i++) { … }<br><br>Cならどういうアセンブリに落ちるかすぐわかるけどC++ならmy_intはクラスかもしれず=0はコンストラクタを起動し&lt;はメソッド呼び出しになり++はejectを発行して光学ディスクトレイが開き相手は死ぬ</p>&mdash; わさびず <a href="https://twitter.com/___yuni/status/681891856335032320">2015年12月29日</a></blockquote>
+
+<!-- .slide: class="center" -->
 
 
 # 型クラス+値
