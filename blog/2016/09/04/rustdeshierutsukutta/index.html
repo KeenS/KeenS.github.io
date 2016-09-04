@@ -5,7 +5,7 @@
         <meta http-equiv="content-type" content="text/html; charset=utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
 
-        <title>mirah 0.2がリリースされました。 | κeenのHappy Hacκing Blog</title>
+        <title>Rustでシェル作った | κeenのHappy Hacκing Blog</title>
         <link rel="stylesheet" href='http://fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css' />
         <link rel="stylesheet" href="/libraries/normalize.3.0.1.css" />
         <link rel="stylesheet" href="/css/liquorice.css" />
@@ -88,13 +88,17 @@
             <div class="sixteen columns">
                 <article class="li-article">
                     <header class="li-article-header">
-                        <h1 class="li-article-title">mirah 0.2がリリースされました。</h1>
+                        <h1 class="li-article-title">Rustでシェル作った</h1>
                         <div class="li-article-meta">
-    <time class="li-article-date">2016-08-11</time>
+    <time class="li-article-date">2016-09-04</time>
     <ul class="li-article-tag">
     
         <li>
-            <a href="/categories/mirah">mirah</a>
+            <a href="/categories/rust">Rust</a>
+        </li>
+    
+        <li>
+            <a href="/categories/shell">Shell</a>
         </li>
     
 </ul>
@@ -105,127 +109,100 @@
                     <section>
                         
 
-<p>κeenです。久しぶりに<a href="mirah.org">mirah</a>のリリースが出ましたので新機能の紹介をしたいと思います。</p>
+<p>κeenです。
+先日、先輩社員と話してるとシェルを作る話になりました。
+だいたいのコンピュータサイエンスの学生なら学部生の頃に課題でシェルを作りますが数学科にいた私は作ったことありませんでした。
+でも、その時「今ならシェルなんて作ろうと思えばすぐに作れますよ」なんて言っちゃったのでなんか作りました。
+まあ、習作程度の雑なものです。</p>
 
-<p>リリース版のダウンロードは <a href="https://github.com/mirah/mirah/releases/tag/0.2.0">こちら</a>から。</p>
+<p>作ったのはこれ、<a href="https://github.com/KeenS/igaguri">KeenS/igaguri: my toy shell written in Rust</a>。
+名前は、Shellは木の実を覆う殻のようにカーネルを覆う殻とのことなのでRustのロゴに似てる毬栗を選びました。</p>
 
-<h1 id="のセマンティクス変更"><code>==</code> のセマンティクス変更</h1>
+<h1 id="パーサ">パーサ</h1>
 
-<p>Rubyに合わせて、 <code>==</code> が等価性、 <code>===</code> が同値性の比較になりました。</p>
+<p>パーサコンビネータライブラリの<a href="https://github.com/Geal/nom">nom</a>を使いました。</p>
 
-<pre><code class="language-mirah">import java.net.URL
+<p>雰囲気こんな感じ。</p>
 
-puts &quot;1 == 1 =&gt; #{1 == 1}&quot;
-puts &quot;1 === 1 =&gt; #{1 === 1}&quot;
-x = 1; puts &quot;x = 1&quot;
-puts &quot;x == x =&gt; #{x == x}&quot;
-puts &quot;x === x =&gt; #{x === x}&quot;
-puts &quot;URL.new(\&quot;http://hoge.com\&quot;) == URL.new(\&quot;http://hoge.com\&quot;) =&gt; #{URL.new(&quot;http://hoge.com&quot;) == URL.new(&quot;http://hoge.com&quot;)}&quot;
-puts &quot;URL.new(\&quot;http://hoge.com\&quot;) === URL.new(\&quot;http://hoge.com\&quot;) =&gt; #{URL.new(&quot;http://hoge.com&quot;) === URL.new(&quot;http://hoge.com&quot;)}&quot;
-x = URL.new(&quot;http://hoge.com&quot;); puts &quot;x = URL.new(\&quot;http://hoge.com\&quot;)&quot;
-puts &quot;x == x =&gt; #{x == x}&quot;
-puts &quot;x === x =&gt; #{x === x}&quot;
-</code></pre>
+<pre><code class="language-rust">named!(token&lt;String&gt;, map!(map_res!(is_a!(&quot;abcdefghijklmnopqlrstuvwxyzABCDEFGHIJKLMNOPQLRSTUVWXYZ-!$%^&amp;@/1234567890&quot;), str::from_utf8), |i: &amp;str| i.to_string()));
+named!(pipe, tag!(&quot;|&quot;));
+named!(redirect_out&lt;String&gt;, chain!(tag!(&quot;&gt;&quot;) ~ opt!(multispace) ~ filename: token, || filename));
 
-<pre><code>1 == 1 =&gt; true
-1 === 1 =&gt; true
-x = 1
-x == x =&gt; true
-x === x =&gt; true
-URL.new(&quot;http://hoge.com&quot;) == URL.new(&quot;http://hoge.com&quot;) =&gt; true
-URL.new(&quot;http://hoge.com&quot;) === URL.new(&quot;http://hoge.com&quot;) =&gt; false
-x = URL.new(&quot;http://hoge.com&quot;)
-x == x =&gt; true
-x === x =&gt; true
-</code></pre>
-
-<h1 id="ビルトインmacroの追加">ビルトインMacroの追加</h1>
-
-<h2 id="キャスト">キャスト</h2>
-
-<p>今まで、Mirahのキャスト構文は</p>
-
-<pre><code class="language-mirah">int(0.5)
-</code></pre>
-
-<p>のように関数呼び出しっぽい形式でしたが、この度 <code>as!</code> マクロが追加されたので以下のように書けるようになりました。</p>
-
-<pre><code class="language-mirah">puts &quot;0.5.as!(int) =&gt; #{0.5.as!(int)}&quot;
-</code></pre>
-
-<pre><code>0.5.as!(int) =&gt; 0
-</code></pre>
-
-<h2 id="synchronize">Synchronize</h2>
-
-<p>javaの <code>Lock</code> の <code>lock</code> , <code>unlock</code> を <code>sychronize</code> マクロでラップしました。Javaのビルトインの <code>synchronized</code> ではない模様。</p>
-
-<pre><code class="language-mirah">import java.util.concurrent.locks.ReentrantLock
-lock = ReentrantLock.new
-counter = 0
-th1 = Thread.new do
-  100.times do
-    lock.synchronize do
-      counter += 1
-    end
-  end
-end
-
-th2 = Thread.new do
-  100.times do
-    lock.synchronize do
-      counter -= 1
-    end
-  end
-end
-
-th1.run
-th2.run
-th1.join
-th2.join
-puts &quot;counter = #{counter}&quot;
+named!(command&lt;Ast&gt;, chain!(
+    opt!(multispace)
+        ~ cmd: separated_list!(multispace, token)
+        ~ outfile: opt!(chain!(multispace ~ out: redirect_out, || out))
+        ~ opt!(multispace), || Ast::Command{cmd: cmd, out: outfile}));
+named!(parse&lt;Ast&gt;, map!(separated_list!(pipe, command), Ast::Pipe));
 
 </code></pre>
 
-<pre><code>counter = 0
+<h1 id="入力ハンドリング">入力ハンドリング</h1>
+
+<p>readlineのRust実装、<a href="https://github.com/kkawakam/rustyline">rustyline</a>を使いました。</p>
+
+<p>それっぽいからとりあえず、で選んだものの、複数行入力（履歴）とか考えるともうちょっとリッチなものを選んだ方が良かったかもしれません。</p>
+
+<h1 id="実行">実行</h1>
+
+<p>最初、<a href="https://github.com/rust-lang/libc">libcバインディング</a>の <code>pipe</code> や <code>fork</code> 、 <code>execve</code> なんかを考えてましたが、標準ライブラリの <a href="https://doc.rust-lang.org/std/process/struct.Command.html"><code>std::process::Command</code></a>で実現出来そうだったのでそれを使いました。</p>
+
+<p>こんな感じ。</p>
+
+<pre><code class="language-rust">Command::new(cmd)
+    .args(&amp;terms)
+    .stdin(stdin)
+    .stdout(stdout)
+    .stderr(stderr)
+    .spawn()
 </code></pre>
 
-<h2 id="private"><code>private</code></h2>
+<h2 id="パイプ-リダイレクト">パイプ/リダイレクト</h2>
 
-<pre><code class="language-mirah">private def my_method
-  puts &quot;foo&quot;
-end
+<p>一応、パイプも標準ライブラリでサポートされてるのでそれを使いました。</p>
+
+<p>ただ、普通のCとは違って子プロセスと親プロセスの間に一旦パイプを作って、子プロセスの出力の生のfdを取り出して、次の子プロセスの入力に与えて、と案外面倒でした。 <code>unsafe</code> も出てくれば <code>unreachable</code> も出てくるのでもう少し書き直したい。</p>
+
+<pre><code class="language-rust">let mut si = stdin;
+let mut itr = commands.into_iter().peekable();
+unsafe {
+    while let Some(command) = itr.next() {
+        if itr.peek().is_some() {
+            let process =
+                try!(self.run(command, si, Stdio::piped(), Stdio::inherit()));
+            si = Stdio::from_raw_fd(process.stdout.unwrap().into_raw_fd());
+        } else {
+            return self.run(command, si, stdout, stderr);
+        }
+    }
+}
+unreachable!()
 </code></pre>
 
-<p>みたいに書けるようになりました。</p>
+<p>リダイレクトも似たようなもので、ファイルを作って生のfdを取り出して、とやります。</p>
 
-<h2 id="ラッパークラスの演算子">ラッパークラスの演算子</h2>
+<pre><code class="language-rust">let stdout = out.map(|f| {
+    unsafe {
+        let file = File::create(f)
+        // FIXME: do not panic
+            .unwrap();
+        Stdio::from_raw_fd(file.into_raw_fd())
+    }
 
-<p><code>int</code> に対する <code>Integer</code> のようなラッパークラスにも演算子マクロが定義されるようになました。</p>
-
-<pre><code class="language-mirah">b = Integer.new(1); puts &quot;b = Integer.new(1)&quot;
-b += 1;puts &quot;b += 1&quot;
-puts &quot;a &lt; b =&gt; #{a &lt; b}&quot;
+}).unwrap_or(stdout);
 </code></pre>
 
-<pre><code>a &lt; b =&gt; true
-</code></pre>
+<h1 id="おわりに">おわりに</h1>
 
-<p>他にも色々と定義されているようです。</p>
+<p>昨日の夜からちょろっと作り始めてさっきそれっぽく動くようになった程度なのでまだ適当にしか動きません。
+パイプと標準出力のリダイレクトだけで、 <code>cd</code> なんかのシェルコマンドもなければシェル変数もありません。
+が、そろそろ飽きたのでこの辺で。</p>
 
-<h1 id="改善">改善</h1>
+<p><blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">そろそろ飽きてきた</p>&mdash; κeen (@blackenedgold) <a href="https://twitter.com/blackenedgold/status/772334565264232454">2016年9月4日</a>&lt;/
+blockquote&gt;
+<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script></p>
 
-<ul>
-<li>Javaのバイトコードを吐くライブラリasmのバージョンが5になりました。</li>
-<li>コンパイラのの内部で使っているロガーをマクロで書き直すことでDebug出力しない時のコンパイラの速度が速くなりました(確かこの変更が入った時に20%速くなるって言ってたような)。</li>
-<li>マクロが<a href="http://www.ne.jp/asahi/hishidama/home/tech/java/jar.html#h_Service_Provider">サービスプロバイダ</a>の仕組みに乗っかるようになりました。
-マクロを使うには今までマクロを定義したmirahのソースコードを一緒にコンパイルしないといけなかったのが、Mirahコンパイラがクラスパスから捜すようになったのでJarによる配布が現実的になりました。</li>
-</ul>
-
-<h1 id="最後に">最後に</h1>
-
-<p>マクロ周りが便利になるなど、興味深い変更がありましたね。
-みなさんもこれを機にmirahを使ってみて下さい。</p>
+<p>シェルコマンドとシェル変数くらいはいつか実装しようかな。</p>
 
                     </section>
                 </article>
@@ -243,8 +220,7 @@ puts &quot;a &lt; b =&gt; #{a &lt; b}&quot;
             <div class="eight columns">
                 <div class="li-pagination-previous">
                     
-                        Later article<br />
-                        <a href="/blog/2016/09/04/rustdeshierutsukutta"> Rustでシェル作った</a>
+                        &nbsp;
                     
                 </div>
             </div>
@@ -252,7 +228,7 @@ puts &quot;a &lt; b =&gt; #{a &lt; b}&quot;
                 <div class="li-pagination-next">
                     
                         Older article<br />
-                        <a href="/blog/2016/08/02/watashigako_dowokakutokitesutohakakanai"> 私がコードを書くときテストは書かない</a>
+                        <a href="/blog/2016/08/11/mirah_0_2gariri_susaremashita"> mirah 0.2がリリースされました。</a>
                     
                 </div>
             </div>
