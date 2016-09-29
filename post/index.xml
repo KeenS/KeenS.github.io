@@ -6,8 +6,39 @@
     <description>Recent content in Posts on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Sun, 04 Sep 2016 16:26:20 +0900</lastBuildDate>
+    <lastBuildDate>Thu, 29 Sep 2016 22:15:51 +0900</lastBuildDate>
     <atom:link href="/post/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Pijulのインストールが難易度高いので解説する</title>
+      <link>/blog/2016/09/29/pijulnoinsuto_ruganan_idotakainodekaisetsusuru</link>
+      <pubDate>Thu, 29 Sep 2016 22:15:51 +0900</pubDate>
+      
+      <guid>/blog/2016/09/29/pijulnoinsuto_ruganan_idotakainodekaisetsusuru</guid>
+      <description>&lt;p&gt;κeenです。ふとTwitterで&lt;a href=&#34;http://pijul.org&#34;&gt;Pijul&lt;/a&gt;の話題を見掛けたついでにインストールしようと思ったら難易度が高かったので解説します。
+Pijulそのものについては&lt;a href=&#34;/blog/2016/02/14/dvcsnomoderu_aruihapijulnitsuite/&#34;&gt;過去のエントリ&lt;/a&gt;を参照して下さい。&lt;/p&gt;
+
+&lt;p&gt;因みにPijulは「ピーフール」みたいに発音するそうです。「フー」は喉の奥から出す破擦音ですね。&lt;/p&gt;
+
+&lt;p&gt;まず、公式ドキュメントには &lt;code&gt;cargo install pijul&lt;/code&gt; すると書いてますが、これはバージョン0.1、古いやつな上にビルドに失敗します。
+ということでソースからビルドするのですがビルドガイドがないので非常に難しいです。コマンドだけ載せてしまうと&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ darcs get https://pijul.org
+$ cd pijul.org/pijul
+$ cp -R ../libpijul src
+$ cd src/libpijul/src
+$ darcs get https://pijul.org/sanakirja
+$ cd ../../../
+$ cargo install
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;です。これだと常に最新版をビルドしてしまいますがdarcsでタグを指定する方法が分からなかったのでこれで。
+あ、あと&lt;code&gt;darcs get https://pijul.org/sanakirja&lt;/code&gt;でnested repositoryで怒られますがそれもよく分からなかったのでそのまま。
+darcsに馴れてる方は好きにして下さい。&lt;/p&gt;
+
+&lt;p&gt;因みにその後のコマンドはちゃんと動くので&lt;a href=&#34;http://pijul.org/documentation/getting-started/&#34;&gt;公式ガイド&lt;/a&gt;に従えば使えます。&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>Rustでシェル作った</title>
@@ -2365,202 +2396,6 @@ if (opt != nullPointer) {
 
 &lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;そしてやはり操作をネストのトップレベルにもってくると操作の引数とかが事前条件/前提条件に依存するのでやりづらい。&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/704602629737811968&#34;&gt;2016年3月1日&lt;/a&gt;&lt;/blockquote&gt;
 &lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>RustのHigher-Kinded type Trait</title>
-      <link>/blog/2016/02/28/rustnohigherkinded_type_trait</link>
-      <pubDate>Sun, 28 Feb 2016 14:40:59 +0900</pubDate>
-      
-      <guid>/blog/2016/02/28/rustnohigherkinded_type_trait</guid>
-      <description>
-
-&lt;p&gt;κeenです。少し前の話になりますがRustの関連型を駆使してHigher Kinded type Trait（高階型トレイト）を実現してしまったものが出回ってたのでそれについて。
-本来RustはHKTをサポートしていませんが不思議なことに実装出来てしまっているのです。&lt;/p&gt;
-
-&lt;p&gt;HKTについて微塵も知らない方にも分かるように解説していきます。&lt;/p&gt;
-
-&lt;h1 id=&#34;map-可能なトレイト&#34;&gt;&lt;code&gt;map&lt;/code&gt; 可能なトレイト&lt;/h1&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://doc.rust-lang.org/core/option/enum.Option.html#method.map&#34;&gt;&lt;code&gt;Option&lt;/code&gt;&lt;/a&gt;、&lt;a href=&#34;https://doc.rust-lang.org/core/result/enum.Result.html#method.map&#34;&gt;&lt;code&gt;Result&lt;/code&gt;&lt;/a&gt;、etc 色々なトレイトが &lt;code&gt;map&lt;/code&gt; メソッドを実装しています。&lt;/p&gt;
-
-&lt;p&gt;それぞれ型シグネチャを抜き出してみましょう。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;Option: &lt;code&gt;map&amp;lt;U, F: FnOnce(T) -&amp;gt; U&amp;gt;(self, f: F) -&amp;gt; Option&amp;lt;U&amp;gt;&lt;/code&gt;&lt;/li&gt;
-&lt;li&gt;Result: &lt;code&gt;map&amp;lt;U, F: FnOnce(T) -&amp;gt; U&amp;gt;(self, op: F) -&amp;gt; Result&amp;lt;U, E&amp;gt;&lt;/code&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;驚く程似てますね。これを抽象化して「&lt;code&gt;map&lt;/code&gt;メソッドを持つ」トレイトを定義したくなるかもしれません。
-しかしそれは簡単には書けません。何故なら&lt;code&gt;map&lt;/code&gt;はコンテナ型、つまり「型引数を取る型」に定義される型だからです。
-現在のRustは「型引数を取る型」に対するジェネリクスはサポートしていません。もし書こうとするとこのようになるでしょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Mappable&amp;lt;M&amp;lt;_&amp;gt;, T&amp;gt; where Self: M&amp;lt;T&amp;gt; {
-  fn map&amp;lt;U, F: FunOnce(T) -&amp;gt; U&amp;gt;(self, f: F) -&amp;gt; M&amp;lt;U&amp;gt;;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;M&amp;lt;_&amp;gt;&lt;/code&gt; なんて型パラメータを書くことは出来ませんし&lt;code&gt;M&amp;lt;T&amp;gt;&lt;/code&gt;や&lt;code&gt;M&amp;lt;U&amp;gt;&lt;/code&gt;も無理があります。残念ですね。&lt;/p&gt;
-
-&lt;h1 id=&#34;iterator-との違い&#34;&gt;&lt;code&gt;Iterator&lt;/code&gt; との違い&lt;/h1&gt;
-
-&lt;p&gt;さて、&lt;code&gt;Iterator&lt;/code&gt;にも&lt;a href=&#34;https://doc.rust-lang.org/std/iter/trait.Iterator.html#method.map&#34;&gt;&lt;code&gt;map&lt;/code&gt;&lt;/a&gt;はあります。
-これこそが求めている「&lt;code&gt;.map&lt;/code&gt; 可能なトレイト」ではないのでしょうか。
-これはおおよそは合っているのですがやや期待とは違う動作をします。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;Option&lt;/code&gt;の&lt;code&gt;map&lt;/code&gt;は不自由なく使えます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let o = Some(1);
-let o = o.map(|i| i + 1);
-println!(&amp;quot;{:?}&amp;quot;, o);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;一方、&lt;code&gt;Vec&lt;/code&gt;は全く同じような書き方は出来ません。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let v = vec![1];
-let v = v.map(|i| i + 1);
-println!(&amp;quot;{:?}&amp;quot;, v);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;lt;anon&amp;gt;:3:11: 3:25 error: no method named `map` found for type `collections::vec::Vec&amp;lt;_&amp;gt;` in the current scope
-&amp;lt;anon&amp;gt;:3 let v = v.map(|i| i + 1);
-                   ^~~~~~~~~~~~~~
-&amp;lt;anon&amp;gt;:3:11: 3:25 note: the method `map` exists but the following trait bounds were not satisfied: `collections::vec::Vec&amp;lt;_&amp;gt; : core::iter::Iterator`, `[_] : core::iter::Iterator`
-error: aborting due to previous error
-playpen: application terminated with error code 101
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;正しくは、こうです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let v = vec![1];
-let v: Vec&amp;lt;i32&amp;gt; = v.iter().map(|i| i + 1).collect();
-println!(&amp;quot;{:?}&amp;quot;, v);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;色々実装上のノイズが乗っているのでやや例として不適切だったかもしれませんが、注目して欲しい部分はここです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let v: Vec&amp;lt;i32&amp;gt; = ...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;Vec&lt;/code&gt;から取り出したイテレータなのに&lt;code&gt;Vec&lt;/code&gt;に戻すためにわざわざ型アノテーションを書く必要があります。&lt;/p&gt;
-
-&lt;p&gt;どうしてこうなるかというとイテレータを取り出した時点で元のコンテナ型が&lt;code&gt;Vec&amp;lt;&amp;gt;&lt;/code&gt;であるという情報が失われているからです。
-これはRustの型システム上どうしても仕方のないことで、なので恐らくRustは「&lt;code&gt;map&lt;/code&gt;可能なトレイト」などを定義せず、コレクションの操作を&lt;code&gt;Iterator&lt;/code&gt;に集約しているんだと思います。
-この方式はある程度は上手くいきますが&lt;code&gt;Option&lt;/code&gt;や&lt;code&gt;Result&lt;/code&gt;はIteratorになれはしてもIteratorからは作れない(2要素のイテレータからOptionは作れない)ので独自でmapメソッドを持つことになってしまいます。&lt;/p&gt;
-
-&lt;h1 id=&#34;map-可能なトレイト-again&#34;&gt;&lt;code&gt;map&lt;/code&gt; 可能なトレイト again&lt;/h1&gt;
-
-&lt;p&gt;先程そういうのは作れないと言ったばかりですが実はどうにかする方法がなくもないです。先程の(仮想の)定義を思い出して下さい。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Mappable&amp;lt;M&amp;lt;_&amp;gt;, T&amp;gt; where Self: M&amp;lt;T&amp;gt; {
-  fn map&amp;lt;U, F: FunOnce(T) -&amp;gt; U&amp;gt;(self, f: F) -&amp;gt; M&amp;lt;U&amp;gt;;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ジェネリクスになっている登場人物は&lt;code&gt;M&amp;lt;_&amp;gt;&lt;/code&gt;、&lt;code&gt;U&lt;/code&gt;、&lt;code&gt;T&lt;/code&gt; ですね。しかし&lt;code&gt;M&amp;lt;_&amp;gt;&lt;/code&gt;は実際にはそのまま使われいる訳ではなく&lt;code&gt;M&amp;lt;T&amp;gt;&lt;/code&gt;または&lt;code&gt;M&amp;lt;U&amp;gt;&lt;/code&gt;の形でのみ使われています。
-では、&lt;code&gt;M&amp;lt;T&amp;gt;&lt;/code&gt;、&lt;code&gt;M&amp;lt;U&amp;gt;&lt;/code&gt;をパラメータに取るようにしてはどうでしょうか。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Mappable&amp;lt;T, MT&amp;gt; where Self: MT {
-  fn map&amp;lt;U, MU, F: FunOnce(T) -&amp;gt; U&amp;gt;(self, f: F) -&amp;gt; MU;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これで出来…てません。これは欲しい、正しいもの &lt;em&gt;も&lt;/em&gt; 作れてはいるのですが正しくないものも含んでいます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;impl &amp;lt;T, MT: Option&amp;lt;T&amp;gt; Mappable&amp;lt;MT, T&amp;gt;  for Option&amp;lt;T&amp;gt; {
-  fn map&amp;lt;U, MU, F: FunOnce(T) -&amp;gt; U&amp;gt;(self, f: F) -&amp;gt; MU {...}
-}
-
-let r: Result&amp;lt;String, ()&amp;gt; = Some(1).map(|i| i.to_string());
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;Option&lt;/code&gt; に対する&lt;code&gt;map&lt;/code&gt;を&lt;code&gt;Result&lt;/code&gt;で受けようとしています。
-これはもちろんおかしなことですが上記の型定義に従うとこういうことが出来てしまいます。
-もうちょっというと上のトレイトの定義はこういう「おかしなこと」が起こるような実装をしろ、と言っている訳で、実際には実装出来ません。&lt;/p&gt;
-
-&lt;p&gt;本来なら自由パラメータが3つなのに4つの自由パラメータを取ってしまったので不整合が起きる訳です。
-では、自由パラメータを3つにして1つを従属パラメータにしてはどうでしょうか。それは&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/associated-types.html&#34;&gt;関連型&lt;/a&gt;を使えばRustでも出来ます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Mappable&amp;lt;T, U, MT&amp;gt; where Self: MT {
-  type MU;
-  fn map&amp;lt;F: FunOnce(T) -&amp;gt; U&amp;gt;(self, f: F) -&amp;gt; MU;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;実は、これである程度上手くいきます。
-もちろん、実際に&lt;code&gt;M&amp;lt;_&amp;gt;&lt;/code&gt;を取れるのに比べると不自由で下手をするとバグる(MUを無関係な型に定義できてしまう)可能性があるのですが、先程の4パラメータの時と比べて
-トレイトが定義された時点で返す型は決まっているのでちゃんと実装出来ますし、使う時に不整合が起きることもありません。&lt;/p&gt;
-
-&lt;h1 id=&#34;hkt&#34;&gt;HKT&lt;/h1&gt;
-
-&lt;p&gt;さて、先の&lt;code&gt;Mappable&lt;/code&gt;の仮想定義、&lt;code&gt;map&lt;/code&gt;関数を除いて汎用的にするとこうなりますね。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait HKT&amp;lt;T, U, MT&amp;gt; where Self: MT {
-  type MU;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;Self: MT&lt;/code&gt; というアノテーションをつけてますが実際には使えません。&lt;code&gt;impl&lt;/code&gt;を書くときに気をつけて実装するしかないです。なのでこうなります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait HKT&amp;lt;T, U&amp;gt; {
-  type MU;
-}
-
-impl &amp;lt;T, U&amp;gt; HKT&amp;lt;T, U&amp;gt; for Option&amp;lt;T&amp;gt; {
-  type MU = Option&amp;lt;U&amp;gt;;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;さて、こう書くとするとこういうことも出来てしまいます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait HKT&amp;lt;T, U&amp;gt; {
-  type MU;
-}
-
-impl &amp;lt;S, T, U&amp;gt; HKT&amp;lt;T, U&amp;gt; for Option&amp;lt;S&amp;gt; {
-  type MU = Option&amp;lt;U&amp;gt;;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;T&lt;/code&gt;とは独立な&lt;code&gt;S&lt;/code&gt;に対するコンテナに対して実装できてしまうのです。「実装するときに気をつける」とはいいましたが制約を書けるなら書いた方がいいです。こうしましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait HKT&amp;lt;U&amp;gt; {
-  type T;
-  type MU;
-}
-
-impl &amp;lt;T, U&amp;gt; HKT&amp;lt;U&amp;gt; for Option&amp;lt;T&amp;gt; {
-  type T = T;
-  type MU = Option&amp;lt;U&amp;gt;;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これで冒頭に紹介したHKTの実装になりました。&lt;/p&gt;
-
-&lt;p&gt;逆にこのHKTの実装からMappableを定義するには、こうです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Mappable&amp;lt;U&amp;gt;: HKT&amp;lt;U&amp;gt; {
-  fn map&amp;lt;F: FunOnce(Self::T) -&amp;gt; U&amp;gt;(self, f: F) -&amp;gt; Self::MU;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;hktについてもっと&#34;&gt;HKTについてもっと&lt;/h1&gt;
-
-&lt;p&gt;ようやく話題のHKTの元実装です。こちら。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://gist.github.com/14427/af90a21b917d2892eace&#34;&gt;Higher-kinded type trait&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;ずいぶんとモナモナしいですがやはり高階型を使った一番実績のある構造はこのあたりでしょう。&lt;/p&gt;
-
-&lt;p&gt;こういうのを扱えるとプログラミングの幅が広がりますね。&lt;/p&gt;
-
-&lt;h1 id=&#34;ノート&#34;&gt;ノート&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;モナドの話題が出ましたがRustでモナドを実現するには高階型だけでなく複数ある関数トレイトのどれを選ぶかだとかその他諸々の問題を扱う必要があるようです。
-&lt;a href=&#34;https://m4rw3r.github.io/rust-and-monad-trait/&#34;&gt;Rust and the Monad trait - Not just higher kinded types · m4rw3r&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
 </description>
     </item>
     
