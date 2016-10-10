@@ -6,8 +6,452 @@
     <description>Recent content in Posts on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Mon, 10 Oct 2016 11:05:38 +0900</lastBuildDate>
+    <lastBuildDate>Mon, 10 Oct 2016 16:48:43 +0900</lastBuildDate>
     <atom:link href="/post/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Rustのクロージャ3種を作って理解する</title>
+      <link>/blog/2016/10/10/rustnokuro_ja3tanewotsukutterikaisuru</link>
+      <pubDate>Mon, 10 Oct 2016 16:48:43 +0900</pubDate>
+      
+      <guid>/blog/2016/10/10/rustnokuro_ja3tanewotsukutterikaisuru</guid>
+      <description>
+
+&lt;p&gt;κeenです。Rustのクロージャ、3種類もあって複雑ですよね。
+こういう複雑なものはRustの気持になって考えれば理解出来たりします。ということで手でクロージャを作って理解してみましょう。&lt;/p&gt;
+
+&lt;p&gt;尚、これはRustの1.12.0-stableと1.14.0-nightly (6e8f92f11 2016-10-07)で実験しています。&lt;/p&gt;
+
+&lt;h1 id=&#34;用語&#34;&gt;用語&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;関数 - 関数&lt;/li&gt;
+&lt;li&gt;無名関数 - 名前のついていない関数&lt;/li&gt;
+&lt;li&gt;自由変数 - そのスコープの中で束縛されていない変数&lt;/li&gt;
+&lt;li&gt;クロージャ - 関数に、自由変数の値(環境)もくっつけてそれだけで閉じるようにしたもの&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;クロージャについては関数が閉じ込める環境だけを指してクロージャとする人もいますが、ここでは関数本体と環境を合わせてクロージャとします。&lt;/p&gt;
+
+&lt;p&gt;よく、無名関数とクロージャ(関数閉包)を一緒くたにすることがありますが明確に区別しましょう。まあ、大抵の無名関数はクロージャになりますが、動的スコープの言語みたいにそうならないケースもあります。&lt;/p&gt;
+
+&lt;p&gt;余談ですが「ラムダ式」は言語がよく無名関数に付ける名前です。「関数」も言語によって「手続き」だったり「メソッド」だったりしますね。&lt;/p&gt;
+
+&lt;h1 id=&#34;fnonce-fnmut-fn&#34;&gt;&lt;code&gt;FnOnce&lt;/code&gt; &lt;code&gt;FnMut&lt;/code&gt; &lt;code&gt;Fn&lt;/code&gt;&lt;/h1&gt;
+
+&lt;p&gt;さて、「作って理解する」なので例を出します。なんかよく分からないけど0から9の値に1を足して印字するプログラムです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
+    let x = 1;
+    for i in 0..10 {
+        // 無名関数を作る
+        let cls = |arg|{ i + arg };
+        println!(&amp;quot;{}&amp;quot;, cls(x));
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;無名関数を作って &lt;code&gt;cls&lt;/code&gt; という変数に束縛しています。 &lt;code&gt;cls&lt;/code&gt; は自由変数 &lt;code&gt;i&lt;/code&gt; を含みますので、 &lt;code&gt;cls&lt;/code&gt; のクロージャを取ると 「&lt;code&gt;cls&lt;/code&gt; の定義 + &lt;code&gt;i&lt;/code&gt; の定義」になります。&lt;/p&gt;
+
+&lt;p&gt;では &lt;code&gt;i&lt;/code&gt; という変数を保持したオブジェクトを作りましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct Closure {
+    i: isize,
+}
+
+
+fn main() {
+    let x = 1;
+    for i in 0..10 {
+        // クロージャを作る
+        let cls = Closure {i: i};
+        // もちろん、Closureは関数でないので呼び出せない
+        // println!(&amp;quot;{}&amp;quot;, cls(x));
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;さて、このままだと &lt;code&gt;cls&lt;/code&gt; は呼び出せません。しかし &lt;code&gt;+&lt;/code&gt; なんかのオーバーロードを許しているRustはなんと関数呼び出し構文 &lt;code&gt;name(arg, ...)&lt;/code&gt; もオーバーロード出来ます。実装すべきトレイトは &lt;code&gt;std::ops::{FnOnce, FnMut, Fn}&lt;/code&gt; です。これがクロージャ3種です。&lt;/p&gt;
+
+&lt;p&gt;これらは継承関係にあって、上から順に &lt;code&gt;FnOnce&lt;/code&gt;  &lt;code&gt;FnMut&lt;/code&gt; &lt;code&gt;Fn&lt;/code&gt; です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub trait FnOnce&amp;lt;Args&amp;gt; {
+    type Output;
+    extern &amp;quot;rust-call&amp;quot; fn call_once(self, args: Args) -&amp;gt; Self::Output;
+}
+
+pub trait FnMut&amp;lt;Args&amp;gt;: FnOnce&amp;lt;Args&amp;gt; {
+    extern &amp;quot;rust-call&amp;quot; fn call_mut(&amp;amp;mut self, args: Args) -&amp;gt; Self::Output;
+}
+
+pub trait Fn&amp;lt;Args&amp;gt;: FnMut&amp;lt;Args&amp;gt; {
+    extern &amp;quot;rust-call&amp;quot; fn call(&amp;amp;self, args: Args) -&amp;gt; Self::Output;
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これらの違いは &lt;code&gt;self&lt;/code&gt; をムーブして受け取るか &lt;code&gt;&amp;amp;mut&lt;/code&gt; で受けるか &lt;code&gt;&amp;amp;&lt;/code&gt; で受けるかです。&lt;/p&gt;
+
+&lt;h2 id=&#34;fnonce&#34;&gt;&lt;code&gt;FnOnce&lt;/code&gt;&lt;/h2&gt;
+
+&lt;p&gt;とりあえず先程の &lt;code&gt;Closure&lt;/code&gt; にこれを実装してみましょう。ちょいとunstableな機能なようなので &lt;code&gt;feature&lt;/code&gt; を使って、nightlyでコンパイルするようにしてみます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;#![feature(unboxed_closures)]
+#![feature(fn_traits)]
+
+use std::ops::{FnOnce, FnMut, Fn};
+
+// 再掲
+struct Closure {
+    i: isize,
+}
+
+impl FnOnce&amp;lt;(isize,)&amp;gt; for Closure {
+    type Output = isize;
+
+    extern &amp;quot;rust-call&amp;quot; fn call_once(self, (arg, ): (isize,)) -&amp;gt; Self::Output {
+        self.i + arg
+    }
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これで呼び出しが出来る筈です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
+    let x = 1;
+    for i in 0..10 {
+        // 無名関数を作る
+        let cls = Closure {i: i};
+        // 呼出せるようになる
+        println!(&amp;quot;{}&amp;quot;, cls(x));
+    }
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;勿論、これは以下のように明示的にメソッドを呼んでも同じです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
+    let x = 1;
+    for i in 0..10 {
+        // クロージャを作る
+        let cls = Closure {i: i};
+        // メソッドで呼ぶ
+        println!(&amp;quot;{}&amp;quot;, cls.call_once((x, )));
+    }
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;fnmut-fnmut&#34;&gt;&lt;code&gt;FnMut&lt;/code&gt; &lt;code&gt;FnMut&lt;/code&gt;&lt;/h2&gt;
+
+&lt;p&gt;&lt;code&gt;FnOnce&lt;/code&gt; で出来るんならなんで &lt;code&gt;FnMut&lt;/code&gt; と &lt;code&gt;FnMut&lt;/code&gt; が存在するかというと、クロージャが閉じ込めた環境の所有権の問題ですね。&lt;/p&gt;
+
+&lt;p&gt;例えば以下のコードを手で実装してみます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
+    let x = 1;
+    // ループの外でクロージャを作る
+    let cls = |arg| { x + arg};
+    for i in 0..10 {
+        // 複数回クロージャを呼ぶ
+        println!(&amp;quot;{}&amp;quot;, cls(i));
+    }
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;先程と同じ &lt;code&gt;Closure&lt;/code&gt; ではコンパイル出来ません（統一感のために &lt;code&gt;Closure&lt;/code&gt; のメンバ名を変えました）。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;#![feature(unboxed_closures)]
+#![feature(fn_traits)]
+
+use std::ops::{FnOnce, FnMut, Fn};
+
+struct Closure {
+    x: isize,
+}
+
+impl FnOnce&amp;lt;(isize,)&amp;gt; for Closure {
+  // ...略
+}
+
+
+fn main() {
+    let x = 1;
+    // ループの外でクロージャを作る
+    let cls = Closure {x: x};
+    for i in 0..10 {
+        // 複数回クロージャを呼ぶ
+        println!(&amp;quot;{}&amp;quot;, cls(i));
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;error[E0382]: use of moved value: `cls`
+  --&amp;gt; closure.rs:45:28
+   |
+45 |             println!(&amp;quot;{}&amp;quot;, cls(i));
+   |                            ^^^ value moved here in previous iteration of loop
+   |
+   = note: move occurs because `cls` has type `Closure`, which does not implement the `Copy` trait
+
+error: aborting due to previous error
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;1回目のループでは問題ないのですが &lt;code&gt;call_once(self, (arg, ): (isize,))&lt;/code&gt; の呼び出しでムーブしてしまうので2回目以降は呼べません。ということで1つ下のトレイト、 &lt;code&gt;FnMut&lt;/code&gt; も実装してみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;// ...略
+
+impl FnMut&amp;lt;(isize,)&amp;gt; for Closure {
+
+    extern &amp;quot;rust-call&amp;quot; fn call_mut(&amp;amp;mut self, (arg, ): (isize,)) -&amp;gt; Self::Output {
+        self.x + arg
+    }
+}
+
+fn main() {
+    let x = 1;
+    let cls = Closure {x: x};
+    for i in 0..10 {
+        println!(&amp;quot;{}&amp;quot;, cls(i));
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;実はこれでも怒られます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;error: cannot borrow immutable local variable `cls` as mutable
+  --&amp;gt; closure.rs:45:28
+   |
+43 |         let cls = Closure {x: x};
+   |             --- use `mut cls` here to make mutable
+44 |         for i in 0..10 {
+45 |             println!(&amp;quot;{}&amp;quot;, cls(i));
+   |                            ^^^ cannot borrow mutably
+
+error: aborting due to previous error
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;何故なら &lt;code&gt;mut&lt;/code&gt; を要求しているから。正確にはこうです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;// ...略
+
+
+fn main() {
+    let x = 1;
+    // `mut` を付ける
+    let mut cls = Closure {x: x};
+    for i in 0..10 {
+        println!(&amp;quot;{}&amp;quot;, cls(i));
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これで通ります。しかしまあ、何か書き換えてる訳でもないのに &lt;code&gt;mut&lt;/code&gt; が付いているのは嫌ですね。&lt;code&gt;mut&lt;/code&gt; を要求しないように定義してあげようと思ったら &lt;code&gt;Fn&lt;/code&gt; が必要になります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;// ...略
+
+impl Fn&amp;lt;(isize,)&amp;gt; for Closure {
+    extern &amp;quot;rust-call&amp;quot; fn call(&amp;amp;self, (arg,): (isize, )) -&amp;gt; Self::Output {
+        self.x + arg
+    }
+}
+
+fn main() {
+    let x = 1;
+    let cls = Closure {x: x};
+    for i in 0..10 {
+        println!(&amp;quot;{}&amp;quot;, cls(i));
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これで通ります。&lt;/p&gt;
+
+&lt;h2 id=&#34;整理&#34;&gt;整理&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;クロージャとは関数とその環境のセットだよ&lt;/li&gt;
+&lt;li&gt;環境にも所有権はあるよ&lt;/li&gt;
+&lt;li&gt;Rustは所有権でクロージャの呼び出しを使い分けるよ&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h1 id=&#34;構文&#34;&gt;構文&lt;/h1&gt;
+
+&lt;p&gt;じゃあ、 &lt;code&gt;FnOnce&lt;/code&gt; &lt;code&gt;FnMut&lt;/code&gt; &lt;code&gt;Fn&lt;/code&gt; に対応するRustの構文を探っていきます。&lt;/p&gt;
+
+&lt;h2 id=&#34;fn&#34;&gt;&lt;code&gt;Fn&lt;/code&gt;&lt;/h2&gt;
+
+&lt;p&gt;先程 &lt;code&gt;Fn&lt;/code&gt; まで実装しないとコンパイルが通らなかった&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
+    let x = 1;
+    let cls = |arg| { x + arg};
+    for i in 0..10 {
+        println!(&amp;quot;{}&amp;quot;, cls(i));
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;は &lt;code&gt;||{}&lt;/code&gt; でコンパイルが通っているので &lt;code&gt;||{}&lt;/code&gt; は &lt;code&gt;Fn&lt;/code&gt; を作るようです。&lt;/p&gt;
+
+&lt;h2 id=&#34;fnmut&#34;&gt;&lt;code&gt;FnMut&lt;/code&gt;&lt;/h2&gt;
+
+&lt;p&gt;じゃあ、 &lt;code&gt;call_mut&lt;/code&gt; を要求しそうにちょっと変えてみます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
+    let mut x = 1;
+    let cls = |arg|{ x += arg };
+    for i in 0..10 {
+        cls(i);
+    }
+    println!(&amp;quot;{}&amp;quot;, x);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;はい、予想通りエラーが出ます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;error: cannot borrow immutable local variable `cls` as mutable
+  --&amp;gt; closure.rs:37:13
+   |
+35 |         let cls = |arg|{ x += arg };
+   |             --- use `mut cls` here to make mutable
+36 |         for i in 0..10 {
+37 |             cls(i);
+   |             ^^^ cannot borrow mutably
+
+error[E0502]: cannot borrow `x` as immutable because it is also borrowed as mutable
+  --&amp;gt; closure.rs:39:24
+   |
+35 |         let cls = |arg|{ x += arg };
+   |                   -----  - previous borrow occurs due to use of `x` in closure
+   |                   |
+   |                   mutable borrow occurs here
+...
+39 |         println!(&amp;quot;{}&amp;quot;, x);
+   |                        ^ immutable borrow occurs here
+40 |     }
+   |     - mutable borrow ends here
+
+error: aborting due to 2 previous errors
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;先程の &lt;code&gt;FnMut&lt;/code&gt; の例のように &lt;code&gt;cls&lt;/code&gt; に &lt;code&gt;mut&lt;/code&gt; を付けてみます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
+    let mut x = 1;
+    let mut cls = |arg|{ x += arg };
+    for i in 0..10 {
+        cls(i);
+    }
+    println!(&amp;quot;{}&amp;quot;, x);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;実は、これでもエラーです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;error[E0502]: cannot borrow `x` as immutable because it is also borrowed as mutable
+  --&amp;gt; closure.rs:39:24
+   |
+35 |         let mut cls = |arg|{ x += arg };
+   |                       -----  - previous borrow occurs due to use of `x` in closure
+   |                       |
+   |                       mutable borrow occurs here
+...
+39 |         println!(&amp;quot;{}&amp;quot;, x);
+   |                        ^ immutable borrow occurs here
+40 |     }
+   |     - mutable borrow ends here
+
+error: aborting due to previous error
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;何故なら &lt;code&gt;cls&lt;/code&gt; が &lt;code&gt;x&lt;/code&gt; を捕捉し続けているから。これは &lt;code&gt;cls&lt;/code&gt; のライフタイムを &lt;code&gt;println!&lt;/code&gt; の前で終わらせてあげると解決します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
+    let mut x = 1;
+    {
+        // `{}` でスコープを作ることでライフタイムをコントロールする
+        let mut cls = |arg|{ x += arg };
+        for i in 0..10 {
+            cls(i);
+        }
+    }
+    println!(&amp;quot;{}&amp;quot;, x);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;FnMut&lt;/code&gt; は変数を &lt;code&gt;mut&lt;/code&gt; にする無名関数と同じなようです。&lt;/p&gt;
+
+&lt;h2 id=&#34;fnonce-1&#34;&gt;&lt;code&gt;FnOnce&lt;/code&gt;&lt;/h2&gt;
+
+&lt;p&gt;じゃあ、 &lt;code&gt;FnOnce&lt;/code&gt; は？ &lt;code&gt;std::mem::drop&lt;/code&gt; を使って所有権を無理矢理奪うクロージャを作ってみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::mem::drop;
+
+fn main() {
+    let x = String::new();
+    let cls = || {drop(x)};
+    cls();
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;はい、実はこれでOKです。冷静に考えたら &lt;code&gt;FnOnce&lt;/code&gt; を継承している &lt;code&gt;Fn&lt;/code&gt; を &lt;code&gt;||{}&lt;/code&gt; で作れた時点で問題ありませんでしたね。&lt;/p&gt;
+
+&lt;h1 id=&#34;落穂拾い&#34;&gt;落穂拾い&lt;/h1&gt;
+
+&lt;h2 id=&#34;move-クロージャ&#34;&gt;&lt;code&gt;move&lt;/code&gt; クロージャ&lt;/h2&gt;
+
+&lt;p&gt;じゃあ、Rustが良い感じに使い分けてくれるなら &lt;code&gt;move&lt;/code&gt; クロージャって何のためにあるの？と思いますが、これは環境を捕捉する際に &lt;code&gt;Copy&lt;/code&gt; なんかが起こらないようにするためのものです。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;move&lt;/code&gt; しない例&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;
+let mut num = 5;
+
+{
+    let mut add_num = |x: i32| num += x;
+
+    add_num(5);
+}
+
+assert_eq!(10, num);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;move&lt;/code&gt; する例&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let mut num = 5;
+
+{
+    let mut add_num = move |x: i32| num += x;
+
+    add_num(5);
+}
+
+assert_eq!(5, num);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;関数ポインタ&#34;&gt;関数ポインタ&lt;/h2&gt;
+
+&lt;p&gt;クロージャを持たない関数は、 &lt;code&gt;fn(i32) -&amp;gt; i32&lt;/code&gt; のような型を持ちます。これは空の環境を持つクロージャと同じですね。空の環境に所有権も何もないのでプリミティブの &lt;code&gt;fn&lt;/code&gt; は &lt;code&gt;FnOnce&lt;/code&gt; &lt;code&gt;FnMut&lt;/code&gt; &lt;code&gt;Fn&lt;/code&gt; のいずれとしても振舞います。&lt;/p&gt;
+
+&lt;h1 id=&#34;参考&#34;&gt;参考&lt;/h1&gt;
+
+&lt;p&gt;ここまで書いて普通にドキュメントに詳しく載っているのに気付きました（汗&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/functions.html&#34;&gt;関数&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/closures.html&#34;&gt;クロージャ&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
     
     <item>
       <title>SMLでモナド</title>
@@ -2573,152 +3017,6 @@ let bs = Box::new(new_value());
 関数内部でそのヒープ領域にBigStructの値を書き込んでいるのです。&lt;/p&gt;
 
 &lt;p&gt;もやもやしていたものがスッキリしたし返り値のサイズが決まってないと関数から返せないのも分かるようになった。&lt;/p&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>Rustのゼロコスト抽象化</title>
-      <link>/blog/2016/03/01/rustnozerokosutochuushouka</link>
-      <pubDate>Tue, 01 Mar 2016 23:32:12 +0900</pubDate>
-      
-      <guid>/blog/2016/03/01/rustnozerokosutochuushouka</guid>
-      <description>&lt;p&gt;κeenです。今日Twitter上でのやりとりから少し面白いことが分かったのでそれについて。&lt;/p&gt;
-
-&lt;p&gt;最近1.0が出たKotlinについて、水島さんがツイートしてました。&lt;/p&gt;
-
-&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;nullableに対してはmapとかの高階関数を一切使えないのが痛い。 ?. でカバーできるケースは一部だけだ。zero-overhead null-safetyと唄っとるが、代わりにnullチェックお化けになるわけで、どこがzero-overheadだ &lt;a href=&#34;https://twitter.com/hashtag/kotlin_dis?src=hash&#34;&gt;#kotlin_dis&lt;/a&gt;&lt;/p&gt;&amp;mdash; 水島 宏太(Klassic作成中) (@kmizu) &lt;a href=&#34;https://twitter.com/kmizu/status/704453235277324288&#34;&gt;2016年2月29日&lt;/a&gt;&lt;/blockquote&gt;
-
-&lt;p&gt;それについて私が無関係なツイートを。&lt;/p&gt;
-
-&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;全く無関係だけどRustはOptionみたいな0-1の型をnull or valueに最適化するそうな。これこそがゼロコスト抽象かな &lt;a href=&#34;https://t.co/5Y7cBEyrMe&#34;&gt;https://t.co/5Y7cBEyrMe&lt;/a&gt;&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/704453898996547584&#34;&gt;2016年2月29日&lt;/a&gt;&lt;/blockquote&gt;
-
-&lt;p&gt;これはRustのnomiconに書かれています。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://doc.rust-lang.org/nomicon/repr-rust.html&#34;&gt;repr(Rust)&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;そうすると水島さんからお返事が。&lt;/p&gt;
-
-&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;&lt;a href=&#34;https://twitter.com/blackenedgold&#34;&gt;@blackenedgold&lt;/a&gt; Rust詳しくないですけど、Optionにmapとかした場合インライン展開されるんですかね？だとしたらとても理想的。&lt;/p&gt;&amp;mdash; 水島 宏太(Klassic作成中) (@kmizu) &lt;a href=&#34;https://twitter.com/kmizu/status/704455185125408768&#34;&gt;2016年2月29日&lt;/a&gt;&lt;/blockquote&gt;
-&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
-
-&lt;p&gt;確かにそうなると面白そう。ということで少し調べてみました。&lt;/p&gt;
-
-&lt;p&gt;まず、上記の話をまとめると、Rustの&lt;code&gt;Option&lt;/code&gt;に対する&lt;code&gt;map&lt;/code&gt;&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub fn map&amp;lt;U, F: FnOnce(T) -&amp;gt; U&amp;gt;(self, f: F) -&amp;gt; Option&amp;lt;U&amp;gt; {
-    match self {
-        Some(x) =&amp;gt; Some(f(x)),
-        None =&amp;gt; None,
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;は&lt;code&gt;x&lt;/code&gt;がポインタ型だった時に以下と同値です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub fn map&amp;lt;U, F: FnOnce(T) -&amp;gt; U&amp;gt;(self, f: F) -&amp;gt; Option&amp;lt;U&amp;gt; {
-    if (self != nullPointer ) {
-        f(x)
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;さらに、&lt;a href=&#34;https://github.com/rust-lang/rust/blob/master/src/libcore/option.rs#L386&#34;&gt;&lt;code&gt;map&lt;/code&gt;はインライン宣言されている&lt;/a&gt;ので以下のコード&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let opt = Some(&amp;amp;v);
-opt.map(|x| x + 1);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;は以下と同値です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let opt = &amp;amp;v;
-if (opt != nullPointer) {
-  (|x| x + 1)(opt)
-};
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;さて、ここで無名関数がどうコンパイルされるかという問題が出てきますが、&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/closures.html&#34;&gt;クロージャのドキュメント&lt;/a&gt;によるとこういう雰囲気のコードになるらしいです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let opt = &amp;amp;v;
-struct AnonymousType;
-
-impl FnOnce&amp;lt;(&amp;amp;i32)&amp;gt; for AnonymousType {
-    type Output = i32;
-    fn call_once(self, args: (&amp;amp;i32)) -&amp;gt; Self::Output {
-        args + 1
-    }
-}
-
-if (opt != nullPointer) {
-    let fn_once: FnOnce = AnonymousType;
-    fn_once.call_once(opt)
-};
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;思ったよりも複雑…。さて、問題は&lt;code&gt;let fn_once: FnOnce = AnonymousType;&lt;/code&gt;としているので一旦元の無名関数の情報が抜けてしまいそうな気がします。
-となるとコンパイル時に具体的なメソッドを決定出来ないので&lt;code&gt;fn_once.call_once(opt);&lt;/code&gt;は以下のような雰囲気のコードになってしまいます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let call_once_fn = fn_once.get_call_once_fn();
-call_once_fn(opt);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;毎回呼び出すべき関数の取得が入るのは面倒ですね。&lt;/p&gt;
-
-&lt;p&gt;しかしなががらクロージャのドキュメントをよく読むと無名関数は静的ディスパッチされると書いてあります。つまり、&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let call_once_fn = fn_once.get_call_once_fn();
-call_once_fn(opt);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;と2段ではなく&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;the_call_once_fn_of_AnonymousType(opt);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;とコンパイルされ、&lt;/p&gt;
-
-&lt;p&gt;よって&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let opt = Some(&amp;amp;v);
-opt.map(|x| x + 1);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;は&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn the_call_once_fn_of_AnonymousType(x: &amp;amp;i32) -&amp;gt; i32 {
-    x + 1
-}
-
-
-let opt = &amp;amp;v;
-if (opt != nullPointer) {
-  the_call_once_fn_of_AnonymousType(opt)
-};
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;と同値ということです。&lt;/p&gt;
-
-&lt;p&gt;ここからは私の推測ですが、&lt;code&gt;the_call_once_fn_of_AnonymousType&lt;/code&gt;は本体が小さい上に1回しか呼ばれないのでインライン化されるのではないかと思います。
-よってこの推測が正しければ&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let opt = Some(&amp;amp;v);
-opt.map(|x| x + 1);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;は&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let opt = &amp;amp;v;
-if (opt != nullPointer) {
-  opt + 1
-};
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;となる筈です。&lt;/p&gt;
-
-&lt;p&gt;ゼロコスト抽象化すごい!&lt;/p&gt;
 </description>
     </item>
     

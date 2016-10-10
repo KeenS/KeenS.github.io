@@ -6,8 +6,452 @@
     <description>Recent content on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Mon, 10 Oct 2016 11:05:38 +0900</lastBuildDate>
+    <lastBuildDate>Mon, 10 Oct 2016 16:48:43 +0900</lastBuildDate>
     <atom:link href="/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Rustのクロージャ3種を作って理解する</title>
+      <link>/blog/2016/10/10/rustnokuro_ja3tanewotsukutterikaisuru</link>
+      <pubDate>Mon, 10 Oct 2016 16:48:43 +0900</pubDate>
+      
+      <guid>/blog/2016/10/10/rustnokuro_ja3tanewotsukutterikaisuru</guid>
+      <description>
+
+&lt;p&gt;κeenです。Rustのクロージャ、3種類もあって複雑ですよね。
+こういう複雑なものはRustの気持になって考えれば理解出来たりします。ということで手でクロージャを作って理解してみましょう。&lt;/p&gt;
+
+&lt;p&gt;尚、これはRustの1.12.0-stableと1.14.0-nightly (6e8f92f11 2016-10-07)で実験しています。&lt;/p&gt;
+
+&lt;h1 id=&#34;用語&#34;&gt;用語&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;関数 - 関数&lt;/li&gt;
+&lt;li&gt;無名関数 - 名前のついていない関数&lt;/li&gt;
+&lt;li&gt;自由変数 - そのスコープの中で束縛されていない変数&lt;/li&gt;
+&lt;li&gt;クロージャ - 関数に、自由変数の値(環境)もくっつけてそれだけで閉じるようにしたもの&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;クロージャについては関数が閉じ込める環境だけを指してクロージャとする人もいますが、ここでは関数本体と環境を合わせてクロージャとします。&lt;/p&gt;
+
+&lt;p&gt;よく、無名関数とクロージャ(関数閉包)を一緒くたにすることがありますが明確に区別しましょう。まあ、大抵の無名関数はクロージャになりますが、動的スコープの言語みたいにそうならないケースもあります。&lt;/p&gt;
+
+&lt;p&gt;余談ですが「ラムダ式」は言語がよく無名関数に付ける名前です。「関数」も言語によって「手続き」だったり「メソッド」だったりしますね。&lt;/p&gt;
+
+&lt;h1 id=&#34;fnonce-fnmut-fn&#34;&gt;&lt;code&gt;FnOnce&lt;/code&gt; &lt;code&gt;FnMut&lt;/code&gt; &lt;code&gt;Fn&lt;/code&gt;&lt;/h1&gt;
+
+&lt;p&gt;さて、「作って理解する」なので例を出します。なんかよく分からないけど0から9の値に1を足して印字するプログラムです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
+    let x = 1;
+    for i in 0..10 {
+        // 無名関数を作る
+        let cls = |arg|{ i + arg };
+        println!(&amp;quot;{}&amp;quot;, cls(x));
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;無名関数を作って &lt;code&gt;cls&lt;/code&gt; という変数に束縛しています。 &lt;code&gt;cls&lt;/code&gt; は自由変数 &lt;code&gt;i&lt;/code&gt; を含みますので、 &lt;code&gt;cls&lt;/code&gt; のクロージャを取ると 「&lt;code&gt;cls&lt;/code&gt; の定義 + &lt;code&gt;i&lt;/code&gt; の定義」になります。&lt;/p&gt;
+
+&lt;p&gt;では &lt;code&gt;i&lt;/code&gt; という変数を保持したオブジェクトを作りましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct Closure {
+    i: isize,
+}
+
+
+fn main() {
+    let x = 1;
+    for i in 0..10 {
+        // クロージャを作る
+        let cls = Closure {i: i};
+        // もちろん、Closureは関数でないので呼び出せない
+        // println!(&amp;quot;{}&amp;quot;, cls(x));
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;さて、このままだと &lt;code&gt;cls&lt;/code&gt; は呼び出せません。しかし &lt;code&gt;+&lt;/code&gt; なんかのオーバーロードを許しているRustはなんと関数呼び出し構文 &lt;code&gt;name(arg, ...)&lt;/code&gt; もオーバーロード出来ます。実装すべきトレイトは &lt;code&gt;std::ops::{FnOnce, FnMut, Fn}&lt;/code&gt; です。これがクロージャ3種です。&lt;/p&gt;
+
+&lt;p&gt;これらは継承関係にあって、上から順に &lt;code&gt;FnOnce&lt;/code&gt;  &lt;code&gt;FnMut&lt;/code&gt; &lt;code&gt;Fn&lt;/code&gt; です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub trait FnOnce&amp;lt;Args&amp;gt; {
+    type Output;
+    extern &amp;quot;rust-call&amp;quot; fn call_once(self, args: Args) -&amp;gt; Self::Output;
+}
+
+pub trait FnMut&amp;lt;Args&amp;gt;: FnOnce&amp;lt;Args&amp;gt; {
+    extern &amp;quot;rust-call&amp;quot; fn call_mut(&amp;amp;mut self, args: Args) -&amp;gt; Self::Output;
+}
+
+pub trait Fn&amp;lt;Args&amp;gt;: FnMut&amp;lt;Args&amp;gt; {
+    extern &amp;quot;rust-call&amp;quot; fn call(&amp;amp;self, args: Args) -&amp;gt; Self::Output;
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これらの違いは &lt;code&gt;self&lt;/code&gt; をムーブして受け取るか &lt;code&gt;&amp;amp;mut&lt;/code&gt; で受けるか &lt;code&gt;&amp;amp;&lt;/code&gt; で受けるかです。&lt;/p&gt;
+
+&lt;h2 id=&#34;fnonce&#34;&gt;&lt;code&gt;FnOnce&lt;/code&gt;&lt;/h2&gt;
+
+&lt;p&gt;とりあえず先程の &lt;code&gt;Closure&lt;/code&gt; にこれを実装してみましょう。ちょいとunstableな機能なようなので &lt;code&gt;feature&lt;/code&gt; を使って、nightlyでコンパイルするようにしてみます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;#![feature(unboxed_closures)]
+#![feature(fn_traits)]
+
+use std::ops::{FnOnce, FnMut, Fn};
+
+// 再掲
+struct Closure {
+    i: isize,
+}
+
+impl FnOnce&amp;lt;(isize,)&amp;gt; for Closure {
+    type Output = isize;
+
+    extern &amp;quot;rust-call&amp;quot; fn call_once(self, (arg, ): (isize,)) -&amp;gt; Self::Output {
+        self.i + arg
+    }
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これで呼び出しが出来る筈です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
+    let x = 1;
+    for i in 0..10 {
+        // 無名関数を作る
+        let cls = Closure {i: i};
+        // 呼出せるようになる
+        println!(&amp;quot;{}&amp;quot;, cls(x));
+    }
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;勿論、これは以下のように明示的にメソッドを呼んでも同じです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
+    let x = 1;
+    for i in 0..10 {
+        // クロージャを作る
+        let cls = Closure {i: i};
+        // メソッドで呼ぶ
+        println!(&amp;quot;{}&amp;quot;, cls.call_once((x, )));
+    }
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;fnmut-fnmut&#34;&gt;&lt;code&gt;FnMut&lt;/code&gt; &lt;code&gt;FnMut&lt;/code&gt;&lt;/h2&gt;
+
+&lt;p&gt;&lt;code&gt;FnOnce&lt;/code&gt; で出来るんならなんで &lt;code&gt;FnMut&lt;/code&gt; と &lt;code&gt;FnMut&lt;/code&gt; が存在するかというと、クロージャが閉じ込めた環境の所有権の問題ですね。&lt;/p&gt;
+
+&lt;p&gt;例えば以下のコードを手で実装してみます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
+    let x = 1;
+    // ループの外でクロージャを作る
+    let cls = |arg| { x + arg};
+    for i in 0..10 {
+        // 複数回クロージャを呼ぶ
+        println!(&amp;quot;{}&amp;quot;, cls(i));
+    }
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;先程と同じ &lt;code&gt;Closure&lt;/code&gt; ではコンパイル出来ません（統一感のために &lt;code&gt;Closure&lt;/code&gt; のメンバ名を変えました）。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;#![feature(unboxed_closures)]
+#![feature(fn_traits)]
+
+use std::ops::{FnOnce, FnMut, Fn};
+
+struct Closure {
+    x: isize,
+}
+
+impl FnOnce&amp;lt;(isize,)&amp;gt; for Closure {
+  // ...略
+}
+
+
+fn main() {
+    let x = 1;
+    // ループの外でクロージャを作る
+    let cls = Closure {x: x};
+    for i in 0..10 {
+        // 複数回クロージャを呼ぶ
+        println!(&amp;quot;{}&amp;quot;, cls(i));
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;error[E0382]: use of moved value: `cls`
+  --&amp;gt; closure.rs:45:28
+   |
+45 |             println!(&amp;quot;{}&amp;quot;, cls(i));
+   |                            ^^^ value moved here in previous iteration of loop
+   |
+   = note: move occurs because `cls` has type `Closure`, which does not implement the `Copy` trait
+
+error: aborting due to previous error
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;1回目のループでは問題ないのですが &lt;code&gt;call_once(self, (arg, ): (isize,))&lt;/code&gt; の呼び出しでムーブしてしまうので2回目以降は呼べません。ということで1つ下のトレイト、 &lt;code&gt;FnMut&lt;/code&gt; も実装してみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;// ...略
+
+impl FnMut&amp;lt;(isize,)&amp;gt; for Closure {
+
+    extern &amp;quot;rust-call&amp;quot; fn call_mut(&amp;amp;mut self, (arg, ): (isize,)) -&amp;gt; Self::Output {
+        self.x + arg
+    }
+}
+
+fn main() {
+    let x = 1;
+    let cls = Closure {x: x};
+    for i in 0..10 {
+        println!(&amp;quot;{}&amp;quot;, cls(i));
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;実はこれでも怒られます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;error: cannot borrow immutable local variable `cls` as mutable
+  --&amp;gt; closure.rs:45:28
+   |
+43 |         let cls = Closure {x: x};
+   |             --- use `mut cls` here to make mutable
+44 |         for i in 0..10 {
+45 |             println!(&amp;quot;{}&amp;quot;, cls(i));
+   |                            ^^^ cannot borrow mutably
+
+error: aborting due to previous error
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;何故なら &lt;code&gt;mut&lt;/code&gt; を要求しているから。正確にはこうです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;// ...略
+
+
+fn main() {
+    let x = 1;
+    // `mut` を付ける
+    let mut cls = Closure {x: x};
+    for i in 0..10 {
+        println!(&amp;quot;{}&amp;quot;, cls(i));
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これで通ります。しかしまあ、何か書き換えてる訳でもないのに &lt;code&gt;mut&lt;/code&gt; が付いているのは嫌ですね。&lt;code&gt;mut&lt;/code&gt; を要求しないように定義してあげようと思ったら &lt;code&gt;Fn&lt;/code&gt; が必要になります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;// ...略
+
+impl Fn&amp;lt;(isize,)&amp;gt; for Closure {
+    extern &amp;quot;rust-call&amp;quot; fn call(&amp;amp;self, (arg,): (isize, )) -&amp;gt; Self::Output {
+        self.x + arg
+    }
+}
+
+fn main() {
+    let x = 1;
+    let cls = Closure {x: x};
+    for i in 0..10 {
+        println!(&amp;quot;{}&amp;quot;, cls(i));
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これで通ります。&lt;/p&gt;
+
+&lt;h2 id=&#34;整理&#34;&gt;整理&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;クロージャとは関数とその環境のセットだよ&lt;/li&gt;
+&lt;li&gt;環境にも所有権はあるよ&lt;/li&gt;
+&lt;li&gt;Rustは所有権でクロージャの呼び出しを使い分けるよ&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h1 id=&#34;構文&#34;&gt;構文&lt;/h1&gt;
+
+&lt;p&gt;じゃあ、 &lt;code&gt;FnOnce&lt;/code&gt; &lt;code&gt;FnMut&lt;/code&gt; &lt;code&gt;Fn&lt;/code&gt; に対応するRustの構文を探っていきます。&lt;/p&gt;
+
+&lt;h2 id=&#34;fn&#34;&gt;&lt;code&gt;Fn&lt;/code&gt;&lt;/h2&gt;
+
+&lt;p&gt;先程 &lt;code&gt;Fn&lt;/code&gt; まで実装しないとコンパイルが通らなかった&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
+    let x = 1;
+    let cls = |arg| { x + arg};
+    for i in 0..10 {
+        println!(&amp;quot;{}&amp;quot;, cls(i));
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;は &lt;code&gt;||{}&lt;/code&gt; でコンパイルが通っているので &lt;code&gt;||{}&lt;/code&gt; は &lt;code&gt;Fn&lt;/code&gt; を作るようです。&lt;/p&gt;
+
+&lt;h2 id=&#34;fnmut&#34;&gt;&lt;code&gt;FnMut&lt;/code&gt;&lt;/h2&gt;
+
+&lt;p&gt;じゃあ、 &lt;code&gt;call_mut&lt;/code&gt; を要求しそうにちょっと変えてみます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
+    let mut x = 1;
+    let cls = |arg|{ x += arg };
+    for i in 0..10 {
+        cls(i);
+    }
+    println!(&amp;quot;{}&amp;quot;, x);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;はい、予想通りエラーが出ます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;error: cannot borrow immutable local variable `cls` as mutable
+  --&amp;gt; closure.rs:37:13
+   |
+35 |         let cls = |arg|{ x += arg };
+   |             --- use `mut cls` here to make mutable
+36 |         for i in 0..10 {
+37 |             cls(i);
+   |             ^^^ cannot borrow mutably
+
+error[E0502]: cannot borrow `x` as immutable because it is also borrowed as mutable
+  --&amp;gt; closure.rs:39:24
+   |
+35 |         let cls = |arg|{ x += arg };
+   |                   -----  - previous borrow occurs due to use of `x` in closure
+   |                   |
+   |                   mutable borrow occurs here
+...
+39 |         println!(&amp;quot;{}&amp;quot;, x);
+   |                        ^ immutable borrow occurs here
+40 |     }
+   |     - mutable borrow ends here
+
+error: aborting due to 2 previous errors
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;先程の &lt;code&gt;FnMut&lt;/code&gt; の例のように &lt;code&gt;cls&lt;/code&gt; に &lt;code&gt;mut&lt;/code&gt; を付けてみます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
+    let mut x = 1;
+    let mut cls = |arg|{ x += arg };
+    for i in 0..10 {
+        cls(i);
+    }
+    println!(&amp;quot;{}&amp;quot;, x);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;実は、これでもエラーです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;error[E0502]: cannot borrow `x` as immutable because it is also borrowed as mutable
+  --&amp;gt; closure.rs:39:24
+   |
+35 |         let mut cls = |arg|{ x += arg };
+   |                       -----  - previous borrow occurs due to use of `x` in closure
+   |                       |
+   |                       mutable borrow occurs here
+...
+39 |         println!(&amp;quot;{}&amp;quot;, x);
+   |                        ^ immutable borrow occurs here
+40 |     }
+   |     - mutable borrow ends here
+
+error: aborting due to previous error
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;何故なら &lt;code&gt;cls&lt;/code&gt; が &lt;code&gt;x&lt;/code&gt; を捕捉し続けているから。これは &lt;code&gt;cls&lt;/code&gt; のライフタイムを &lt;code&gt;println!&lt;/code&gt; の前で終わらせてあげると解決します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
+    let mut x = 1;
+    {
+        // `{}` でスコープを作ることでライフタイムをコントロールする
+        let mut cls = |arg|{ x += arg };
+        for i in 0..10 {
+            cls(i);
+        }
+    }
+    println!(&amp;quot;{}&amp;quot;, x);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;FnMut&lt;/code&gt; は変数を &lt;code&gt;mut&lt;/code&gt; にする無名関数と同じなようです。&lt;/p&gt;
+
+&lt;h2 id=&#34;fnonce-1&#34;&gt;&lt;code&gt;FnOnce&lt;/code&gt;&lt;/h2&gt;
+
+&lt;p&gt;じゃあ、 &lt;code&gt;FnOnce&lt;/code&gt; は？ &lt;code&gt;std::mem::drop&lt;/code&gt; を使って所有権を無理矢理奪うクロージャを作ってみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::mem::drop;
+
+fn main() {
+    let x = String::new();
+    let cls = || {drop(x)};
+    cls();
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;はい、実はこれでOKです。冷静に考えたら &lt;code&gt;FnOnce&lt;/code&gt; を継承している &lt;code&gt;Fn&lt;/code&gt; を &lt;code&gt;||{}&lt;/code&gt; で作れた時点で問題ありませんでしたね。&lt;/p&gt;
+
+&lt;h1 id=&#34;落穂拾い&#34;&gt;落穂拾い&lt;/h1&gt;
+
+&lt;h2 id=&#34;move-クロージャ&#34;&gt;&lt;code&gt;move&lt;/code&gt; クロージャ&lt;/h2&gt;
+
+&lt;p&gt;じゃあ、Rustが良い感じに使い分けてくれるなら &lt;code&gt;move&lt;/code&gt; クロージャって何のためにあるの？と思いますが、これは環境を捕捉する際に &lt;code&gt;Copy&lt;/code&gt; なんかが起こらないようにするためのものです。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;move&lt;/code&gt; しない例&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;
+let mut num = 5;
+
+{
+    let mut add_num = |x: i32| num += x;
+
+    add_num(5);
+}
+
+assert_eq!(10, num);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;move&lt;/code&gt; する例&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let mut num = 5;
+
+{
+    let mut add_num = move |x: i32| num += x;
+
+    add_num(5);
+}
+
+assert_eq!(5, num);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;関数ポインタ&#34;&gt;関数ポインタ&lt;/h2&gt;
+
+&lt;p&gt;クロージャを持たない関数は、 &lt;code&gt;fn(i32) -&amp;gt; i32&lt;/code&gt; のような型を持ちます。これは空の環境を持つクロージャと同じですね。空の環境に所有権も何もないのでプリミティブの &lt;code&gt;fn&lt;/code&gt; は &lt;code&gt;FnOnce&lt;/code&gt; &lt;code&gt;FnMut&lt;/code&gt; &lt;code&gt;Fn&lt;/code&gt; のいずれとしても振舞います。&lt;/p&gt;
+
+&lt;h1 id=&#34;参考&#34;&gt;参考&lt;/h1&gt;
+
+&lt;p&gt;ここまで書いて普通にドキュメントに詳しく載っているのに気付きました（汗&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/functions.html&#34;&gt;関数&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/closures.html&#34;&gt;クロージャ&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
     
     <item>
       <title>SMLでモナド</title>
@@ -2980,541 +3424,6 @@ Total LL D-Cache Misses...7,721 (0%)
 &lt;p&gt;私にとっては薮蛇にκLispの実装の筋が悪いことが分かったりしてショックでしたがまあ、簡単にプロファイルをとれるツールを紹介しました。&lt;/p&gt;
 
 &lt;p&gt;Rustで高速なアプリケーションを作りたい方、利用してみては如何でしょうか。&lt;/p&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>高速な継続ライブラリに向けて</title>
-      <link>/slide/kousokunakeizokuraiburarinimukete/</link>
-      <pubDate>Sun, 08 May 2016 21:26:32 +0900</pubDate>
-      
-      <guid>/slide/kousokunakeizokuraiburarinimukete/</guid>
-      <description>&lt;section data-markdown
-    data-separator=&#34;\n\n&#34;
-    data-vertical=&#34;\n\n&#34;
-    data-notes=&#34;^Note:&#34;&gt;
-&lt;script type=&#34;text/template&#34;&gt;
-# 高速な継続ライブラリに向けて
-----------------------
-[継続勉強会](http://connpass.com/event/28150/) 2016-05-22
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-
-# About Me
----------
-![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
-
- + κeen
- + [@blackenedgold](https://twitter.com/blackenedgold)
- + Github: [KeenS](https://github.com/KeenS)
- + サイバーエージェントのエンジニア
- + Lisp, ML, Rust, Shell Scriptあたりを書きます
-
-# 継続欲しい
------------
-
-* 色々な場面で便利
-* Schemeで使い回してるのうらやましい
-* Common Lispでも使いたい
-* 現実には限定継続が欲しい
-  +  Common Lispには大域脱出はある
-
-
-# 限定継続を使う例
------------------
-## 非同期プログラミング
-
-* コールバック形式だと厳しい
-* 限定継続を使うと綺麗に書き直せる
-
-
-# 限定継続を使う例
------------------
-## ゲームのコルーチン
-
-* 複数のオブジェクトを制御するのにコルーチンが欲しい
-* cf [コルーチンをCommon Lispで簡単に定義 - さくらんぼのlambda日記](http://lambdasakura.hatenablog.com/entry/20111026/1319598590)
-
-
-# 限定継続を使う例
------------------
-## do記法
-
-* モナドのdo記法は限定継続を使って実装出来る
-* [Operational monad in scheme](http://www.slideshare.net/yuichinishiwaki/operational-monad-in-scheme)
-
-
-
-# Common Lispでの限定継続の実現
----------------
-
-1. 仕様に入れてもらう
-2. 処理系に手を入れる
-3. ユーザレベルで(限定)継続ライブラリを作る
-   + 柔軟なCommon Lispでは可能
-
-
-# CPS変換
----------
-
-* (限定)継続の実現方法の1つ
-  + スタックを切り取る方式とかもある
-* 機械的にも出来る
-* グローバルな変換なのとプリミティブな式しか書けないでコンパイラ内部でやることが多い
-  + 継続関係なしに中間形式として採用されることが多い
-* 関数定義/呼び出し以外にも諸々の構文とかに対しても定義が必要
-
-
-# CPS変換
-----------
-
-Q. Common Lispだといくつの構文に対して定義が必要?
-
-1. 1つ
-2. 26つ
-3. 42つ
-4. 無数
-
-
-
-# CPS変換
-----------
-
-A. 26つ (スペシャルフォーム25+funcall)
-
-
-# Common Lispのプリミティブ
---------------------------
-
-* スペシャルフォームと呼ばれる
-* 仕様で25個定められている
-* [CLHS: Section 3.1.2.1.2.1](http://www.lispworks.com/documentation/HyperSpec/Body/03_ababa.htm)
-* この中に関数定義だとか例外だとかは入っていない
-  + マクロで定義されている
-
-
-# マクロ
---------
-
-* 構文木 to 構文木(S式to S式)変換器( = 普通のLispの関数)
-* 新しい構文を作れる
-* CPS変換は?????
-
-
-# `macroexpand`
--------------
-
-* [CLHS: Function MACROEXPAND, MACROEXPAND-1](http://clhs.lisp.se/Body/f_mexp_.htm)
-* マクロを手動展開する関数
-* 雑にいうと普段pre-orderなマクロ展開をin-orderやpost-orderにする時に使う
-* 本来はあまり使いたくない
-  + 処理系の展開器に任せた方が間違いが少ない
-* これでマクロを排したプリミティブのCommon Lispの構文木にアクセス出来る
-
-
-# cl-cont
----------
-
-* 上記のことを全てやったライブラリ
-* デファクトというか唯一のライブラリ
-* [Common Lispで限定継続と遊ぶ | κeenのHappy Hacκing Blog](http://keens.github.io/slide/Common_Lispdegenteikeizokutoasobu_/)
-
-
-&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;「shift/resetがわからない時にあげる声」&lt;/p&gt;&amp;mdash; かず(原材料に小麦粉を含む) (@kazzna) &lt;a href=&#34;https://twitter.com/kazzna/status/674026894602309632&#34;&gt;2015年12月8日&lt;/a&gt;&lt;/blockquote&gt;
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-
-# cl-contの使用例
-
-``` common-lisp
-(with-call/cc
-  (+ 1 (call/cc
-        (lambda (k)
-          (funcall k 2)))))
-```
-
-
-# cl-contの使用例
-
-``` common-lisp
-(FUNCALL
- (LAMBDA (&amp;OPTIONAL #:G542 &amp;REST #:G543)
-   (DECLARE (IGNORABLE #:G542))
-   (DECLARE (IGNORE #:G543))
-   (FUNCALL
-    (LAMBDA (&amp;OPTIONAL #:G544 &amp;REST #:G545)
-      (DECLARE (IGNORABLE #:G544))
-      (DECLARE (IGNORE #:G545))
-      (FUNCALL (LAMBDA (K) (FUNCALL K 1))
-               (LAMBDA (&amp;OPTIONAL #:G546 &amp;REST #:G547)
-                 (DECLARE (IGNORABLE #:G546))
-                 (DECLARE (IGNORE #:G547))
-                 (FUNCALL (CL-CONT::FDESIGNATOR-TO-FUNCTION/CC #:G542) #&#39;VALUES
-                          #:G544 #:G546))))
-    1))
- #&#39;+)
-```
-
-
-
-# cl-contへの不満
------------------
-
-* 遅い
-* lambda多い。
-  + 多分コンパイラと相性が悪い
-* lambda禁止おじさんと分かりあえる
-
-
-# cl-fast-cont
-
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# cl-fast-cont
---------------
-
-* [KeenS/cl-fast-cont: faster partial contiuation library of common lisp](https://github.com/KeenS/cl-fast-cont)
-* とりあえずレポジトリ作っただけ
-* 完成させたい…
-
-
-# アプローチ1
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-
-# SSA使う
----------
-
-* CPSと等価
-* だけどSSAだったらlambda出てこない
-* Common Lispならgotoあるしいけるんじゃね？
-
-
-```common-lisp
-(let (x y z)
- (tagbody
-    (setq x 1)
-  :call/cc
-    (setq y 1)
-    (setq z (+ x y))))
-```
-
-
-
-# 問題
--------
-
-* ネイティブスタックとは別に自分でスタック作らないといけない
-  + 例外とかでスタック巻き戻されるとつらい
-* gotoのタグをtagbodyの外に持ち出せない(=継続を外に持ち出せない)
-* 変数を準備するのが面倒orパフォーマンスに影響しそう
-* そもそもtagbodyそこまで柔軟じゃなかった
-* 関数が消し飛ぶ
-
-
-# アプローチ2
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-
-# SSA+CPS
----------
-
-* SSAとCPSを組み合わせる
-* 基本はSSA
-* スタックを使う/継続が必要な所でだけCPS
-
-# 問題
--------
-
-* SSAの部分意味なくね？
-* そもそも継続を取り出すのが目的なので関係ない所で変換しても意味がない
-
-
-# アプローチ3
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-# Selective CPS
-----------------
-
-* 継続が必要な部分でのみ変換
-* 2 pass transformation
-* [A Selective CPS Transformation](http://www.sciencedirect.com/science/article/pii/S1571066104809691)
-
-
-```common-lisp
-(with-call/cc
-  (let ((x 3) y)
-    (setq y (* x x))
-    (+ 1 (call/cc
-          (lambda (k)
-            (funcall k y))))))
-
-```
-
-
-
-```common-lisp
-(with-call/cc
-  (let ((x 3) y)
-    (setq y (* x x))
-    (+ 1 @(call/cc
-          (lambda (k)
-            (funcall k y))))))
-
-```
-
-
-
-```common-lisp
-(with-call/cc
-  (let ((x 3) y)
-    (setq y (* x x))
-    @(+ 1 @(call/cc
-          (lambda (k)
-            (funcall k y))))))
-
-```
-
-
-
-```common-lisp
-(with-call/cc
-  @(let ((x 3) y)
-    (setq y (* x x))
-    @(+ 1 @(call/cc
-          (lambda (k)
-            (funcall k y))))))
-
-```
-
-
-# そもそもCommon Lispのつらい話
--------------------------------
-* セマンティクスが動的
-  + catch, block, tagbody
-  + special variable
-  + 変換は静的なのでどう頑張っても追い付かない
-* multiple valueが面倒
-
-
-
-# ダイナミック!!
-----------------
-
-``` common-lisp
-(block name
- (let ((f
-        (lambda (x) (return-from name x))))
-   (with-call/cc
-       (funcall
-        f
-        (call/cc
-         (lambda (k)
-           (funcall k 2)))))))
-```
-
-
-# スペシャル変数
----------------
-
-* Common Lispにはレキシカルスコープとダイナミックスコープ両方ある
-* CPS変換すると継続の全てがスコープ下に入る
-  + 関数の呼び出し関係が木だったのが線型になる
-  + ダイナミックスコープだと困る
-
-![CPS前のAST](/images/cps/pre-cps.png)
-
-
-
-![CPS後のAST](/images/cps/post-cps.png)
-
-
-
-```
-(defvar *x* 1)
-(with-call/cc
-  (progn
-    (let ((*x* 2))
-      (call/cc ..)
-      (format t &#34;~a~%&#34; *x*)) ; *x* = 2
-    (format t &#34;~a~%&#34; *x*))) ; *x* = 1
-
-```
-
-
-
-```
-(defvar *x* 1)
-(with-call/cc
-  (progn
-    (let ((*x* 2))
-      (...
-       (lambda (ignore)
-         ((lambda (ignore)
-            (format t &#34;~a~%&#34; *x*)) ; *x* = 2!!
-          (format t &#34;~a~%&#34; *x*))))))) ; *x* = 1
-```
-
-
-# 多値
-------
-
-* Common Lispの多値はGoと違って無視出来る
-* 変換が空気読む必要がある
-* 下手するとプログラムを壊す
-  1. 本当は多値を返してるのに変換で無視された
-  2. 意図的に無視してるのに変換で加えられた
-
-
-# 関数定義と引数の数
------------------
-
-* **Selective** CPS
-* 関数をCPS変換するときとしない時がある
-* 呼び出す時にどっちか分かんなくね？
-  1. 統一的に変換してしまう
-  2. Selectiveに変換して関数にメタデータつける
-
--&gt; まだ決めきれてない
-
-
-# パフォーマンス
-----------------
-
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-
-# フィボナッチ数列
------------------
-* とりえあずのフィボナッチ数列で計測
-  + Full CPS変換に割と不利
-  + 何も考えずにライブラリを使うとこうなるよって例
-* Selective CPSは何もしない=普通の定義と同じ
-
-
-
-```common-lisp
-(defun fib (n)
-  (if (&lt;= n 1)
-      1
-      (+ (fib (- n 1)) (fib (- n 2)))))
-```
-
-``` common-lisp
-(defun/cc fib-cont (n)
-  (if (&lt;= n 1)
-      1
-      (+ (fib-cont (- n 1)) (fib-cont (- n 2)))))
-```
-
-
-# Selective
-
-
-```
-Evaluation took:
-  1.517 seconds of real time
-  1.516000 seconds of total run time (1.516000 user, 0.000000 system)
-  99.93% CPU
-  4,388,993,782 processor cycles
-  0 bytes consed
-```
-
-
-# Full
-
-```
-Evaluation took:
-  18.347 seconds of real time
-  18.576000 seconds of total run time (18.248000 user, 0.328000 system)
-  [ Run times consist of 1.396 seconds GC time, and 17.180 seconds non-GC time. ]
-  101.25% CPU
-  53,149,416,888 processor cycles
-  22,922,853,904 bytes consed
-```
-
-# コルーチン
-------------
-
-* そこまでFull CPSに不利じゃない
-* 割と実用しそうな例
-* Selective CPSは少しだけラムダが少ない
-
-
-# Selective
-
-``` common-lisp
-(let (c)
-  (setf c ((lambda ()
-             (write-line &#34;in thread A 1&#34;)
-             (lambda ()
-              (write-line &#34;in thread A 2&#34;)
-              (lambda ()
-                (write-line &#34;in thread A 3&#34;))))))
-  (write-line &#34;in main thread 1&#34;)
-  (setq c (funcall c))
-  (write-line &#34;in main thread 2&#34;)
-  (setq c (funcall c))
-  (write-line &#34;in main thread 3&#34;))
-```
-
-
-
-# full
-
-```common-lisp
-(let (c)
-  (setf c (with-call/cc
-            (write-line &#34;in thread A 1&#34;)
-            (let/cc k k)
-            (write-line &#34;in thread A 2&#34;)
-            (let/cc k k)
-            (write-line &#34;in thread A 3&#34;)))
-  (write-line &#34;in main thread 1&#34;)
-  (setq c (funcall c))
-  (write-line &#34;in main thread 2&#34;)
-  (setq c (funcall c))
-  (write-line &#34;in main thread 3&#34;))
-```
-
-# Selective
-
-```
-Evaluation took:
-  0.905 seconds of real time
-  0.904000 seconds of total run time (0.904000 user, 0.000000 system)
-  99.89% CPU
-  2,617,396,241 processor cycles
-  0 bytes consed
-
-```
-
-
-# full
-
-```
-Evaluation took:
-  1.272 seconds of real time
-  1.272000 seconds of total run time (1.272000 user, 0.000000 system)
-  100.00% CPU
-  3,681,362,466 processor cycles
-  0 bytes consed
-```
-
-
-# まとめ
---------
-
-* 限定継続便利だよ
-* マクロを使えばCPS変換で限定継続実装出来るよ
-* でもパフォーマンや言語の問題もあるよ
-* Selective CPSを使えばパフォーマンスの問題解決出来るよ
-
-&lt;/script&gt;
-&lt;/section&gt;
 </description>
     </item>
     
