@@ -6,8 +6,423 @@
     <description>Recent content in Sml on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Sat, 02 Jul 2016 15:25:24 +0900</lastBuildDate>
+    <lastBuildDate>Mon, 10 Oct 2016 11:05:38 +0900</lastBuildDate>
     <atom:link href="/categories/sml/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>SMLでモナド</title>
+      <link>/blog/2016/10/10/smldemonado</link>
+      <pubDate>Mon, 10 Oct 2016 11:05:38 +0900</pubDate>
+      
+      <guid>/blog/2016/10/10/smldemonado</guid>
+      <description>
+
+&lt;p&gt;κeenです。ML Workshop 2016でなんかSMLで型クラスする発表があったらしいので追ってみます。&lt;/p&gt;
+
+&lt;p&gt;implicit parameterをexplicitに渡すのではなく、モジュールとファンクタを使った実装です。&lt;/p&gt;
+
+&lt;h1 id=&#34;前置き&#34;&gt;前置き&lt;/h1&gt;
+
+&lt;p&gt;Haskell風の中置演算子を使うので&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-standard-ml&#34;&gt;infix 4 &amp;lt;$&amp;gt; &amp;lt;$ $&amp;gt;  &amp;lt;*&amp;gt; &amp;lt;* *&amp;gt;
+infix 1 &amp;gt;&amp;gt;= &amp;gt;&amp;gt;
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;を予め宣言しておきます。&lt;/p&gt;
+
+&lt;h1 id=&#34;最初の試み&#34;&gt;最初の試み&lt;/h1&gt;
+
+&lt;p&gt;さて、(MLの機能の方ではない)functorを考えましょうか。functorには &lt;code&gt;fmap&lt;/code&gt; が要求され、&lt;code&gt;&amp;lt;$&amp;gt;&lt;/code&gt; なんかが実装されます。それを素直に表したらこうなるでしょうか。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-standard-ml&#34;&gt;signature FUNCTOR_MIN = sig
+    type &#39;a t
+    val fmap: (&#39;a -&amp;gt; &#39;b) -&amp;gt; &#39;a t -&amp;gt; &#39;b t
+end
+
+signature FUNCTOR = sig
+    include FUNCTOR_MIN
+    val &amp;lt;$&amp;gt; : (&#39;a -&amp;gt; &#39;b) * &#39;a t -&amp;gt; &#39;b t
+    val &amp;lt;$ : &#39;a *  &#39;b t -&amp;gt;  &#39;a t
+    val $&amp;gt; : &#39;a t *  &#39;b  -&amp;gt;  &#39;b t
+    val void: &#39;a t -&amp;gt; unit t
+end
+
+functor MkFunctor(Fun: FUNCTOR_MIN): FUNCTOR = struct
+    open Fun
+
+    fun f &amp;lt;$&amp;gt; fa = fmap f fa
+    fun a &amp;lt;$ fb =  (fn _ =&amp;gt; a) &amp;lt;$&amp;gt; fb
+    fun fa $&amp;gt; b = b &amp;lt;$ fa
+    fun void fa = () &amp;lt;$ fa
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;さて、さらにそのサブクラスのapplicativeも作ります。 &lt;code&gt;include&lt;/code&gt; を使うことで &lt;code&gt;FUNCTOR&lt;/code&gt; を継承することを表します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-standard-ml&#34;&gt;signature APPLICATIVE_MIN = sig
+    include FUNCTOR
+
+    val pure: &#39;a -&amp;gt; &#39;a t
+    val ap : (&#39;a -&amp;gt; &#39;b) t -&amp;gt; &#39;a t -&amp;gt; &#39;b t
+end
+
+signature APPLICATIVE = sig
+    include APPLICATIVE_MIN
+
+    val &amp;lt;*&amp;gt; : (&#39;a -&amp;gt; &#39;b) t * &#39;a t -&amp;gt; &#39;b t
+    val *&amp;gt; : &#39;a t * &#39;b t -&amp;gt; &#39;b t
+    val &amp;lt;* : &#39;a t * &#39;b t -&amp;gt; &#39;a t
+end
+
+functor MkApplicative(App: APPLICATIVE_MIN): APPLICATIVE = struct
+    open App
+
+    fun af &amp;lt;*&amp;gt; aa = ap af aa
+    fun aa *&amp;gt; ab = pure (fn _ =&amp;gt; fn x =&amp;gt; x) &amp;lt;*&amp;gt; aa &amp;lt;*&amp;gt; ab
+    fun aa &amp;lt;* ab = pure (fn x =&amp;gt; fn _ =&amp;gt; x) &amp;lt;*&amp;gt; aa &amp;lt;*&amp;gt; ab
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;さらにmonadも作りましょうか。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-standard-ml&#34;&gt;signature MONAD_MIN = sig
+    include APPLICATIVE
+
+    val bind : &#39;a t -&amp;gt; (&#39;a -&amp;gt; &#39;b t) -&amp;gt; &#39;b t
+end
+
+signature MONAD = sig
+    include MONAD_MIN
+
+    val return: &#39;a -&amp;gt; &#39;a t
+    val &amp;gt;&amp;gt;= : &#39;a t * (&#39;a -&amp;gt; &#39;b t) -&amp;gt; &#39;b t
+    val &amp;gt;&amp;gt; : &#39;a t * &#39;b t -&amp;gt; &#39;b t
+end
+
+
+functor MkMonad(M: MONAD_MIN): MONAD = struct
+    open M
+
+    val return = pure
+    fun ma &amp;gt;&amp;gt;= f = bind ma f
+    fun ma &amp;gt;&amp;gt; mb = ma &amp;gt;&amp;gt;= (fn _ =&amp;gt; mb)
+
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ちょっと使ってみましょう。1つ1つインスタンスを作ってあげます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-standard-ml&#34;&gt;structure OptionFunc = MkFunctor(
+  struct
+      type &#39;a t = &#39;a option
+      fun fmap f = Option.map f
+  end)
+
+structure OptionApp = MkApplicative(
+  struct
+      open OptionFunc
+      fun pure x = SOME(x)
+      fun ap af aa = case (af, aa) of
+                         (SOME(f), SOME(a)) =&amp;gt; SOME(f a)
+                       | _ =&amp;gt; NONE
+  end)
+
+structure OptionMonad = MkMonad(
+  struct
+      open OptionApp
+      fun bind ma f = case ma of
+                          SOME(a) =&amp;gt; f a
+                        | NONE =&amp;gt; NONE
+  end)
+
+
+local
+    open OptionMonad
+in
+    fun add x y = x + y
+    fun println s = print (s ^ &amp;quot;\n&amp;quot;)
+
+    val ret1 = add &amp;lt;$&amp;gt; SOME(1) &amp;lt;*&amp;gt; SOME(2)
+    val ret2 = SOME(1) &amp;gt;&amp;gt;= (fn x =&amp;gt;
+               SOME(2) &amp;gt;&amp;gt;= (fn y =&amp;gt;
+               return (x + y)))
+    val () = Option.app (println o Int.toString) ret1 (* =&amp;gt; 3 *)
+    val () = Option.app (println o Int.toString) ret2 (* =&amp;gt; 3 *)
+end
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;動きました。&lt;/p&gt;
+
+&lt;p&gt;さて、一見これで良さそうですがML Workshopでの発表では問題点を2点指摘しています。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Monadのインスタンスが欲しいだけなのにFunctorまで遡って作らないといけない&lt;/li&gt;
+&lt;li&gt;ダイアモンド継承が起きた時に共通の親クラスの実装の一貫性を保障出来ない&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;とのことです。私はこの問題点自体割と疑問なのですがまあ、問題らしいです。&lt;/p&gt;
+
+&lt;h1 id=&#34;解決案&#34;&gt;解決案&lt;/h1&gt;
+
+&lt;p&gt;継承のやり方をちょいと変えます。&lt;code&gt;Functor&lt;/code&gt; までは先程と同じなのですが、Applicativeは
+APPLICATIVE_MINにFUNCTORをincludeしません。また、衝突の問題から型が &lt;code&gt;applicative&lt;/code&gt;になります（同じと言っちゃいましたがFunctorの方も &lt;code&gt;functor_&lt;/code&gt; になってます）。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-standard-ml&#34;&gt;signature APPLICATIVE_MIN = sig
+    type &#39;a applicative
+    val pure: &#39;a -&amp;gt; &#39;a applicative
+    val ap : (&#39;a -&amp;gt; &#39;b) applicative -&amp;gt; &#39;a applicative -&amp;gt; &#39;b applicative
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そしてAPPLICATIVEの方でincludeします。ここで &lt;code&gt;sharing&lt;/code&gt; 制約を付けます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-standard-ml&#34;&gt;signature APPLICATIVE = sig
+    include FUNCTOR APPLICATIVE_MIN
+    sharing type functor_ = applicative
+
+    val &amp;lt;*&amp;gt; : (&#39;a -&amp;gt; &#39;b) applicative * &#39;a applicative -&amp;gt; &#39;b applicative
+    val *&amp;gt; : &#39;a applicative * &#39;b applicative -&amp;gt; &#39;b applicative
+    val &amp;lt;* : &#39;a applicative * &#39;b applicative -&amp;gt; &#39;a applicative
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;で、 &lt;code&gt;APPLICATIVE_MIN&lt;/code&gt; から &lt;code&gt;FUNCTOR_MIN&lt;/code&gt; を生成するファンクタを作ります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-standard-ml&#34;&gt;functor ApplicativeMinToFunctorMin(A: APPLICATIVE_MIN): FUNCTOR_MIN = struct
+    open A
+    type &#39;a functor_ = &#39;a applicative
+    fun fmap f = ap (pure f)
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;applicativeからfunctor????感ありますがとりあえず進みます。&lt;/p&gt;
+
+&lt;p&gt;で、 &lt;code&gt;MkApplicative&lt;/code&gt; は一旦内部で &lt;code&gt;Functor&lt;/code&gt; を作ってそれを &lt;code&gt;open&lt;/code&gt; します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-standard-ml&#34;&gt;functor MkApplicative(App: APPLICATIVE_MIN): APPLICATIVE = struct
+    type &#39;a applicative = &#39;a App.applicative
+
+    structure FunctorMin = ApplicativeMinToFunctorMin(App)
+    structure Functor = MkFunctor(FunctorMin)
+    open App Functor
+
+    fun af &amp;lt;*&amp;gt; aa = ap af aa
+    fun aa *&amp;gt; ab = pure (fn _ =&amp;gt; fn x =&amp;gt; x) &amp;lt;*&amp;gt; aa &amp;lt;*&amp;gt; ab
+    fun aa &amp;lt;* ab = pure (fn x =&amp;gt; fn _ =&amp;gt; x) &amp;lt;*&amp;gt; aa &amp;lt;*&amp;gt; ab
+end
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;モナドも同じですね。ただ、 &lt;code&gt;MONAD_MIN&lt;/code&gt; から &lt;code&gt;APPLICATIVE_MIN&lt;/code&gt; を生成する必要があるので &lt;code&gt;MONAD_MIN&lt;/code&gt; のシグネチャに &lt;code&gt;return&lt;/code&gt; が増えてます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-standard-ml&#34;&gt;signature MONAD_MIN = sig
+    type &#39;a monad
+    val return: &#39;a -&amp;gt; &#39;a monad
+    val bind : &#39;a monad -&amp;gt; (&#39;a -&amp;gt; &#39;b monad) -&amp;gt; &#39;b monad
+end
+
+signature MONAD = sig
+    include APPLICATIVE MONAD_MIN
+    sharing type applicative = monad
+    val &amp;gt;&amp;gt;= : &#39;a monad * (&#39;a -&amp;gt; &#39;b monad) -&amp;gt; &#39;b monad
+    val &amp;gt;&amp;gt; : &#39;a monad * &#39;b monad -&amp;gt; &#39;b monad
+end
+
+functor MonadMinToApplicativeMin(M: MONAD_MIN): APPLICATIVE_MIN = struct
+    open M
+    type &#39;a applicative = &#39;a monad
+    val pure = return
+    fun ap mf ma =  bind mf (fn f =&amp;gt;
+                    bind ma (fn a =&amp;gt;
+                    return (f a)))
+end
+
+functor MkMonad(M: MONAD_MIN): MONAD = struct
+    type &#39;a monad = &#39;a M.monad
+    structure AppMin = MonadMinToApplicativeMin(M)
+    structure App = MkApplicative(AppMin)
+    open M App
+
+    fun ma &amp;gt;&amp;gt;= f = bind ma f
+    fun ma &amp;gt;&amp;gt; mb = ma &amp;gt;&amp;gt;= (fn _ =&amp;gt; mb)
+
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ちょっと &lt;code&gt;ap&lt;/code&gt; の実装イケてないなぁと思いつつ先に進みます。&lt;/p&gt;
+
+&lt;p&gt;さて、使ってみましょう。今度はファンクタの適用は一回で済みます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-standard-ml&#34;&gt;structure ListMonad = MkMonad(struct
+                                   type &#39;a monad = &#39;a list
+                                   fun return x = [x]
+                                   fun bind ma f = List.concat (List.map f ma)
+                              end)
+local
+    open ListMonad
+in
+    val ret = [1, 2, 3] &amp;gt;&amp;gt;= (fn x =&amp;gt;
+              [4, 5, 6] &amp;gt;&amp;gt;= (fn y =&amp;gt;
+              return (x + y)))
+    fun println s = print (s ^ &amp;quot;\n&amp;quot;)
+
+    val () = List.app (println o Int.toString) ret
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;動きます。
+ご覧の通り、ファンクタの適用は1回で済んでますし、親クラスのインスタンス全て自分で生成しているので実装の一貫性も保障出来ます。ダイアモンド継承が来ても安心ですね！&lt;/p&gt;
+
+&lt;h1 id=&#34;感想&#34;&gt;感想&lt;/h1&gt;
+
+&lt;p&gt;私は最初のアプローチの方が好きですね（率直）。&lt;/p&gt;
+
+&lt;p&gt;それぞれのクラスのインスタンスを作るのは自然だと思いますし実はWorkshopのアプローチは表層上の問題でダイアモンド継承を解決出来ていません。名前衝突が起きます。モジュールの名前衝突ならまだ気合で( &lt;code&gt;val &amp;gt;&amp;gt;= = Monad.&amp;gt;&amp;gt;=&lt;/code&gt; のように全て手で)解決出来ますが、シグネチャの方は解決策はなさそうです(いや、シグネチャを使わずに全て手で書き直すとかは可能ですが)。どうせ完全には解決出来てない問題のために実装が曲がるのは好みではないです。&lt;/p&gt;
+
+&lt;h1 id=&#34;付録a-ダイアモンド継承に強そうなアプローチ&#34;&gt;付録A ダイアモンド継承に強そうなアプローチ&lt;/h1&gt;
+
+&lt;p&gt;単純に親クラスのインクルードをやめます。んで親クラスは名前空間の汚染を防ぐためにモジュールに入ったまま受け取ることにします。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-standard-ml&#34;&gt;infix 4 &amp;lt;$&amp;gt; &amp;lt;$ $&amp;gt;  &amp;lt;*&amp;gt; &amp;lt;* *&amp;gt;
+infix 1 &amp;gt;&amp;gt;= &amp;gt;&amp;gt;
+
+signature FUNCTOR_MIN = sig
+    type &#39;a t
+    val fmap: (&#39;a -&amp;gt; &#39;b) -&amp;gt; &#39;a t -&amp;gt; &#39;b t
+end
+
+signature FUNCTOR = sig
+    include FUNCTOR_MIN
+    val &amp;lt;$&amp;gt; : (&#39;a -&amp;gt; &#39;b) * &#39;a t -&amp;gt; &#39;b t
+    val &amp;lt;$ : &#39;a *  &#39;b t -&amp;gt;  &#39;a t
+    val $&amp;gt; : &#39;a t *  &#39;b  -&amp;gt;  &#39;b t
+    val void: &#39;a t -&amp;gt; unit t
+end
+
+functor MkFunctor(Fun: FUNCTOR_MIN): FUNCTOR = struct
+    open Fun
+
+    fun f &amp;lt;$&amp;gt; fa = fmap f fa
+    fun a &amp;lt;$ fb =  (fn _ =&amp;gt; a) &amp;lt;$&amp;gt; fb
+    fun fa $&amp;gt; b = b &amp;lt;$ fa
+    fun void fa = () &amp;lt;$ fa
+end
+
+signature APPLICATIVE_MIN = sig
+    type &#39;a t
+    val pure: &#39;a -&amp;gt; &#39;a t
+    val ap : (&#39;a -&amp;gt; &#39;b) t -&amp;gt; &#39;a t -&amp;gt; &#39;b t
+end
+
+signature APPLICATIVE = sig
+    include APPLICATIVE_MIN
+
+    val &amp;lt;*&amp;gt; : (&#39;a -&amp;gt; &#39;b) t * &#39;a t -&amp;gt; &#39;b t
+    val *&amp;gt; : &#39;a t * &#39;b t -&amp;gt; &#39;b t
+    val &amp;lt;* : &#39;a t * &#39;b t -&amp;gt; &#39;a t
+end
+
+functor MkApplicative(App: sig
+                          structure Functor: FUNCTOR
+                          include APPLICATIVE_MIN
+                          sharing type Functor.t = t
+                         end): APPLICATIVE = struct
+    open App
+    type &#39;a t = &#39;a t
+
+    fun af &amp;lt;*&amp;gt; aa = ap af aa
+    fun aa *&amp;gt; ab = pure (fn _ =&amp;gt; fn x =&amp;gt; x) &amp;lt;*&amp;gt; aa &amp;lt;*&amp;gt; ab
+    fun aa &amp;lt;* ab = pure (fn x =&amp;gt; fn _ =&amp;gt; x) &amp;lt;*&amp;gt; aa &amp;lt;*&amp;gt; ab
+end
+
+
+signature MONAD_MIN = sig
+    type &#39;a t
+    val return: &#39;a -&amp;gt; &#39;a t
+    val bind : &#39;a t -&amp;gt; (&#39;a -&amp;gt; &#39;b t) -&amp;gt; &#39;b t
+end
+
+signature MONAD = sig
+    include MONAD_MIN
+    val &amp;gt;&amp;gt;= : &#39;a t * (&#39;a -&amp;gt; &#39;b t) -&amp;gt; &#39;b t
+    val &amp;gt;&amp;gt; : &#39;a t * &#39;b t -&amp;gt; &#39;b t
+end
+
+
+functor MkMonad(M: sig
+                    structure Applicative: APPLICATIVE
+                    include MONAD_MIN
+                    sharing type Applicative.t = t
+                end): MONAD = struct
+    open M
+    type &#39;a t = &#39;a t
+
+    fun ma &amp;gt;&amp;gt;= f = bind ma f
+    fun ma &amp;gt;&amp;gt; mb = ma &amp;gt;&amp;gt;= (fn _ =&amp;gt; mb)
+
+end
+
+
+structure ListFunctor = MkFunctor(struct
+                                       type &#39;a t = &#39;a list
+                                       val fmap = List.map end)
+structure ListApplicative = MkApplicative(struct
+                                               structure Functor = ListFunctor
+                                               type &#39;a t = &#39;a list
+                                               fun pure x = [x]
+                                               fun ap af aa = List.concat (List.map (fn a =&amp;gt; List.map (fn f =&amp;gt; f a) af) aa)
+                                           end)
+structure ListMonad = MkMonad(struct
+                                   structure Applicative = ListApplicative
+                                   type &#39;a t = &#39;a list
+                                   fun return x = [x]
+                                   fun bind ma f = List.concat (List.map f ma)
+                               end)
+local
+    open ListFunctor
+    open ListApplicative
+    open ListMonad
+in
+    fun add x y = x + y
+    val ret1 = [1, 2, 3] &amp;gt;&amp;gt;= (fn x =&amp;gt;
+               [4, 5, 6] &amp;gt;&amp;gt;= (fn y =&amp;gt;
+               return (x + y)))
+    val ret2 = add &amp;lt;$&amp;gt; [1, 2, 3] &amp;lt;*&amp;gt; pure 1
+    fun println s = print (s ^ &amp;quot;\n&amp;quot;)
+
+    val () = List.app (println o Int.toString) ret1
+    val () = List.app (println o Int.toString) ret2
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;付録b-do記法&#34;&gt;付録B do記法&lt;/h1&gt;
+
+&lt;p&gt;ちょっと &lt;code&gt;&amp;gt;&amp;gt;=&lt;/code&gt; が入り乱れるのはつらいですね。&lt;a href=&#34;https://github.com/br0ns/PreML&#34;&gt;PreML&lt;/a&gt;というSMLのプリプロセッサがあって、do記法（など）のシンタックスシュガーを提供してくれます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-standard-ml&#34;&gt;val ret = do with ListMonad;
+    x &amp;lt;- [1, 2, 3];
+    y &amp;lt;- [4, 5, 6];
+    return (x + y)
+end
+fun println s = print (s ^ &amp;quot;\n&amp;quot;)
+
+val () = List.app (println o Int.toString) ret
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;生成されるコードはこれです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-standard-ml&#34;&gt;val ret = let infix 0 &amp;gt;&amp;gt;= val op&amp;gt;&amp;gt;= = ListMonad.&amp;gt;&amp;gt;= val return = ListMonad.return in ( 
+         [1, 2, 3] ) &amp;gt;&amp;gt;= (fn  x =&amp;gt; ( 
+         [4, 5, 6] ) &amp;gt;&amp;gt;= (fn  y =&amp;gt; 
+    return (x + y) ) ) end 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;マシになりましたね。&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>Socket on SML#</title>
@@ -2805,262 +3220,6 @@ $ make -j4 install
 &lt;h1 id=&#34;おまけ&#34;&gt;おまけ&lt;/h1&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://github.com/nrnrnr/SML-Lint&#34;&gt;SML-Lint&lt;/a&gt;というものがあって、スタイルワーニングを出してくれます。ただ、これはパッチを当てないと使えなかったりスタイルワーニングのみしか出さなかったりするので気が向いた時に紹介します&lt;/p&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>SMLSharpでFFIバインディングを書く時の知見</title>
-      <link>/blog/2015/04/19/smlsharpdeffibaindinguwokakutokinochiken</link>
-      <pubDate>Sun, 19 Apr 2015 13:51:33 +0900</pubDate>
-      
-      <guid>/blog/2015/04/19/smlsharpdeffibaindinguwokakutokinochiken</guid>
-      <description>
-
-&lt;p&gt;κeenです。最近頻繁にSML#を使ってます。SML#のメイン機能の1つであるC連携ですが、ちょっと複雑なことをやろうとするとテクニックが必要になるので共有します。&lt;/p&gt;
-
-&lt;p&gt;Twitterとかにコメントや突っ込みお願いします。&lt;/p&gt;
-
-&lt;h1 id=&#34;簡単な型&#34;&gt;簡単な型&lt;/h1&gt;
-
-&lt;p&gt;型が簡単な関数なら普通に&lt;code&gt;_import&lt;/code&gt;で済みます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val puts = _import &amp;quot;puts&amp;quot;: string -&amp;gt; ()
-val () = puts &amp;quot;Hello, C&amp;quot;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;尚、簡単な型とは&lt;a href=&#34;http://www.pllab.riec.tohoku.ac.jp/smlsharp/docs/2.0/ja/Ch9.S2.xhtml&#34;&gt;公式ドキュメント&lt;/a&gt;にある通り、いわゆる即値、即値の組（タプル）、即値の配列、即値の参照、それらを引数、返り値に持つ関数などです。&lt;/p&gt;
-
-&lt;p&gt;又、以下のような制約もあります。&lt;/p&gt;
-
-&lt;blockquote&gt;
-&lt;p&gt;C関数全体の型は，引数リストを組型とするMLの関数型に対応付けられます． ただし，C関数の引数や返り値に書ける相互運用型には，以下の制約があり ます．
-   配列型や組型など，Cのポインタ型に対応する相互運用型を，C関数の返り値の 型として指定することはできません．&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;p&gt;恐らくGCとの兼ね合いでしょうがつらいですね。stringすら返り値で受け取れません。&lt;/p&gt;
-
-&lt;p&gt;それにこの制約がどこまで効いてるのかが不明で、同じ型でも型付けに成功したり失敗したりすることがあります。例えば上の例でstring型を引数にとる関数をインポートしましたが関数に依ってはstringが相互運用型でないとか怒られることがあります。タプルの配列やタプルの参照などは確実にダメみたいです。&lt;/p&gt;
-
-&lt;p&gt;尚、string型はCでいう &lt;code&gt;const char *&lt;/code&gt; 、タプルは変更不能な構造体へのポインタになるそうです。構造体の即値は扱えないんですね…。また、参照とは別に &lt;code&gt;ptr&lt;/code&gt; 型も存在します。SML#側からは作れず、Cとの相互運用のためだけに存在するようです。&lt;/p&gt;
-
-&lt;h1 id=&#34;魔法の-unit-ptr&#34;&gt;魔法の &lt;code&gt;unit ptr&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;じゃあ複雑な型はインポート出来ないのかというとそうでもなく、 &lt;code&gt;unit ptr&lt;/code&gt; 型にしておけばとりあえずインポート出来ます。Cで言うところの &lt;code&gt;void *&lt;/code&gt; です。
-邪悪な雰囲気を感じますね。しかしそこは型安全言語、ちゃんと型安全に &lt;code&gt;unit ptr&lt;/code&gt; を扱えます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;type file = unit ptr
-val fopen = _import &amp;quot;fopen&amp;quot;: (string, string) -&amp;gt; file
-val fgetc = _import &amp;quot;fgetc&amp;quot;: (file) -&amp;gt; int
-val fclose = _import &amp;quot;fclose&amp;quot;: (file) -&amp;gt; int
-val () = let
-      val f = fopen(&amp;quot;test&amp;quot;, &amp;quot;r&amp;quot;)
-      val c = fgetc(f)
-    in
-      print(str(chr c));
-      fclose(f)
-    end
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;はい。単に &lt;code&gt;type&lt;/code&gt; で名前をつけてあげれば大丈夫です。SML#側ではポイント先が何であるかには関知せず、インポートしたC関数の間で完結してれば問題ありません。多くのライブラリはそのようなAPIになっているのではないでしょうか。&lt;/p&gt;
-
-&lt;h1 id=&#34;ポインタを扱う&#34;&gt;ポインタを扱う&lt;/h1&gt;
-
-&lt;p&gt;とはいえ時にポインタを扱う必要もあります。構造体の配列を扱えないのでその辺で。&lt;/p&gt;
-
-&lt;p&gt;そういった時に便利なのが &lt;code&gt;SMLSharp_Builtin.Pointer&lt;/code&gt; と &lt;code&gt;Pointer&lt;/code&gt; です。 &lt;code&gt;Pointer&lt;/code&gt; の方は .smi ファイルの中で &lt;code&gt;_require &amp;quot;ffi.smi&amp;quot;&lt;/code&gt; してから使います。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;structure SMLSharp_Builtin
-  structure Pointer =
-  struct
-    val identityEqual = _builtin val IdentityEqual : boxed * boxed -&amp;gt; bool
-    val advance = _builtin val Ptr_advance : &#39;a ptr * int -&amp;gt; &#39;a ptr
-    val deref = _builtin val Ptr_deref : &#39;a ptr -&amp;gt; &#39;a
-    val store = _builtin val Ptr_store : &#39;a ptr * &#39;a -&amp;gt; unit
-
-    val toUnitPtr = _builtin val Cast : &#39;a ptr -&amp;gt; unit ptr
-    val fromUnitPtr = _builtin val Cast : unit ptr -&amp;gt; &#39;a ptr
-    val toCodeptr = _builtin val BitCast : unit ptr -&amp;gt; codeptr
-  end
-  end
-
-structure Pointer =
-struct
-  val advance = SMLSharp_Builtin.Pointer.advance
-
-  val load =
-      case &#39;a in &#39;a ptr -&amp;gt; &#39;a of
-        int =&amp;gt; SMLSharp_Builtin.Pointer.deref
-      | word =&amp;gt; SMLSharp_Builtin.Pointer.deref
-      | SMLSharp_Builtin.Word8.word =&amp;gt; SMLSharp_Builtin.Pointer.deref
-      | char =&amp;gt; SMLSharp_Builtin.Pointer.deref
-      | real =&amp;gt; SMLSharp_Builtin.Pointer.deref
-      | SMLSharp_Builtin.Real32.real =&amp;gt; SMLSharp_Builtin.Pointer.deref
-      | &#39;b ptr =&amp;gt; SMLSharp_Builtin.Pointer.deref
-
-  val store =
-      case &#39;a in &#39;a ptr * &#39;a -&amp;gt; unit of
-        int =&amp;gt; SMLSharp_Builtin.Pointer.store
-      | word =&amp;gt; SMLSharp_Builtin.Pointer.store
-      | SMLSharp_Builtin.Word8.word =&amp;gt; SMLSharp_Builtin.Pointer.store
-      | char =&amp;gt; SMLSharp_Builtin.Pointer.store
-      | real =&amp;gt; SMLSharp_Builtin.Pointer.store
-      | SMLSharp_Builtin.Real32.real =&amp;gt; SMLSharp_Builtin.Pointer.store
-      | &#39;b ptr =&amp;gt; SMLSharp_Builtin.Pointer.store
-
-  val isNull : &#39;a ptr -&amp;gt; bool
-  val NULL : unit -&amp;gt; &#39;a ptr
-
-  val importBytes : SMLSharp_Builtin.Word8.word ptr * int
-                    -&amp;gt; SMLSharp_Builtin.Word8.word vector
-  val importString : char ptr -&amp;gt; string
-end
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;load&lt;/code&gt; 、 &lt;code&gt;store&lt;/code&gt; 、 &lt;code&gt;deref&lt;/code&gt; 、 &lt;code&gt;advance&lt;/code&gt; あたりを良く使いそうですね。&lt;/p&gt;
-
-&lt;p&gt;実際にあった話。 &lt;code&gt;struct header { const char *name; int name_len; const char *value; int value_len}&lt;/code&gt; の配列(&lt;code&gt;struct header *&lt;/code&gt;)を扱う必要がありました。
-その配列をCの関数に渡して書き換えてもらって、後で値を取り出したいという状況がです。その時値を取り出すコードがこれです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;fun getHeader headers i =
-      let
-          val header_ptr : char ptr ptr = fromUnitPtr(headers)
-          val header_ptr = advance(header_ptr, i * 2)
-          val header_ptr : int ptr =
-              fromUnitPtr(toUnitPtr(header_ptr))
-          val header_ptr = advance(header_ptr , i * 2)
-
-          val header_ptr : char ptr ptr =
-              fromUnitPtr(toUnitPtr(header_ptr))
-          val name = deref(header_ptr)
-          val header_ptr = advance(header_ptr, 1)
-
-          val header_ptr : int ptr =
-              fromUnitPtr(toUnitPtr(header_ptr))
-          val nameLen = deref(header_ptr)
-          val header_ptr = advance(header_ptr, 1)
-
-          val header_ptr : char ptr ptr =
-              fromUnitPtr(toUnitPtr(header_ptr))
-          val value = deref(header_ptr)
-          val header_ptr = advance(header_ptr, 1)
-
-          val header_ptr : int ptr =
-              fromUnitPtr(toUnitPtr(header_ptr))
-          val valueLen = deref(header_ptr)
-      in
-          if isNull name
-          then (NONE, String.substring(importString(value), 0, valueLen))
-          else (SOME(String.substring(importString(name), 0, nameLen)),
-                String.substring(importString(value), 0, valueLen))
-      end
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;まず、タプルは構造体へのポインタなので今回の &lt;code&gt;struct header *&lt;/code&gt; は &lt;code&gt;(string * int * string * int) ptr&lt;/code&gt; ではありません。それは &lt;code&gt;struct header **&lt;/code&gt; になってしまいます。
-また、ポインタを扱う関数が &lt;code&gt;ptr&lt;/code&gt; 型しか受け付けないので &lt;code&gt;string&lt;/code&gt; ではなく &lt;code&gt;char ptr&lt;/code&gt; にしておいて後から &lt;code&gt;importString&lt;/code&gt; で文字列にする戦略をとります。&lt;/p&gt;
-
-&lt;p&gt;そして配列のi番目にアクセスしたかったら先述の通り &lt;code&gt;(string * int * string * int) ptr&lt;/code&gt; ではないので地道に &lt;code&gt;char ptr ptr&lt;/code&gt; 2*i個分、 &lt;code&gt;int ptr&lt;/code&gt; 2*i個分ポインタを進めます。
-ポインタの型を変える時はダイレクトには変換出来ないようなので一旦 &lt;code&gt;unit ptr&lt;/code&gt; を経由してから変換。そして次のメンバにアクセスするために &lt;code&gt;advance&lt;/code&gt; という形をとります。&lt;/p&gt;
-
-&lt;p&gt;そこまでしたら後は &lt;code&gt;deref&lt;/code&gt; してあげれば欲しい値がとれます。&lt;/p&gt;
-
-&lt;h1 id=&#34;replからのimportと-dynamiclink&#34;&gt;REPLからのimportと &lt;code&gt;DynamicLink&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;SML#のREPLからも勿論インポート出来ますが、SML#のランタイムにリンクされてないライブラリのものはインポート出来ないのでダイナミックリンクを使います。 &lt;code&gt;DynamicLink&lt;/code&gt; にCの &lt;code&gt;dl*&lt;/code&gt; と同じ関数群が用意されているのでそれらを使います。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;structure DynamicLink =
-struct
-  type lib (= ptr)
-  datatype scope = LOCAL | GLOBAL
-  datatype mode = LAZY | NOW
-  val dlopen : string -&amp;gt; lib
-  val dlopen&#39; : string * scope * mode -&amp;gt; lib
-  val dlsym : lib * string -&amp;gt; codeptr
-  val dlsym&#39; : lib * string -&amp;gt; unit ptr
-  val dlclose : lib -&amp;gt; unit
-end
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;val lib = dlopen(&amp;quot;libawsome.so&amp;quot;)&lt;/code&gt; でライブラリのオープン、 &lt;code&gt;dlsym(lib, &amp;quot;awm_function&amp;quot;): _import () -&amp;gt;unit&lt;/code&gt; で読み込みです。&lt;/p&gt;
-
-&lt;p&gt;これでインポートする関数は必要になった時に読み込んで欲しいのですがトップレベルで &lt;code&gt;val&lt;/code&gt; でバインドすると即読み込まれてしまいます。その辺を上手くやるテクニックがSML#のソースにありました。MySQLのバインディングの部分です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;  fun lazy f =
-      let
-        val r = ref NONE
-      in
-        fn () =&amp;gt;
-           case !r of
-             SOME x =&amp;gt; x
-           | NONE =&amp;gt;
-             let val x = f ()
-             in r := SOME x; x
-             end
-      end
-
-  val lib =
-      lazy (fn _ =&amp;gt;
-               DynamicLink.dlopen
-                 (case OS.Process.getEnv &amp;quot;SMLSHARP_LIBMYSQLCLIENT&amp;quot; of
-                    NONE =&amp;gt; &amp;quot;libmysqlclient.16.&amp;quot; ^ SMLSharp_Config.DLLEXT ()
-                  | SOME x =&amp;gt; x))
-
-  fun find s = DynamicLink.dlsym(lib (), s)
-  val mysql_init =
-      lazy (fn _ =&amp;gt; find &amp;quot;mysql_init&amp;quot;
-                    : _import (MYSQL) -&amp;gt; MYSQL)
-
-
-...
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;遅延評価してますね。これ。呼び出す時は &lt;code&gt;mysql_init () (mysql)&lt;/code&gt; みたいに一旦lazyを剥がさないといけないので注意です。&lt;/p&gt;
-
-&lt;h1 id=&#34;問題とか&#34;&gt;問題とか&lt;/h1&gt;
-
-&lt;h2 id=&#34;cの仕様&#34;&gt;Cの仕様&lt;/h2&gt;
-
-&lt;p&gt;確かCの仕様上構造体のメモリ上の表現にはメンバ以外のものも置いていいことになっていた筈です。
-上の方法では変なコンパイラでコンパイルしたコードだと動きそうにないですね。GCCやClangは大丈夫な筈。&lt;/p&gt;
-
-&lt;p&gt;そもそもSML#自体GCCとABI互換なコンパイラでコンパイルしたものじゃないとリンク出来なそうな気がするので杞憂ですかね。&lt;/p&gt;
-
-&lt;h2 id=&#34;メモリ確保&#34;&gt;メモリ確保&lt;/h2&gt;
-
-&lt;p&gt;Cの関数から構造体のポインタが返ってくるケースだと良いんですが自分で構造体を用意してCの関数に渡すケースだとメモリの確保が問題になります。現状、&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;struct header
-*prepare_headers(int n)
-{
-  return malloc(n * sizeof(struct header));
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;みたいなヘルパ関数を用意して凌いでますが欲しい構造体毎に書かないといけないのであまり嬉しくないです。 &lt;code&gt;sizeof&lt;/code&gt; をSML#側でとれれば単に &lt;code&gt;malloc&lt;/code&gt; をバインドするだけで済むのに。
-もう少し欲を言うと &lt;code&gt;malloc&lt;/code&gt; したらGCから外れそうな気がするので明示的に &lt;code&gt;free&lt;/code&gt; する必要がありそうです。GCに載るメモリ確保関数も欲しいですね。
-さらに欲を言うとスタックアロケートする版のメモリ確保関数も欲しい。もしかしたら &lt;code&gt;alloca&lt;/code&gt; で大丈夫なんでしょうか。&lt;/p&gt;
-
-&lt;h2 id=&#34;define&#34;&gt;&lt;code&gt;#define&lt;/code&gt;&lt;/h2&gt;
-
-&lt;p&gt;ヘッダファイル内で定数を &lt;code&gt;#define&lt;/code&gt; してあることが多々あります。それらは地道に手書きでSML#側に持ってくることになりますが気になるのが互換性の問題。
-特にOSのヘッダファイルには名前は同じだけどOS毎に値が異なるものが存在します。シグナルとか。OSで条件分岐するか理想的にはプリプロセッサのサポートがあればどうにかなりそうなんですけどねぇ。
-現状だとCで定数を返すgetter関数を書いてSML#側でインポートして…ってやればどうにか出来そうですけどやりたくないですね。&lt;/p&gt;
-
-&lt;h2 id=&#34;変数&#34;&gt;変数&lt;/h2&gt;
-
-&lt;p&gt;私はまだ遭遇してないのですがライブラリによってはグローバル変数にアクセスしないといけないものが存在します。これもgetterとsetterを書いて…ってやるとどうにか出来そうですがどうせなら変数のインポートも出来ると良いですよね。&lt;/p&gt;
-
-&lt;h2 id=&#34;まとめ&#34;&gt;まとめ&lt;/h2&gt;
-
-&lt;ul&gt;
-&lt;li&gt;SML#でCのバインドを書く時は少しテクニックが必要&lt;/li&gt;
-&lt;li&gt;SML#にはポインタを直接扱える関数もある&lt;/li&gt;
-&lt;li&gt;それでも機能が足りない時はCでヘルパ関数を書こう。&lt;/li&gt;
-&lt;li&gt;ダイナミックリンクライブラリも扱えるよ&lt;/li&gt;
-&lt;/ul&gt;
 </description>
     </item>
     
