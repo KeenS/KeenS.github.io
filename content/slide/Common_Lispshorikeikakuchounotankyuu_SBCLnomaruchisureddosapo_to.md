@@ -6,8 +6,8 @@ title: Common Lisp処理系拡張の探求 SBCLのマルチスレッドサポー
 ---
 
 <section data-markdown
-    data-separator="\n\n"
-    data-vertical="\n\n"
+    data-separator="\n===\n"
+    data-vertical="\n---\n"
     data-notes="^Note:">
 <script type="text/template">
 ### Common Lisp 処理系拡張の探求
@@ -17,7 +17,7 @@ SBCLのマルチスレッドサポート
 Lisp Meet Up #29
 
 <!-- .slide: class="center" -->
-
+===
 # About Me
 ---------
 ![κeenのアイコン](/images/icon.png) <!-- .element: style="position:absolute;right:0;z-index:-1" -->
@@ -27,7 +27,7 @@ Lisp Meet Up #29
  + Github: [KeenS](https://github.com/KeenS)
  + 渋谷のエンジニア
  + Lisp, ML, Shell Scriptあたりを書きます
-
+===
 # CLのマルチスレッド
 ----------------------------
 ## [bordeaux-threads](https://trac.common-lisp.net/bordeaux-threads/wiki/ApiDocumentation)
@@ -37,12 +37,12 @@ Lisp Meet Up #29
   + ロック
   + コンディションヴァリアル
 
-
+===
 # SBLCのマルチスレッド
 
 <!-- .slide: class="center" -->
 
-
+===
 # SBLCのマルチスレッド
 ----------------------------
 
@@ -59,11 +59,11 @@ Lisp Meet Up #29
 * ゲート<!-- .element: class="fragment highlight-red" data-fragment-index="1" -->
 * frlock<!-- .element: class="fragment highlight-red" data-fragment-index="1" -->
 
-
+===
 # アトミック操作
 
 <!-- .slide: class="center" -->
-
+===
 # アトミック操作
 ----------------
 複雑な動作は同じデータに並行に動かすと壊れうる
@@ -77,7 +77,7 @@ Lisp Meet Up #29
             |        | 
         [var = 0]<--[0]
 ```
-
+===
 # アトミック操作
 ----------------
 
@@ -86,7 +86,7 @@ Lisp Meet Up #29
 * `atomic-{pop, push, update}`
   + CASプロトコルを実装していればどこでも
 
-
+===
 # CASプロトコル
 ---------------
 * compare and swap
@@ -98,7 +98,7 @@ Lisp Meet Up #29
 * `(defun (cas foo) (old new))`
   + `cas`版の`setf`定義
 * 他にも`setf`相当の機能は揃ってる
-
+===
 # CASプロトコル
 ---------------
 
@@ -109,7 +109,7 @@ Lisp Meet Up #29
   (cas (symbol-value '*foo*) old new))
 ```
 
-
+===
 # キュー
 --------
 
@@ -119,7 +119,7 @@ Lisp Meet Up #29
 * `dequeue`が多値で、ブロックしない
   + 空なら第二値がnilになる
 
-
+===
 # メールボックス
 ---------------
 
@@ -131,14 +131,14 @@ Lisp Meet Up #29
 * `recieve-message-no-hangはdequeue`と同じ挙動
 * `recieve-pending-messages`もある
 
-
+===
 # ゲート
 --------
 
 * 複数のスレッドが1つのイベントを待つ時に使う
 * `wait-on-gate`, `open-gate`, `close-gate`が基本操作
 
-
+===
 ```
 [gate (closed)]  [T1] [T2] [T3]
      |            |    |    |
@@ -152,7 +152,7 @@ Lisp Meet Up #29
                        V    V
 ```
 
-
+===
 # frlock
 --------
 
@@ -162,7 +162,7 @@ Lisp Meet Up #29
 * 基本操作は`frlock-read`と`frlock-write`
 * 普通のlockと違って複数のReadが速くなる
 
-
+===
 # まとめ
 --------
 

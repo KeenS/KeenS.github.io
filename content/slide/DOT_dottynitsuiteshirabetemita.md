@@ -6,8 +6,8 @@ title: DOT/dottyについて調べてみた
 ---
 
 <section data-markdown
-    data-separator="\n\n"
-    data-vertical="\n\n"
+    data-separator="\n===\n"
+    data-vertical="\n---\n"
     data-notes="^Note:">
 <script type="text/template">
 
@@ -18,7 +18,7 @@ title: DOT/dottyについて調べてみた
 
 <!-- .slide: class="center" -->
 
-
+===
 # About Me
 ---------
 ![κeenのアイコン](/images/icon.png) <!-- .element: style="position:absolute;right:0;z-index:-1" -->
@@ -31,7 +31,7 @@ title: DOT/dottyについて調べてみた
  + Scala初心者
    + Scala歴1年未満&gt;&lt;
 
-
+===
 # Scalaコンパイラ
 ----------------
 
@@ -45,7 +45,7 @@ title: DOT/dottyについて調べてみた
 * そもそものScalaの設計に起因する点が多い
   + 抜本的変更が必要
 
-
+===
 # Scala基礎
 -----------
 
@@ -57,7 +57,7 @@ title: DOT/dottyについて調べてみた
   + 機能追加時の矛盾確認が楽
 * コア言語
 
-
+===
 # Featherlight Scala
 ---------------------
 
@@ -65,7 +65,7 @@ title: DOT/dottyについて調べてみた
 * 小さな言語
 * 元のScalaはこれをベースに議論されてきた
 
-
+===
 # 形式言語理論
 -------------
 
@@ -77,7 +77,7 @@ title: DOT/dottyについて調べてみた
   + 「型検査が必ず終了する」
 * 逆に、「このモデルだとこの機能は実現出来ない」とかも分かる
 
-
+===
 # Dependent Object Type
 ------
 
@@ -92,7 +92,7 @@ title: DOT/dottyについて調べてみた
 * サブタイピング
 
 
-
+===
 # About DOT
 ---------
 
@@ -104,7 +104,7 @@ title: DOT/dottyについて調べてみた
   + `A extends B` -> `A & B`
   + 合併型は主に型推論の結果に出てくる
 
-
+===
 ```scala
 package scala.collection.immutable trait List[+A] {
   def isEmpty: Boolean; def head: A; def tail: List[A]
@@ -119,7 +119,7 @@ object List {
 }
 ```
 
-
+===
 ```scala
 object scala_collection_immutable { sci =>
   trait List { self =>
@@ -144,7 +144,7 @@ object scala_collection_immutable { sci =>
 }
 ```
 
-
+===
 # dotty
 --------
 
@@ -156,7 +156,7 @@ object scala_collection_immutable { sci =>
 * `forSome` が消えた
   + DOTのお陰
 
-
+===
 # dotty
 --------
 
@@ -171,7 +171,7 @@ object scala_collection_immutable { sci =>
   + 中間木がなくなってGCにやさしい
 * 他にも一杯改善が
 
-
+===
 
 ```scala
 object DaysOfTheWeek{
@@ -189,7 +189,7 @@ object DaysOfTheWeek{
 }
 ```
 
-
+===
 # TASTY/Linker
 --------------
 
@@ -202,7 +202,7 @@ object DaysOfTheWeek{
 * Scala/Scala.js/Scala Native共通プラットフォーム化への布石？
 * どうやらclassファイルにバイトコードとTASTYを埋め込む??
 
-
+===
 # まとめ
 --------
 
@@ -211,7 +211,7 @@ object DaysOfTheWeek{
 * dottyで色々改善されるよ
 * ついでにTASTY/Linkerについて話したよ
 
-
+===
 # 参考1
 ------
 
@@ -221,7 +221,7 @@ object DaysOfTheWeek{
 * [Why is the Scala compiler so slow? - Quora](https://www.quora.com/Why-is-the-Scala-compiler-so-slow)
 * [performance - Java compile speed vs Scala compile speed - Stack Overflow](http://stackoverflow.com/questions/3490383/java-compile-speed-vs-scala-compile-speed/3612212#3612212)
 
-
+===
 # 参考2
 -------
 

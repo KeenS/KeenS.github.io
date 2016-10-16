@@ -6,15 +6,15 @@ title: Method Drawでお手軽LGTM生成
 ---
 
 <section data-markdown
-    data-separator="\n\n"
-    data-vertical="\n\n"
+    data-separator="\n===\n"
+    data-vertical="\n---\n"
     data-notes="^Note:">
 <script type="text/template">
 # Method Drawでお手軽LGTM生成
 ----------------------
 
 <!-- .slide: class="center" -->
-
+===
 # About Me
 ---------
 ![κeenのアイコン](/images/icon.png) <!-- .element: style="position:absolute;right:0;z-index:-1" -->
@@ -25,7 +25,7 @@ title: Method Drawでお手軽LGTM生成
  + サイバーエージェントのエンジニア
  + Lisp, ML, Shell Scriptあたりを書きます
 
-
+===
 # Method Draw
 -------------
 
@@ -33,11 +33,11 @@ title: Method Drawでお手軽LGTM生成
 * オープンソース
 * [editor.method.ac](http://editor.method.ac/)
 
-
+===
 # デモ
 
 <!-- .slide: class="center" -->
-
+===
 # 以上
 ------
 Have a happy hacking life

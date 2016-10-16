@@ -6,15 +6,15 @@ title: ISUCONこれまでの流れ
 ---
 
 <section data-markdown
-    data-separator="\n\n"
-    data-vertical="\n\n"
+    data-separator="\n===\n"
+    data-vertical="\n---\n"
     data-notes="^Note:">
 <script type="text/template">
 # ISUCONこれまでの流れ
 ----------------------
 雑に書き殴った
 <!-- .slide: class="center" -->
-
+===
 # About Me
 ---------
 ![κeenのアイコン](/images/icon.png) <!-- .element: style="position:absolute;right:0;z-index:-1" -->
@@ -23,7 +23,7 @@ title: ISUCONこれまでの流れ
  + [@blackenedgold](https://twitter.com/blackenedgold)
  + Github: [KeenS](https://github.com/KeenS)
  + ISUCON3、 4の予選、本戦に出場（学生枠）
-
+===
 # ISUCON1 ブログ
 ---------------
 
@@ -32,7 +32,7 @@ title: ISUCONこれまでの流れ
 * ブログのサイドバーが重いやつ
 * 割と親切なルール
 
-
+===
 # ISUCON2 チケット予約サイト
 ---------------------------
 
@@ -42,7 +42,7 @@ title: ISUCONこれまでの流れ
 * JOINが3連になってる所があってみんなそこに引っ掛かったがボトルネックはそこじゃない
 * ちょっとルールが雑になった
 
-
+===
 # ISUCON3予選 スニペット投稿サイト
 --------------------------------
 * go node perl python ruby php
@@ -56,7 +56,7 @@ title: ISUCONこれまでの流れ
 * 学生枠が出来た
 * ベンチマーカが通れば何でもアリな風潮
 
-
+===
 # ISUCON3本戦 画像SNS
 --------------------
 * go node perl python ruby
@@ -72,7 +72,7 @@ title: ISUCONこれまでの流れ
 * 推測するな計測せよ
 * nodeで初期パスワードが間違っているトラブル
 
-
+===
 # ISUCON4予選 銀行
 --------------------------------------
 
@@ -88,7 +88,7 @@ title: ISUCONこれまでの流れ
 * Varnish潰し
 * アプリをC++で書き換えて予選突破したチームも出る
 
-
+===
 # ISUCON4本戦 動画広告
 ----------------
 
@@ -100,7 +100,7 @@ title: ISUCONこれまでの流れ
 * 実はCache-Controlをしたらスコアが爆上がり(上位2チームだけ気付いた)
 * 3位のチームは外向きと内向きの2枚のNICを使って団子状のスコアから頭1つだけ出た
 
-
+===
 #ISUCON5予選 ???
 ----------------
 * perl ruby node php python go java (scala)

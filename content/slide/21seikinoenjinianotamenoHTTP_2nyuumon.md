@@ -8,8 +8,8 @@ title: 21世紀のエンジニアのためのHTTP/2入門
 ---
 
 <section data-markdown
-    data-separator="\n\n"
-    data-vertical="\n\n"
+    data-separator="\n===\n"
+    data-vertical="\n---\n"
     data-notes="^Note:">
 <script type="text/template">
 # 21世紀のエンジニアのためのHTTP/2入門
@@ -17,7 +17,7 @@ title: 21世紀のエンジニアのためのHTTP/2入門
 サイバーエージェントFresh勉強会
 
 <!-- .slide: class="center" -->
-
+===
 # About Me
 ---------
 ![κeenのアイコン](/images/icon.png) <!-- .element: style="position:absolute;right:0;z-index:-1" -->
@@ -28,7 +28,7 @@ title: 21世紀のエンジニアのためのHTTP/2入門
  + 渋谷のエンジニア
  + Lisp, ML, Shell Scriptあたりを書きます
 
-
+===
 # HTTPについて
 -------------
 
@@ -36,7 +36,7 @@ title: 21世紀のエンジニアのためのHTTP/2入門
 * Human Readableなテキストベース
 * パフォーマンスはあまり考慮してない
 
-
+===
 # HTTP/1.1の限界
 ---------------
 
@@ -48,7 +48,7 @@ title: 21世紀のエンジニアのためのHTTP/2入門
   + コネクションが"ウォームアップ"する前に切れる
 * Head of Line Blocking
   + 遅いコンテンツをダウンロードしてると他のコンテンツがダウンロード出来なくなる
-
+===
 
 ```
 GET / HTTP/1.1
@@ -62,7 +62,7 @@ Connection: keep-alive
 Cache-Control: max-age=0
 ```
 
-
+===
 
 ```
 GET /js/todo.js HTTP/1.1
@@ -77,7 +77,7 @@ Connection: keep-alive
 Cache-Control: max-age=0
 ```
 
-
+===
 
 ```
 GET /style/main.css HTTP/1.1
@@ -91,7 +91,7 @@ Cookie: _ga=GA1.1.1989570020.1429589222; __utma=111872281.1989570020.1429589222.
 Connection: keep-alive
 Cache-Control: max-age=0
 ```
-
+===
 # 涙ぐましい努力
 --------------
 何度もリクエストをしないためにファイル数を減らす様々な努力がされてきた
@@ -104,11 +104,11 @@ Cache-Control: max-age=0
   + 複数の画像を1まとめにして表示する時に切り出して使う
 * 並列アクセス
   + ブラウザは最大6並列でサーバにアクセスする
-
+===
 # HTTP/2
 
 <!-- .slide: class="center" -->
-
+===
 # HTTP/2
 --------
 
@@ -118,7 +118,7 @@ Cache-Control: max-age=0
   + 新しいがある程度の信頼性もある
 * これから広まっていく
 
-
+===
 # HTTP/2の特徴
 -------------
 
@@ -131,7 +131,7 @@ Cache-Control: max-age=0
 * その他拡張も多数
 
 CF [HTTP/2の現状とこれから](http://www.slideshare.net/shigeki_ohtsu/http2-ohtsu-html5conf2015)
-
+===
 ## セマンティクスの保持
 --------------------
 
@@ -140,7 +140,7 @@ CF [HTTP/2の現状とこれから](http://www.slideshare.net/shigeki_ohtsu/http
   + アプリケーションはいじらずにフロント側が対応すればすぐに使える
 
 CF [nghttpx](http://qiita.com/tatsuhiro-t/items/99a2fd61d0fb16d7241b)
-
+===
 ## セマンティクスの保持
 --------------------
 
@@ -152,7 +152,7 @@ CF [nghttpx](http://qiita.com/tatsuhiro-t/items/99a2fd61d0fb16d7241b)
 +------+           +-------+             +---+
 ```
 
-
+===
 ## HPACK
 --------
 
@@ -162,7 +162,7 @@ CF [nghttpx](http://qiita.com/tatsuhiro-t/items/99a2fd61d0fb16d7241b)
   + Dynamic Table
 * それ以外もハフマン符号で圧縮可能
 
-
+===
 # HTTP/2の新機能
 ---------------
 
@@ -170,7 +170,7 @@ CF [nghttpx](http://qiita.com/tatsuhiro-t/items/99a2fd61d0fb16d7241b)
 * フロー制御
 * サーバープッシュ
 
-
+===
 # ストリーム
 ------------
 
@@ -180,7 +180,7 @@ CF [nghttpx](http://qiita.com/tatsuhiro-t/items/99a2fd61d0fb16d7241b)
   + さらに、1コネクション内で並列に複数のファイルをやりとり出来る
 * 短命なコネクションをいくつも張るよりずっと効率的
   + コネクションの性能をほぼフルで使い切れるようになった
-
+===
 # フロー制御
 ------------
 
@@ -194,7 +194,7 @@ CF [nghttpx](http://qiita.com/tatsuhiro-t/items/99a2fd61d0fb16d7241b)
 > * あるリクエストの処理にサーバがかかりっきりになり、他のリクエストをサーバが処理してくれなくなる。
 > * 高速なアップロードを行うクライアントと、低速な書き込みをしているサーバとの間に挟まったプロキシが、調整のためにデータを貯めているバッファが溢れる。
 
-
+===
 # プライオーリティ制御
 ---------------------
 
@@ -204,7 +204,7 @@ CF [nghttpx](http://qiita.com/tatsuhiro-t/items/99a2fd61d0fb16d7241b)
 * ブラウザが要求する時に指定出来るし、サーバが指定することも出来る
 
 CF [HTTP2 のプライオリティ制御 - Qiita](http://qiita.com/Jxck_/items/16a5a9e9983e9ea1129f)
-
+===
 # サーバープッシュ
 ----------------
 
@@ -217,7 +217,7 @@ CF [HTTP2 のプライオリティ制御 - Qiita](http://qiita.com/Jxck_/items/1
 
 CF [Service WorkerとHTTP/2が切り開く新しいWeb Pushの世界](http://d.hatena.ne.jp/jovi0608/20141204/1417697480)
 
-
+===
 # Availability
 --------------
 ## ブラウザ
@@ -227,7 +227,7 @@ CF [Service WorkerとHTTP/2が切り開く新しいWeb Pushの世界](http://d.h
 * Opera
 * IE 11 on Windows10
 
-
+===
 # Availability
 --------------
 ## Servers
@@ -236,7 +236,7 @@ CF [Service WorkerとHTTP/2が切り開く新しいWeb Pushの世界](http://d.h
 
 ![available servers according to http2 wiki](/images/http2_availability.png)
 
-
+===
 # Availability
 --------------
 ## Servers
@@ -245,7 +245,7 @@ CF [Service WorkerとHTTP/2が切り開く新しいWeb Pushの世界](http://d.h
   + H2OのようにHTTP/2を念頭に置いて書かれたものもある
 * アプリケーションサーバはそんなに多くない
   + 多分Rackなどの統一サーバインターフェースの問題
-
+===
 # Availability
 --------------
 少くともこういうことをすれば利用出来る
@@ -258,7 +258,7 @@ CF [Service WorkerとHTTP/2が切り開く新しいWeb Pushの世界](http://d.h
 +--------+             +---------+             +-----+
 ```
 
-
+===
 # まとめ
 --------
 

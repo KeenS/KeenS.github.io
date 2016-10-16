@@ -7,8 +7,8 @@ title: 高速な継続ライブラリに向けて
 ---
 
 <section data-markdown
-    data-separator="\n\n"
-    data-vertical="\n\n"
+    data-separator="\n===\n"
+    data-vertical="\n---\n"
     data-notes="^Note:">
 <script type="text/template">
 # 高速な継続ライブラリに向けて
@@ -16,7 +16,7 @@ title: 高速な継続ライブラリに向けて
 [継続勉強会](http://connpass.com/event/28150/) 2016-05-22
 <!-- .slide: class="center" -->
 
-
+===
 # About Me
 ---------
 ![κeenのアイコン](/images/icon.png) <!-- .element: style="position:absolute;right:0;z-index:-1" -->
@@ -26,7 +26,7 @@ title: 高速な継続ライブラリに向けて
  + Github: [KeenS](https://github.com/KeenS)
  + サイバーエージェントのエンジニア
  + Lisp, ML, Rust, Shell Scriptあたりを書きます
-
+===
 # 継続欲しい
 -----------
 
@@ -36,7 +36,7 @@ title: 高速な継続ライブラリに向けて
 * 現実には限定継続が欲しい
   +  Common Lispには大域脱出はある
 
-
+===
 # 限定継続を使う例
 -----------------
 ## 非同期プログラミング
@@ -44,7 +44,7 @@ title: 高速な継続ライブラリに向けて
 * コールバック形式だと厳しい
 * 限定継続を使うと綺麗に書き直せる
 
-
+===
 # 限定継続を使う例
 -----------------
 ## ゲームのコルーチン
@@ -52,7 +52,7 @@ title: 高速な継続ライブラリに向けて
 * 複数のオブジェクトを制御するのにコルーチンが欲しい
 * cf [コルーチンをCommon Lispで簡単に定義 - さくらんぼのlambda日記](http://lambdasakura.hatenablog.com/entry/20111026/1319598590)
 
-
+===
 # 限定継続を使う例
 -----------------
 ## do記法
@@ -61,7 +61,7 @@ title: 高速な継続ライブラリに向けて
 * [Operational monad in scheme](http://www.slideshare.net/yuichinishiwaki/operational-monad-in-scheme)
 
 
-
+===
 # Common Lispでの限定継続の実現
 ---------------
 
@@ -70,7 +70,7 @@ title: 高速な継続ライブラリに向けて
 3. ユーザレベルで(限定)継続ライブラリを作る
    + 柔軟なCommon Lispでは可能
 
-
+===
 # CPS変換
 ---------
 
@@ -81,7 +81,7 @@ title: 高速な継続ライブラリに向けて
   + 継続関係なしに中間形式として採用されることが多い
 * 関数定義/呼び出し以外にも諸々の構文とかに対しても定義が必要
 
-
+===
 # CPS変換
 ----------
 
@@ -93,13 +93,13 @@ Q. Common Lispだといくつの構文に対して定義が必要?
 4. 無数
 
 
-
+===
 # CPS変換
 ----------
 
 A. 26つ (スペシャルフォーム25+funcall)
 
-
+===
 # Common Lispのプリミティブ
 --------------------------
 
@@ -109,7 +109,7 @@ A. 26つ (スペシャルフォーム25+funcall)
 * この中に関数定義だとか例外だとかは入っていない
   + マクロで定義されている
 
-
+===
 # マクロ
 --------
 
@@ -117,7 +117,7 @@ A. 26つ (スペシャルフォーム25+funcall)
 * 新しい構文を作れる
 * CPS変換は?????
 
-
+===
 # `macroexpand`
 -------------
 
@@ -128,7 +128,7 @@ A. 26つ (スペシャルフォーム25+funcall)
   + 処理系の展開器に任せた方が間違いが少ない
 * これでマクロを排したプリミティブのCommon Lispの構文木にアクセス出来る
 
-
+===
 # cl-cont
 ---------
 
@@ -136,12 +136,12 @@ A. 26つ (スペシャルフォーム25+funcall)
 * デファクトというか唯一のライブラリ
 * [Common Lispで限定継続と遊ぶ | κeenのHappy Hacκing Blog](http://keens.github.io/slide/Common_Lispdegenteikeizokutoasobu_/)
 
-
+===
 <blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">「shift/resetがわからない時にあげる声」</p>&mdash; かず(原材料に小麦粉を含む) (@kazzna) <a href="https://twitter.com/kazzna/status/674026894602309632">2015年12月8日</a></blockquote>
 
 <!-- .slide: class="center" -->
 
-
+===
 # cl-contの使用例
 
 ``` common-lisp
@@ -151,7 +151,7 @@ A. 26つ (スペシャルフォーム25+funcall)
           (funcall k 2)))))
 ```
 
-
+===
 # cl-contの使用例
 
 ``` common-lisp
@@ -174,7 +174,7 @@ A. 26つ (スペシャルフォーム25+funcall)
 ```
 
 
-
+===
 # cl-contへの不満
 -----------------
 
@@ -183,12 +183,12 @@ A. 26つ (スペシャルフォーム25+funcall)
   + 多分コンパイラと相性が悪い
 * lambda禁止おじさんと分かりあえる
 
-
+===
 # cl-fast-cont
 
 
 <!-- .slide: class="center" -->
-
+===
 # cl-fast-cont
 --------------
 
@@ -196,11 +196,11 @@ A. 26つ (スペシャルフォーム25+funcall)
 * とりあえずレポジトリ作っただけ
 * 完成させたい…
 
-
+===
 # アプローチ1
 <!-- .slide: class="center" -->
 
-
+===
 # SSA使う
 ---------
 
@@ -208,7 +208,7 @@ A. 26つ (スペシャルフォーム25+funcall)
 * だけどSSAだったらlambda出てこない
 * Common Lispならgotoあるしいけるんじゃね？
 
-
+===
 ```common-lisp
 (let (x y z)
  (tagbody
@@ -219,7 +219,7 @@ A. 26つ (スペシャルフォーム25+funcall)
 ```
 
 
-
+===
 # 問題
 -------
 
@@ -230,35 +230,35 @@ A. 26つ (スペシャルフォーム25+funcall)
 * そもそもtagbodyそこまで柔軟じゃなかった
 * 関数が消し飛ぶ
 
-
+===
 # アプローチ2
 <!-- .slide: class="center" -->
 
-
+===
 # SSA+CPS
 ---------
 
 * SSAとCPSを組み合わせる
 * 基本はSSA
 * スタックを使う/継続が必要な所でだけCPS
-
+===
 # 問題
 -------
 
 * SSAの部分意味なくね？
 * そもそも継続を取り出すのが目的なので関係ない所で変換しても意味がない
 
-
+===
 # アプローチ3
 <!-- .slide: class="center" -->
-
+===
 # Selective CPS
 ----------------
 
 * 継続が必要な部分でのみ変換
 * 2 pass transformation
 * [A Selective CPS Transformation](http://www.sciencedirect.com/science/article/pii/S1571066104809691)
-
+===
 
 ```common-lisp
 (with-call/cc
@@ -270,7 +270,7 @@ A. 26つ (スペシャルフォーム25+funcall)
 
 ```
 
-
+===
 
 ```common-lisp
 (with-call/cc
@@ -282,7 +282,7 @@ A. 26つ (スペシャルフォーム25+funcall)
 
 ```
 
-
+===
 
 ```common-lisp
 (with-call/cc
@@ -294,7 +294,7 @@ A. 26つ (スペシャルフォーム25+funcall)
 
 ```
 
-
+===
 
 ```common-lisp
 (with-call/cc
@@ -306,7 +306,7 @@ A. 26つ (スペシャルフォーム25+funcall)
 
 ```
 
-
+===
 # そもそもCommon Lispのつらい話
 -------------------------------
 * セマンティクスが動的
@@ -316,7 +316,7 @@ A. 26つ (スペシャルフォーム25+funcall)
 * multiple valueが面倒
 
 
-
+===
 # ダイナミック!!
 ----------------
 
@@ -332,7 +332,7 @@ A. 26つ (スペシャルフォーム25+funcall)
            (funcall k 2)))))))
 ```
 
-
+===
 # スペシャル変数
 ---------------
 
@@ -340,15 +340,15 @@ A. 26つ (スペシャルフォーム25+funcall)
 * CPS変換すると継続の全てがスコープ下に入る
   + 関数の呼び出し関係が木だったのが線型になる
   + ダイナミックスコープだと困る
-
+===
 ![CPS前のAST](/images/cps/pre-cps.png)
 
 
-
+===
 ![CPS後のAST](/images/cps/post-cps.png)
 
 
-
+===
 ```
 (defvar *x* 1)
 (with-call/cc
@@ -360,7 +360,7 @@ A. 26つ (スペシャルフォーム25+funcall)
 
 ```
 
-
+===
 
 ```
 (defvar *x* 1)
@@ -374,7 +374,7 @@ A. 26つ (スペシャルフォーム25+funcall)
           (format t "~a~%" *x*))))))) ; *x* = 1
 ```
 
-
+===
 # 多値
 ------
 
@@ -384,7 +384,7 @@ A. 26つ (スペシャルフォーム25+funcall)
   1. 本当は多値を返してるのに変換で無視された
   2. 意図的に無視してるのに変換で加えられた
 
-
+===
 # 関数定義と引数の数
 -----------------
 
@@ -396,14 +396,14 @@ A. 26つ (スペシャルフォーム25+funcall)
 
 -> まだ決めきれてない
 
-
+===
 # パフォーマンス
 ----------------
 
 
 <!-- .slide: class="center" -->
 
-
+===
 # フィボナッチ数列
 -----------------
 * とりえあずのフィボナッチ数列で計測
@@ -412,7 +412,7 @@ A. 26つ (スペシャルフォーム25+funcall)
 * Selective CPSは何もしない=普通の定義と同じ
 
 
-
+===
 ```common-lisp
 (defun fib (n)
   (if (<= n 1)
@@ -427,7 +427,7 @@ A. 26つ (スペシャルフォーム25+funcall)
       (+ (fib-cont (- n 1)) (fib-cont (- n 2)))))
 ```
 
-
+===
 # Selective
 
 
@@ -440,7 +440,7 @@ Evaluation took:
   0 bytes consed
 ```
 
-
+===
 # Full
 
 ```
@@ -452,7 +452,7 @@ Evaluation took:
   53,149,416,888 processor cycles
   22,922,853,904 bytes consed
 ```
-
+===
 # コルーチン
 ------------
 
@@ -460,7 +460,7 @@ Evaluation took:
 * 割と実用しそうな例
 * Selective CPSは少しだけラムダが少ない
 
-
+===
 # Selective
 
 ``` common-lisp
@@ -479,7 +479,7 @@ Evaluation took:
 ```
 
 
-
+===
 # full
 
 ```common-lisp
@@ -496,7 +496,7 @@ Evaluation took:
   (setq c (funcall c))
   (write-line "in main thread 3"))
 ```
-
+===
 # Selective
 
 ```
@@ -509,7 +509,7 @@ Evaluation took:
 
 ```
 
-
+===
 # full
 
 ```
@@ -521,7 +521,7 @@ Evaluation took:
   0 bytes consed
 ```
 
-
+===
 # まとめ
 --------
 

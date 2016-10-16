@@ -8,8 +8,8 @@ title: Socket on SML#
 ---
 
 <section data-markdown
-    data-separator="\n\n"
-    data-vertical="\n\n"
+    data-separator="\n===\n"
+    data-vertical="\n---\n"
     data-notes="^Note:">
 <script type="text/template">
 # Socket on SML&#x23;
@@ -17,7 +17,7 @@ title: Socket on SML#
 [ML勉強会](http://connpass.com/event/32752/) 2016-07-09
 
 <!-- .slide: class="center" -->
-
+===
 # About Me
 ---------
 ![κeenのアイコン](/images/icon.png) <!-- .element: style="position:absolute;right:0;z-index:-1" -->
@@ -28,7 +28,7 @@ title: Socket on SML#
  + サイバーエージェントのエンジニア
  + Lisp, ML, Rust, Shell Scriptあたりを書きます
 
-
+===
 # HTTP on SML&#x23;?
 -------------
 
@@ -40,7 +40,7 @@ title: Socket on SML#
 * SML#でHTTPの機運
 * しかしHTTPサポートはないので自前実装するしかない
 
-
+===
 # Socket on SML&#x23;?
 ------------------
 
@@ -50,7 +50,7 @@ title: Socket on SML#
 * FFIあるしユーザランドで実装するか
 * [KeenS/SmlSharpSocketSupport](https://github.com/KeenS/SmlSharpSocketSupport)
 
-
+===
 # TCP/IP、ソケットなど
 ---------------------------
 
@@ -63,7 +63,7 @@ title: Socket on SML#
   + TCPとUDP
   + IP v4/v6アドレスで通信
 
-
+===
 # 主要なstructure
 -----------------
 
@@ -72,7 +72,7 @@ title: Socket on SML#
 * INetSock
 * (UnixSock)
 
-
+===
 # [NetHostDB](http://sml-family.org/Basis/net-host-db.html#SIG:NET_HOST_DB)
 -----------
 
@@ -82,7 +82,7 @@ title: Socket on SML#
   + 非推奨どころか脆弱性もあったり CF [glibc の脆弱性 CVE-2015-0235（通称：GHOST）についてまとめてみた - piyolog](http://d.hatena.ne.jp/Kango/20150128/1422409960)
 * 新しいAPIで実装するのが面倒
 
-
+===
 # [Socket](http://sml-family.org/Basis/socket.html#SIG:SOCKET.accept:VAL:SPEC)
 ---------
 
@@ -91,14 +91,14 @@ title: Socket on SML#
 * typeには依る
   + stream socketとdgramソケットで送受信関数が別
 
-
+===
 # Socket.AF
 ------------
 
 * ソケットのアドレスファミリ関連
 * 仕様では具体的なファミリを定義しない
 
-
+===
 # Socket.SOCK
 -------------
 
@@ -107,14 +107,14 @@ title: Socket on SML#
 * さらにstreamにはactive/passiveがある
 * それらの型。
 
-
+===
 # [INetSock](http://sml-family.org/Basis/inet-sock.html#INetSock:STR:SPEC)
 --------------
 
 * IP - TCP/UDPのソケットを作る/操作するやつ。
 * ここの関数はインターネットドメインソケットしか受け付けない
 
-
+===
 # Socketについて整理
 ----------------
 
@@ -124,7 +124,7 @@ title: Socket on SML#
 * streamにはさらにactiveとpassiveがある
 * 特定のaf, 特定のtypeしか受け付けない関数がある
 
-
+===
 # Socketについて整理
 ----------------
 
@@ -140,12 +140,12 @@ title: Socket on SML#
    (AF_INET/INET6)   [UDP(dgram)]
 ```
 
-
+===
 <span style="font-size:500%;">幽霊型</sapn>
 
 <!-- .slide: class="center" -->
 
-
+===
 # Socketの幽霊型
 ---------------
 
@@ -157,7 +157,7 @@ type 'mode stream
 type passive
 type active
 ```
-
+===
 # サーバのSocket操作(stream)
 ---------------------------
 
@@ -169,7 +169,7 @@ type active
   + passive streamしか受け付けない
   + passive streamがactive streamになる
   + 一度acceptしたsockはlisten/accept出来ない
-
+===
 # データの送受信
 ---------------
 
@@ -177,7 +177,7 @@ type active
 * それぞれArraySlice/VectorSliceの制御フラグ有り/無しがある
   + 実装がまあまあ面倒
 
-
+===
 # SML# でのバインディング
 ------------------------
 
@@ -190,12 +190,12 @@ type active
  + C側で定数関数でラップしてSML#で呼び出した値を束縛
 * その他 - straitforward
 
-
+===
 # 非同期IO
 
 <!-- .slide: class="center" -->
 
-
+===
 # 非同期IO
 ----------
 
@@ -206,7 +206,7 @@ type active
 * 読み書き出来ない時にやったらブロック(CPU時間の無駄遣い)する
 * 「読み書き出来るならする」/「読み書き出来るクライアントを選ぶ」APIが必要
 
-
+===
 # 非同期API
 ----------
 
@@ -215,8 +215,8 @@ type active
 * poll - selectと同じような（ちょっと速い）API。SocketではなくIOにある。
   + pollがあるのに何故Socketにselectがあるの…。
 
-
-
+===
+===
 # 非同期APIのFFI
 ----------------
 
@@ -224,7 +224,7 @@ type active
 * \*NB - O_NONBLOCKを付けたsend/recv。
 * poll - SML#にある
 
-
+===
 # 非同期HTTPサーバ概略
 ---------------------
 
@@ -247,11 +247,11 @@ create_thread(n, fn i => let
 end)
 ```
 
-
+===
 # Cバインディングの憂鬱
 
 <!-- .slide: class="center" -->
-
+===
 # importとメモリ割り当て
 -----------------------
 
@@ -263,7 +263,7 @@ end)
 * SML#からコールバックを渡してCのスタックの変数をインポート
 * CF https://github.com/KeenS/SmlSharpSocketSupport/blob/master/lib/net_host_db.c#L74
 
-
+===
 # メモリ管理
 ------------
 
@@ -276,7 +276,7 @@ end)
 * SML#側でどうにかしてもらわないとダメ？
   + パンドラの壷(sml_alloc)使う？
 
-
+===
 # 型隠蔽
 -------
 
@@ -285,7 +285,7 @@ end)
 * しかし型隠蔽のせいでintをioDescに変換出来ない
 * 手詰まり
 
-
+===
 # まとめ
 --------
 

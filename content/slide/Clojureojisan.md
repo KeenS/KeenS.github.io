@@ -6,8 +6,8 @@ title: Clojureおじさん
 ---
 
 <section data-markdown
-    data-separator="\n\n"
-    data-vertical="\n\n"
+    data-separator="\n===\n"
+    data-vertical="\n---\n"
     data-notes="^Note:">
 <script type="text/template">
 # Clojureおじさん
@@ -16,7 +16,7 @@ title: Clojureおじさん
 第5回 Fresh勉強会
 
 <!-- .slide: class="center" -->
-
+===
 # About Me
 ---------
 ![κeenのアイコン](/images/icon.png) <!-- .element: style="position:absolute;right:0;z-index:-1" -->
@@ -26,7 +26,7 @@ title: Clojureおじさん
  + Github: [KeenS](https://github.com/KeenS)
  + 渋谷のエンジニア
  + Lisp, ML, Shell Scriptあたりを書きます
-
+===
 # Clojure 
 ---------
 
@@ -38,7 +38,7 @@ title: Clojureおじさん
 * 遅延シーケンス
 * STMがあり、並列処理に強い
 
-
+===
 # Hello World
 -------------
 
@@ -46,7 +46,7 @@ title: Clojureおじさん
 (println "Hello, World")
 ```
 <!-- .slide: class="center" -->
-
+===
 # JVM
 ------
 ## Javaのコードをシームレスに呼べる
@@ -55,7 +55,7 @@ title: Clojureおじさん
 * `Class.staticField` ではなく `Class/staticField`
 * `obj.method1().method2()` ではなく `(.. obj method1 method2)`
 
-
+===
 # JVM
 -----
 
@@ -68,7 +68,7 @@ title: Clojureおじさん
 ```
 <!-- .slide: class="center" -->
 
-
+===
 # Immutable
 -----------
 
@@ -79,7 +79,7 @@ title: Clojureおじさん
   + それらはトランザクション内でのみ変更可能
   + 不整合が起きない
 
-
+===
 # 函数型
 --------
 
@@ -88,7 +88,7 @@ title: Clojureおじさん
 ```
 <!-- .slide: class="center" -->
 
-
+===
 # 遅延シーケンス
 ---------------
 
@@ -98,7 +98,7 @@ title: Clojureおじさん
 ```
 <!-- .slide: class="center" -->
 
-
+===
 # リスト内包表記
 ----------------
 
@@ -109,7 +109,7 @@ title: Clojureおじさん
 
 <!-- .slide: class="center" -->
 
-
+===
 #並列処理に強い
 ---------------
 
@@ -122,14 +122,14 @@ title: Clojureおじさん
                    (println 'foo))))
 ```
 
-
+===
 #並列処理に強い
 ---------------
 ## core.async
 
 * goroutineとgochannelが使える
 
-
+===
 ## core.async
 -------------
 
@@ -150,7 +150,7 @@ title: Clojureおじさん
 ```
 <!-- .slide: class="center" -->
 
-
+===
 # 今回紹介し切れなかったの
 -------------------------
 
@@ -160,7 +160,7 @@ title: Clojureおじさん
 * ClojureScript/Om
 * Typed Clojure
 
-
+===
 # まとめ
 --------
 
@@ -168,7 +168,7 @@ title: Clojureおじさん
 * Clojureを使えばPythonのリスト内包表記が使える
 * Clojureを使えばGoのgoroutine/gochannelが使える
 
-
+===
 
 <span style="font-size:200%;">Why not start Clojure?</span>
 <!-- .slide: class="center" -->

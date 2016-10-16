@@ -6,8 +6,8 @@ title: HAMT ~ イミュータブルで高速なハッシュマップ ~
 ---
 
 <section data-markdown
-    data-separator="\n\n"
-    data-vertical="\n\n"
+    data-separator="\n===\n"
+    data-vertical="\n---\n"
     data-notes="^Note:">
 <script type="text/template">
 # <span style="font-size: 90%">Hash-Array Mapped Trie</span>
@@ -16,7 +16,7 @@ title: HAMT ~ イミュータブルで高速なハッシュマップ ~
 サイバーエージェント AdTech Scala Meetup LT大会
 
 <!-- .slide: class="center" -->
-
+===
 # About Me
 ---------
 ![κeenのアイコン](/images/icon.png) <!-- .element: style="position:absolute;right:0;z-index:-1" -->
@@ -27,7 +27,7 @@ title: HAMT ~ イミュータブルで高速なハッシュマップ ~
  + 基盤開発グループの新卒
  + Lisp, ML, Rust, Shell Scriptあたりを書きます
 
-
+===
 # <span style="font-size: 60%">scala.collections.immutable.HashMap</span>
 -------------------------------------
 
@@ -36,7 +36,7 @@ title: HAMT ~ イミュータブルで高速なハッシュマップ ~
 * キー-バリューペア
 * 値を追加する度に新たなハッシュマップを作る <!-- .element: class="fragment grow" data-fragment-index="1" -->
 
-
+===
 # HashMap
 ----------------
 
@@ -46,7 +46,7 @@ title: HAMT ~ イミュータブルで高速なハッシュマップ ~
 * 普通はミュータブルに使う
   + 大量のメモリをアロケートするのでコピーはつらい
 
-
+===
 # メモリ効率悪そう？
 -------------------------
 
@@ -61,7 +61,7 @@ val hash = HashMap.empty + (3 -> 1)
 //      +-+
 ```
 
-
+===
 # メモリ効率悪そう？
 -------------------------
 
@@ -84,7 +84,7 @@ val hash2 = hash + (2 -> 2)
 //      +-+     +-+
 ```
 
-
+===
 # メモリ効率的データ構造?
 ----------------------------
 ## TreeMap
@@ -96,7 +96,7 @@ val hash2 = hash + (2 -> 2)
 * 全順序関数が定義出来れば何でもキーに出来る
 * キーが複数回比較される問題がある
 
-
+===
 # キー同士の比較
 ---------------
 長いキー同士の比較がO(log(n))回走る可能性がある
@@ -113,7 +113,7 @@ treeMap.get("very long ... key1")
       "very long ...key1" -> "value1"
 ```
 
-
+===
 # HashMap vs TreeMap
 -----------------
 
@@ -124,7 +124,7 @@ treeMap.get("very long ... key1")
 <tr><th>キーの比較</th><td class="fragment highlight-red"  data-fragment-index="1">定数回</td><td>`O(log(n))`回</td></tr>
 <tr><th>キーの要件</th><td class="fragment highlight-red"  data-fragment-index="1">Hash関数が定義されている</td><td>全順序関数が定義されている</td></tr>
 </table>
-
+===
 # <span style="font-size: 90%">Hash-Array Mapped Trie</span>
 ------------------------
 
@@ -133,13 +133,13 @@ treeMap.get("very long ... key1")
 * キーの比較は定数回
 * Hash関数が定義されていればキーに出来る
 
-
+===
 # 動作
 ------
 
 * ざっくり言うと、「Hashして分割してトライ」
 
-
+===
 # 動作
 ------
 ## Hashする
@@ -151,7 +151,7 @@ hash("key")
 // => 0b10101101010101001010110101010100
 ```
 
-
+===
 # 動作
 ------
 ## 分割する
@@ -164,7 +164,7 @@ hash("key")
 11111 00010 10110 10101 01001 01011 01010 10100
 ```
 
-
+===
 # 動作
 ------
 ## トライ
@@ -172,7 +172,7 @@ hash("key")
 * 32分のトライ木になる
 * トライ木の実装は32bitのbitmapを使ったArray Mapped Trieを使う
 
-
+===
 (図が分かりづらいというか不適切)
 
 ```
@@ -192,7 +192,7 @@ hash("key")
         ...
 ```
 
-
+===
 # 特徴
 ------
 
@@ -201,7 +201,7 @@ hash("key")
 * 木を辿る時の比較はhash値（の一部）なので高速
 * キーに全順序がなくてもハッシュ関数さえ定義されていれば木を構築出来る
 
-
+===
 # まとめ
 --------
 
@@ -210,7 +210,7 @@ hash("key")
   + ざっくりなので本物はもう少し工夫してる
   + prefix treeになってる
 
-
+===
 # 参考
 ------
 

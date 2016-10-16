@@ -6,15 +6,15 @@ title: SMLで函数型的正規表現マッチ
 ---
 
 <section data-markdown
-    data-separator="\n\n"
-    data-vertical="\n\n"
+    data-separator="\n===\n"
+    data-vertical="\n---\n"
     data-notes="^Note:">
 <script type="text/template">
 # SMLで函数型的正規表現マッチ
 ----------------------
 
 <!-- .slide: class="center" -->
-
+===
 # About Me
 ---------
 ![κeenのアイコン](/images/icon.png) <!-- .element: style="position:absolute;right:0;z-index:-1" -->
@@ -25,13 +25,13 @@ title: SMLで函数型的正規表現マッチ
  + サイバーエージェントのエンジニア
  + Lisp, ML, Rust, Shell Scriptあたりを書きます
 
-
+===
 # 元ネタ
 --------
 [関数型的正規表現マッチ | Preferred Research](https://research.preferred.jp/2010/11/regexp-play/)
 
 <!-- .slide: class="center" -->
-
+===
 # 正規表現
 ----------
 
@@ -43,7 +43,7 @@ title: SMLで函数型的正規表現マッチ
 4. 正規表現のAND結合
 5. 正規表現の繰り返し
 
-
+===
 # SMLで表してみる
 -----------------
 
@@ -55,12 +55,12 @@ datatype  reg
   | And of reg * reg
   | Rep of reg
 ```
-
+===
 # 本当に大丈夫？
 
 <!-- .slide: class="center" -->
 
-
+===
 # `/(a|b)*c/`
 -----------
 
@@ -68,7 +68,7 @@ datatype  reg
 And(Rep(Or(Sym "a", Sym "b")), Sym "c")
 ```
 
-
+===
 # `/https?:\/\/[a-z]*/`
 -----------
 
@@ -77,12 +77,12 @@ val a_z = Or(Sym"a", Or(Sym "b", Or(Sym "d", ...)))
 And(Sym "http", And(Or(Sym "s", Empty), And(Sym "://", Rep a_z)))
 ```
 
-
+===
 # 実装してみる
 
 <!-- .slide: class="center" -->
 
-
+===
 # `Empty`, `Sym`, `Or`
 ----------------
 trivial
@@ -93,7 +93,7 @@ fun match Empty u = isEmpty u
   | match (Or(p, q)) u = match p u orelse match q u
 ```
 
-
+===
 # `And`
 --------
 
@@ -102,7 +102,7 @@ fun match Empty u = isEmpty u
 * `u` から一部取ってきて`p`にマッチするか確認
 * 残りの文字列が`q`にマッチするか確認
 
-
+===
 # `And`
 --------
 `match (And (Sym "a", Sym "b")) "abd"` の時
@@ -113,7 +113,7 @@ fun match Empty u = isEmpty u
 * (Sym "a"と"abd")、(Sym "b"と"")
 
 
-
+===
 # `And`
 --------
 
@@ -126,7 +126,7 @@ fun match Empty u = isEmpty u
 
 `withSprits u f` は`u`を2分割するパターン全通りに対して`f`を呼び、最初に`true`になったものを返す。
 
-
+===
 # `Rep`
 -------
 
@@ -135,8 +135,8 @@ fun match Empty u = isEmpty u
 * `u` を任意の個数に分割し
 * その全てが`r`にマッチするか確認
 
-
-
+===
+===
 # `Rep`
 --------
 `match (Rep (Sym "a")) "abd"` の時
@@ -148,7 +148,7 @@ fun match Empty u = isEmpty u
 
 
 
-
+===
 # `Rep`
 --------
 
@@ -161,7 +161,7 @@ fun match Empty u = isEmpty u
 `withParts u f` は`u`を分割するパターン全通りに対して`f`を呼び、最初に`true`になったものを返す。
 
 
-
+===
 # チェック
 ----------
 
@@ -174,14 +174,14 @@ val it = true : bool
 val it = true : bool
 ```
 
-
+===
 # まとめ
 --------
 
 * 適当に実装したら正規表現も簡単に実装出来るよ
 * SMLで正規表現実装したよ
 
-
+===
 # 参考
 ------
 

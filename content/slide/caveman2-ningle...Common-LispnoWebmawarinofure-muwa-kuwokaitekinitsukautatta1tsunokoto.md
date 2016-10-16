@@ -6,8 +6,8 @@ title: caveman2、ningle…Common LispのWeb周りのフレームワークを快
 ---
 
 <section data-markdown
-    data-separator="\n\n"
-    data-vertical="\n\n"
+    data-separator="\n===\n"
+    data-vertical="\n---\n"
     data-notes="^Note:">
 <script type="text/template">
 # caveman2、ningle、datafly…Common LispのWeb周りのフレームワークを快適に使うためのたった1つのコト
@@ -16,11 +16,11 @@ Clack Meet Up #1
 2015-03-05 @サムライト
 
 <!-- .slide: class="center" -->
-
+===
 <span style="font-size:300%">ずっと俺のターン</span>
 
 <!-- .slide: class="center" -->
-
+===
 # 問題
 ------
 Common Lispは case
@@ -29,7 +29,7 @@ Common Lispは case
 * Insensitive <!--.element: class="fragment shrink" data-fragment-index="1" -->
 
 どっち?
-
+===
 # 問題
 -------
 
@@ -39,7 +39,7 @@ Common Lispは case
 (eql? 'CaseInsensitive 'caseinsensitive) ;=> t
 ```
 
-
+===
 # 問題
 -------
 
@@ -48,7 +48,7 @@ Common Lispは case
 (eql? '|CaseSensitive| '|casesensitive|) ;=> nil
 ```
 
-
+===
 # Caveman2
 ---------
 
@@ -57,7 +57,7 @@ Common Lispは case
 (defun say-hello (&key (|name| "Guest"))
   (format nil "Hello, ~A" |name|))
 ```
-
+===
 # Ningle
 --------
 
@@ -69,15 +69,15 @@ Common Lispは case
             "Authorized!"
             "Failed...Try again.")))
 ```
-
+===
 # 面倒…
 ----
 デフォルトでそのままだたっらいいのに
-
+===
 # 魔法の`readtable-case`
 
 <!-- .slide: class="center" -->
-
+===
 # 魔法の`readtable-case`
 -----------------------
 ```lisp
@@ -85,7 +85,7 @@ Common Lispは case
 ```
 を使えばOK  
 参考: [SBCLでclispとかallegroのmodern mode的なことをする - wasabizの日記](http://wasabiz.hatenablog.com/entry/20120929/1348889601)
-
+===
 # 例
 ----
 ```lisp
@@ -96,7 +96,7 @@ CL-USER> (setf (readtable-case *readtable*) :invert)
 CL-USER> :username
 :username
 ```
-
+===
 # まとめ
 --------
 * `(setf (readtable-case *readtable*) :invert)`を使うと快適だよ

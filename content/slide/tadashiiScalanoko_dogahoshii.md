@@ -8,15 +8,15 @@ title: 正しいScalaのコードが欲しい
 ---
 
 <section data-markdown
-    data-separator="\n\n"
-    data-vertical="\n\n"
+    data-separator="\n===\n"
+    data-vertical="\n---\n"
     data-notes="^Note:">
 <script type="text/template">
 # 正しいScalaのコードが欲しい
 ----------------------
 
 <!-- .slide: class="center" -->
-
+===
 # About Me
 ---------
 ![κeenのアイコン](/images/icon.png) <!-- .element: style="position:absolute;right:0;z-index:-1" -->
@@ -27,11 +27,11 @@ title: 正しいScalaのコードが欲しい
  + 基盤開発グループ
  + Lisp, ML, Rust, Shell Scriptあたりを書きます
    + Scalaはあんまり
-
+===
 # Scalaを始めたばかりの頃の話
 
 <!-- .slide: class="center" -->
-
+===
 
 
 ``` scala
@@ -43,7 +43,7 @@ def revappend[A](
 }
 ```
 
-
+===
 
 ``` scala
 def length(xs: List[_]): Int = xs match {
@@ -52,7 +52,7 @@ def length(xs: List[_]): Int = xs match {
 }
 ```
 
-
+===
 
 ``` scala
 def append[A](
@@ -67,7 +67,7 @@ append(List(1, 2, 3), List(4, 5, 6))
 
 ```
 
-
+===
 # Scalaを始めたばかりの頃の話
 -----------------------------
 
@@ -77,7 +77,7 @@ append(List(1, 2, 3), List(4, 5, 6))
   + 実装ミス
 * 正しいScalaのコードが欲しい
 
-
+===
 # 正しさって？
 -------------
 
@@ -86,7 +86,7 @@ append(List(1, 2, 3), List(4, 5, 6))
 * バグのないコード？
   + テストが通るコード?
 
-
+===
 # 正しさって？
 -----------
 
@@ -94,7 +94,7 @@ append(List(1, 2, 3), List(4, 5, 6))
 * 数学なら証明されれば正しい
 * プログラムの証明????
 
-
+===
 # Isabelle
 ----------
 
@@ -103,7 +103,7 @@ append(List(1, 2, 3), List(4, 5, 6))
 * 結構昔からある
 * 関数型言語 + 高階論理
 
-
+===
 # コード
 --------
 
@@ -117,7 +117,7 @@ primrec app :: "'a list => 'a list => 'a list" (infixr "@" 65)
   "(x # xs) @ ys = x # (xs @ ys)"
 ```
 
-
+===
 
 # 証明
 ------
@@ -134,7 +134,7 @@ lemma app_assoc [simp]: "(xs @ ys) @ zs = xs @ (ys @ zs)"
   done
 ```
 
-
+===
 # Extract
 ---------
 
@@ -145,7 +145,7 @@ export_code append
    file "Example.scala"
 ```
 
-
+===
 # Scalaのコード
 ---------------
 
@@ -167,7 +167,7 @@ def append[A](x0: list[A], ys: list[A]): list[A] = (x0, ys) match {
 
 ```
 
-
+===
 # 余談
 -------
 
@@ -181,7 +181,7 @@ export_code append
 ```
 
 
-
+===
 # まとめ
 ---------
 

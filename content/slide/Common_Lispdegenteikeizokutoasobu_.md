@@ -9,8 +9,8 @@ title: Common Lispで限定継続と遊ぶ
 ---
 
 <section data-markdown
-    data-separator="\n\n"
-    data-vertical="\n\n"
+    data-separator="\n===\n"
+    data-vertical="\n---\n"
     data-notes="^Note:">
 <script type="text/template">
 # Common Lispで限定継続と遊ぶ
@@ -18,7 +18,7 @@ title: Common Lispで限定継続と遊ぶ
 [Lisp Meet Up #27](https://atnd.org/events/64988)
 
 <!-- .slide: class="center" -->
-
+===
 # About Me
 ---------
 ![κeenのアイコン](/images/icon.png) <!-- .element: style="position:absolute;right:0;z-index:-1" -->
@@ -29,7 +29,7 @@ title: Common Lispで限定継続と遊ぶ
  + 渋谷のエンジニア
  + Lisp, ML, Shell Scriptあたりを書きます
 
-
+===
 # Agenda
 --------
 
@@ -38,23 +38,23 @@ title: Common Lispで限定継続と遊ぶ
 2. 限定継続の使い方の話
 3. 限定継続の実装の話
 
-
+===
 # CL-CONTの紹介
 
 <!-- .slide: class="center" -->
-
+===
 # CL-CONT
 ---------
 
 * Common Lispの限定継続ライブラリ
 * 結構古くからあるっぽい
 * 割と色々なライブラリが使ってる
-
+===
 # CL-CONT
 ---------
 
 ![cl-cont dependers](/images/cl-cont-dependers.png)
-
+===
 # API
 -----
 
@@ -68,11 +68,11 @@ title: Common Lispで限定継続と遊ぶ
 
 ※後で説明するので意味が分からなくても問題ないです。
 
-
+===
 # 限定継続の話
 
 <!-- .slide: class="center" -->
-
+===
 # 継続とは
 ---------
 
@@ -80,7 +80,7 @@ title: Common Lispで限定継続と遊ぶ
 * 値が決定した後トップレベルに戻るまでの計算。
 * Schemeが一級市民として扱えることで有名
 * 値として取り出した時は0-1引数関数として振る舞う
-
+===
 # 継続とは
 ----------
 `foo`の継続は、`foo`を虫食いにしたものと思えば良い。
@@ -91,7 +91,7 @@ title: Common Lispで限定継続と遊ぶ
          :collect (if (evenp x)
                       (foo x))))
 ```
-
+===
 # 継続とは
 ----------
 `foo`の継続は、`foo`を虫食いにしたものと思えば良い。
@@ -102,7 +102,7 @@ title: Common Lispで限定継続と遊ぶ
          :collect (if (evenp x)
                       □)))
 ```
-
+===
 # 継続とは
 ----------
 あとはそれを関数にするだけ
@@ -115,7 +115,7 @@ title: Common Lispで限定継続と遊ぶ
                         k))))
 ```
 
-
+===
 # 限定継続とは
 ---------
 
@@ -125,7 +125,7 @@ title: Common Lispで限定継続と遊ぶ
 * 部分継続などの言い方もある
   + 英語もpart contとdelimited contで分かれる
 
-
+===
 # 限定継続とは
 -------------
 先の例を`loop`までの限定継続にすると
@@ -137,7 +137,7 @@ title: Common Lispで限定継続と遊ぶ
                       (foo x))))
 ```
 
-
+===
 # 限定継続とは
 -------------
 先の例を`loop`までの限定継続にすると
@@ -148,7 +148,7 @@ title: Common Lispで限定継続と遊ぶ
                         □))
 ```
 
-
+===
 # 限定継続とは
 -------------
 
@@ -158,7 +158,7 @@ title: Common Lispで限定継続と遊ぶ
      :collect (if (evenp x)
                   k)))
 ```
-
+===
 # 限定継続の挙動
 ---------------
 普通のやつ
@@ -177,7 +177,7 @@ title: Common Lispで限定継続と遊ぶ
 ```
 
 と等価
-
+===
 # 限定継続の挙動
 ---------------
 今度は継続を呼ばないでみる
@@ -194,7 +194,7 @@ title: Common Lispで限定継続と遊ぶ
 ```
 
 と等価
-
+===
 # 限定継続の挙動
 ---------------
 もうちょっと呼ばない例  
@@ -217,11 +217,11 @@ title: Common Lispで限定継続と遊ぶ
 
 と等価
 
-
+===
 # 限定継続の使い方の話
 
 <!-- .slide: class="center" -->
-
+===
 # 限定継続の使い方の話
 ---------------------
 
@@ -230,12 +230,12 @@ title: Common Lispで限定継続と遊ぶ
 * 非決定性計算
 * etc...
 
-
+===
 ## グリーンスレッド
 
 <!-- .slide: class="center" -->
 
-
+===
 ## グリーンスレッド
 -----------------
 
@@ -243,7 +243,7 @@ title: Common Lispで限定継続と遊ぶ
 * またの名を強調スレッド
 
 
-
+===
 ## グリーンスレッド
 -----------------
 ```lisp
@@ -260,7 +260,7 @@ title: Common Lispで限定継続と遊ぶ
   (setq c (funcall c))
   (write-line "in main thread 3"))
 ```
-
+===
 ## グリーンスレッド
 -----------------
 実行結果
@@ -275,11 +275,11 @@ in main thread 3
 
 ```
 
-
+===
 ## コールバックの書き換え
 
 <!-- .slide: class="center" -->
-
+===
 ## コールバックの書き換え
 ----------------------
 本当はこう書きたい
@@ -288,7 +288,7 @@ in main thread 3
 (with-event-loop
     (format t "Hello, ~a!~%" (async-read stream)))
 ```
-
+===
 ## コールバックの書き換え
 ----------------------
 しかしライブラリがコールバック関数を要求してくる
@@ -298,7 +298,7 @@ in main thread 3
     (async-read stream (lambda (line)
                          (format t "Hello, ~a!~%" line))))
 ```
-
+===
 ## コールバックの書き換え
 -----------------------
 コールバック = 限定継続（後述）なのでこうしてやれば良い。
@@ -310,18 +310,18 @@ in main thread 3
               (call/cc (lambda (k))
                        (async-read stream k)))))
 ```
-
+===
 ## 非決定性計算
 
 <!-- .slide: class="center" -->
-
+===
 ## 非決定性計算
 -------------
 ### ベースアイディア
 
 * 継続を関数として取り出した後同じ処理を何回も実行出来るんじゃね？
 
-
+===
 ## 非決定性計算
 -------------
 ### ベースアイディア
@@ -336,7 +336,7 @@ in main thread 3
         (funcall c 3)))
 ```
 
-
+===
 ## 非決定性計算
 -------------
 ### ベースアイディア
@@ -348,7 +348,7 @@ in main thread 3
             (+ 1 (* 2 (- 3 (let/cc k k))))))
   (mapcar c (list 1 2 3)))
 ```
-
+===
 ## 非決定性計算
 -------------
 ### ベースアイディア
@@ -363,7 +363,7 @@ in main thread 3
 (defun unit () nil)
 ```
 
-
+===
 ## 非決定性計算
 -------------
 使ってみる
@@ -379,11 +379,11 @@ in main thread 3
 ((1 . A) (1 . B) (1 . C) (2 . A) (2 . B) (2 . C) (3 . A) (3 . B) (3 . C))
 ```
 
-
+===
 # 限定継続の実装の話
 
 <!-- .slide: class="center" -->
-
+===
 # 限定継続の実装の話
 -------------------
 
@@ -392,11 +392,11 @@ in main thread 3
 * 継続は全ての式に暗黙に存在するのであった
   + 全ての式を継続を明示的に使うようにも出来る
 
-
+===
 # CPS変換
 
 <!-- .slide: class="center" -->
-
+===
 # CPS変換
 ---------
 
@@ -404,7 +404,7 @@ in main thread 3
 * 値を返す時は暗黙のreturnを使うのではなく明示的に継続を呼ぶ
 * 関数を呼ぶ時は必ず継続を渡す。呼び出し元には返ってこない（自然と末尾再帰になる）
 
-
+===
 # CPS変換
 ---------
 例えば
@@ -424,7 +424,7 @@ in main thread 3
 
 。
 
-
+===
 # CPS変換
 ---------
 よって
@@ -435,7 +435,7 @@ in main thread 3
 
 と変換される
 
-
+===
 # CPS変換
 ---------
 再帰関数だと少し面倒
@@ -459,13 +459,13 @@ in main thread 3
 
 となる
 
-
+===
 # CPS変換
 ---------
 
 * CPS変換を行なうことでいつでも継続を値として使える
 
-
+===
 # 限定継続の実装の話
 -------------------
 
@@ -475,7 +475,7 @@ in main thread 3
   + スペシャルフォームも気をつける必要がある
 * `lambda`が乱立するのでパフォーマンスは酷い。
 
-
+===
 # まとめ
 -------
 
@@ -484,7 +484,7 @@ in main thread 3
 * 裏ではえげつないことをやっている
 * パフォーマンスが必要なところでは使っちゃダメ
 
-
+===
 # 参考
 ------
 * [picrin/partcont.scm at master · picrin-scheme/picrin](https://github.com/picrin-scheme/picrin)

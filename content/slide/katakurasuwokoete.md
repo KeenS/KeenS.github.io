@@ -8,8 +8,8 @@ title: 型クラスを越えて
 ---
 
 <section data-markdown
-    data-separator="\n\n"
-    data-vertical="\n\n"
+    data-separator="\n===\n"
+    data-vertical="\n---\n"
     data-notes="^Note:">
 <script type="text/template">
 # 型クラスを越えて
@@ -17,7 +17,7 @@ title: 型クラスを越えて
 [歌舞伎座.tech#10「型クラス勉強会」](http://kbkz.connpass.com/event/32420/)
 
 <!-- .slide: class="center" -->
-
+===
 # About Me
 ---------
 ![κeenのアイコン](/images/icon.png) <!-- .element: style="position:absolute;right:0;z-index:-1" -->
@@ -28,7 +28,7 @@ title: 型クラスを越えて
  + サイバーエージェントのエンジニア
  + Lisp, ML, Rust, Shell Scriptあたりを書きます
 
-
+===
 # Rustとは
 ----------
 
@@ -39,7 +39,7 @@ title: 型クラスを越えて
 * パターンマッチ、代数的データ型などなど
 * [プログラミング言語Rust](https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/README.html)
 
-
+===
 # Rustのトレイト的なの
 ----------------
 
@@ -48,7 +48,7 @@ title: 型クラスを越えて
 * トレイト
   + 型クラス
 
-
+===
 # 型クラスじゃない方
 -------------------
 
@@ -69,13 +69,13 @@ impl Person {
 }
 ```
 
-
+===
 ``` rust
 let person = Person::new("κeen");
 person.hello();
 ```
 
-
+===
 # 多相型と制約
 --------------
 
@@ -96,7 +96,7 @@ impl <T: Fahrenheit> Temp<T> {
 
 ```
 
-
+===
 # 型クラス
 ---------
 
@@ -105,7 +105,7 @@ impl <T: Fahrenheit> Temp<T> {
 * 型クラスを入れることで言語設計がどうなるか
 * ユーザランドより言語機能的な部分フォーカス
 
-
+===
 # Rustの型クラスの実装
 ---------------------
 
@@ -117,7 +117,7 @@ impl <T: Fahrenheit> Temp<T> {
 * デフォフォルト静的
   + 動的を選ぶことも出来る
 
-
+===
 # 静的ディスパッチの意味
 -----------------------
 
@@ -126,7 +126,7 @@ impl <T: Fahrenheit> Temp<T> {
 * インライン化などの最適化も出来る
 * 逆の見方をすればZero-Cost Abstraction出来るからシステムプログラミング言語に高級な機能を入れれた
 
-
+===
 # 型クラス+α
 -----------
 それぞれ面白い特徴が。
@@ -137,7 +137,7 @@ impl <T: Fahrenheit> Temp<T> {
 * `Default`, `Zero`
 * `Iterator`
 
-
+===
 # 型クラス+関数
 --------------
 
@@ -152,7 +152,7 @@ pub trait FromStr {
 }
 ```
 
-
+===
 ``` rust
 use std::str::FromStr;
 
@@ -162,7 +162,7 @@ let x = i32::from_str(s).unwrap();
 assert_eq!(5, x);
 ```
 
-
+===
 # 型クラス+構文
 --------------
 
@@ -177,7 +177,7 @@ trait Write {
 }
 ```
 
-
+===
 ``` rust
 impl Write for Foo {
   fn write(&mut self, buf: &[u8]) -> Result<usize> {
@@ -189,7 +189,7 @@ let foo = Foo::new();
 foo.write(aa);
 ```
 
-
+===
 # 型クラス+UFCS
 ---------------
 
@@ -198,7 +198,7 @@ foo.write(aa);
 * どのメソッドを呼ぶかを決定する構文がある
   + = Universal Function Call Syntax
 
-
+===
 ```rust
 trait Foo {
     fn foo() -> i32;
@@ -219,7 +219,7 @@ impl Foo for Bar {
 }
 
 ```
-
+===
 
 ```rust
 <Bar as Foo>::foo();
@@ -227,7 +227,7 @@ Bar::foo();
 ```
 
 
-
+===
 # 型クラス+演算子
 -----------------
 
@@ -241,7 +241,7 @@ pub trait Add<RHS = Self> {
 }
 ```
 
-
+===
 
 ``` rust
 use std::ops::Add;
@@ -261,12 +261,12 @@ fn main() {
     Foo + Foo;
 }
 ```
-
+===
 <blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">for (my_int i = 0; i &lt; 10; i++) { … }<br><br>Cならどういうアセンブリに落ちるかすぐわかるけどC++ならmy_intはクラスかもしれず=0はコンストラクタを起動し&lt;はメソッド呼び出しになり++はejectを発行して光学ディスクトレイが開き相手は死ぬ</p>&mdash; わさびず <a href="https://twitter.com/___yuni/status/681891856335032320">2015年12月29日</a></blockquote>
 
 <!-- .slide: class="center" -->
 
-
+===
 # 型クラス+値
 -------------
 
@@ -289,7 +289,7 @@ pub trait Zero {
 }
 ```
 
-
+===
 ```rust
 trait Monoid: Add<Self> + Zero
   where Self::Output : Add<Self> + Zero {
@@ -297,7 +297,7 @@ trait Monoid: Add<Self> + Zero
 
 ```
 
-
+===
 # 型クラス+型
 -------------
 
@@ -314,7 +314,7 @@ pub trait Iterator {
 }
 ```
 
-
+===
 ``` rust
 trait Iterator {
   ...
@@ -322,7 +322,7 @@ trait Iterator {
 }
 ```
 
-
+===
 # 型クラス+暗黙のルール
 ---------------------
 
@@ -336,7 +336,7 @@ pub trait Drop {
 }
 ```
 
-
+===
 ``` rust
 impl Drop for Lock {
     fn drop(&mut self) {
@@ -345,7 +345,7 @@ impl Drop for Lock {
 }
 ```
 
-
+===
 # 型クラス+アノテーション
 ------------------------
 
@@ -357,7 +357,7 @@ impl Drop for Lock {
 struct Foo(usize);
 ```
 
-
+===
 
 ``` rust
 let foo1 = Foo(1);
@@ -368,7 +368,7 @@ println!("{:?} == {:?} ?: {:?}",
          foo1 == foo2);
 ```
 
-
+===
 # まとめ
 --------
 

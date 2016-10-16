@@ -8,8 +8,8 @@ title: DSLとTagless Final
 ---
 
 <section data-markdown
-    data-separator="\n\n"
-    data-vertical="\n\n"
+    data-separator="\n===\n"
+    data-vertical="\n---\n"
     data-notes="^Note:">
 <script type="text/template">
 # DSLとTagless Final
@@ -18,7 +18,7 @@ title: DSLとTagless Final
 Scala Meet Up 2015-12-18
 
 <!-- .slide: class="center" -->
-
+===
 # About Me
 ---------
 ![κeenのアイコン](/images/icon.png) <!-- .element: style="position:absolute;right:0;z-index:-1" -->
@@ -29,7 +29,7 @@ Scala Meet Up 2015-12-18
  + AMoAdの新卒エンジニア
  + Lisp, ML, Rust, Shell Scriptあたりを書きます
    - Scalaは初心者 ※ [Scala初心者の新卒が頑張ってLispを作ってみた](http://adtech.cyberagent.io/scalablog/2015/12/05/scala-lisp/)
-
+===
 # 注意
 ------
 
@@ -37,7 +37,7 @@ Scala Meet Up 2015-12-18
   + ~~コード例動かす時間が無かっただけ~~
 * Scala初心者なのでScalaのコードは少なめに説明します
 
-
+===
 # DSLを作る
 -----------
 
@@ -51,7 +51,7 @@ val scenario = and(
 val Right(_) = runScenario(scenario, "user")
 ```
 
-
+===
 # DSLを作る
 -----------
 
@@ -70,7 +70,7 @@ def get(url: String): ScenarioDSL= Get(url)
 
 ```
 
-
+===
 # DSLを作る
 -----------
 
@@ -91,7 +91,7 @@ def runScenario(scenario: ScenarioDSL, user: String) = {
 
 
 
-
+===
 # DSLを便利に
 -------------
 
@@ -110,7 +110,7 @@ def toCurl(scenario: ScenarioDSL, user: String) =
 
 ```
 
-
+===
 # DSLの拡張
 -----------
 
@@ -124,7 +124,7 @@ val scenario = and(
 val _ = runScenario(scenario, "user")
 ```
 
-
+===
 # Expression Problem
 -------------------
 
@@ -138,7 +138,7 @@ val _ = runScenario(scenario, "user")
 * 実際には使ってなくても全ての関数で新しい機能に対応しないといけない
   + `toCurl`では`select`に対応しないとか
   + 逆に、`toCurl`がプラグインでコードいじれなかったらどうしよう
-
+===
 # Tagless Finalで解決出来るよ
 ----------------------------
 
@@ -148,7 +148,7 @@ val _ = runScenario(scenario, "user")
 
 DSLの作り方があります。それは型クラスを使ったやり方です。
 
-
+===
 # 型クラスの復習
 ---------------
 
@@ -160,7 +160,7 @@ DSLの作り方があります。それは型クラスを使ったやり方で�
 
 でした
 
-
+===
 # 型クラスの復習
 ---------------
 
@@ -181,7 +181,7 @@ fn main() {
 }
 ```
 
-
+===
 # DSLをRustに翻訳
 -------------
 
@@ -195,7 +195,7 @@ let scenario = and(
 runScenario(scenario, "user").unwrap();
 ```
 
-
+===
 # Rustに翻訳
 -------------
 DSLのASTはこうなります。
@@ -209,7 +209,7 @@ enum ScenarioDSL {
    callBack: FnOnce<(Scenario, Request) -> ScenarioDSL>},
 }
 ```
-
+===
 # Rustに翻訳
 -------------
 runScenarioはこうなります。
@@ -228,7 +228,7 @@ fn runScenario(scenario: &ScenarioDSL, user: &str)-> Result<()> {
 }
 ```
 
-
+===
 # Rustに翻訳
 -------------
 `toCurl`はこうなります
@@ -249,13 +249,13 @@ fn toCurl(scenario: &ScenarioDSL, user: &str)-> String {
 }
 ```
 
-
+===
 # Tagless Final
 ---------------
 
 Rustの準備が終わったのでTagless Finalの説明に入ります。
 
-
+===
 # Tagless Final
 ----------------
 
@@ -268,7 +268,7 @@ Rustの準備が終わったのでTagless Finalの説明に入ります。
 * 型クラスでジェネリックに作って
 * 欲しい型を伝えるだけで挙動が変わる
 
-
+===
 # 型クラス
 ----------
 DSLの文法の型クラスを定義する。  
@@ -290,7 +290,7 @@ fn and<C: ScenarioSYM>(first: C, second: C) -> C {C::and(first, second)}
 ```
 
 
-
+===
 # `runScenario`
 ------
 結果に`Result`型が結果として欲しいなら`Result`型に`ScenarioSYM`を実装する
@@ -307,7 +307,7 @@ fn runScenario(res: Result<()>) -> Result<()> {
 }
 ```
 
-
+===
 # `toCurl`
 ----------
 `String`が欲しいなら`String`に実装すれば良い。
@@ -324,7 +324,7 @@ fn toCurl(str: String) -> String {
 }
 ```
 
-
+===
 # 完成形
 --------
 
@@ -338,7 +338,7 @@ let scenario = and(
 runScenario(scenario, "user").unwrap();
 ```
 
-
+===
 # DSLの拡張
 -----------
 
@@ -356,7 +356,7 @@ impl SelectSYM for Result<()> {
 }
 ```
 
-
+===
 # Tagless Finalまとめ
 ---------------------
 
@@ -364,7 +364,7 @@ impl SelectSYM for Result<()> {
 * DSLの拡張も機能の拡張も容易
 * 型クラス便利
 
-
+===
 # ScalaでのTagless Final
 ------------------------
 Rustで分かりやすく解説したのでScalaでどうなるか見ていきます。
@@ -382,7 +382,7 @@ def post(self: C, url: String)(implicit i: ScenarioSYM[C]): C = i.post(self, url
 ...
 ```
 
-
+===
 # `runScenario`
 ------
 
@@ -397,7 +397,7 @@ def runScenario(ast: Either[Err, ()], user: String)
       (implicit i: ScenarioSYM[Either[Err, ()]]) = ast
 ```
 
-
+===
 # 完成形
 --------
 Scalaの型クラスの制約上最初の例と少し異なる
@@ -413,7 +413,7 @@ val Right(_) = runScenario(scenario, "user")
 
 ```
 
-
+===
 # まとめ
 --------
 

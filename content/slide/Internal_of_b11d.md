@@ -8,8 +8,8 @@ title: Internal of b11d
 ---
 
 <section data-markdown
-    data-separator="\n\n"
-    data-vertical="\n\n"
+    data-separator="\n===\n"
+    data-vertical="\n---\n"
     data-notes="^Note:">
 <script type="text/template">
 # Internal of b11d
@@ -18,7 +18,7 @@ title: Internal of b11d
 ひとりDSP最終発表会
 
 <!-- .slide: class="center" -->
-
+===
 # About Me
 ---------
 ![κeenのアイコン](/images/icon.png) <!-- .element: style="position:absolute;right:0;z-index:-1" -->
@@ -30,7 +30,7 @@ title: Internal of b11d
  + 趣味でLisp, ML, Shell Scriptあたりを書きます
  + 仕事でScalaとShell Scriptあたりを書きます
 
-
+===
 # 今回作ったもの
 ----------------
 
@@ -42,7 +42,7 @@ title: Internal of b11d
 * デプロイその他はシェルスクリプト
 * 監視はmackerel
 
-
+===
 # シンプルということ
 -------------------
 
@@ -54,7 +54,7 @@ title: Internal of b11d
 * スケールアウトが容易
 * compojureのミドルウェアを上手く使った
 
-
+===
 # シンプルということ2
 --------------------
 
@@ -66,7 +66,7 @@ title: Internal of b11d
 * データが綺麗なのでアプリケーション側でのやることが少ない
 * 分析する時にも活きる筈
 
-
+===
 # デプロイ
 ---------
 
@@ -76,7 +76,7 @@ title: Internal of b11d
 * ☆秘伝☆のシェルテクニック満載！ 
 * アプリケーションが1jarに収まるのでデプロイが楽。
 
-
+===
 # 監視
 ------
 
@@ -87,7 +87,7 @@ title: Internal of b11d
 * アプリケーションの死活監視にはsupervisord
   + 本当はsystemdでやりたかったけどUbuntuのバージョンが古かった
 
-
+===
 # 落穂拾い
 ----------
 
@@ -101,7 +101,7 @@ title: Internal of b11d
 * CTR予測は訓練データを 広告主xサイトxUA で統計を取って使う
   + 途中からシグモイド関数で変化をつける
 
-
+===
 # 改善点とか今後とか
 ---------
 

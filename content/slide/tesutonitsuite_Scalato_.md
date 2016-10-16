@@ -8,8 +8,8 @@ title: テストについて、Scalaと。
 ---
 
 <section data-markdown
-    data-separator="\n\n"
-    data-vertical="\n\n"
+    data-separator="\n===\n"
+    data-vertical="\n---\n"
     data-notes="^Note:">
 <script type="text/template">
 # テストについて、Scalaと。
@@ -18,7 +18,7 @@ title: テストについて、Scalaと。
 ScalaMeetUp テスト回
 
 <!-- .slide: class="center" -->
-
+===
 # About Me
 ---------
 ![κeenのアイコン](/images/icon.png) <!-- .element: style="position:absolute;right:0;z-index:-1" -->
@@ -30,7 +30,7 @@ ScalaMeetUp テスト回
    + 基盤開発グループでScalaで基盤開発してます
  + Lisp, ML, Rust, Shell Scriptあたりを書きます
 
-
+===
 # Scalaのテスト
 ---------------
 
@@ -42,7 +42,7 @@ ScalaMeetUp テスト回
   + 普通に使いやすい
 * 他にもScalaCheck、JUnit、Gatlingなどなど
 
-
+===
 # ScalaTestのスタイルたち
 -----------
 
@@ -53,7 +53,7 @@ ScalaMeetUp テスト回
 * FunSpec
   + RSpecっぽいBDD用の
 
-
+===
 # ScalaTestのスタイルたち
 -----------
 
@@ -64,14 +64,14 @@ ScalaMeetUp テスト回
 * Spec
   + テスト=メソッド。速いらしい。
 
-
+===
 # ScalaTestのスタイルたち
 -----------
 * PropSpec
   + プロパティベースのテスト。ScalaCheckとの統合。
 * FeatureSpec
   + シナリオテスト。
-
+===
 # その他の機能
 -------------
 
@@ -79,11 +79,11 @@ ScalaMeetUp テスト回
 * Matcher DSL
 * 複数のランナー（複数のツールとの統合）
 
-
+===
 # Axionのテスト
 コード紹介を多めに
 <!-- .slide: class="center" -->
-
+===
 # 単体テスト
 ---------------
 
@@ -94,7 +94,7 @@ ScalaMeetUp テスト回
 * コマンドの実行と事後条件への表明を明確に分離
 * テストの分け方に試行錯誤
 
-
+===
 # 事前条件
 ----------
 
@@ -105,14 +105,14 @@ ScalaMeetUp テスト回
   + 逆にノイズが乗ってわかりにくい？
 * メソッドの実行に必要な引数と環境全てを構築する
 
-
+===
 # コマンドの実行
 ---------------
 
 * 例外が起きないことだけ表明する
 * 結果はvarに保存して外に持ち出す。
 
-
+===
 # 事後条件
 ----------
 
@@ -121,7 +121,7 @@ ScalaMeetUp テスト回
   + 環境が変化した/しなかった
   + 依存オブジェクトのメソッドが呼ばれた/なかった
 
-
+===
 メソッド毎にテストケースをグルーピング
 
 ``` scala
@@ -141,7 +141,7 @@ ScalaMeetUp テスト回
 
 ```
 
-
+===
 # Tips
 ------
 
@@ -149,7 +149,7 @@ ScalaMeetUp テスト回
   + ensimeのテストテンプレートとか
 * やや冗長でも頭を使わずに書ける/理解出来るテストを書く
 
-
+===
 # ユーティリ
 ---------------
 
@@ -161,7 +161,7 @@ ScalaMeetUp テスト回
 * 一部Tebale Driven Test
   + Generatorがコーナーケースを生成してくれない時がある
 
-
+===
 # 他のテスト
 ------------
 
@@ -170,7 +170,7 @@ ScalaMeetUp テスト回
 * パフォーマンステストは実行インスタンスを固定しないといけない問題が…
 * シナリオテストはない(APIがReadのみなため)
 
-
+===
 # 他のテスト
 ---------------
 
@@ -182,7 +182,7 @@ ScalaMeetUp テスト回
 * そのうちノウハウを公開するかも？
   + 2.1.Xと2.2.XでAPIが違う問題も…
 
-
+===
 # まとめ
 --------
 
