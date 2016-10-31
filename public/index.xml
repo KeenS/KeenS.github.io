@@ -6,8 +6,87 @@
     <description>Recent content on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Mon, 10 Oct 2016 16:48:43 +0900</lastBuildDate>
+    <lastBuildDate>Mon, 31 Oct 2016 22:06:17 +0900</lastBuildDate>
     <atom:link href="/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>VMwareのUbuntuを16.10にしたら起動しなくなった</title>
+      <link>/blog/2016/10/31/vmwarenoubuntuwo16_10nishitarakidoushinakunatta</link>
+      <pubDate>Mon, 31 Oct 2016 22:06:17 +0900</pubDate>
+      
+      <guid>/blog/2016/10/31/vmwarenoubuntuwo16_10nishitarakidoushinakunatta</guid>
+      <description>
+
+&lt;p&gt;κeenです。普段はネイティブのUbuntuを使ってますが会社では使えないのでVMwareにUbuntuを入れて使っています。
+今日そのUbuntuを16.04から16.10にアップグレードしたら起動しなくなったので対策メモ。&lt;/p&gt;
+
+&lt;p&gt;現象は、Ubuntuを起動しようとするとゲストOSによってCPUがオフにされた旨の通知が来てフリーズします。
+このリリースノート（&lt;a href=&#34;http://pubs.vmware.com/Release_Notes/en/fusion/8/fusion-851-release-notes.html&#34;&gt;VMware Fusion 8.5.1 Release Notes&lt;/a&gt;）を見れば分かりますが、Linux Kernel 4.7以上を使うと発生するバグのようです。&lt;/p&gt;
+
+&lt;blockquote&gt;
+&lt;p&gt;Known Issues&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;Virtual machines running Linux kernel version 4.7 or above may crash or hang on hosts with Intel CPUs
+
+Virtual Machines running Linux kernel version 4.7 or above may crash during installation or during power-on with a crash in the intel_powerclamp driver. This issue has been reported with Ubuntu 16.10, but it is a generic Linux kernel issue.
+
+Workaround: VMware is working with the OS vendors to have them fix their respective kernels. Until a fix is available, you can blacklist the intel_powerclamp driver so that the buggy code doesn&#39;t get loaded.
+
+To blacklist the driver:
+
+Add the kernel command-line option modprobe.blacklist=intel_powerclamp to the guest OS&#39;s default grub configuration or add it directly at the grub menu during boot.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;どうやらIntel CPUのホストだと特定のカーネルモジュールが誤動作してCPUをoffってしまうっぽい？OSベンダと協力して直していくと言っているのでVMwareのアップデートでは直らなそう。OSのアップデートはそもそも起動しないので出来ない、というかなりキツい状況です。
+幸いにもワークアラウンドがあるのでそれを使って起動、修正します。&lt;/p&gt;
+
+&lt;h1 id=&#34;ubuntuの起動&#34;&gt;Ubuntuの起動&lt;/h1&gt;
+
+&lt;p&gt;誤動作するカーネルモジュールをロードしないようにしたら起動するっぽいです。&lt;/p&gt;
+
+&lt;p&gt;今OSがハングしている状態ならとりあえず殺して、 &lt;code&gt;ESC&lt;/code&gt; キー(多分。もしかしたら &lt;code&gt;Shift&lt;/code&gt; かも)を押しながらUbuntuを起動します。そうするとgrub menuの画面に遷移する筈です。&lt;/p&gt;
+
+&lt;p&gt;grub menuで（恐らく1番上にある）使用中のカーネルに選択肢を合わせた状態で&lt;code&gt;e&lt;/code&gt;を押すと起動シーケンスをいじれるようになります。&lt;/p&gt;
+
+&lt;p&gt;Emacsっぽく操作出来る画面が出てくるので&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;	linux	/vmlinuz-4.4.0-45-generic root=/dev/mapper/ubuntu--vg-root ro  quiet splash $vt_handoff
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;のようにLinuxカーネルを起動してるっぽい行に&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;	linux	/vmlinuz-4.4.0-45-generic root=/dev/mapper/ubuntu--vg-root ro  quiet splash $vt_handoff modprobe.blacklist=intel_powerclamp
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と &lt;code&gt;modprobe.blacklist=intel_powerclamp&lt;/code&gt; を追加してあげれば起動します。&lt;/p&gt;
+
+&lt;h1 id=&#34;起動オプションの変更&#34;&gt;起動オプションの変更&lt;/h1&gt;
+
+&lt;p&gt;とりあえず今のでワンショットで起動出来るようになったので起動オプションの設定を変更して次回以降も起動出来るようにしておきます。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;/etc/default/grub&lt;/code&gt; をいじれば良いようです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;GRUB_CMDLINE_LINUX=&amp;quot;&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;の行をこれまた&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;GRUB_CMDLINE_LINUX=&amp;quot;modprobe.blacklist=intel_powerclamp&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と &lt;code&gt;modprobe.blacklist=intel_powerclamp&lt;/code&gt; を追加するように書き換えてあげて、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ sudo update-grub2
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;でgrubに変更を反映してあげればOKです。&lt;/p&gt;
+
+&lt;h1 id=&#34;その他&#34;&gt;その他&lt;/h1&gt;
+
+&lt;p&gt;Ubuntu 16.10を1日使ってみましたが特に不自由なく使えています。&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>Rustのクロージャ3種を作って理解する</title>
@@ -3220,212 +3299,6 @@ object DaysOfTheWeek{
 
 &lt;/script&gt;
 &lt;/section&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>cargo-profilerを試す</title>
-      <link>/blog/2016/05/14/cargo_profilerwotamesu</link>
-      <pubDate>Sat, 14 May 2016 20:59:13 +0900</pubDate>
-      
-      <guid>/blog/2016/05/14/cargo_profilerwotamesu</guid>
-      <description>
-
-&lt;p&gt;κeenです。先日Rustのニュースに流れてきたcargo profilerを試してみます。
-元の紹介記事はこちら&lt;a href=&#34;http://www.suchin.co/2016/05/11/Introducing-Cargo-Profiler/&#34;&gt;Introducing Cargo Profiler · suchin&lt;/a&gt;。&lt;/p&gt;
-
-&lt;p&gt;GitHubレポジトリはこちら&lt;a href=&#34;https://github.com/pegasos1/cargo-profiler&#34;&gt;pegasos1/cargo-profiler: cargo subcommand to profile binaries&lt;/a&gt;。&lt;/p&gt;
-
-&lt;p&gt;Profilerとはいっても自身でプロファイラを持っている訳ではなくて外部のプロファイラ（現状valgrind）を呼び出して整形してくれるツールのようです。
-Rust向けに関数をモジュールパス付きで表示してくれたりするのでRustから使うにはvalgrind生より便利そうです。&lt;/p&gt;
-
-&lt;h1 id=&#34;インストール&#34;&gt;インストール&lt;/h1&gt;
-
-&lt;p&gt;READMEに従って&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ sudo apt install valgrind
-$ cargo install cargo-profiler
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;とします。&lt;/p&gt;
-
-&lt;h1 id=&#34;プロジェクトの準備&#34;&gt;プロジェクトの準備&lt;/h1&gt;
-
-&lt;p&gt;適当なものがないので手元の[κLisp]()でフィボナッチ数列を動かしてみます。(と思ったらκLispに比較演算子がなかったのでそれを作るところから始まりましたがそれはまた別の話)。&lt;/p&gt;
-
-&lt;p&gt;main.rsはこんな感じ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;extern crate kappa_lisp;
-use kappa_lisp::kappa_lisp::{run, init};
-use kappa_lisp::env::Env;
-
-fn main() {
-    let mut env = Env::new();
-    init(&amp;amp;mut env).unwrap();
-    run(&amp;amp;mut env, r&amp;quot;
-(defun fib (n)
-  (if (&amp;lt; n 2)
-      1
-      (+ (fib (- n 1)) (fib (- n 2)))))
-&amp;quot;).unwrap();
-    let expr = run(&amp;amp;mut env, r&amp;quot; (fib 20) &amp;quot;).unwrap();
-    println!(&amp;quot;{}&amp;quot;, expr);
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;割と遅いので20くらいで限界でした。&lt;/p&gt;
-
-&lt;p&gt;さて、これを&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;cargo build --release
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;としてビルドします。&lt;/p&gt;
-
-&lt;h1 id=&#34;プロファイル&#34;&gt;プロファイル&lt;/h1&gt;
-
-&lt;p&gt;今のところcallgrindとcachegrindが実装されているようです。1つづづ試してみます。&lt;/p&gt;
-
-&lt;h2 id=&#34;callgrind&#34;&gt;callgrind&lt;/h2&gt;
-
-&lt;p&gt;よく分かってないのですが多分実行時間に占める関数毎の割合を出してくれるんですかね。-nで上位何件を表示するか指定出来ます。&lt;/p&gt;
-
-&lt;p&gt;とりあえず上位10件出してみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo profiler callgrind --bin ./target/release/kappa_lisp -n 10
-Profiling kappa_lisp with callgrind...
-
-Total Instructions...571,437,255
-
-142,527,726 (24.9%) ???:collections::hash::table::make_hash
------------------------------------------------------------------------
-107,551,309 (18.8%) ???:hash::sip::SipHasher.Hasher::write
------------------------------------------------------------------------
-39,749,571 (7.0%) ???:collections::hash::map::HashMap..K$C$..V$C$..S..::get
------------------------------------------------------------------------
-38,693,006 (6.8%) ???:sdallocx
------------------------------------------------------------------------
-37,670,732 (6.6%) ???:mallocx
------------------------------------------------------------------------
-34,608,049 (6.1%) ???:expr..Expr::drop.9629
------------------------------------------------------------------------
-26,539,906 (4.6%) ???:eval::eval
------------------------------------------------------------------------
-19,887,024 (3.5%) ???:util::f_foldr
------------------------------------------------------------------------
-16,634,175 (2.9%) ???:eval::feval
------------------------------------------------------------------------
-14,353,992 (2.5%) ???:util::kcons
------------------------------------------------------------------------
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;はい、こんな感じです。ハッシュテーブル関連が時間喰ってますね。これは関数呼び出しの度に行われてます。
-ちょっと実装が雑すぎるので直さなきゃ…。&lt;/p&gt;
-
-&lt;h1 id=&#34;cachegrind&#34;&gt;cachegrind&lt;/h1&gt;
-
-&lt;p&gt;キャッシュミスを表示してくれます。本気出してチューニングする時に必要ですね。&lt;/p&gt;
-
-&lt;p&gt;同じく -nで件数を絞り込めます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;cargo profiler cachegrind --bin ./target/release/kappa_lisp -n 10  
-
-
-Profiling kappa_lisp with cachegrind...
-
-Total Memory Accesses...800,070,388	
-
-Total L1 I-Cache Misses...100,068 (0%)	
-Total LL I-Cache Misses...422 (0%)	
-Total L1 D-Cache Misses...4,346,335 (0%)	
-Total LL D-Cache Misses...7,724 (0%)	
-
- Ir  I1mr ILmr  Dr  D1mr DLmr  Dw  D1mw DLmw
-0.25 0.00 0.02 0.09 0.00 0.01 0.11 0.05 0.06 ???:collections::hash::table::make_hash
------------------------------------------------------------------------
-0.19 0.00 0.03 0.13 0.00 0.00 0.11 0.01 0.01 ???:hash::sip::SipHasher.Hasher::write
------------------------------------------------------------------------
-0.07 0.00 0.01 0.13 0.06 0.01 0.07 0.00 0.00 ???:expr..Expr::drop.9629
------------------------------------------------------------------------
-0.07 0.00 0.01 0.10 0.08 0.00 0.12 0.03 0.04 ???:collections::hash::map::HashMapK$C$V$C$S::get
------------------------------------------------------------------------
-0.07 0.00 0.03 0.09 0.01 0.00 0.03 0.00 0.00 ???:sdallocx
------------------------------------------------------------------------
-0.07 0.02 0.03 0.11 0.02 0.01 0.04 0.01 0.01 ???:mallocx
------------------------------------------------------------------------
-0.05 0.06 0.20 0.06 0.29 0.21 0.09 0.25 0.16 ???:eval::eval
------------------------------------------------------------------------
-0.03 0.00 0.03 0.04 0.14 0.15 0.09 0.13 0.09 ???:util::f_foldr
------------------------------------------------------------------------
-0.03 0.02 0.05 0.04 0.05 0.00 0.02 0.06 0.05 ???:eval::feval
------------------------------------------------------------------------
-0.03 0.00 0.02 0.03 0.00 0.01 0.08 0.05 0.09 ???:util::kcons
------------------------------------------------------------------------
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;やはりハッシュテーブルが酷いですが同じコードを繰り返し実行するタイプのマイクロベンチマークなのでキャッシュミスは少ないです。&lt;/p&gt;
-
-&lt;p&gt;因みにそれぞれの列はこういう意味だそうです。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;Ir -&amp;gt; Total Instructions&lt;/li&gt;
-&lt;li&gt;I1mr -&amp;gt; Level 1 I-Cache misses&lt;/li&gt;
-&lt;li&gt;ILmr -&amp;gt; Last Level I-Cache misses&lt;/li&gt;
-&lt;li&gt;Dr -&amp;gt; Total Memory Reads&lt;/li&gt;
-&lt;li&gt;D1mr -&amp;gt; Level 1 D-Cache read misses&lt;/li&gt;
-&lt;li&gt;DLmr -&amp;gt; Last Level D-cache read misses&lt;/li&gt;
-&lt;li&gt;Dw -&amp;gt; Total Memory Writes&lt;/li&gt;
-&lt;li&gt;D1mw -&amp;gt; Level 1 D-Cache write misses&lt;/li&gt;
-&lt;li&gt;DLmw -&amp;gt; Last Level D-cache write misses&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;&lt;code&gt;--sort&lt;/code&gt; オプションでどの列をみるのか指定出来るようです。全メモリアクセスのミスレートを見てみましょうか。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo profiler cachegrind --bin ./target/release/kappa_lisp -n 10 --sort dr
-
-
-Profiling kappa_lisp with cachegrind...
-
-Total Memory Accesses...800,082,686	
-
-Total L1 I-Cache Misses...100,083 (0%)	
-Total LL I-Cache Misses...420 (0%)	
-Total L1 D-Cache Misses...4,321,895 (0%)	
-Total LL D-Cache Misses...7,721 (0%)	
-
- Ir  I1mr ILmr  Dr  D1mr DLmr  Dw  D1mw DLmw
-0.19 0.00 0.03 0.13 0.00 0.00 0.11 0.01 0.01 ???:hash::sip::SipHasher.Hasher::write
------------------------------------------------------------------------
-0.07 0.00 0.01 0.13 0.06 0.01 0.07 0.00 0.00 ???:expr..Expr::drop.9629
------------------------------------------------------------------------
-0.07 0.02 0.03 0.11 0.02 0.01 0.04 0.01 0.01 ???:mallocx
------------------------------------------------------------------------
-0.07 0.00 0.01 0.10 0.08 0.00 0.12 0.03 0.04 ???:collections::hash::map::HashMapK$C$V$C$S::get
------------------------------------------------------------------------
-0.25 0.00 0.02 0.09 0.00 0.01 0.11 0.05 0.06 ???:collections::hash::table::make_hash
------------------------------------------------------------------------
-0.07 0.00 0.03 0.09 0.01 0.00 0.03 0.00 0.00 ???:sdallocx
------------------------------------------------------------------------
-0.05 0.06 0.20 0.06 0.29 0.21 0.09 0.25 0.16 ???:eval::eval
------------------------------------------------------------------------
-0.03 0.00 0.03 0.04 0.14 0.15 0.09 0.13 0.09 ???:util::f_foldr
------------------------------------------------------------------------
-0.03 0.02 0.05 0.04 0.04 0.00 0.02 0.06 0.05 ???:eval::feval
------------------------------------------------------------------------
-0.03 0.00 0.02 0.03 0.00 0.01 0.08 0.05 0.09 ???:util::kcons
------------------------------------------------------------------------
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;やっぱりハッシュテーブル関連が重い…。&lt;/p&gt;
-
-&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
-
-&lt;p&gt;私にとっては薮蛇にκLispの実装の筋が悪いことが分かったりしてショックでしたがまあ、簡単にプロファイルをとれるツールを紹介しました。&lt;/p&gt;
-
-&lt;p&gt;Rustで高速なアプリケーションを作りたい方、利用してみては如何でしょうか。&lt;/p&gt;
 </description>
     </item>
     
