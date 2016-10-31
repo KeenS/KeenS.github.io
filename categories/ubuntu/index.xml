@@ -6,8 +6,87 @@
     <description>Recent content in Ubuntu on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Thu, 14 Apr 2016 22:51:20 +0900</lastBuildDate>
+    <lastBuildDate>Mon, 31 Oct 2016 22:06:17 +0900</lastBuildDate>
     <atom:link href="/categories/ubuntu/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>VMwareのUbuntuを16.10にしたら起動しなくなった</title>
+      <link>/blog/2016/10/31/vmwarenoubuntuwo16_10nishitarakidoushinakunatta</link>
+      <pubDate>Mon, 31 Oct 2016 22:06:17 +0900</pubDate>
+      
+      <guid>/blog/2016/10/31/vmwarenoubuntuwo16_10nishitarakidoushinakunatta</guid>
+      <description>
+
+&lt;p&gt;κeenです。普段はネイティブのUbuntuを使ってますが会社では使えないのでVMwareにUbuntuを入れて使っています。
+今日そのUbuntuを16.04から16.10にアップグレードしたら起動しなくなったので対策メモ。&lt;/p&gt;
+
+&lt;p&gt;現象は、Ubuntuを起動しようとするとゲストOSによってCPUがオフにされた旨の通知が来てフリーズします。
+このリリースノート（&lt;a href=&#34;http://pubs.vmware.com/Release_Notes/en/fusion/8/fusion-851-release-notes.html&#34;&gt;VMware Fusion 8.5.1 Release Notes&lt;/a&gt;）を見れば分かりますが、Linux Kernel 4.7以上を使うと発生するバグのようです。&lt;/p&gt;
+
+&lt;blockquote&gt;
+&lt;p&gt;Known Issues&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;Virtual machines running Linux kernel version 4.7 or above may crash or hang on hosts with Intel CPUs
+
+Virtual Machines running Linux kernel version 4.7 or above may crash during installation or during power-on with a crash in the intel_powerclamp driver. This issue has been reported with Ubuntu 16.10, but it is a generic Linux kernel issue.
+
+Workaround: VMware is working with the OS vendors to have them fix their respective kernels. Until a fix is available, you can blacklist the intel_powerclamp driver so that the buggy code doesn&#39;t get loaded.
+
+To blacklist the driver:
+
+Add the kernel command-line option modprobe.blacklist=intel_powerclamp to the guest OS&#39;s default grub configuration or add it directly at the grub menu during boot.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;どうやらIntel CPUのホストだと特定のカーネルモジュールが誤動作してCPUをoffってしまうっぽい？OSベンダと協力して直していくと言っているのでVMwareのアップデートでは直らなそう。OSのアップデートはそもそも起動しないので出来ない、というかなりキツい状況です。
+幸いにもワークアラウンドがあるのでそれを使って起動、修正します。&lt;/p&gt;
+
+&lt;h1 id=&#34;ubuntuの起動&#34;&gt;Ubuntuの起動&lt;/h1&gt;
+
+&lt;p&gt;誤動作するカーネルモジュールをロードしないようにしたら起動するっぽいです。&lt;/p&gt;
+
+&lt;p&gt;今OSがハングしている状態ならとりあえず殺して、 &lt;code&gt;ESC&lt;/code&gt; キー(多分。もしかしたら &lt;code&gt;Shift&lt;/code&gt; かも)を押しながらUbuntuを起動します。そうするとgrub menuの画面に遷移する筈です。&lt;/p&gt;
+
+&lt;p&gt;grub menuで（恐らく1番上にある）使用中のカーネルに選択肢を合わせた状態で&lt;code&gt;e&lt;/code&gt;を押すと起動シーケンスをいじれるようになります。&lt;/p&gt;
+
+&lt;p&gt;Emacsっぽく操作出来る画面が出てくるので&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;	linux	/vmlinuz-4.4.0-45-generic root=/dev/mapper/ubuntu--vg-root ro  quiet splash $vt_handoff
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;のようにLinuxカーネルを起動してるっぽい行に&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;	linux	/vmlinuz-4.4.0-45-generic root=/dev/mapper/ubuntu--vg-root ro  quiet splash $vt_handoff modprobe.blacklist=intel_powerclamp
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と &lt;code&gt;modprobe.blacklist=intel_powerclamp&lt;/code&gt; を追加してあげれば起動します。&lt;/p&gt;
+
+&lt;h1 id=&#34;起動オプションの変更&#34;&gt;起動オプションの変更&lt;/h1&gt;
+
+&lt;p&gt;とりあえず今のでワンショットで起動出来るようになったので起動オプションの設定を変更して次回以降も起動出来るようにしておきます。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;/etc/default/grub&lt;/code&gt; をいじれば良いようです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;GRUB_CMDLINE_LINUX=&amp;quot;&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;の行をこれまた&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;GRUB_CMDLINE_LINUX=&amp;quot;modprobe.blacklist=intel_powerclamp&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と &lt;code&gt;modprobe.blacklist=intel_powerclamp&lt;/code&gt; を追加するように書き換えてあげて、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ sudo update-grub2
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;でgrubに変更を反映してあげればOKです。&lt;/p&gt;
+
+&lt;h1 id=&#34;その他&#34;&gt;その他&lt;/h1&gt;
+
+&lt;p&gt;Ubuntu 16.10を1日使ってみましたが特に不自由なく使えています。&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>LXDがリリースされたらしい</title>
