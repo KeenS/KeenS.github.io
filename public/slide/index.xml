@@ -6,8 +6,436 @@
     <description>Recent content in Slide-rsses on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Fri, 04 Nov 2016 13:19:01 +0900</lastBuildDate>
+    <lastBuildDate>Sun, 20 Nov 2016 14:08:07 +0900</lastBuildDate>
     <atom:link href="/slide/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Rustの話とリソースの話</title>
+      <link>/slide/Rustnohanashitoriso_sunohanashi/</link>
+      <pubDate>Sun, 20 Nov 2016 14:08:07 +0900</pubDate>
+      
+      <guid>/slide/Rustnohanashitoriso_sunohanashi/</guid>
+      <description>&lt;section data-markdown
+    data-separator=&#34;\n===\n&#34;
+    data-vertical=&#34;\n---\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+&lt;script type=&#34;text/template&#34;&gt;
+# Rustの話とリソースの話
+----------------------
+[RustのLT会！ Rust入門者の集い](https://rust.connpass.com/event/41467/)  
+2016-11-21
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+===
+# About Me
+---------
+![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
+
+ * κeen
+ * [@blackenedgold](https://twitter.com/blackenedgold)
+ * Github: [KeenS](https://github.com/KeenS)
+ * 若者
+ * サイバーエージェントのエンジニア
+ * Lisp, ML, Rust, Shell Scriptあたりを書きます
+
+===
+
+# 注意
+------
+
+* たまにマニアックな話が出ますが気にせず無視して下さい
+* 「なんかRustすげー」って思ってもらえれば幸いです
+
+
+===
+
+# Rustとの出会い
+----------------
+
+* 元々Lisperだった
+* 他にはML, Ruby, JVM言語など
+
+===
+
+![lis books](/images/rust-and-resource/lisp.jpg)&lt;!-- .element: height=&#34;640px&#34; --&gt;
+
+===
+
+&lt;span style=&#34;font-size: 150%&#34;&gt;「Lisperは自分で処理系作って一人前」&lt;/span&gt;
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+===
+
+![compiler books](/images/rust-and-resource/compiler.jpg) &lt;!-- .element: height=&#34;640px&#34;&#34; --&gt;
+
+===
+
+# 苦悩
+-------
+
+* Cは低級すぎる
+* Javaは向いてない
+* C++は怖そう
+  + 闇の軍団
+  + 縄文土器飛んできそう
+  + あと **nullあるしメモリ破壊あるし**
+* MLは向いてるけどシステムプログラミングしづらい
+* ATS2, Golang, D...
+
+===
+
+# Rustと出会う
+----------------
+
+* 正直最初は色物言語と思ってた
+* 調べてみたら気に入った
+
+===
+
+# ゼロコスト抽象化
+----------------------------
+
+``` rust
+fn sum_pos(v: &amp;Vec&lt;i32&gt;) -&gt; i32 {
+    v.iter().filter(|i| **i &gt; 0).sum()
+```
+
+===
+
+高階関数が消えた…！？
+
+``` asm
+_ZN21higher_order_function7sum_pos17h2f9de4f69306ec0aE:
+	.cfi_startproc
+	movq	(%rdi), %rcx
+	movq	16(%rdi), %rax
+	leaq	(%rcx,%rax,4), %rdx
+	xorl	%eax, %eax
+	jmp	.LBB0_1
+.LBB0_3:
+	addl	%esi, %eax
+	.p2align	4, 0x90
+.LBB0_1:
+	cmpq	%rcx, %rdx
+	je	.LBB0_4
+	movl	(%rcx), %esi
+	addq	$4, %rcx
+	testl	%esi, %esi
+	jle	.LBB0_1
+	jmp	.LBB0_3
+.LBB0_4:
+	retq
+```
+
+===
+
+
+# スタックとヒープ
+------------------
+
+
+* Rustは手で割り当てを変えられる
+* 「ヒープを使ったら負け」ゲームが出来る
+* ループの中でヒープアロケートしたくないよね
+
+===
+
+# マクロとコンパイラプラグイン
+-----------------------------
+
+例えば正規表現リテラルを作れるか、とか。
+
+1. Common Lisp
+2. 衛生的マクロ + 手続的マクロ &lt;- Rust
+2. 衛生的マクロ + コンパイラプラグイン &lt;- Rust
+3. 手続的マクロ
+4. コンパイラプラグイン
+4. 衛生的マクロ
+
+===
+
+# トレイト
+----------
+
+* 型クラス
+  + 継承を駆逐する
+  + MLにも欲しい超便利機能
+* 関連型
+  + 表現力が高いことが知られている
+  + CF [Rustの型レベルLispっぽいの作った | κeenのHappy Hacκing Blog](http://keens.github.io/blog/2016/11/06/rustnokatareberulispppoinotsukutta/)
+
+===
+
+# パターンマッチ、代数的データ型
+-------------------------------
+
+* 便利ってかないと困る
+
+``` rust
+    match expr {
+        &amp;Expr::Nil |
+        &amp;Expr::EOF |
+        &amp;Expr::Str(_) |
+        &amp;Expr::Int(_) |
+        &amp;Expr::Float(_) |
+        &amp;Expr::Proc(_) =&gt; Ok(expr.clone()),
+        &amp;Expr::Sym(ref name) =&gt; {
+            match env.find(&amp;name.to_owned()) {
+                Ok(v) =&gt; Ok(v.clone()),
+                Err(m) =&gt; {
+                    if name.deref() == &#34;t&#34; {
+                        Ok(ksym(&#34;t&#34;))
+                    } else {
+                        Err(m)
+                    }
+                }
+            }
+        }
+        &amp;Expr::Cons(ref car, ref cdr) =&gt; {
+        ....
+```
+
+
+===
+
+# C インターフェース
+---------------------
+
+* C FFI, C API共に1行
+* 構造体なんかも互換
+
+``` rust
+extern {
+    fn snappy_max_compressed_length(source_length: size_t) -&gt; size_t;
+}
+```
+
+``` rust
+#[no_mangle]
+pub extern fn hello_rust() -&gt; *const u8 {
+    &#34;Hello, world!\0&#34;.as_ptr()
+}
+```
+
+
+===
+
+# ランタイムなし
+---------------
+
+* [RustでベアメタルRaspberry PiのLチカ | κeenのHappy Hacκing Blog](http://keens.github.io/blog/2016/05/04/rustdebeametaruraspberry_pinolchika/)
+* [Writing an OS in Rust](http://os.phil-opp.com/)
+* [Redox - Your Next(Gen) OS](http://www.redox-os.org/)
+
+===
+
+# 生ポインタ
+------------
+
+* Cとのやりとりで大事
+* あるいはパフォーマンスチューニングに
+
+``` rust
+pub struct Vec&lt;T&gt; {
+    ptr: *mut T,
+    cap: usize,
+    len: usize,
+}
+```
+
+``` rust
+unsafe fn from_raw_parts(ptr: *mut T, length: usize, capacity: usize) -&gt; Vec&lt;T&gt;
+```
+
+
+===
+
+# エラー処理
+------------
+
+* 例外じゃない
+* [`Result`](https://doc.rust-lang.org/std/result/enum.Result.html)
+* `?` (元 `try!`)も便利
+* Erro as a data
+* 巻き戻し例外って扱い難しいよね
+  + 値継続と例外継続の使い分けつらい
+
+===
+
+# リソースの話（本題）
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+===
+
+# リソースの重要性
+-------------------
+
+* プログラムはIOの塊、すなわりリソースの塊
+* 従来は手動で管理するかGCで管理するかしていた
+* RustはGCを使わず自動で管理する
+* 所有権の概念が「ただの自動」以上に便利
+
+===
+
+# メモリ管理
+------------
+
+* Cでいう`free`を自動で挟んでくれる
+* 基本
+
+===
+
+# Vecとslice
+-------------
+
+* sliceを`Vec`のviewとして使える
+  + zero copy
+  + 例えばJavaとかだと出来ない
+* zero copy parserとかも書ける
+
+===
+
+# `File` 、 `Lock`
+------------------
+
+* `Drop`があるので自動
+* ところでGCがあるのに手動で管理する言語があるらしいですね
+  + 例えばRubyの`File.open(..) do ... end` も半手動
+  + GCで処理すべきなのに手で`do ... end`を書いてる
+
+===
+
+# Rust
+-------
+
+``` rust
+let file = File::open(&#34;text.txs&#34;).unwrap();
+let mut br = BufReader::new(file);
+...
+```
+
+
+===
+
+# Java
+-------
+※try-with-resourceを使うともっと簡単に書けます。極端な比較のためにこう書いてます
+
+``` java
+BufferedReader br = null;
+try {
+    br = new BufferedReader(new FileReader(&#34;test.txt&#34;));
+    ...
+} catch (FileNotFoundException e) {
+    e.printStackTrace();
+} finally {
+    if (br != null)
+        try {
+            br.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+}
+```
+
+===
+
+# Use after close
+------------------
+
+* プログラミングエラーの一種
+* あらゆるリソースで起きうる
+* GCのある言語ではメモリでのエラー **のみ** 防げる
+* 他のリソースだとダメ
+* Rustは **全ての** リソースで防げる
+
+===
+
+# Ruby
+------
+
+``` ruby
+file = nil
+File.open(&#34;file.rb&#34;) do |f|
+  file = f
+end
+puts file.read
+
+```
+
+```
+#&lt;File:file.rb (closed)&gt;
+file.rb:6:in `read&#39;: closed stream (IOError)
+        from file.rb:6:in `&lt;main&gt;&#39;
+```
+
+
+===
+
+# Rust
+-------
+
+* 所有権のある限り勝手に`close`されない
+
+``` rust
+let mut file = None;
+{
+  let f = File::open(&#34;file.rs&#34;).unwrap();
+  file = Some(f);
+}
+let mut s = String::new();
+file.unwrap().read_to_string(&amp;mut s).unwrap();
+println!(&#34;{}&#34;, s);
+```
+
+===
+
+# Use  wrapped object
+---------------------------
+
+* 所有権便利って話
+
+===
+
+# Java
+------
+
+``` scala
+val kc = new KafkaProducer(...)
+val sk = new SimpleKafkaClient(kc)
+kc.close // &lt;- !?!?!?
+...
+```
+
+===
+
+# Rust
+-------
+
+``` rust
+let kc = KafkaClient(...);
+val mut sk = SimpleKafkaClient(kc);
+kc.close(); // &lt;- Compile error because kc has been moved
+```
+
+===
+
+# まとめ
+--------
+
+* Rust = 便利機能詰め合わせ + 所有権
+* さらにランタイムもないしCとの相互連携も出来る
+* リソース管理って大事
+* 所有権は制限だけじゃないよ
+
+
+
+&lt;/script&gt;
+&lt;/section&gt;
+</description>
+    </item>
     
     <item>
       <title>Scala 2.12.0変更点</title>
@@ -3880,124 +4308,6 @@ Lisp Meet Up #3
 ------
 
 * [Internal of b11d | κeenのHappy Hacκing Blog](//KeenS.github.io/slide/Internal_of_b11d/)
-
-&lt;/script&gt;
-&lt;/section&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>Internal of b11d</title>
-      <link>/slide/Internal_of_b11d/</link>
-      <pubDate>Mon, 19 Oct 2015 21:33:00 +0900</pubDate>
-      
-      <guid>/slide/Internal_of_b11d/</guid>
-      <description>&lt;section data-markdown
-    data-separator=&#34;\n===\n&#34;
-    data-vertical=&#34;\n---\n&#34;
-    data-notes=&#34;^Note:&#34;&gt;
-&lt;script type=&#34;text/template&#34;&gt;
-# Internal of b11d
-----------------------
-サイバーエージェント新卒研修  
-ひとりDSP最終発表会
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-===
-# About Me
----------
-![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
-
- + κeen
- + [@blackenedgold](https://twitter.com/blackenedgold)
- + Github: [KeenS](https://github.com/KeenS)
- + AMoAdのサーバーサイド（？）エンジニア
- + 趣味でLisp, ML, Shell Scriptあたりを書きます
- + 仕事でScalaとShell Scriptあたりを書きます
-
-===
-# 今回作ったもの
-----------------
-
-* b11d (ぶらっくんどごーるど)
-* Clojure (compojure + middleware)製
-  + + NginX + MySQL + Supervisord
-* 出来る限りシンプルになるように作った
-  + 310行
-* デプロイその他はシェルスクリプト
-* 監視はmackerel
-
-===
-# シンプルということ
--------------------
-
-* アプリケーションは状態を持たない
-* IO以外副作用を持たない
-* つまり、キャッシュを持たない
-  + キャッシュはパフォーマンス上の意味しかない
-  + 早過ぎる最適化は諸悪の根源
-* スケールアウトが容易
-* compojureのミドルウェアを上手く使った
-
-===
-# シンプルということ2
---------------------
-
-* データベースはだいたい第4正規形（ﾀﾌﾞﾝ）
-  + 全てのカラムは`NOT NULL`
-  + 広告主の所だけ拡張性を持たせるために第1正規形に落とした
-  + 1広告主に対して複数の広告が持てるようになる
-* 外部キー制約も全部付ける
-* データが綺麗なのでアプリケーション側でのやることが少ない
-* 分析する時にも活きる筈
-
-===
-# デプロイ
----------
-
-* 全てシェルスクリプトでオペレーション出来る
-* 手作業を無くしてミスを無くす
-  + 「あれ？設定書き換えたのに反映されてない」 → 「再起動忘れてた」とかを防ぐ
-* ☆秘伝☆のシェルテクニック満載！ 
-* アプリケーションが1jarに収まるのでデプロイが楽。
-
-===
-# 監視
-------
-
-* mackerelで色々モニタリング
-* Linux, NginX, MySQL, JVM, レスポンスステータス
-* ほとんどMackerelに乗っかることで本質的でないことに労力を割かない
-  + 本質 = 業務ロジックを理解すること
-* アプリケーションの死活監視にはsupervisord
-  + 本当はsystemdでやりたかったけどUbuntuのバージョンが古かった
-
-===
-# 落穂拾い
-----------
-
-* DBへの書き込みは非同期。Clojureなら簡単に書ける
-  + `(go ...)` で囲むだけ
-* だいたい1700qps。データが増えると多分もうちょい下がる。
-  + キャッシュすればデータに依存しない速度。もう少しパフォーマンスも出る。
-* アプリケーションサーバには組込みjettyを使った。
-  + War + Tomcatでも出来るがデプロイ/運用が楽なのでこちらを採用
-* コア数に対してスケールするのでスケールアップも出来る
-* CTR予測は訓練データを 広告主xサイトxUA で統計を取って使う
-  + 途中からシグモイド関数で変化をつける
-
-===
-# 改善点とか今後とか
----------
-
-* win rate, 入札/落札価格, CTRとかをmackerelでモニタリングしたかった
-* 管理画面的なの必要？
-* フォールトトラレンス性はないのでその辺
-  + MySQLが死ぬとヤバい。
-* ホットデプロイしたかった
-* 折角JVMだし機械学習したかった
-* Unix Domain Socket使うの忘れてた
-* データベースにタイムスタンプ入れるの忘れてた………orz
 
 &lt;/script&gt;
 &lt;/section&gt;
