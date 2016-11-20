@@ -28,7 +28,8 @@ title: Rustの話とリソースの話
  * 若者
  * サイバーエージェントのエンジニア
  * Lisp, ML, Rust, Shell Scriptあたりを書きます
-
+ * [プログラミング言語Rust](https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/)の翻訳
+ * [Join rust-jp on Slack!](http://rust-jp.herokuapp.com/) にもいます。
 ===
 
 # 注意
