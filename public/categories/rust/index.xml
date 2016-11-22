@@ -9,6 +9,117 @@
     <atom:link href="/categories/rust/index.xml" rel="self" type="application/rss+xml" />
     
     <item>
+      <title>Rustの関連型の使いどころ</title>
+      <link>/blog/2016/11/22/rustnokanrenkatanotsukaidokoro</link>
+      <pubDate>Tue, 22 Nov 2016 18:26:47 +0900</pubDate>
+      
+      <guid>/blog/2016/11/22/rustnokanrenkatanotsukaidokoro</guid>
+      <description>&lt;p&gt;κeenです。昨日は&lt;a href=&#34;https://rust.connpass.com/event/41467/&#34;&gt;RustのLT会！ Rust入門者の集い - connpass&lt;/a&gt;に参加してきました。
+そこで&lt;a href=&#34;http://qiita.com/tacke_jp/items/9c7617971dc341146c0f&#34;&gt;関連型に関する発表&lt;/a&gt;があったので感化されて私も一筆。&lt;/p&gt;
+
+&lt;p&gt;
+馴れないと関連型はジェネリクスでいいじゃんと思えますが、両者は別の機能を提供するものです。
+設計による使い分けではなくて実現したいことに応じた機能による使い分けをするので馴れてしまえば迷うことなくどちらを使うか判断出来ます。&lt;/p&gt;
+
+&lt;p&gt;ということで関連型のパターンをいくつか。
+もちろん、根底にある関連型という機能は共通なのでほとんど同じようなことを言ってますが気持としてパターンを知っておくと便利です。&lt;/p&gt;
+
+&lt;h1 id=&#34;型レベルの関数として&#34;&gt;型レベルの関数として&lt;/h1&gt;
+
+&lt;p&gt;「関連」型なのである型に関連する型を表現します。ちょっと見方を変えると型から型への写像、つまり関数になります。
+例えばこういうのです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait ToUnsigned {
+    type Counterpart;
+    fn to_unsigned(self) -&amp;gt; Self::Counterpart;
+}
+
+impl ToUnsigned for i32 {
+    type Counterpart = u32;
+    fn to_unsigned(self) -&amp;gt; Self::Counterpart {
+        self as u32
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;i32&lt;/code&gt; から &lt;code&gt;u32&lt;/code&gt; への関数になってそうなのが見えますかね？もちろん、 &lt;code&gt;i64&lt;/code&gt; から &lt;code&gt;u64&lt;/code&gt; などへの対応も作れます。
+こういうのは例えば符号無し数にのみ演算が定義されている場合とかに便利ですね。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn write_bigendian_signed&amp;lt;I, U&amp;gt;(i: I) -&amp;gt; ()
+    where I: ToUnsigned&amp;lt;Counterpart = U&amp;gt;,
+          U: ...,  {
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;トレイト内で使う型を固定するため&#34;&gt;トレイト内で使う型を固定するため&lt;/h1&gt;
+
+&lt;p&gt;これが一番目にするやつじゃないでしょうか。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Handler {
+    type Request;
+    type Response;
+    fn handle(req: Self::Request, res: Self::Response) -&amp;gt; io::Result&amp;lt;()&amp;gt;;
+}
+
+struct HTTPHandler;
+
+impl Handler for HTTPHandler {
+    type Request = HTTPRequest;
+    type Response = HTTPResponse;
+    fn handle(req: Self::Request, res: Self::Response) -&amp;gt; io::Result&amp;lt;()&amp;gt;;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;固定というか特殊化というか、トレイト自体は汎用的に作られていて、それを実装する型が特定の処理に特化するパターンです。
+ジェネリクスで受け取る訳にはいかなくて、実装すべき型をトレイトの中で定義してあげる必要があるのは分かると思います。&lt;/p&gt;
+
+&lt;h1 id=&#34;関数の返り値を一般化するため&#34;&gt;関数の返り値を一般化するため&lt;/h1&gt;
+
+&lt;p&gt;これは現在のRust(rust-1.13.0)が &lt;a href=&#34;https://github.com/rust-lang/rfcs/pull/1522&#34;&gt;&lt;code&gt;impl Trait&lt;/code&gt;&lt;/a&gt;をサポートしていないために必要になるテクニックです。
+関連型とトレイト境界を組み合わせて使います。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait ReverseIter {
+    type Item;
+    type Iter: Iterator&amp;lt;Item = Self::Item&amp;gt;;
+    fn rev_iter(&amp;amp;self) -&amp;gt; Iter;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これの &lt;code&gt;type Iter: Iterator&amp;lt;Item = Self::Item&amp;gt;;&lt;/code&gt; の方です。
+返り値のIteratorを抽象化したいのですが、現在のRustでは&lt;code&gt;fn rev_iter(&amp;amp;self) -&amp;gt; Iterator&amp;lt;Item = Self::Item&amp;gt;;&lt;/code&gt;のような書き方が出来ないので仕方なく関連型を使ってあげる必要があります。&lt;/p&gt;
+
+&lt;p&gt;ちょっと踏み込んだ話をすると、関数の引数の多相性は∀の量化、返り値の多相は∃の量化です。そしてトレイトのジェネリクスも∀の量化で関連型が∃の量化なのでそういう対応がある訳です。&lt;/p&gt;
+
+&lt;h1 id=&#34;最後に&#34;&gt;最後に&lt;/h1&gt;
+
+&lt;p&gt;結構理論的にも色々あるようなので調べてみると様々なブログポストが見付かると思います。&lt;/p&gt;
+
+&lt;p&gt;ぱぱっと思いついたパターンを3つ挙げました。もしかしたら他にもパターンがあるかもしれません。&lt;/p&gt;
+
+&lt;p&gt;これを知っておけば&lt;a href=&#34;https://github.com/tokio-rs/tokio-service&#34;&gt;tokio-service&lt;/a&gt;の&lt;a href=&#34;https://tokio-rs.github.io/tokio-service/tokio_service/trait.Service.html&#34;&gt;Service&lt;/a&gt;みたいな関連型を多用するパターンでもひるまなくなります。&lt;/p&gt;
+
+&lt;h1 id=&#34;参考&#34;&gt;参考&lt;/h1&gt;
+
+&lt;h2 id=&#34;関連型とimpl-traitに関して&#34;&gt;関連型とimpl Traitに関して&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/associated-types.html&#34;&gt;関連型&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://rust-lang-ja.org/rust-by-example/generics/assoc_items/the_problem.html&#34;&gt;関連型が必要になる状況 | Rust by Example&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.ncameron.org/blog/abstract-return-types-aka-%60impl-trait%60/&#34;&gt;Abstract return types, aka &lt;code&gt;impl Trait&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;発展的な話題&#34;&gt;発展的な話題&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://smallcultfollowing.com/babysteps/blog/2016/11/02/associated-type-constructors-part-1-basic-concepts-and-introduction/&#34;&gt;Associated type constructors, part 1: basic concepts and introduction&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://smallcultfollowing.com/babysteps/blog/2016/11/03/associated-type-constructors-part-2-family-traits/&#34;&gt;Associated type constructors, part 2: family traits&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://smallcultfollowing.com/babysteps/blog/2016/11/04/associated-type-constructors-part-3-what-higher-kinded-types-might-look-like/&#34;&gt;Associated type constructors, part 3: What higher-kinded types might look like&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://smallcultfollowing.com/babysteps/blog/2016/11/09/associated-type-constructors-part-4-unifying-atc-and-hkt/&#34;&gt;Associated type constructors, part 4: Unifying ATC and HKT&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/rust-lang/rfcs/pull/1598&#34;&gt;Associated type constructors (a form of higher-kinded polymorphism). by withoutboats · Pull Request #1598 · rust-lang/rfcs&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;</description>
+    </item>
+    
+    <item>
       <title>Rustの話とリソースの話</title>
       <link>/slide/Rustnohanashitoriso_sunohanashi/</link>
       <pubDate>Sun, 20 Nov 2016 14:08:07 +0900</pubDate>
@@ -3203,53 +3314,6 @@ documentation = http://KeenS.github.io/file_logger/file_logger/
 &lt;p&gt;余談ですが&lt;code&gt;std::fs::File&lt;/code&gt;の実体はCの&lt;code&gt;FILE&lt;/code&gt;構造体ではなくファイルディスクリプタなのでバッファリングはしてません。のでこちらは気にする必要はありません。&lt;/p&gt;
 
 &lt;p&gt;という訳で小ネタでした。&lt;/p&gt;</description>
-    </item>
-    
-    <item>
-      <title>Rustのロガーを作る</title>
-      <link>/blog/2015/12/26/rustnoroga_wotsukuru</link>
-      <pubDate>Sat, 26 Dec 2015 19:18:31 +0900</pubDate>
-      
-      <guid>/blog/2015/12/26/rustnoroga_wotsukuru</guid>
-      <description>&lt;p&gt;κeenです。Advent Calendarのためにネタやアイディアを用意したものの時間/場所的都合でAdvent Calendarとして出せなかったボツネタでも供養しようかと。
-Advent Calendarが終わってしまったので投げやり気味ですね。
-第1段はRustのロガーを作る話。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://qiita.com/advent-calendar/2015/rust-lang&#34;&gt;Rust Advent Calendar&lt;/a&gt;の&lt;a href=&#34;//KeenS.github.io/blog/2015/11/14/rustdechiisanatsu_ruwotsukuttemiru/&#34;&gt;初日&lt;/a&gt;でロガーはfacadと実装に分かれてると書きましたが、実装を作る話ですね。
-
-&lt;a href=&#34;https://doc.rust-lang.org/log/log/index.html&#34;&gt;ドキュメント&lt;/a&gt;を見てもらえば分かる通り、logは&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub trait Log: Sync + Send {
-    fn enabled(&amp;amp;self, metadata: &amp;amp;LogMetadata) -&amp;gt; bool;
-    fn log(&amp;amp;self, record: &amp;amp;LogRecord);
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;とだけインターフェースが定まっているのでそこを実装してあげれば終わりです。
-なぜまたloggerを作ろうとしたのかというと、Rust公式の&lt;a href=&#34;https://crates.io/crates/env_logger/&#34;&gt;env_logger&lt;/a&gt;は標準出力にしか出せず、crates.ioを捜しても（作ろうと思った時点ではパっと見）ファイルに書き出せるものがなさそうだったからです。&lt;/p&gt;
-
-&lt;p&gt;私が作ったのは&lt;a href=&#34;https://github.com/KeenS/file_logger&#34;&gt;file_logger&lt;/a&gt;といいます。まだcrates.ioには出してません。TOMLでコンフィグを書けるようになったら出そうかと思うのですがもう既にファイルに書きだせるものが他にありますかね。&lt;/p&gt;
-
-&lt;p&gt;今回作るにあたって目指したのは1つのことにだけ集中する他と組み合わせられるライブラリです。
-logはロガーをグローバル変数に代入して使い回してるので同時に1つしかロガーを登録出来ません。そこでロガーアグリケーターのようなものを作ってそれに複数のロガーを登録することが考えられます。
-調べきれてませんが恐らく既にいくつか存在するでしょう。アグリゲータの存在を仮定してしまえばアグリゲータに任せれる部分は任せてしまうのが良いでしょう。&lt;/p&gt;
-
-&lt;p&gt;ということで次のことを最初に決めました&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;ログフォーマットは柔軟性を持たせる&lt;/li&gt;
-&lt;li&gt;ログメッセージの内容に応じて出力を制御出来るフィルターを入れる。(アグリゲータが無差別にログを流し込んで来た時のため)&lt;/li&gt;
-&lt;li&gt;複数ファイルへのログはサポートしない。アグリゲータに任せる&lt;/li&gt;
-&lt;li&gt;プラグインはサポートしない。アグリゲータに任せる&lt;/li&gt;
-&lt;li&gt;ログローテーションはしない。&lt;code&gt;Write&lt;/code&gt;の実装に任せる。&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;一応file loggerですがWriteをすべからく受け取れるので実際はストリームにも使えたりします。今書き出してみたらフォーマッタとかフィルタとかもアグリゲータに任せた方がいいのかなって気がしてきた。
-しかし単体での利便性を考えると仕方ない。&lt;/p&gt;
-
-&lt;p&gt;実装は大したことをやっていなくて、精々ログフォーマットを文字列で書けるように（TOMLで設定を書きたいため）フォーマットのパーサを書いた程度でしょうか。&lt;/p&gt;
-
-&lt;p&gt;もう少し考えてからリリースします。あとFile Lotating Writerも一緒に出さなきゃ片手落ちですかね…&lt;/p&gt;</description>
     </item>
     
   </channel>
