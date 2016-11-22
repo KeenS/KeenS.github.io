@@ -383,14 +383,14 @@ println!("{}", s);
 
 ===
 
-# Use  wrapped object
----------------------------
+# ラッパーオブジェクト
+--------------------
 
 * 所有権便利って話
 
 ===
 
-# Java
+# Scala
 ------
 
 ``` scala
@@ -409,6 +409,40 @@ kc.close // <- !?!?!?
 let kc = KafkaClient(...);
 val mut sk = SimpleKafkaClient(kc);
 kc.close(); // <- Compile error because kc has been moved
+```
+
+===
+
+# 責任者問題
+-----------
+
+* ラッパーオブジェクトの続き
+* ラップされたオブジェクトは誰が閉じるの？
+
+
+===
+
+# Scala
+------
+
+``` scala
+val kc = new KafkaProducer(...)
+val sk = new SimpleKafkaClient(kc)
+...
+sk.close
+kc.close // 本当に必要？
+```
+
+===
+
+# Rust
+-------
+
+``` rust
+let kc = KafkaClient(...);
+val mut sk = SimpleKafkaClient(kc); // ここでmove
+...
+sk.close(); // moveされたskがcolseすることが型で分かる
 ```
 
 ===
