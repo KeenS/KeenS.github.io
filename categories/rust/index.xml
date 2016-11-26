@@ -9,6 +9,420 @@
     <atom:link href="/categories/rust/index.xml" rel="self" type="application/rss+xml" />
     
     <item>
+      <title>Rustで非同期Thriftしたい</title>
+      <link>/slide/RustdehidoukiThriftshitai/</link>
+      <pubDate>Sat, 26 Nov 2016 13:07:29 +0900</pubDate>
+      
+      <guid>/slide/RustdehidoukiThriftshitai/</guid>
+      <description>&lt;section data-markdown
+    data-separator=&#34;\n===\n&#34;
+    data-vertical=&#34;\n---\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+&lt;script type=&#34;text/template&#34;&gt;
+
+# Rustで非同期Thrift
+----------------------
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+===
+
+# About Me
+---------
+![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
+
+ * κeen
+ * [@blackenedgold](https://twitter.com/blackenedgold)
+ * Github: [KeenS](https://github.com/KeenS)
+ * サイバーエージェントのエンジニア
+ * Lisp, ML, Rust, Shell Scriptあたりを書きます
+
+===
+
+* &lt;span style=&#34;font-size:150%&#34;&gt;X&lt;/span&gt; RPCライブラリを使う話
+* &lt;span style=&#34;font-size:150%&#34;&gt;O&lt;/span&gt; RPCライブラリを作る話
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+===
+
+# Thrift
+--------
+
+* Facebook発(現apache)RPCフレームワーク
+* IDLから複数の言語向けのコードを吐ける
+* 対応言語多い
+* 新しい言語はthriftレポジトリフォークして追加
+
+===
+
+# Thrift vs gRPC
+----------------
+
+\                       | Thrift | gRPC
+------------------------|:------:|:----:
+ベース                  | 自前   | HTTP/2
+コード生成              | o      | o
+プロトコルのアップデート | o      | o
+通信の多重化            | トランスポート次第  | o (HTTP/2)
+認証                    | x  | o
+例外                    | ユーザ定義可能 | 事前定義のみ?
+対応言語                | 多い   | ほどほど
+その他                  | union  | timestamp, anyなど
+&lt;!-- .element: style=&#34; margin-right:auto; margin-left:auto&#34;--&gt;
+
+===
+
+# 何故Thrift?
+-------------
+
+* 仕事で使ってたから
+* 仕事は「gRPCかthrift、まあthriftでいっしょ」で決まった
+
+===
+
+# RustとThrift
+--------------
+いくつか実装がある
+
+===
+
+## [sgnr/rust-thrift](https://github.com/sgnr/rust-thrift)
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+===
+
+![sgnr/rust-thrift is deprecated](/images/thrift/sgnr-rust-thrift.png)
+
+===
+
+## [maximg/thrift](https://github.com/maximg/thrift)
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+===
+
+![maximg/thrift is deprecated](/images/thrift/maximg-thrift.png)
+
+===
+
+## [terminalcloud/thrift](https://github.com/terminalcloud/thrift)
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+===
+
+![terminalcloud/thrift is deprecated](/images/thrift/terminalcloud.png)
+
+===
+
+# [thehydroimpulse/thrust](https://github.com/thehydroimpulse/thrust)
+---------------------------
+
+* Thrift RPC in Rust (Async I/O)
+* 非同期!!
+* apache/thriftベースじゃない（フルスクラッチ）
+* コンパイラプラグインサポートとかも
+* 作りかけ
+  + `Latest commit 0a37b77 on 11 Apr`
+
+→ フォークすることに
+
+===
+
+# [Finagle](https://github.com/twitter/finagle)
+---------
+
+* **Scalaの** RPCフレームワーク
+* [You Server as a Function](https://monkey.org/~marius/funsrv.pdf)
+* Nettyベース
+* サーバとクライアント両方サポート
+* Twitter製
+* 良くも悪くもTwitterべったり
+
+===
+
+# Finagle Client
+--------
+
+* クライアントが賢い
+* RPCではTCPベースのLBが使えない
+  + クライアントはコネクション張りっぱなし
+* クライアントサイドロードバランシングが必要
+* Finagleはそこまでカバー
+* 他にもエラーが起きたサーバ外したり色々
+
+===
+
+# Tokio
+--------
+
+* **Rustの** RPCフレームワーク
+* mioベース
+* Finagleを参考に開発
+  + **開発中**
+* tokio-core
+  + コア部分
+* tokio-proto
+  + プロトコル実装のサポート
+* tokio-service
+  + サービス実装のサポート
+
+===
+
+# TokioとFinagle
+-----------------
+
+  \           | Tokio       | Finagle
+--------------|:-----------:|:-------:
+コア          | [tokio-core](https://github.com/tokio-rs/tokio-core) | [finagle-core](https://github.com/twitter/finagle/tree/develop/finagle-core)
+Future        | [future](https://github.com/alexcrichton/futures-rs) | [twitter util](https://github.com/twitter/util)
+非同期エンジン | [mio](https://github.com/carllerche/mio) | [netty](http://netty.io/)
+&lt;!-- .element: style=&#34; margin-right:auto; margin-left:auto&#34;--&gt;
+
+
+===
+
+# [mio](https://github.com/carllerche/mio)
+------
+
+* 非同期イベントループライブラリ
+* ループ内ゼロアロケーション
+* `epoll` などの薄いラッパ
+* libuv, libevent, libev2などのRust版
+* イベントドリブン
+* ソケットだけでなく *ファイルIO* 、インメモリチャネルとかも監視出来る
+
+===
+
+# [future](https://github.com/alexcrichton/futures-rs)
+--------------
+
+* [Zero-cost futures in Rust · Aaron Turon](https://aturon.github.io/blog/2016/08/11/futures/)
+* ゼロコスト
+* 普通にFutureを使うとランタイムにステートマシンになる
+* お型付けは大変
+    + `map` したら `Map&lt;A, fn (A)-&gt;B&gt;` の型が返ったり
+* ストリーミング指向のAPIもある
+
+===
+
+# tokio-thrift
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+===
+
+# [tokio-thrift](https://github.com/KeenS/tokio-thrift)
+--------------
+
+* [KeenS/tokio-thrift](https://github.com/KeenS/tokio-thrift)
+* この発表のために作った（作ってる）
+* tokioベースのrustのthriftサポート
+* thrustのフォーク
+* 基本ツール全て
+  + コードジェネレータ
+  + コンパイラプラグイン
+  + ランタイムライブラリ
+
+===
+
+# プロトコルスタック
+-------------------
+
+ユーザは実装に集中出来る仕組み
+
+```
++------------------------------------------------+
+| service   | tokio-service + 生成コード + ユーザ |
+|------------------------------------------------|
+| protocol  | tokio-proto   + tokio-thrift       |
+|------------------------------------------------|
+| transport | tokio-core                         |
++------------------------------------------------+
+```
+
+===
+
+# サンプルコード
+----------------
+
+* [これ](https://github.com/KeenS/tokio-thrift/blob/master/example/simple_server_client/src/main.rs)
+
+===
+
+# ユーザビリティ
+---------------
+
+* サーバ: ユーザはインターフェースに沿ったコードを書くだけ
+* クライアント: インターフェース通りに呼べる
+* 返り値はFuture
+* サーバ: 非同期実装と相性がいい
+* クライアント: 非同期通信をそのままエンコード
+
+===
+
+# 実装の話
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+===
+
+# 所有権とゼロコピー
+-------------------
+
+* プロトコルのパースの部分
+* Rustっぽい部分
+* バッファの所有権をパース結果に渡すことでデータのコピーを避ける
+
+===
+
+# 所有権とゼロコピー
+-------------------
+バッファをresultにパースして
+
+```
+buffer
+  |
++-+---------------+
+|                 |
+-------------------
+| | | | | ... | | | &lt;- バイト列
+-------------------
+```
+
+===
+
+# 所有権とゼロコピー
+-------------------
+resultにデータの所有権を渡してしまう
+
+```
+ result   buffer
+   |        |
++--+----++--+-----+
+|       ||        |
+-------------------
+| | | | | ... | | | &lt;- バイト列
+-------------------
+```
+
+===
+
+# 複数メソッド
+-------------
+
+* 複数メソッドだと複数の引数/返値の型を扱う
+* コネクションのハンドラは1つ
+* 複数型をどうやって扱う？
+  + [enumを定義](https://github.com/KeenS/tokio-thrift/blob/master/example/simple_server_client/src/thrift.rs#L67)
+  + ゼロオーバーヘッド…
+
+===
+
+# 複数メソッド
+-------------
+
+```
+ (methodA) (methodB)
+     |         |
+     +----+----+
+          | &lt;----- enum化
+      [client]
+          |
+      [server]
+          | &lt;----- enumでディスパッチ
+     +----+-----+
+     |          |
+(handlerA) (handlerB)
+```
+
+
+===
+
+# つらい話
+-----------------
+
+* Thrift IDLのセマンティクスが書いてない
+  + throws節のフィールドは直積？直和？
+* フォークライブラリの実装が不完全
+  + パーサはフルスクラッチで書き直した
+  + [パーサコンビネータ便利](https://github.com/KeenS/tokio-thrift/blob/master/tokio-thrift-codegen/src/parser.rs#L517)
+  + フォークした意味…
+* Rustにエンコード出来ないthriftの機能もある
+  + mapの定数は普通には無理
+  + エラーどうしよう(`Error`トレイトの実装とEnum)
+
+===
+
+# コード生成の話
+---------------
+
+* コンパイラプラグイン微妙
+  + 定義元ジャンプ、フィールド名補完などに難
+* CLI生成は悪手
+  + IDL変更する度CLI実行？
+  + 生成コードはコミット？
+    - CLIのバージョンがあるので基本はコミット。でも…
+* ビルドツール統合が最良
+  + FinagleにはScoogeがある
+  + tokio-thriftでもやりたい
+    - build.rsのサポート
+
+===
+
+# 多重化の話
+------------
+
+* 生のthrift on TCPだと通信を多重化出来ない
+* tokio-proto側でpipelineやmultiplexなどをサポート
+* pipeline: レスポンスを待たずに次のリクエスト
+* multiplex: リクエストとレスポンスが入り乱れてもよい。プロトコルオーバーヘッドがある
+* tokio-thriftは未実装
+
+===
+
+# Tokioの利点
+-------------
+
+* service: サーバとクライアント両方面倒見てくれる
+  + サーバもCPUの数だけハンドラをクローンしてくれたりする
+* protocol: 面倒毎が少ない(バッファ使ってくれる)
+* Futureベースの非同期
+* pipeline, multiplexによる多重化
+
+===
+
+# Tokioの利点
+-------------
+
+* APIが不安定
+  + tokio-thriftは今動かないorz
+* thriftはストリーミング指向なのにバッファ使う
+* Rustの痒い所に当たる
+  + 返り値多相がない(`Future`を直接返せない)
+  + アロケーションが必要になる
+  + ダイナミックディスパッチが必要になる
+  + 他言語と同水準のコスト
+
+===
+
+# まとめ
+--------
+
+* Thriftは広さで勝負
+* コードジェネレータはビルドツールへの統合を
+* IDLは既存のコードに乗っかった方が楽（上と競合）
+* フレームワークを使うとみんな幸せ
+* RPCはインターフェースベースであるべき
+* 多重化はRPCより下のレイヤーで出来る
+
+&lt;/script&gt;
+&lt;/section&gt;
+</description>
+    </item>
+    
+    <item>
       <title>Rustの関連型の使いどころ</title>
       <link>/blog/2016/11/22/rustnokanrenkatanotsukaidokoro</link>
       <pubDate>Tue, 22 Nov 2016 18:26:47 +0900</pubDate>
@@ -3242,84 +3656,6 @@ documentation = http://KeenS.github.io/file_logger/file_logger/
 &lt;li&gt;Cargoを使えば簡単にパッケージを登録出来るよ&lt;/li&gt;
 &lt;li&gt;Cargoってすごいね&lt;/li&gt;
 &lt;/ul&gt;</description>
-    </item>
-    
-    <item>
-      <title>Rustといえどリソースの解放は注意</title>
-      <link>/blog/2016/01/08/rusttoiedoriso_sunokaihouhachuui</link>
-      <pubDate>Fri, 08 Jan 2016 00:50:31 +0900</pubDate>
-      
-      <guid>/blog/2016/01/08/rusttoiedoriso_sunokaihouhachuui</guid>
-      <description>&lt;p&gt;κeenです。深夜にですが小ネタを。
-&lt;/p&gt;
-
-&lt;p&gt;Rustを使っているとついついリソースの解放のことは忘れてしまうのですが、注意しないといけない類のリソースがあります。&lt;/p&gt;
-
-&lt;p&gt;その1つが&lt;code&gt;BufWriter&lt;/code&gt;です。
-バッファリングライター全般に言えることですが、奴らはメモリ上にまだ書き込まれてない値を保持しているので解放する前にそれらを掃き出す必要があります。
-その時に書き込み例外が起き得るので、解放も安全な処理ではないのです。Javaのtry-with-resource文を使わないファイルの扱いについては悪名高いですが、あれは仕方ない話なのです。&lt;/p&gt;
-
-&lt;p&gt;ところでRustのリソースの解放は&lt;code&gt;Drop&lt;/code&gt;トレイトの&lt;code&gt;drop&lt;/code&gt;が担っていますが、返り値は&lt;code&gt;void&lt;/code&gt;です。基本的には裏で動くので当然ですね。
-そして、&lt;code&gt;drop&lt;/code&gt;はpanicを起こさないことが望ましいです。Rustは今のところ(1.5時点)panicから回復出来ないのでそれはそうでしょう。では、エラーを返り値でも返せない、panicも起こせない中&lt;code&gt;BufWrite&lt;/code&gt;はどうエラーを扱っているのでしょう。それは実装を見ると分かります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;impl&amp;lt;W: Write&amp;gt; Drop for BufWriter&amp;lt;W&amp;gt; {
-    fn drop(&amp;amp;mut self) {
-        if self.inner.is_some() {
-            // dtors should not panic, so we ignore a failed flush
-            // 訳: dropはパニックすべきではない、だからflushの失敗は無視する
-            let _r = self.flush_buf();
-        }
-    }
-}
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;…はい。中々アレなことをやってくれますね。&lt;/p&gt;
-
-&lt;p&gt;ということで&lt;code&gt;BufWrite&lt;/code&gt;を使う時は&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;{
-  let file = File::create(&amp;quot;some_file.txt&amp;quot;).unwrap();
-  let br = BufWrite::new(&amp;amp;file);
-
-  // do something
-
-  match br.flush_buf() {
-    Ok(()) =&amp;gt; (),
-    Err(e) =&amp;gt; // handle errors
-  }
-
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のようにライフタイムの終わりで&lt;code&gt;flush_buf&lt;/code&gt;を呼ぶのが作法的な方法です。
-&lt;code&gt;unwrap&lt;/code&gt;と同じく掃き出せない時に無視されてもいいならそこまでする必要はありませんが、それでもスコープの終わりに意図的に&lt;code&gt;flush_buf&lt;/code&gt;を呼んでない旨を書くと丁寧でしょう。&lt;/p&gt;
-
-&lt;p&gt;因みにスコープが大きすぎる時は&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;{
-  let file = File::create(&amp;quot;some_file.txt&amp;quot;).unwrap();
-  {
-    let br = BufWrite::new(&amp;amp;file);
-  
-    // do something with br
-  
-    match br.flush_buf() {
-      Ok(()) =&amp;gt; (),
-      Err(e) =&amp;gt; // handle errors
-    }
-  }
-  
-  // do other things
-
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のようにスコープを作って不要なライフタイムを切り詰めるイディオムもあるので併せてどうぞ。&lt;/p&gt;
-
-&lt;p&gt;余談ですが&lt;code&gt;std::fs::File&lt;/code&gt;の実体はCの&lt;code&gt;FILE&lt;/code&gt;構造体ではなくファイルディスクリプタなのでバッファリングはしてません。のでこちらは気にする必要はありません。&lt;/p&gt;
-
-&lt;p&gt;という訳で小ネタでした。&lt;/p&gt;</description>
     </item>
     
   </channel>
