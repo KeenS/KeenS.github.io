@@ -6,8 +6,422 @@
     <description>Recent content on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Tue, 22 Nov 2016 18:26:47 +0900</lastBuildDate>
+    <lastBuildDate>Sat, 26 Nov 2016 13:07:29 +0900</lastBuildDate>
     <atom:link href="/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Rustで非同期Thriftしたい</title>
+      <link>/slide/RustdehidoukiThriftshitai/</link>
+      <pubDate>Sat, 26 Nov 2016 13:07:29 +0900</pubDate>
+      
+      <guid>/slide/RustdehidoukiThriftshitai/</guid>
+      <description>&lt;section data-markdown
+    data-separator=&#34;\n===\n&#34;
+    data-vertical=&#34;\n---\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+&lt;script type=&#34;text/template&#34;&gt;
+
+# Rustで非同期Thrift
+----------------------
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+===
+
+# About Me
+---------
+![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
+
+ * κeen
+ * [@blackenedgold](https://twitter.com/blackenedgold)
+ * Github: [KeenS](https://github.com/KeenS)
+ * サイバーエージェントのエンジニア
+ * Lisp, ML, Rust, Shell Scriptあたりを書きます
+
+===
+
+* &lt;span style=&#34;font-size:150%&#34;&gt;X&lt;/span&gt; RPCライブラリを使う話
+* &lt;span style=&#34;font-size:150%&#34;&gt;O&lt;/span&gt; RPCライブラリを作る話
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+===
+
+# Thrift
+--------
+
+* Facebook発(現apache)RPCフレームワーク
+* IDLから複数の言語向けのコードを吐ける
+* 対応言語多い
+* 新しい言語はthriftレポジトリフォークして追加
+
+===
+
+# Thrift vs gRPC
+----------------
+
+\                       | Thrift | gRPC
+------------------------|:------:|:----:
+ベース                  | 自前   | HTTP/2
+コード生成              | o      | o
+プロトコルのアップデート | o      | o
+通信の多重化            | トランスポート次第  | o (HTTP/2)
+認証                    | x  | o
+例外                    | ユーザ定義可能 | 事前定義のみ?
+対応言語                | 多い   | ほどほど
+その他                  | union  | timestamp, anyなど
+&lt;!-- .element: style=&#34; margin-right:auto; margin-left:auto&#34;--&gt;
+
+===
+
+# 何故Thrift?
+-------------
+
+* 仕事で使ってたから
+* 仕事は「gRPCかthrift、まあthriftでいっしょ」で決まった
+
+===
+
+# RustとThrift
+--------------
+いくつか実装がある
+
+===
+
+## [sgnr/rust-thrift](https://github.com/sgnr/rust-thrift)
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+===
+
+![sgnr/rust-thrift is deprecated](/images/thrift/sgnr-rust-thrift.png)
+
+===
+
+## [maximg/thrift](https://github.com/maximg/thrift)
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+===
+
+![maximg/thrift is deprecated](/images/thrift/maximg-thrift.png)
+
+===
+
+## [terminalcloud/thrift](https://github.com/terminalcloud/thrift)
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+===
+
+![terminalcloud/thrift is deprecated](/images/thrift/terminalcloud.png)
+
+===
+
+# [thehydroimpulse/thrust](https://github.com/thehydroimpulse/thrust)
+---------------------------
+
+* Thrift RPC in Rust (Async I/O)
+* 非同期!!
+* apache/thriftベースじゃない（フルスクラッチ）
+* コンパイラプラグインサポートとかも
+* 作りかけ
+  + `Latest commit 0a37b77 on 11 Apr`
+
+→ フォークすることに
+
+===
+
+# [Finagle](https://github.com/twitter/finagle)
+---------
+
+* **Scalaの** RPCフレームワーク
+* [You Server as a Function](https://monkey.org/~marius/funsrv.pdf)
+* Nettyベース
+* サーバとクライアント両方サポート
+* Twitter製
+* 良くも悪くもTwitterべったり
+
+===
+
+# Finagle Client
+--------
+
+* クライアントが賢い
+* RPCではTCPベースのLBが使えない
+  + クライアントはコネクション張りっぱなし
+* クライアントサイドロードバランシングが必要
+* Finagleはそこまでカバー
+* 他にもエラーが起きたサーバ外したり色々
+
+===
+
+# Tokio
+--------
+
+* **Rustの** RPCフレームワーク
+* mioベース
+* Finagleを参考に開発
+  + **開発中**
+* tokio-core
+  + コア部分
+* tokio-proto
+  + プロトコル実装のサポート
+* tokio-service
+  + サービス実装のサポート
+
+===
+
+# TokioとFinagle
+-----------------
+
+  \           | Tokio       | Finagle
+--------------|:-----------:|:-------:
+コア          | [tokio-core](https://github.com/tokio-rs/tokio-core) | [finagle-core](https://github.com/twitter/finagle/tree/develop/finagle-core)
+Future        | [future](https://github.com/alexcrichton/futures-rs) | [twitter util](https://github.com/twitter/util)
+非同期エンジン | [mio](https://github.com/carllerche/mio) | [netty](http://netty.io/)
+&lt;!-- .element: style=&#34; margin-right:auto; margin-left:auto&#34;--&gt;
+
+
+===
+
+# [mio](https://github.com/carllerche/mio)
+------
+
+* 非同期イベントループライブラリ
+* ループ内ゼロアロケーション
+* `epoll` などの薄いラッパ
+* libuv, libevent, libev2などのRust版
+* イベントドリブン
+* ソケットだけでなく *ファイルIO* 、インメモリチャネルとかも監視出来る
+
+===
+
+# [future](https://github.com/alexcrichton/futures-rs)
+--------------
+
+* [Zero-cost futures in Rust · Aaron Turon](https://aturon.github.io/blog/2016/08/11/futures/)
+* ゼロコスト
+* 普通にFutureを使うとランタイムにステートマシンになる
+* お型付けは大変
+    + `map` したら `Map&lt;A, fn (A)-&gt;B&gt;` の型が返ったり
+* ストリーミング指向のAPIもある
+
+===
+
+# tokio-thrift
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+===
+
+# [tokio-thrift](https://github.com/KeenS/tokio-thrift)
+--------------
+
+* [KeenS/tokio-thrift](https://github.com/KeenS/tokio-thrift)
+* この発表のために作った（作ってる）
+* tokioベースのrustのthriftサポート
+* thrustのフォーク
+* 基本ツール全て
+  + コードジェネレータ
+  + コンパイラプラグイン
+  + ランタイムライブラリ
+
+===
+
+# プロトコルスタック
+-------------------
+
+ユーザは実装に集中出来る仕組み
+
+```
++------------------------------------------------+
+| service   | tokio-service + 生成コード + ユーザ |
+|------------------------------------------------|
+| protocol  | tokio-proto   + tokio-thrift       |
+|------------------------------------------------|
+| transport | tokio-core                         |
++------------------------------------------------+
+```
+
+===
+
+# サンプルコード
+----------------
+
+* [これ](https://github.com/KeenS/tokio-thrift/blob/master/example/simple_server_client/src/main.rs)
+
+===
+
+# ユーザビリティ
+---------------
+
+* サーバ: ユーザはインターフェースに沿ったコードを書くだけ
+* クライアント: インターフェース通りに呼べる
+* 返り値はFuture
+* サーバ: 非同期実装と相性がいい
+* クライアント: 非同期通信をそのままエンコード
+
+===
+
+# 実装の話
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+===
+
+# 所有権とゼロコピー
+-------------------
+
+* プロトコルのパースの部分
+* Rustっぽい部分
+* バッファの所有権をパース結果に渡すことでデータのコピーを避ける
+
+===
+
+# 所有権とゼロコピー
+-------------------
+バッファをresultにパースして
+
+```
+buffer
+  |
++-+---------------+
+|                 |
+-------------------
+| | | | | ... | | | &lt;- バイト列
+-------------------
+```
+
+===
+
+# 所有権とゼロコピー
+-------------------
+resultにデータの所有権を渡してしまう
+
+```
+ result   buffer
+   |        |
++--+----++--+-----+
+|       ||        |
+-------------------
+| | | | | ... | | | &lt;- バイト列
+-------------------
+```
+
+===
+
+# 複数メソッド
+-------------
+
+* 複数メソッドだと複数の引数/返値の型を扱う
+* コネクションのハンドラは1つ
+* 複数型をどうやって扱う？
+  + [enumを定義](https://github.com/KeenS/tokio-thrift/blob/master/example/simple_server_client/src/thrift.rs#L67)
+  + ゼロオーバーヘッド…
+
+===
+
+# 複数メソッド
+-------------
+
+```
+ (methodA) (methodB)
+     |         |
+     +----+----+
+          | &lt;----- enum化
+      [client]
+          |
+      [server]
+          | &lt;----- enumでディスパッチ
+     +----+-----+
+     |          |
+(handlerA) (handlerB)
+```
+
+
+===
+
+# つらい話
+-----------------
+
+* Thrift IDLのセマンティクスが書いてない
+  + throws節のフィールドは直積？直和？
+* フォークライブラリの実装が不完全
+  + パーサはフルスクラッチで書き直した
+  + [パーサコンビネータ便利](https://github.com/KeenS/tokio-thrift/blob/master/tokio-thrift-codegen/src/parser.rs#L517)
+  + フォークした意味…
+* Rustにエンコード出来ないthriftの機能もある
+  + mapの定数は普通には無理
+  + エラーどうしよう(`Error`トレイトの実装とEnum)
+
+===
+
+# コード生成の話
+---------------
+
+* コンパイラプラグイン微妙
+  + 定義元ジャンプ、フィールド名補完などに難
+* CLI生成は悪手
+  + IDL変更する度CLI実行？
+  + 生成コードはコミット？
+    - CLIのバージョンがあるので基本はコミット。でも…
+* ビルドツール統合が最良
+  + FinagleにはScoogeがある
+  + tokio-thriftでもやりたい
+    - build.rsのサポート
+
+===
+
+# 多重化の話
+------------
+
+* 生のthrift on TCPだと通信を多重化出来ない
+* tokio-proto側でpipelineやmultiplexなどをサポート
+* pipeline: レスポンスを待たずに次のリクエスト
+* multiplex: リクエストとレスポンスが入り乱れてもよい。プロトコルオーバーヘッドがある
+* tokio-thriftは未実装
+
+===
+
+# Tokioの利点
+-------------
+
+* service: サーバとクライアント両方面倒見てくれる
+  + サーバもCPUの数だけハンドラをクローンしてくれたりする
+* protocol: 面倒毎が少ない(バッファ使ってくれる)
+* Futureベースの非同期
+* pipeline, multiplexによる多重化
+
+===
+
+# Tokioの利点
+-------------
+
+* APIが不安定
+  + tokio-thriftは今動かないorz
+* thriftはストリーミング指向なのにバッファ使う
+* Rustの痒い所に当たる
+  + 返り値多相がない(`Future`を直接返せない)
+  + アロケーションが必要になる
+  + ダイナミックディスパッチが必要になる
+  + 他言語と同水準のコスト
+
+===
+
+# まとめ
+--------
+
+* Thriftは広さで勝負
+* コードジェネレータはビルドツールへの統合を
+* IDLは既存のコードに乗っかった方が楽（上と競合）
+* フレームワークを使うとみんな幸せ
+* RPCはインターフェースベースであるべき
+* 多重化はRPCより下のレイヤーで出来る
+
+&lt;/script&gt;
+&lt;/section&gt;
+</description>
+    </item>
     
     <item>
       <title>Rustの関連型の使いどころ</title>
@@ -3026,141 +3440,6 @@ seq 1 10 | xargs -I@ bash -c &#39;sum @&#39;
 
 &lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;cat nginx.conf | ssh stepper ssh host1 sudo tee /etc/nginx/nginx.conf &amp;gt; /dev/null
 &lt;/code&gt;&lt;/pre&gt;</description>
-    </item>
-    
-    <item>
-      <title>Container Desgin Patterns</title>
-      <link>/blog/2016/07/02/container_desgin_patterns</link>
-      <pubDate>Sat, 02 Jul 2016 22:26:10 +0900</pubDate>
-      
-      <guid>/blog/2016/07/02/container_desgin_patterns</guid>
-      <description>&lt;p&gt;κeenです。先日、Kubernetesの開発者が書いた&lt;a href=&#34;http://blog.kubernetes.io/2016/06/container-design-patterns.html&#34;&gt;Kubernetes: Container Design Patterns&lt;/a&gt;というのを教えてもらって、面白かったのでそれを紹介します。
-ただ漫然とコンテナを使っているだけでは気付かない使い方があったのでコンテナに興味のある方は是非一読下さい。&lt;/p&gt;
-
-&lt;p&gt;&lt;/p&gt;
-
-&lt;h1 id=&#34;序論&#34;&gt;序論&lt;/h1&gt;
-
-&lt;p&gt;オブジェクト指向が出てすぐにオブジェクト指向デザインパターンが産まれたように、分散システムにもデザインパターンが必要となってきました。
-分散システムのデザインパターンの萌芽はHadoop/MapReduceに見ることが出来ますが、Javaに限られていました。
-ところがここ数年の(Linuxの)コンテナ技術の躍進により欠けていたピースが埋まりました。分散システムパターンへのデプロイの抽象化です。
-依存モジュールも一緒にデプロイ出来ますし、デプロイの状態も成功/失敗の二値になります。
-それだけでなく、コンテナはオブジェクト指向におけるオブジェクトによく似た役割を果たします。それを見ていきましょう。&lt;/p&gt;
-
-&lt;h1 id=&#34;単一コンテナのマネジメント-パターン&#34;&gt;単一コンテナのマネジメント パターン&lt;/h1&gt;
-
-&lt;p&gt;コンテナは、自然にインターフェースの境界となります（オブジェクトと同じように）。
-アプリケーション機能のインターフェースに留まらず、コンテナそのものの管理インターフェースも提供するでしょう。
-典型的には &lt;code&gt;run()&lt;/code&gt; &lt;code&gt;pause()&lt;/code&gt; &lt;code&gt;stop()&lt;/code&gt; の管理ですが、もっと多様な管理インターフェースが有り得ます。&lt;/p&gt;
-
-&lt;p&gt;大抵の今時のプログラミング言語ならHTTP経由でJSONをやりとりする機能くらい簡単に書けるのでそれがコンテナ間で統一さたインターフェースになりえるでしょう。&lt;/p&gt;
-
-&lt;p&gt;上位のアプリケーションに対してはコンテナ内の情報(アプリケーションのQPS, プロファイル情報, コンフィグ情報, ヘルスチェック, ログなどなど)を提供するでしょう。&lt;/p&gt;
-
-&lt;p&gt;下位のアプリケーションにはマネジメントインターフェース、例えばgraceful shutdownなどを提供することになるでしょう。
-Android OSがActivityを管理する時に様々なコールバック(&lt;code&gt;onCreate&lt;/code&gt;, &lt;code&gt;onResume&lt;/code&gt;&amp;hellip;)を呼ぶように、分散マネージャがコンテナを管理するための様々なAPIを提供すると綺麗に管理出来ます。
-また、コンテナ特有の機能として「レプリケーションする」（スケールアップするためのインターフェース）なんかもあるかもしれません。&lt;/p&gt;
-
-&lt;h1 id=&#34;単一ノード-複数コンテナのアプリケーションパターン&#34;&gt;単一ノード、複数コンテナのアプリケーションパターン&lt;/h1&gt;
-
-&lt;p&gt;コンテナマネージャにはKubernetesのPodやNomadのTask Groupsのように複数のコンテナを1つのノードにスケジュールする機能があります。
-別にコンテナに分けずに複数のコンテナをアプリケーションと同じの1つのコンテナに入れることも可能です。しかしながら分けた方が様々なメリットが得られます。&lt;/p&gt;
-
-&lt;ol&gt;
-&lt;li&gt;コンテナがリソース管理の単位である。cgroupによる管理がやりやすくなる。&lt;/li&gt;
-&lt;li&gt;コンテナがパッケージングの単位である。複数のコンテナでデプロイや管理をするチームを分けるのも簡単になるし、テストも簡単になる。&lt;/li&gt;
-&lt;li&gt;コンテナが再利用の単位である。多くのサブ機能コンテナは多種のメインコンテナと一緒に使うことが出来る。&lt;/li&gt;
-&lt;li&gt;コンテナが障害を分離する境界になる。例えば、コンテントマネジメントコンテナに障害があったとしても、Webサーバコンテナはサービスを継続出来るようになる。&lt;/li&gt;
-&lt;li&gt;コンテナがデプロイの単位となる。新しい機能の追加やロールバックが単独で行える。（ただし、アプリケーションのバージョンの組み合わせが増えるという点では短所にもなる）。&lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;p&gt;ということでそれらを前提にしたデザインパターンをいくつか。&lt;/p&gt;
-
-&lt;h2 id=&#34;サイドカーパターン&#34;&gt;サイドカーパターン&lt;/h2&gt;
-
-&lt;p&gt;メインのアプリケーションコンテナにサイドカーのように付属するコンテナを付けて、機能を足すパターンです。
-例えばアプリケーションがあって、それのログをローカルストレージから分散ストレージに保存するサイドカーなど。&lt;/p&gt;
-
-&lt;p&gt;逆に、ローカルディスクのファイルを提供するWebサーバがあったとして、そのために定期的にgitからstatic fileをpollするサイドカーコンテナなんかもあるかもしれません。&lt;/p&gt;
-
-&lt;p&gt;これらのサイドカーは同じノードのコンテナ同士ならディスクボリュームを共有出来ることに依存した作りになっています。&lt;/p&gt;
-
-&lt;h2 id=&#34;アンバサダーパターン&#34;&gt;アンバサダーパターン&lt;/h2&gt;
-
-&lt;p&gt;アンバサダーパターンはメインコンテナと別システムとのコミュニケーションを代理します。
-例えば、&lt;a href=&#34;https://github.com/twitter/twemproxy&#34;&gt;twemproxy&lt;/a&gt; のコンテナをアンバサダーとすれば実際は複数のmemcachedにシャードされたmemcachedクラスタと通信しているも関らず、アプリケーションはローカルホストのmemcachedと通信しているように出来ます。&lt;/p&gt;
-
-&lt;p&gt;この利点は1つにはアプリケーションをローカルホストのmemcachedと通信することだけを考えて書けばいいようになる点、もう1つにはアプリケーションのテストをローカルホストのmemcachedとだけすれば良くなる点、さらにもう1つにはtwemproxyのコンテナを（別の言語で書かれた）別のアプリケーションに使い回せる点にあります。&lt;/p&gt;
-
-&lt;p&gt;これは同じホストのコンテナ同士はローカルホストのネットワークインターフェースを使って通信出来ることに依存した作りになっています。&lt;/p&gt;
-
-&lt;h2 id=&#34;アダプターパターン&#34;&gt;アダプターパターン&lt;/h2&gt;
-
-&lt;p&gt;アダプターパターンはアンバサダーパターンの逆で、アプリケーションを外部から観測した時に統一されたインターフェースを提供するようにするために使います。&lt;/p&gt;
-
-&lt;p&gt;アプリケーション毎にメトリクスの採り方は異ります（例えばJavaならJMX、など）。様々にあるメトリクスを統一したインタフェースで提供するとメトリクスアグリゲータが非常にシンプルになります。
-具体的な例を出すと&lt;a href=&#34;https://prometheus.io/&#34;&gt;Prometheus&lt;/a&gt;のためのインターフェース (HTTP &lt;code&gt;/metrics&lt;/code&gt;)を提供する(&lt;a href=&#34;https://prometheus.io/docs/instrumenting/exporters/&#34;&gt;exporter&lt;/a&gt;)コンテナなどです。&lt;/p&gt;
-
-&lt;p&gt;アダプターとメインコンテナはストレージやローカルホストネットワークを通じてデータをやりとりするでしょう。&lt;/p&gt;
-
-&lt;h1 id=&#34;複数ノードアプリケーションパターン&#34;&gt;複数ノードアプリケーションパターン&lt;/h1&gt;
-
-&lt;p&gt;次は複数のノードに跨る協調分散システムでのパターンです。
-こちらも同じくPodなどの抽象化を前提とします。&lt;/p&gt;
-
-&lt;h2 id=&#34;リーダー選出パターン&#34;&gt;リーダー選出パターン&lt;/h2&gt;
-
-&lt;p&gt;分散システムではリーダを選出する需要が多々あります。
-例えば複数のレプリカを作った時にマスターがコケたら次のマスターを選出しないといけません。&lt;/p&gt;
-
-&lt;p&gt;巷にはリーダー選出アルゴリズムを実装したライブライが出回っていますが、往々にして難解であり、また、特定の言語でしか動かないので再利用性がありません。&lt;/p&gt;
-
-&lt;p&gt;そこで、ライブラリを使うのではなくてリーダー選出コンテナを実装しましょう。&lt;/p&gt;
-
-&lt;p&gt;単一ノードのパターンと同じく、リーダー選出コンテナとアプリケーションコンテナを一緒にスケジューリングします。
-そして、リーダー選出コンテナが他のコンテナとネゴシエーションしてリーダーになったら、ローカルホストのHTTP APIにbecomeLeader、renewLeadershipなどのクエリを投げます。
-アプリケーションはただそれらのエンドポイントを実装しさえすればいいのです。&lt;/p&gt;
-
-&lt;p&gt;このコンテナはアプリケーションにも言語に依存しないので自由に使い回すことが出来ます。&lt;/p&gt;
-
-&lt;h2 id=&#34;ワークキューパターン&#34;&gt;ワークキューパターン&lt;/h2&gt;
-
-&lt;p&gt;もう1つのよくある分散システムでのタスクは、ワークキューによる分散実行です。
-いくつかワークキューの実装はありますが、やはりそれらは特定の言語に依存しています。&lt;/p&gt;
-
-&lt;p&gt;そこで仕事の分配のコンテナ、そして、仕事実行のフレームワークとなるコンテナを用意してあげましょう。&lt;/p&gt;
-
-&lt;p&gt;フレームワークのコンテナは分配コンテナから仕事(ファイルなど)を受け取って、ユーザの書いた実行コンテナに処理を移譲します。そしてフレームワークコンテナが実行コンテナの出力した結果をまた分配コンテナに戻します。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;
-[Request]       +---[フレームワークコンテナ]=[実行コンテナ(ユーザ)]
-   |            |
-[分配コンテナ] --+
-   |            |
-   |            +---[フレームワークコンテナ]=[実行コンテナ(ユーザ)]
-   |
-[ワークキューの保存など]
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;分散協調の部分をフレームワークコンテナがやってくれるのでユーザが書く実行コンテナは非常にシンプルになります。&lt;/p&gt;
-
-&lt;h2 id=&#34;分配-集約パターン&#34;&gt;分配/集約パターン&lt;/h2&gt;
-
-&lt;p&gt;このパターンは、クライアントが1つの巨大なタスクをルートコンテナに投げ、ルートコンテナが子コンテナ達に分割したタスクを移譲します。そして子コンテナ達の結果を纏めてクライアントに返します。&lt;/p&gt;
-
-&lt;p&gt;MapReduceと同じように、タスクを実行するリーフコンテナと、リーフコンテナの結果を纏めるマージコンテナを用意する必要があります。&lt;/p&gt;
-
-&lt;p&gt;コンテナは特定のインターフェースさえ実装していればいいのでリファクタが(オブジェクト指向の時と同じように)容易です。&lt;/p&gt;
-
-&lt;p&gt;また、子コンテナにルートコンテナと同じようなscatter/gather機能を持ったコンテナを使うことで、任意の深さにまでタスクツリーを作ることが出来ます。
-これは例えば処理中のリソース使用量が多いときに部分的にタスクを実行してマージを繰替えすことで必要となる最大リソースを減らす、などに使えるでしょう（他にももっとあるかもしれませんがパッとは思いつきませんでした）。&lt;/p&gt;
-
-&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
-
-&lt;p&gt;コンテナのデザインパターを紹介しました。フレームワークコンテナなど、興味深いパターンもあって興味深いですね。&lt;/p&gt;
-
-&lt;p&gt;まだまだパターンはありえると思うのでこの分野（？）、もう少し広まると良いですね。&lt;/p&gt;</description>
     </item>
     
   </channel>
