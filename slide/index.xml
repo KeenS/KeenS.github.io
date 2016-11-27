@@ -47,6 +47,19 @@
 
 ===
 
+# RPC
+-----
+
+* Remote Procedure Call
+* リモートで呼べる
+* 言語跨げる
+* シリアライズフォーマットが決まれば大体出来る
+* Thrift, protobuf/gRPC, avro...
+* 大抵バイナリ
+  + JSONに比べて2倍くらい効率がいい
+
+===
+
 # Thrift
 --------
 
@@ -167,8 +180,10 @@
   + コア部分
 * tokio-proto
   + プロトコル実装のサポート
+  + 絶賛API変更中
 * tokio-service
   + サービス実装のサポート
+
 
 ===
 
@@ -189,10 +204,10 @@ Future        | [future](https://github.com/alexcrichton/futures-rs) | [twitter 
 ------
 
 * 非同期イベントループライブラリ
+* イベントドリブン
 * ループ内ゼロアロケーション
 * `epoll` などの薄いラッパ
 * libuv, libevent, libev2などのRust版
-* イベントドリブン
 * ソケットだけでなく *ファイルIO* 、インメモリチャネルとかも監視出来る
 
 ===
@@ -206,6 +221,88 @@ Future        | [future](https://github.com/alexcrichton/futures-rs) | [twitter 
 * お型付けは大変
     + `map` したら `Map&lt;A, fn (A)-&gt;B&gt;` の型が返ったり
 * ストリーミング指向のAPIもある
+
+===
+
+# [tokio-core](https://github.com/tokio-rs/tokio-core)
+--------------
+
+* 非同期IOのフレームワーク
+* Futureベース
+* フレームドIOとストリーミングIO
+* フレームワークというよりユーティリティ？
+  + mioとfutureを合わせて使う
+
+===
+
+# [tokio-proto](https://github.com/tokio-rs/tokio-proto)
+-------------
+
+* 主にバイナリ列&lt;-&gt;構造体の部分の面倒を見てくれる
+* API変更中…
+* バッファリングしてパースしやすくしてくれる
+* プロトコルの多重化やってくれる(後述)
+
+===
+
+# [tokio-service](https://github.com/tokio-rs/tokio-service)
+-----------------
+
+* タスクサーバの面倒見てくれる
+* 主にロードバランシング
+
+
+===
+
+# [Service](https://tokio-rs.github.io/tokio-service/tokio_service/trait.Service.html)
+-------------
+
+``` rust
+pub trait Service {
+    type Request;
+    type Response;
+    type Error;
+    type Future: Future&lt;Item=Self::Response, Error=Self::Error&gt;;
+    fn call(&amp;self, req: Self::Request) -&gt; Self::Future;
+}
+```
+
+===
+
+# Service
+----------
+
+* いわゆるハンドラ
+* インターフェースさえ満たせばいい
+  + ミドルウェアもハンドラも同じ扱い
+
+===
+
+# [NewService](https://tokio-rs.github.io/tokio-service/tokio_service/trait.NewService.html)
+--------------
+
+```rust
+pub trait NewService {
+    type Request;
+    type Response;
+    type Error;
+    type Instance: Service&lt;Request=Self::Request, Response=Self::Response, Error=Self::Error&gt;;
+    fn new_service(&amp;self) -&gt; Result&lt;Self::Instance&gt;;
+}
+
+impl&lt;F, R&gt; NewService for F where F: Fn() -&gt; Result&lt;R&gt;, R: Service
+```
+
+===
+
+# NewService
+------------
+
+* いわゆるAbstractServiceFactory的な存在
+* コア数に応じてサービスを作ってくれる
+* ただし`Service`を返す普通の関数も`NewService`になる
+* [example](https://github.com/tokio-rs/tokio-line/blob/master/examples/echo_client_server.rs#L21)
+
 
 ===
 
@@ -269,10 +366,20 @@ Future        | [future](https://github.com/alexcrichton/futures-rs) | [twitter 
 
 ===
 
+# Thriftのプロトコル
+-------------------
+
+* 現状binary protocolのみ
+  + fork元が実装してあった
+* compactとか需要ある？
+* 因みにJSONはやめとけ
+
+===
+
 # 所有権とゼロコピー
 -------------------
 
-* プロトコルのパースの部分
+* プロトコルのパースの部分の話
 * Rustっぽい部分
 * バッファの所有権をパース結果に渡すことでデータのコピーを避ける
 
@@ -338,7 +445,6 @@ resultにデータの所有権を渡してしまう
 (handlerA) (handlerB)
 ```
 
-
 ===
 
 # つらい話
@@ -346,6 +452,7 @@ resultにデータの所有権を渡してしまう
 
 * Thrift IDLのセマンティクスが書いてない
   + throws節のフィールドは直積？直和？
+  + Javaで生成してみて推測するしかない
 * フォークライブラリの実装が不完全
   + パーサはフルスクラッチで書き直した
   + [パーサコンビネータ便利](https://github.com/KeenS/tokio-thrift/blob/master/tokio-thrift-codegen/src/parser.rs#L517)
@@ -353,13 +460,28 @@ resultにデータの所有権を渡してしまう
 * Rustにエンコード出来ないthriftの機能もある
   + mapの定数は普通には無理
   + エラーどうしよう(`Error`トレイトの実装とEnum)
+* 所有権の問題
+
+===
+
+# 言語との統合
+-------------
+
+* Rustには公式のシリアライズフレームワークがある
+* [rustc-serialize](https://github.com/rust-lang-nursery/rustc-serialize)
+* あるいはユーザ側のも
+* [serde](https://github.com/serde-rs/serde)
+* のっかりたいけどThriftに必要なデータがない
+  + フィールドのシーケンス番号とか
+* 今のところ自動生成に頼る
+  + フレームワークにフィードバックした方がいい？
 
 ===
 
 # コード生成の話
 ---------------
 
-* コンパイラプラグイン微妙
+* [コンパイラプラグイン](https://github.com/KeenS/tokio-thrift/blob/master/tokio-thrift-macros/tests/service.rs#L10)微妙
   + 定義元ジャンプ、フィールド名補完などに難
 * CLI生成は悪手
   + IDL変更する度CLI実行？
@@ -379,7 +501,7 @@ resultにデータの所有権を渡してしまう
 * tokio-proto側でpipelineやmultiplexなどをサポート
 * pipeline: レスポンスを待たずに次のリクエスト
 * multiplex: リクエストとレスポンスが入り乱れてもよい。プロトコルオーバーヘッドがある
-* tokio-thriftは未実装
+* tokio-thriftは未対応
 
 ===
 
@@ -394,7 +516,7 @@ resultにデータの所有権を渡してしまう
 
 ===
 
-# Tokioの利点
+# Tokioの欠点
 -------------
 
 * APIが不安定
