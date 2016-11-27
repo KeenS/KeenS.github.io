@@ -98,6 +98,10 @@ trait ReverseIter {
 * [関連型が必要になる状況 | Rust by Example](http://rust-lang-ja.org/rust-by-example/generics/assoc_items/the_problem.html)
 * [Abstract return types, aka `impl Trait`](http://www.ncameron.org/blog/abstract-return-types-aka-%60impl-trait%60/)
 
+## 応用
+
+* [RustのHigher-Kinded type Trait | κeenのHappy Hacκing Blog](http://keens.github.io/blog/2016/02/28/rustnohigherkinded_type_trait/)
+
 ## 発展的な話題
 
 * [Associated type constructors, part 1: basic concepts and introduction](http://smallcultfollowing.com/babysteps/blog/2016/11/02/associated-type-constructors-part-1-basic-concepts-and-introduction/)
