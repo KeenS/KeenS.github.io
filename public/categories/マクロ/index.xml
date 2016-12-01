@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>κeenのHappy Hacκing Blog</title>
+    <link>/categories/%E3%83%9E%E3%82%AF%E3%83%AD/index.xml</link>
+    <description>Recent content on κeenのHappy Hacκing Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>ja-jp</language>
+    <atom:link href="/categories/%E3%83%9E%E3%82%AF%E3%83%AD/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>マクロやコンパイラプラグインの実装方法色々</title>
+      <link>/blog/2016/12/01/makuroyakonpairapuraguinnojissouhouhou</link>
+      <pubDate>Thu, 01 Dec 2016 13:29:52 +0900</pubDate>
+      
+      <guid>/blog/2016/12/01/makuroyakonpairapuraguinnojissouhouhou</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2016/lang_dev&#34;&gt;言語実装 Advent Calendar 2016 - Qiita&lt;/a&gt;2日目の記事です。&lt;/p&gt;
+
+&lt;p&gt;κeenです。マクロなどのコンパイル時に何か処理をしてコード生成する機構の実現方法が言語によって様々にあるなぁと思ったのでちょっと探ってみます&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;
+
+&lt;p&gt;なんか文字だけ並んでても味気ないのでサンプルマクロも付けときますね。&lt;/p&gt;
+
+&lt;h1 id=&#34;コンパイラにマクロ専用言語のインタプリタ機能を付けるやつ&#34;&gt;コンパイラにマクロ専用言語のインタプリタ機能を付けるやつ&lt;/h1&gt;
+
+&lt;p&gt;Rustの&lt;code&gt;macro_rules&lt;/code&gt;やSchemeの&lt;code&gt;syntax-rules&lt;/code&gt;が該当します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-scheme&#34;&gt;(define-syntax define-protocol
+  (syntax-rules ()
+    ((define-protocol (name type ...) (method arg ...) ...)
+     (begin
+       (define method
+         (make-generic))
+       ...
+       (define name
+         (lambda (type ...)
+           (lambda methods
+             (add-methods methods (list (list method arg ...) ...)))))))))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;制限が強い上に無駄にコンパイラの機能が増えるので個人的にはあまり好きじゃないですね…。&lt;/p&gt;
+
+&lt;h1 id=&#34;コンパイラでもホスト言語を動かすやつ&#34;&gt;コンパイラでもホスト言語を動かすやつ&lt;/h1&gt;
+
+&lt;p&gt;コンパイラとランタイムが一緒になっているCommon Lispなんかで使われる方法です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-common-lisp&#34;&gt;(defmacro dotimes-unroll ((i n unroll) &amp;amp;body body)
+  (let ((n_      (gensym &amp;quot;n&amp;quot;)))
+    `(let ((,n_ ,n))
+       (do ((,i 0))
+           ((&amp;lt; ,n_ (the fixnum (+ ,unroll ,i)))
+            (do ((,i ,i (the fixnum (1+ ,i))))
+                ((&amp;lt; ,n_ (the fixnum (1+ ,i))))
+              ,@body
+              ))
+         ,@(loop :repeat unroll :append (append body `((setq ,i (the fixnum (1+ ,i))))))))))
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;マクロがなくなるまで再帰的にマクロ展開をします。
+ユーザが好き勝手書けてしかも手軽に使えるので割と好きです。まあ、でも言語を選びますね。&lt;/p&gt;
+
+&lt;h1 id=&#34;コンパイラプラグインとしてdlopenするやつ&#34;&gt;コンパイラプラグインとしてdlopenするやつ&lt;/h1&gt;
+
+&lt;p&gt;Rustのコンパイラプラグインが相当します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-toml&#34;&gt;[lib]
+crate-type = [&amp;quot;dylib&amp;quot;]
+plugin = true
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn codegen&amp;lt;&#39;cx&amp;gt;(cx: &amp;amp;&#39;cx mut ExtCtxt, text: String, file: String)
+        -&amp;gt; Box&amp;lt;MacResult + &#39;cx&amp;gt; {
+    let mut output = Vec::new();
+    let doc = Document::parse(&amp;amp;text)
+        .expect(&amp;quot;failed to parse thrift file&amp;quot;)
+        .expect(&amp;quot;EOF while parsing thrift file&amp;quot;);
+    {
+        let ns = find_rust_namespace(&amp;amp;doc).expect(&amp;quot;cannot find namespace&amp;quot;);
+    output.write_all(format!(&amp;quot;mod {} {{&amp;quot;, ns.module).as_ref()).expect(&amp;quot;internal error failed to write the vec&amp;quot;);
+    }
+    compile(doc, &amp;amp;mut output).expect(&amp;quot;failed to generate code&amp;quot;);
+    output.write_all(format!(&amp;quot;}}&amp;quot;).as_ref()).expect(&amp;quot;internal error failed to write the vec&amp;quot;);
+    let output = match std::str::from_utf8(&amp;amp;output) {
+        Ok(s) =&amp;gt; s,
+        Err(_) =&amp;gt; &amp;quot;&amp;quot;,
+    };
+
+    trace!(&amp;quot;{}&amp;quot;, output);
+
+
+    let parser = new_parser_from_source_str(cx.parse_sess(), file, output.to_string());
+
+    struct ExpandResult&amp;lt;&#39;a&amp;gt; {
+        p: parse::parser::Parser&amp;lt;&#39;a&amp;gt;,
+    }
+    impl&amp;lt;&#39;a&amp;gt; base::MacResult for ExpandResult&amp;lt;&#39;a&amp;gt; {
+        fn make_items(mut self: Box&amp;lt;ExpandResult&amp;lt;&#39;a&amp;gt;&amp;gt;)
+                      -&amp;gt; Option&amp;lt;SmallVector&amp;lt;ptr::P&amp;lt;ast::Item&amp;gt;&amp;gt;&amp;gt; {
+            let mut ret = SmallVector::zero();
+            while self.p.token != token::Eof {
+                match panictry!(self.p.parse_item()) {
+                    Some(item) =&amp;gt; ret.push(item),
+                    None =&amp;gt; panic!(self.p.diagnostic().span_fatal(self.p.span,
+                                                                  &amp;amp;format!(&amp;quot;expected item, found `{}`&amp;quot;,
+                                                                           self.p.this_token_to_string())))
+                }
+            }
+            Some(ret)
+        }
+    }
+
+    Box::new(ExpandResult { p: parser })
+
+}
+
+
+fn macro_thrift&amp;lt;&#39;cx&amp;gt;(cx: &amp;amp;&#39;cx mut ExtCtxt, sp: Span, tts: &amp;amp;[TokenTree])
+                     -&amp;gt; Box&amp;lt;MacResult + &#39;cx&amp;gt; {
+
+    let text = match get_single_str_from_tts(cx, sp, tts, &amp;quot;thrift!&amp;quot;) {
+        Some(f) =&amp;gt; f,
+        None =&amp;gt; return DummyResult::expr(sp),
+    };
+
+    codegen(cx, text, &amp;quot;trift!&amp;quot;.to_string())
+}
+
+
+#[plugin_registrar]
+pub fn plugin_registrar(reg: &amp;amp;mut Registry) {
+    reg.register_macro(&amp;quot;thrift&amp;quot;, macro_thrift);
+    reg.register_macro(&amp;quot;thrift_file&amp;quot;, macro_thrift_file);
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;一旦dllを作ってそれをプラグインとしてロードするという手間もありますし、ユーザが触れるASTも複雑なのであまり好きではないです。
+まあ、これは準クオートだとかのユーザインターフェースの問題だったりするんですが。
+ただ表現力はホスト言語が使えるので自由に使えます。&lt;/p&gt;
+
+&lt;h1 id=&#34;言語の仕組みを使ってライブラリをコンパイラにロードする&#34;&gt;言語の仕組みを使ってライブラリをコンパイラにロードする&lt;/h1&gt;
+
+&lt;p&gt;私が地味に好きな言語に&lt;a href=&#34;http://www.mirah.org/&#34;&gt;mirah&lt;/a&gt;というのがあります。その言語での実現方法が少し好きでした。
+mirahはJVMで動くRuby風言語で、コンパイラは既にセルフホストされています。つまりコンパイラもJVMで動く訳です。&lt;/p&gt;
+
+&lt;p&gt;Javaには&lt;a href=&#34;https://docs.oracle.com/javase/tutorial/sound/SPI-intro.html&#34;&gt;SPI&lt;/a&gt;というものがあって明示的にクラスやインスタンスを指定しなくてもJVMが実装を捜してくれる機能があります。
+その機能にのっかることでマクロを.classファイルにコンパイルしてクラスパスに置いておくだけでマクロが使えるようになります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-mirah&#34;&gt;$ExtensionsRegistration[[&#39;java.util.Map&#39;]]
+class MapExtensions
+  macro def [](key)
+    quote { `@call.target`.get(`key`) }
+  end
+end
+
+class Builtins implements ExtensionsProvider
+
+  def register(type_system:ExtensionsService):void
+    type_system.macro_registration(MapExtensions.class)
+  end
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;中々面白いですね。&lt;/p&gt;
+
+&lt;h1 id=&#34;おわりに&#34;&gt;おわりに&lt;/h1&gt;
+
+&lt;p&gt;なんか実装コード1つない雑な記事で申し訳ありませんがmirahのマクロの仕組みがちょっと気に入ったので書こうと思った次第です。&lt;/p&gt;
+
+&lt;p&gt;あとはOCamlのppxやHaskellのTHも気になるのですが調べきれませんでした。はい。&lt;/p&gt;</description>
+    </item>
+    
+  </channel>
+</rss>

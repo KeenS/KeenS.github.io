@@ -6,8 +6,460 @@
     <description>Recent content in Post-rsses on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Wed, 30 Nov 2016 15:51:38 +0900</lastBuildDate>
+    <lastBuildDate>Thu, 01 Dec 2016 14:29:33 +0900</lastBuildDate>
     <atom:link href="/post/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Rustでバイト列を扱う時のtips</title>
+      <link>/blog/2016/12/01/rustdebaitoretsuwoatsukautokinotips</link>
+      <pubDate>Thu, 01 Dec 2016 14:29:33 +0900</pubDate>
+      
+      <guid>/blog/2016/12/01/rustdebaitoretsuwoatsukautokinotips</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2016/rust-lang-2&#34;&gt;Rust その2 Advent Calendar 2016 - Qiita&lt;/a&gt;2日目の記事です。&lt;/p&gt;
+
+&lt;p&gt;Rustはシステムプログラミング言語なのでバイト列をあれこれしたいことがあると思います。その時にイテレータでバイト列を舐める以外にも色々方法があるなと気付いたので。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;
+
+&lt;h1 id=&#34;read-と-write&#34;&gt;&lt;code&gt;Read&lt;/code&gt; と &lt;code&gt;Write&lt;/code&gt;&lt;/h1&gt;
+
+&lt;p&gt;私には割と衝撃だったのですが&lt;code&gt;&amp;amp;[u8]&lt;/code&gt;や&lt;code&gt;&amp;amp;mut [u8]&lt;/code&gt;、&lt;code&gt;Vec&amp;lt;u8&amp;gt;&lt;/code&gt;は直接&lt;code&gt;Read&lt;/code&gt;や&lt;code&gt;Write&lt;/code&gt;のインスタンスになってます。
+例えば&lt;code&gt;Read&lt;/code&gt;ならこういう風に使えます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let mut bytes: &amp;amp;[u8] = &amp;amp;[1, 2, 3, 4, 5, 6];
+let mut buf = [0;3];
+bytes.read_exact(&amp;amp;mut buf).unwrap();
+println!(&amp;quot;read: {:?}, rest: {:?}&amp;quot;, buf, bytes);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;read: [1, 2, 3], rest: [4, 5, 6]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;あるいは &lt;code&gt;.bytes()&lt;/code&gt;でbyteのイテレータを取り出してもいいですし、如何様にも扱えます。&lt;/p&gt;
+
+&lt;p&gt;少し注意が必要なのは&lt;code&gt;Vec&lt;/code&gt;は &lt;code&gt;Read&lt;/code&gt; を実装してないので一旦スライスに変換してあげる必要がありますが、やり方を工夫する必要があります。&lt;/p&gt;
+
+&lt;p&gt;以下は少しびっくりする例。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let bytes: Vec&amp;lt;u8&amp;gt; = vec![1, 2, 3, 4, 5, 6];
+let mut buf = [0;3];
+(&amp;amp;bytes[..]).read_exact(&amp;amp;mut buf).unwrap();
+println!(&amp;quot;read: {:?}, rest: {:?}&amp;quot;, buf, bytes);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;read: [1, 2, 3], rest: [1, 2, 3, 4, 5, 6]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;一旦スライスを取り出してその場で捨てているので&lt;code&gt;bytes&lt;/code&gt;は消費されません。&lt;/p&gt;
+
+&lt;p&gt;そうやりたいなら&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let bytes: Vec&amp;lt;u8&amp;gt; = vec![1, 2, 3, 4, 5, 6];
+let mut bytes = &amp;amp;bytes[..];
+let mut buf = [0;3];
+bytes.read_exact(&amp;amp;mut buf).unwrap();
+println!(&amp;quot;read: {:?}, rest: {:?}&amp;quot;, buf, bytes);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;のように一旦スライスを束縛してから使います。&lt;/p&gt;
+
+&lt;p&gt;Writeの方も似ていて、そのまま&lt;code&gt;write&lt;/code&gt;出来ますし、消費されます。ただ、書き込み領域が空になってもそのままスルーされるので注意です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;let mut bytes: &amp;amp;mut [u8] = &amp;amp;mut [0; 6];
+let data = &amp;amp;[1, 2, 3];
+println!(&amp;quot;data: {:?}, buf: {:?}&amp;quot;, data, bytes);
+bytes.write(data).unwrap();
+println!(&amp;quot;data: {:?}, buf: {:?}&amp;quot;, data, bytes);
+bytes.write(data).unwrap();
+println!(&amp;quot;data: {:?}, buf: {:?}&amp;quot;, data, bytes);
+bytes.write(data).unwrap();
+println!(&amp;quot;data: {:?}, buf: {:?}&amp;quot;, data, bytes);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;data: [1, 2, 3], buf: [0, 0, 0, 0, 0, 0]
+data: [1, 2, 3], buf: [0, 0, 0]
+data: [1, 2, 3], buf: []
+data: [1, 2, 3], buf: []
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;最後、バッファが空になった状態で書き込んでも無言で書き込みが終了しています。そして書き込んだデータへのアクセスは出来てないですね。&lt;/p&gt;
+
+&lt;p&gt;こうすると出来ます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let mut bytes:[u8; 6] =  [0; 6];
+let data = &amp;amp;[1, 2, 3];
+{
+    let mut buf: &amp;amp;mut [u8] = &amp;amp;mut bytes;
+    println!(&amp;quot;data: {:?}, buf: {:?}&amp;quot;, data, buf);
+    buf.write(data).unwrap();
+    println!(&amp;quot;data: {:?}, buf: {:?}&amp;quot;, data, buf);
+    buf.write(data).unwrap();
+    println!(&amp;quot;data: {:?}, buf: {:?}&amp;quot;, data, buf);
+}
+println!(&amp;quot;bytes: {:?}&amp;quot;, bytes);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;data: [1, 2, 3], buf: [0, 0, 0, 0, 0, 0]
+data: [1, 2, 3], buf: [0, 0, 0]
+data: [1, 2, 3], buf: []
+bytes: [1, 2, 3, 1, 2, 3]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;まあまあ面倒ですね。というかそもそも固定長のバッファに書き込みたいという需要が少ない。&lt;/p&gt;
+
+&lt;p&gt;でもこれは&lt;code&gt;Vec&lt;/code&gt;を使えば解決します。可変長ですし&lt;code&gt;Write&lt;/code&gt; も実装しているので便利です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let mut bytes: Vec&amp;lt;u8&amp;gt; = Vec::new();
+let data = &amp;amp;[1, 2, 3];
+println!(&amp;quot;data: {:?}, buf: {:?}&amp;quot;, data, bytes);
+bytes.write(data).unwrap();
+println!(&amp;quot;data: {:?}, buf: {:?}&amp;quot;, data, bytes);
+bytes.write(data).unwrap();
+println!(&amp;quot;data: {:?}, buf: {:?}&amp;quot;, data, bytes);
+println!(&amp;quot;bytes: {:?}&amp;quot;, bytes);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;data: [1, 2, 3], buf: []
+data: [1, 2, 3], buf: [1, 2, 3]
+data: [1, 2, 3], buf: [1, 2, 3, 1, 2, 3]
+bytes: [1, 2, 3, 1, 2, 3]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;cursor&#34;&gt;&lt;code&gt;Cursor&lt;/code&gt;&lt;/h1&gt;
+
+&lt;p&gt;さて、上で見た通り、なんとなく生のバイト列だと扱いづらそうな場面がありそうですよね。
+そこで &lt;a href=&#34;https://doc.rust-lang.org/stable/std/io/struct.Cursor.html&#34;&gt;&lt;code&gt;std::io::Cursor&lt;/code&gt;&lt;/a&gt;を使うと便利です。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;Cursor&lt;/code&gt;はコンストラクタで引数の所有権を奪うタイプの、ラッパーオブジェクト的構造体です。&lt;/p&gt;
+
+&lt;p&gt;readだとこんな感じです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let bytes: &amp;amp;[u8] = &amp;amp;[1,2,3,4,5,6];
+let data: &amp;amp;mut [u8] = &amp;amp;mut [0;3];
+let mut cur = Cursor::new(bytes);
+println!(&amp;quot;data: {:?}, position {}&amp;quot;, data, cur.position());
+cur.read_exact(data).unwrap();
+println!(&amp;quot;data: {:?}, position {}&amp;quot;, data, cur.position());
+cur.read_exact(data).unwrap();
+println!(&amp;quot;data: {:?}, position {}&amp;quot;, data, cur.position());
+println!(&amp;quot;bytes: {:?}&amp;quot;, cur.into_inner());
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;data: [0, 0, 0], position 0
+data: [1, 2, 3], position 3
+data: [4, 5, 6], position 6
+bytes: [1, 2, 3, 4, 5, 6]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ポジションが取れるのと元のオブジェクトが無事なのが違いますね。&lt;/p&gt;
+
+&lt;p&gt;Writeも同様です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let bytes: &amp;amp;mut [u8] = &amp;amp;mut [0;6];
+let data: &amp;amp;[u8] = &amp;amp;[1, 2, 3];
+let mut cur = Cursor::new(bytes);
+println!(&amp;quot;bytes: {:?}, position {}&amp;quot;, cur.get_ref(), cur.position());
+cur.write(data).unwrap();
+println!(&amp;quot;bytes: {:?}, position {}&amp;quot;, cur.get_ref(), cur.position());
+cur.write(data).unwrap();
+println!(&amp;quot;bytes: {:?}, position {}&amp;quot;, cur.get_ref(), cur.position());
+println!(&amp;quot;bytes: {:?}&amp;quot;, cur.into_inner());
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;data: [0, 0, 0, 0, 0, 0], position 0
+data: [1, 2, 3, 0, 0, 0], position 3
+data: [1, 2, 3, 1, 2, 3], position 6
+bytes: [1, 2, 3, 1, 2, 3]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;さて、この&lt;code&gt;Cursor&lt;/code&gt;の面白いのは&lt;code&gt;&amp;amp;[u8]&lt;/code&gt;でなく&lt;code&gt;AsRef&amp;lt;[u8]&amp;gt;&lt;/code&gt;で&lt;code&gt;Read&lt;/code&gt;を実装していますし&lt;code&gt;std::io::Seek&lt;/code&gt;も実装しているのでこういうことが出来ます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let bytes: Vec&amp;lt;u8&amp;gt; = Vec::new();
+let data: &amp;amp;[u8] = &amp;amp;[1, 2, 3];
+let buf: &amp;amp;mut [u8] = &amp;amp;mut [0; 3];
+let mut cur = Cursor::new(bytes);
+println!(&amp;quot;bytes: {:?}, position {}&amp;quot;, cur.get_ref(), cur.position());
+cur.write(data).unwrap();
+println!(&amp;quot;bytes: {:?}, position {}&amp;quot;, cur.get_ref(), cur.position());
+cur.write(data).unwrap();
+println!(&amp;quot;bytes: {:?}, position {}&amp;quot;, cur.get_ref(), cur.position());
+cur.seek(SeekFrom::Start(0)).unwrap();
+println!(&amp;quot;bytes: {:?}, position {}&amp;quot;, cur.get_ref(), cur.position());
+cur.read(buf).unwrap();
+println!(&amp;quot;bytes: {:?}, position {}, buf: {:?}&amp;quot;, cur.get_ref(), cur.position(), buf);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;bytes: [], position 0
+bytes: [1, 2, 3], position 3
+bytes: [1, 2, 3, 1, 2, 3], position 6
+bytes: [1, 2, 3, 1, 2, 3], position 0  // &amp;lt;- 0にシークした
+bytes: [1, 2, 3, 1, 2, 3], position 3, buf: [1, 2, 3] // &amp;lt;- 0からリード出来てる
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;生の&lt;code&gt;Vec&lt;/code&gt;では出来なかったread and writeが実現出来ています。そして好きにカーソルをシーク出来ます。
+ここまでくるとほとんどファイルと変わらなく扱えますね。&lt;/p&gt;
+
+&lt;h1 id=&#34;おりに&#34;&gt;おりに&lt;/h1&gt;
+
+&lt;p&gt;ちょっとしたTipsですが道具箱にこういうのを増やしておくと便利ですよね！！&lt;/p&gt;
+
+&lt;h1 id=&#34;参考&#34;&gt;参考&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://doc.rust-lang.org/stable/std/io/trait.Read.html&#34;&gt;std::io::Read - Rust&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://doc.rust-lang.org/stable/std/io/trait.Write.html&#34;&gt;std::io::Write - Rust&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://doc.rust-lang.org/stable/std/io/struct.Cursor.html&#34;&gt;std::io::Cursor - Rust&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://doc.rust-lang.org/stable/std/io/trait.Seek.html&#34;&gt;std::io::Seek - Rust&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://doc.rust-lang.org/stable/std/io/enum.SeekFrom.html&#34;&gt;std::io::SeekFrom - Rust&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;</description>
+    </item>
+    
+    <item>
+      <title>マクロやコンパイラプラグインの実装方法色々</title>
+      <link>/blog/2016/12/01/makuroyakonpairapuraguinnojissouhouhou</link>
+      <pubDate>Thu, 01 Dec 2016 13:29:52 +0900</pubDate>
+      
+      <guid>/blog/2016/12/01/makuroyakonpairapuraguinnojissouhouhou</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2016/lang_dev&#34;&gt;言語実装 Advent Calendar 2016 - Qiita&lt;/a&gt;2日目の記事です。&lt;/p&gt;
+
+&lt;p&gt;κeenです。マクロなどのコンパイル時に何か処理をしてコード生成する機構の実現方法が言語によって様々にあるなぁと思ったのでちょっと探ってみます&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;
+
+&lt;p&gt;なんか文字だけ並んでても味気ないのでサンプルマクロも付けときますね。&lt;/p&gt;
+
+&lt;h1 id=&#34;コンパイラにマクロ専用言語のインタプリタ機能を付けるやつ&#34;&gt;コンパイラにマクロ専用言語のインタプリタ機能を付けるやつ&lt;/h1&gt;
+
+&lt;p&gt;Rustの&lt;code&gt;macro_rules&lt;/code&gt;やSchemeの&lt;code&gt;syntax-rules&lt;/code&gt;が該当します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-scheme&#34;&gt;(define-syntax define-protocol
+  (syntax-rules ()
+    ((define-protocol (name type ...) (method arg ...) ...)
+     (begin
+       (define method
+         (make-generic))
+       ...
+       (define name
+         (lambda (type ...)
+           (lambda methods
+             (add-methods methods (list (list method arg ...) ...)))))))))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;制限が強い上に無駄にコンパイラの機能が増えるので個人的にはあまり好きじゃないですね…。&lt;/p&gt;
+
+&lt;h1 id=&#34;コンパイラでもホスト言語を動かすやつ&#34;&gt;コンパイラでもホスト言語を動かすやつ&lt;/h1&gt;
+
+&lt;p&gt;コンパイラとランタイムが一緒になっているCommon Lispなんかで使われる方法です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-common-lisp&#34;&gt;(defmacro dotimes-unroll ((i n unroll) &amp;amp;body body)
+  (let ((n_      (gensym &amp;quot;n&amp;quot;)))
+    `(let ((,n_ ,n))
+       (do ((,i 0))
+           ((&amp;lt; ,n_ (the fixnum (+ ,unroll ,i)))
+            (do ((,i ,i (the fixnum (1+ ,i))))
+                ((&amp;lt; ,n_ (the fixnum (1+ ,i))))
+              ,@body
+              ))
+         ,@(loop :repeat unroll :append (append body `((setq ,i (the fixnum (1+ ,i))))))))))
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;マクロがなくなるまで再帰的にマクロ展開をします。
+ユーザが好き勝手書けてしかも手軽に使えるので割と好きです。まあ、でも言語を選びますね。&lt;/p&gt;
+
+&lt;h1 id=&#34;コンパイラプラグインとしてdlopenするやつ&#34;&gt;コンパイラプラグインとしてdlopenするやつ&lt;/h1&gt;
+
+&lt;p&gt;Rustのコンパイラプラグインが相当します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-toml&#34;&gt;[lib]
+crate-type = [&amp;quot;dylib&amp;quot;]
+plugin = true
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn codegen&amp;lt;&#39;cx&amp;gt;(cx: &amp;amp;&#39;cx mut ExtCtxt, text: String, file: String)
+        -&amp;gt; Box&amp;lt;MacResult + &#39;cx&amp;gt; {
+    let mut output = Vec::new();
+    let doc = Document::parse(&amp;amp;text)
+        .expect(&amp;quot;failed to parse thrift file&amp;quot;)
+        .expect(&amp;quot;EOF while parsing thrift file&amp;quot;);
+    {
+        let ns = find_rust_namespace(&amp;amp;doc).expect(&amp;quot;cannot find namespace&amp;quot;);
+    output.write_all(format!(&amp;quot;mod {} {{&amp;quot;, ns.module).as_ref()).expect(&amp;quot;internal error failed to write the vec&amp;quot;);
+    }
+    compile(doc, &amp;amp;mut output).expect(&amp;quot;failed to generate code&amp;quot;);
+    output.write_all(format!(&amp;quot;}}&amp;quot;).as_ref()).expect(&amp;quot;internal error failed to write the vec&amp;quot;);
+    let output = match std::str::from_utf8(&amp;amp;output) {
+        Ok(s) =&amp;gt; s,
+        Err(_) =&amp;gt; &amp;quot;&amp;quot;,
+    };
+
+    trace!(&amp;quot;{}&amp;quot;, output);
+
+
+    let parser = new_parser_from_source_str(cx.parse_sess(), file, output.to_string());
+
+    struct ExpandResult&amp;lt;&#39;a&amp;gt; {
+        p: parse::parser::Parser&amp;lt;&#39;a&amp;gt;,
+    }
+    impl&amp;lt;&#39;a&amp;gt; base::MacResult for ExpandResult&amp;lt;&#39;a&amp;gt; {
+        fn make_items(mut self: Box&amp;lt;ExpandResult&amp;lt;&#39;a&amp;gt;&amp;gt;)
+                      -&amp;gt; Option&amp;lt;SmallVector&amp;lt;ptr::P&amp;lt;ast::Item&amp;gt;&amp;gt;&amp;gt; {
+            let mut ret = SmallVector::zero();
+            while self.p.token != token::Eof {
+                match panictry!(self.p.parse_item()) {
+                    Some(item) =&amp;gt; ret.push(item),
+                    None =&amp;gt; panic!(self.p.diagnostic().span_fatal(self.p.span,
+                                                                  &amp;amp;format!(&amp;quot;expected item, found `{}`&amp;quot;,
+                                                                           self.p.this_token_to_string())))
+                }
+            }
+            Some(ret)
+        }
+    }
+
+    Box::new(ExpandResult { p: parser })
+
+}
+
+
+fn macro_thrift&amp;lt;&#39;cx&amp;gt;(cx: &amp;amp;&#39;cx mut ExtCtxt, sp: Span, tts: &amp;amp;[TokenTree])
+                     -&amp;gt; Box&amp;lt;MacResult + &#39;cx&amp;gt; {
+
+    let text = match get_single_str_from_tts(cx, sp, tts, &amp;quot;thrift!&amp;quot;) {
+        Some(f) =&amp;gt; f,
+        None =&amp;gt; return DummyResult::expr(sp),
+    };
+
+    codegen(cx, text, &amp;quot;trift!&amp;quot;.to_string())
+}
+
+
+#[plugin_registrar]
+pub fn plugin_registrar(reg: &amp;amp;mut Registry) {
+    reg.register_macro(&amp;quot;thrift&amp;quot;, macro_thrift);
+    reg.register_macro(&amp;quot;thrift_file&amp;quot;, macro_thrift_file);
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;一旦dllを作ってそれをプラグインとしてロードするという手間もありますし、ユーザが触れるASTも複雑なのであまり好きではないです。
+まあ、これは準クオートだとかのユーザインターフェースの問題だったりするんですが。
+ただ表現力はホスト言語が使えるので自由に使えます。&lt;/p&gt;
+
+&lt;h1 id=&#34;言語の仕組みを使ってライブラリをコンパイラにロードする&#34;&gt;言語の仕組みを使ってライブラリをコンパイラにロードする&lt;/h1&gt;
+
+&lt;p&gt;私が地味に好きな言語に&lt;a href=&#34;http://www.mirah.org/&#34;&gt;mirah&lt;/a&gt;というのがあります。その言語での実現方法が少し好きでした。
+mirahはJVMで動くRuby風言語で、コンパイラは既にセルフホストされています。つまりコンパイラもJVMで動く訳です。&lt;/p&gt;
+
+&lt;p&gt;Javaには&lt;a href=&#34;https://docs.oracle.com/javase/tutorial/sound/SPI-intro.html&#34;&gt;SPI&lt;/a&gt;というものがあって明示的にクラスやインスタンスを指定しなくてもJVMが実装を捜してくれる機能があります。
+その機能にのっかることでマクロを.classファイルにコンパイルしてクラスパスに置いておくだけでマクロが使えるようになります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-mirah&#34;&gt;$ExtensionsRegistration[[&#39;java.util.Map&#39;]]
+class MapExtensions
+  macro def [](key)
+    quote { `@call.target`.get(`key`) }
+  end
+end
+
+class Builtins implements ExtensionsProvider
+
+  def register(type_system:ExtensionsService):void
+    type_system.macro_registration(MapExtensions.class)
+  end
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;中々面白いですね。&lt;/p&gt;
+
+&lt;h1 id=&#34;おわりに&#34;&gt;おわりに&lt;/h1&gt;
+
+&lt;p&gt;なんか実装コード1つない雑な記事で申し訳ありませんがmirahのマクロの仕組みがちょっと気に入ったので書こうと思った次第です。&lt;/p&gt;
+
+&lt;p&gt;あとはOCamlのppxやHaskellのTHも気になるのですが調べきれませんでした。はい。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>4年間続いたShibuya.lispのLispMeetUp</title>
+      <link>/blog/2016/12/01/4nenkantsuzuitashibuya_lispnolispmeetup</link>
+      <pubDate>Thu, 01 Dec 2016 12:40:08 +0900</pubDate>
+      
+      <guid>/blog/2016/12/01/4nenkantsuzuitashibuya_lispnolispmeetup</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2016/event-management&#34;&gt;IT勉強会/コミュニティ運営 Advent Calendar 2016 - Qiita&lt;/a&gt;2日目の記事です。&lt;/p&gt;
+
+&lt;p&gt;Shibuya.lispの開催しているlispmeetupは約4年間毎月開催しました（現46回開催）。
+そこまで長く続いているコミュニティ活動はそんなに多くないのではないでしょうか。
+lispmeetupがどうして続いたのかちょっと考察してみます。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;
+
+&lt;p&gt;因みにlispmeetupを開催しているのは第2期運営で、Shibuya.lisp自体はそれより前から活動しています。&lt;/p&gt;
+
+&lt;p&gt;私は2期運営に途中から入った人でmeetup第6回から参加し始めて確か19回くらいから運営になったと思います。&lt;/p&gt;
+
+&lt;h1 id=&#34;会場が安定的に確保出来た&#34;&gt;会場が安定的に確保出来た&lt;/h1&gt;
+
+&lt;p&gt;安定してるかは若干怪しいですが毎月会場確保が出来ていたのは事実です。
+最初の頃は天井から木の根が出てくるお粗末な会場だったそうですが、私が参加するころには毎回サイバーエージェントのセミナールームを使ってました。&lt;/p&gt;
+
+&lt;h1 id=&#34;発表者がいなかったら運営が発表した&#34;&gt;発表者がいなかったら運営が発表した&lt;/h1&gt;
+
+&lt;p&gt;勉強会に来たのに発表がなかったら残念ですよね。
+どんな回でも少なくとも運営が発表するので2件くらいは発表がありました。
+時間が余ったらライブコーディングしたりもしてました。&lt;/p&gt;
+
+&lt;p&gt;因みに私も毎月発表してるからという理由で運営になったような気がします。&lt;/p&gt;
+
+&lt;h1 id=&#34;テーマをローテした&#34;&gt;テーマをローテした&lt;/h1&gt;
+
+&lt;p&gt;Lisp固有の事情かもしれませんがメジャーな方言にCommon Lisp、 Clojure、Schemeがあります。
+参加者の中には全部いけるって人もそれなりにいますがClojureにしか興味がないって人もいます。
+なので毎回テーマを決めてある程度発表者、参加者のゾーンニングをした方が満足度が高い訳です。&lt;/p&gt;
+
+&lt;p&gt;ローテションというのもまあまあ重要で、まず運営が考えることが少なくて済む。
+発表者は3ヶ月に1回くらいの頻度で自分の興味のある方言の回がやってくるのでそれなりに準備期間がある。
+参加者も今月はClojureだから無理してでもいこおう、Common Lispだから今月はいいやみたいにメリハリが付けれる。&lt;/p&gt;
+
+&lt;h1 id=&#34;平日開催した&#34;&gt;平日開催した&lt;/h1&gt;
+
+&lt;p&gt;善し悪しだと思いますが平日開催に拘りました。平日にしか来れない人を集めたいという意向です。
+逆に休日にしか来れない人は切り捨てちゃってますね。&lt;/p&gt;
+
+&lt;p&gt;来れる人が渋谷近辺の人に限られてしまいますがまあ、Shibuya.lispなのでご愛嬌。
+参加する人は地球の裏側からでも来ます。これは半分本当で、オランダとかからの参加者も過去にいました。&lt;/p&gt;
+
+&lt;p&gt;仕事帰りに参加する人とか学生とかが多いようでした。&lt;/p&gt;
+
+&lt;h1 id=&#34;運営の負荷を減らした&#34;&gt;運営の負荷を減らした&lt;/h1&gt;
+
+&lt;p&gt;テーマをローテしたのところでも述べましたが、極力運営の負荷は減らした方がいいです。
+運営が動かないと何も進まないので開催が億劫になるくらいなら負荷は減らしましょう。
+lispmeetupでは開催報告やレポートをメーリスに投げていましたがやめてしまいました。
+まあ、connpassが優秀だったのである程度そっちに頼れたというのもあります。&lt;/p&gt;
+
+&lt;p&gt;また、最初のうちは懇親会で余ったお金を予算として持っていましたが、管理コストもかかるので掃き出してしまいました。&lt;/p&gt;
+
+&lt;h1 id=&#34;とにかく毎月開催した&#34;&gt;とにかく毎月開催した&lt;/h1&gt;
+
+&lt;p&gt;最初の頃は参加者が1ケタの時もありました。それでも毎月続けました。
+するとある程度lispmeetupが定着したのかここ1年ほどは会場定員オーバーくらいまで人が集まるようになりました。&lt;/p&gt;
+
+&lt;h1 id=&#34;懇親会を毎回やった&#34;&gt;懇親会を毎回やった&lt;/h1&gt;
+
+&lt;p&gt;地味に重要だと思います。
+発表者に質問にいったりあるいはふとした会話から次の発表のネタが産まれたりします。
+新規参加者も重要ですがリピーターも重要です。&lt;/p&gt;
+
+&lt;h1 id=&#34;最後に&#34;&gt;最後に&lt;/h1&gt;
+
+&lt;p&gt;LispMeetUpは4年の節目で一旦終了します。&lt;/p&gt;
+
+&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;Shibuya.lispの現運営が引退するので &lt;a href=&#34;https://twitter.com/hashtag/lispmeetup?src=hash&#34;&gt;#lispmeetup&lt;/a&gt; がなくなります。引き継いでくれる方を募集しています。残りはClojure回、CL回です。Schemeは今月が最後でした。&lt;a href=&#34;https://t.co/o4vv9DRFal&#34;&gt;https://t.co/o4vv9DRFal&lt;/a&gt;&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/803599706475507716&#34;&gt;2016年11月29日&lt;/a&gt;&lt;/blockquote&gt;
+&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
+
+&lt;p&gt;今の運営が引退した後を引き継いでくれる人も集まりそうなので何らかの形では続くと思いますが、lispmeetupという形をとるのかTech Talkだけになるのかは次の運営次第です。&lt;/p&gt;
+
+&lt;p&gt;お疲れ様でした。&lt;/p&gt;</description>
+    </item>
     
     <item>
       <title>サイバーエージェントを退職しました</title>
@@ -1886,756 +2338,6 @@ seq 1 10 | xargs -I@ bash -c &#39;sum @&#39;
 
 &lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;cat nginx.conf | ssh stepper ssh host1 sudo tee /etc/nginx/nginx.conf &amp;gt; /dev/null
 &lt;/code&gt;&lt;/pre&gt;</description>
-    </item>
-    
-    <item>
-      <title>Container Desgin Patterns</title>
-      <link>/blog/2016/07/02/container_desgin_patterns</link>
-      <pubDate>Sat, 02 Jul 2016 22:26:10 +0900</pubDate>
-      
-      <guid>/blog/2016/07/02/container_desgin_patterns</guid>
-      <description>&lt;p&gt;κeenです。先日、Kubernetesの開発者が書いた&lt;a href=&#34;http://blog.kubernetes.io/2016/06/container-design-patterns.html&#34;&gt;Kubernetes: Container Design Patterns&lt;/a&gt;というのを教えてもらって、面白かったのでそれを紹介します。
-ただ漫然とコンテナを使っているだけでは気付かない使い方があったのでコンテナに興味のある方は是非一読下さい。&lt;/p&gt;
-
-&lt;p&gt;&lt;/p&gt;
-
-&lt;h1 id=&#34;序論&#34;&gt;序論&lt;/h1&gt;
-
-&lt;p&gt;オブジェクト指向が出てすぐにオブジェクト指向デザインパターンが産まれたように、分散システムにもデザインパターンが必要となってきました。
-分散システムのデザインパターンの萌芽はHadoop/MapReduceに見ることが出来ますが、Javaに限られていました。
-ところがここ数年の(Linuxの)コンテナ技術の躍進により欠けていたピースが埋まりました。分散システムパターンへのデプロイの抽象化です。
-依存モジュールも一緒にデプロイ出来ますし、デプロイの状態も成功/失敗の二値になります。
-それだけでなく、コンテナはオブジェクト指向におけるオブジェクトによく似た役割を果たします。それを見ていきましょう。&lt;/p&gt;
-
-&lt;h1 id=&#34;単一コンテナのマネジメント-パターン&#34;&gt;単一コンテナのマネジメント パターン&lt;/h1&gt;
-
-&lt;p&gt;コンテナは、自然にインターフェースの境界となります（オブジェクトと同じように）。
-アプリケーション機能のインターフェースに留まらず、コンテナそのものの管理インターフェースも提供するでしょう。
-典型的には &lt;code&gt;run()&lt;/code&gt; &lt;code&gt;pause()&lt;/code&gt; &lt;code&gt;stop()&lt;/code&gt; の管理ですが、もっと多様な管理インターフェースが有り得ます。&lt;/p&gt;
-
-&lt;p&gt;大抵の今時のプログラミング言語ならHTTP経由でJSONをやりとりする機能くらい簡単に書けるのでそれがコンテナ間で統一さたインターフェースになりえるでしょう。&lt;/p&gt;
-
-&lt;p&gt;上位のアプリケーションに対してはコンテナ内の情報(アプリケーションのQPS, プロファイル情報, コンフィグ情報, ヘルスチェック, ログなどなど)を提供するでしょう。&lt;/p&gt;
-
-&lt;p&gt;下位のアプリケーションにはマネジメントインターフェース、例えばgraceful shutdownなどを提供することになるでしょう。
-Android OSがActivityを管理する時に様々なコールバック(&lt;code&gt;onCreate&lt;/code&gt;, &lt;code&gt;onResume&lt;/code&gt;&amp;hellip;)を呼ぶように、分散マネージャがコンテナを管理するための様々なAPIを提供すると綺麗に管理出来ます。
-また、コンテナ特有の機能として「レプリケーションする」（スケールアップするためのインターフェース）なんかもあるかもしれません。&lt;/p&gt;
-
-&lt;h1 id=&#34;単一ノード-複数コンテナのアプリケーションパターン&#34;&gt;単一ノード、複数コンテナのアプリケーションパターン&lt;/h1&gt;
-
-&lt;p&gt;コンテナマネージャにはKubernetesのPodやNomadのTask Groupsのように複数のコンテナを1つのノードにスケジュールする機能があります。
-別にコンテナに分けずに複数のコンテナをアプリケーションと同じの1つのコンテナに入れることも可能です。しかしながら分けた方が様々なメリットが得られます。&lt;/p&gt;
-
-&lt;ol&gt;
-&lt;li&gt;コンテナがリソース管理の単位である。cgroupによる管理がやりやすくなる。&lt;/li&gt;
-&lt;li&gt;コンテナがパッケージングの単位である。複数のコンテナでデプロイや管理をするチームを分けるのも簡単になるし、テストも簡単になる。&lt;/li&gt;
-&lt;li&gt;コンテナが再利用の単位である。多くのサブ機能コンテナは多種のメインコンテナと一緒に使うことが出来る。&lt;/li&gt;
-&lt;li&gt;コンテナが障害を分離する境界になる。例えば、コンテントマネジメントコンテナに障害があったとしても、Webサーバコンテナはサービスを継続出来るようになる。&lt;/li&gt;
-&lt;li&gt;コンテナがデプロイの単位となる。新しい機能の追加やロールバックが単独で行える。（ただし、アプリケーションのバージョンの組み合わせが増えるという点では短所にもなる）。&lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;p&gt;ということでそれらを前提にしたデザインパターンをいくつか。&lt;/p&gt;
-
-&lt;h2 id=&#34;サイドカーパターン&#34;&gt;サイドカーパターン&lt;/h2&gt;
-
-&lt;p&gt;メインのアプリケーションコンテナにサイドカーのように付属するコンテナを付けて、機能を足すパターンです。
-例えばアプリケーションがあって、それのログをローカルストレージから分散ストレージに保存するサイドカーなど。&lt;/p&gt;
-
-&lt;p&gt;逆に、ローカルディスクのファイルを提供するWebサーバがあったとして、そのために定期的にgitからstatic fileをpollするサイドカーコンテナなんかもあるかもしれません。&lt;/p&gt;
-
-&lt;p&gt;これらのサイドカーは同じノードのコンテナ同士ならディスクボリュームを共有出来ることに依存した作りになっています。&lt;/p&gt;
-
-&lt;h2 id=&#34;アンバサダーパターン&#34;&gt;アンバサダーパターン&lt;/h2&gt;
-
-&lt;p&gt;アンバサダーパターンはメインコンテナと別システムとのコミュニケーションを代理します。
-例えば、&lt;a href=&#34;https://github.com/twitter/twemproxy&#34;&gt;twemproxy&lt;/a&gt; のコンテナをアンバサダーとすれば実際は複数のmemcachedにシャードされたmemcachedクラスタと通信しているも関らず、アプリケーションはローカルホストのmemcachedと通信しているように出来ます。&lt;/p&gt;
-
-&lt;p&gt;この利点は1つにはアプリケーションをローカルホストのmemcachedと通信することだけを考えて書けばいいようになる点、もう1つにはアプリケーションのテストをローカルホストのmemcachedとだけすれば良くなる点、さらにもう1つにはtwemproxyのコンテナを（別の言語で書かれた）別のアプリケーションに使い回せる点にあります。&lt;/p&gt;
-
-&lt;p&gt;これは同じホストのコンテナ同士はローカルホストのネットワークインターフェースを使って通信出来ることに依存した作りになっています。&lt;/p&gt;
-
-&lt;h2 id=&#34;アダプターパターン&#34;&gt;アダプターパターン&lt;/h2&gt;
-
-&lt;p&gt;アダプターパターンはアンバサダーパターンの逆で、アプリケーションを外部から観測した時に統一されたインターフェースを提供するようにするために使います。&lt;/p&gt;
-
-&lt;p&gt;アプリケーション毎にメトリクスの採り方は異ります（例えばJavaならJMX、など）。様々にあるメトリクスを統一したインタフェースで提供するとメトリクスアグリゲータが非常にシンプルになります。
-具体的な例を出すと&lt;a href=&#34;https://prometheus.io/&#34;&gt;Prometheus&lt;/a&gt;のためのインターフェース (HTTP &lt;code&gt;/metrics&lt;/code&gt;)を提供する(&lt;a href=&#34;https://prometheus.io/docs/instrumenting/exporters/&#34;&gt;exporter&lt;/a&gt;)コンテナなどです。&lt;/p&gt;
-
-&lt;p&gt;アダプターとメインコンテナはストレージやローカルホストネットワークを通じてデータをやりとりするでしょう。&lt;/p&gt;
-
-&lt;h1 id=&#34;複数ノードアプリケーションパターン&#34;&gt;複数ノードアプリケーションパターン&lt;/h1&gt;
-
-&lt;p&gt;次は複数のノードに跨る協調分散システムでのパターンです。
-こちらも同じくPodなどの抽象化を前提とします。&lt;/p&gt;
-
-&lt;h2 id=&#34;リーダー選出パターン&#34;&gt;リーダー選出パターン&lt;/h2&gt;
-
-&lt;p&gt;分散システムではリーダを選出する需要が多々あります。
-例えば複数のレプリカを作った時にマスターがコケたら次のマスターを選出しないといけません。&lt;/p&gt;
-
-&lt;p&gt;巷にはリーダー選出アルゴリズムを実装したライブライが出回っていますが、往々にして難解であり、また、特定の言語でしか動かないので再利用性がありません。&lt;/p&gt;
-
-&lt;p&gt;そこで、ライブラリを使うのではなくてリーダー選出コンテナを実装しましょう。&lt;/p&gt;
-
-&lt;p&gt;単一ノードのパターンと同じく、リーダー選出コンテナとアプリケーションコンテナを一緒にスケジューリングします。
-そして、リーダー選出コンテナが他のコンテナとネゴシエーションしてリーダーになったら、ローカルホストのHTTP APIにbecomeLeader、renewLeadershipなどのクエリを投げます。
-アプリケーションはただそれらのエンドポイントを実装しさえすればいいのです。&lt;/p&gt;
-
-&lt;p&gt;このコンテナはアプリケーションにも言語に依存しないので自由に使い回すことが出来ます。&lt;/p&gt;
-
-&lt;h2 id=&#34;ワークキューパターン&#34;&gt;ワークキューパターン&lt;/h2&gt;
-
-&lt;p&gt;もう1つのよくある分散システムでのタスクは、ワークキューによる分散実行です。
-いくつかワークキューの実装はありますが、やはりそれらは特定の言語に依存しています。&lt;/p&gt;
-
-&lt;p&gt;そこで仕事の分配のコンテナ、そして、仕事実行のフレームワークとなるコンテナを用意してあげましょう。&lt;/p&gt;
-
-&lt;p&gt;フレームワークのコンテナは分配コンテナから仕事(ファイルなど)を受け取って、ユーザの書いた実行コンテナに処理を移譲します。そしてフレームワークコンテナが実行コンテナの出力した結果をまた分配コンテナに戻します。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;
-[Request]       +---[フレームワークコンテナ]=[実行コンテナ(ユーザ)]
-   |            |
-[分配コンテナ] --+
-   |            |
-   |            +---[フレームワークコンテナ]=[実行コンテナ(ユーザ)]
-   |
-[ワークキューの保存など]
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;分散協調の部分をフレームワークコンテナがやってくれるのでユーザが書く実行コンテナは非常にシンプルになります。&lt;/p&gt;
-
-&lt;h2 id=&#34;分配-集約パターン&#34;&gt;分配/集約パターン&lt;/h2&gt;
-
-&lt;p&gt;このパターンは、クライアントが1つの巨大なタスクをルートコンテナに投げ、ルートコンテナが子コンテナ達に分割したタスクを移譲します。そして子コンテナ達の結果を纏めてクライアントに返します。&lt;/p&gt;
-
-&lt;p&gt;MapReduceと同じように、タスクを実行するリーフコンテナと、リーフコンテナの結果を纏めるマージコンテナを用意する必要があります。&lt;/p&gt;
-
-&lt;p&gt;コンテナは特定のインターフェースさえ実装していればいいのでリファクタが(オブジェクト指向の時と同じように)容易です。&lt;/p&gt;
-
-&lt;p&gt;また、子コンテナにルートコンテナと同じようなscatter/gather機能を持ったコンテナを使うことで、任意の深さにまでタスクツリーを作ることが出来ます。
-これは例えば処理中のリソース使用量が多いときに部分的にタスクを実行してマージを繰替えすことで必要となる最大リソースを減らす、などに使えるでしょう（他にももっとあるかもしれませんがパッとは思いつきませんでした）。&lt;/p&gt;
-
-&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
-
-&lt;p&gt;コンテナのデザインパターを紹介しました。フレームワークコンテナなど、興味深いパターンもあって興味深いですね。&lt;/p&gt;
-
-&lt;p&gt;まだまだパターンはありえると思うのでこの分野（？）、もう少し広まると良いですね。&lt;/p&gt;</description>
-    </item>
-    
-    <item>
-      <title>Rustの所有権/ミュータビリティの分割</title>
-      <link>/blog/2016/06/19/rustnoshoyuuken_myu_tabiriteinobunkatsu</link>
-      <pubDate>Sun, 19 Jun 2016 20:42:14 +0900</pubDate>
-      
-      <guid>/blog/2016/06/19/rustnoshoyuuken_myu_tabiriteinobunkatsu</guid>
-      <description>&lt;p&gt;κeenです。昔所有権/ミュータビリティを分割したくなったけどぱっと方法が思いつかなくて困ったことがあるので今更ながら備忘録として残しておきます。&lt;/p&gt;
-
-&lt;p&gt;&lt;/p&gt;
-
-&lt;h1 id=&#34;ミュータビリティ&#34;&gt;ミュータビリティ&lt;/h1&gt;
-
-&lt;p&gt;例えば、HTTPパーサを作ろうとしてるとしましょう。
-受け取ったバイト列のバッファをパースしてヘッダやらボディやらのサブスライスを返します。この時、返り値のサブスライスはユーザへの自由を与えるために &lt;code&gt;mut&lt;/code&gt; にしたいですよね。&lt;/p&gt;
-
-&lt;p&gt;そう思ってこういうコードを書くと&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::io;
-
-fn parse(buf: &amp;amp;mut [u8]) -&amp;gt; io::Result&amp;lt;(&amp;amp;mut [u8], &amp;amp;mut [u8])&amp;gt; {
-    ...
-    Ok((&amp;amp;mut buf[hstart..hend], &amp;amp;mut buf[bstart..bend]))
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;エラーになります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;mutability_split.rs:4:31: 4:34 error: cannot borrow `*buf` as mutable more than once at a time [E0499]
-mutability_split.rs:4     Ok((&amp;amp;mut buf[hstart..hend], &amp;amp;mut buf[bstart..bend]))
-...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;普通にやろうとすると
-1つ1つミュータブルなサブスライスを作ることになり、2つ目以降でborrow checkに引っ掛かってしまいます。2つのバッファがオーバーラップしてなくても。難儀ですね。コピーするくらいしかないのでしょうか。いいえ。rustはちゃんと助けになるAPIを用意してくれています。&lt;/p&gt;
-
-&lt;h2 id=&#34;split-at-mut-https-doc-rust-lang-org-std-primitive-slice-html-method-split-at-mut&#34;&gt;&lt;a href=&#34;https://doc.rust-lang.org/std/primitive.slice.html#method.split_at_mut&#34;&gt;&lt;code&gt;split_at_mut&lt;/code&gt;&lt;/a&gt;&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn split_at_mut(&amp;amp;mut self, mid: usize) -&amp;gt; (&amp;amp;mut [T], &amp;amp;mut [T])
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;スライスを2つに分割してくれます。重要なのが、ミュータビリティも分割してくれるところです。返り値の2つ共に &lt;code&gt;mut&lt;/code&gt; がついています。ということで、次のように実装出来ます。（実行してないので結果が正しいかは確認してませんが）&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn parse(buf: &amp;amp;mut [u8]) -&amp;gt; io::Result&amp;lt;(&amp;amp;mut [u8], &amp;amp;mut [u8])&amp;gt; {
-    ...
-
-    let (h, b) = buf.split_at_mut(bstart);
-    let h = {
-        let (_, h) = h.split_at_mut(hstart);
-        let (_, h) = h.split_at_mut(hend - hstart);
-        h
-    };
-
-    let (_, b) = b.split_at_mut(bend - bstart);
-
-    Ok((h, b))
-}
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;所有権&#34;&gt;所有権&lt;/h1&gt;
-
-&lt;p&gt;似たような話で、構造体の所有権というか、貸与権(?)を分割したい時もあります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct PersonDB {
-    name: String,
-    age: usize,
-    address: String,
-}
-
-
-fn use_immutable(s: &amp;amp;str) {
-    // empty
-}
-
-fn use_mutable(s: &amp;amp;mut str) {
-    // empty
-}
-
-
-
-fn from_db(person: PersonDB) {
-    let name = &amp;amp;person.name;
-    let mut address = &amp;amp;mut person.address;
-    use_immutable(name);
-    use_mutable(address);
-}
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;イミュータブルとミュータブル両方の借用があるのでエラーになってしまいます。実際は別のフィールドなので問題は起きないのですが、コンパイラに怒られます。理不尽ですね。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;mutability_split.rs:36:28: 36:42 error: cannot borrow immutable field `person.address` as mutable
-mutability_split.rs:36     let mut address = &amp;amp;mut person.address;
-                                                  ^~~~~~~~~~~~~~
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;そういう時は、パターンマッチによる分配束縛でクリア出来ます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn from_db(person: PersonDB) {
-    let PersonDB {name, mut address, ..} = person;
-    use_immutable(&amp;amp;name);
-    use_mutable(&amp;amp;mut address);
-}
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
-
-&lt;p&gt;Rustの所有権やミュータブルな参照など、1つしか存在出来ないとされるものが分割出来ることを示しました。
-地味に悩む所なので誰かの助けになれば幸いです。&lt;/p&gt;
-
-&lt;p&gt;蛇足を足すと、本当は所有権の分割についても書く予定でしたがエラーになる筈のコードがあっさりコンパイルを通ってしまったのでナシになりました。コンパイラも進化してますね。&lt;/p&gt;</description>
-    </item>
-    
-    <item>
-      <title>multirustが非推奨になったようなのでrustupに移行する</title>
-      <link>/blog/2016/06/12/multirustgahisuishouninattayounanoderustupniikousuru</link>
-      <pubDate>Sun, 12 Jun 2016 15:23:06 +0900</pubDate>
-      
-      <guid>/blog/2016/06/12/multirustgahisuishouninattayounanoderustupniikousuru</guid>
-      <description>&lt;p&gt;κeenです。どうやらもうそろそろRustのツールチェーン管理はmultirustじゃなくてrustupを使った方が良さそうなので移行しようと思います。
-
-きっかけはmultirustにそういうコミットがされたから。&lt;/p&gt;
-
-&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;もうmultirustじゃなくてrustup使え、と。&lt;br&gt;&lt;br&gt;Update README.md · brson/multirust@84c3459&lt;a href=&#34;https://t.co/ySeRB50x5C&#34;&gt;https://t.co/ySeRB50x5C&lt;/a&gt;&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/741077158651514882&#34;&gt;2016年6月10日&lt;/a&gt;&lt;/blockquote&gt;
-&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
-
-&lt;p&gt;因みにrustupは&lt;a href=&#34;https://github.com/rust-lang/rustup.sh&#34;&gt;rust-lang/rustup.sh: The rustup.sh script for installing Rust from release channels&lt;/a&gt;ではなく&lt;a href=&#34;https://github.com/rust-lang-nursery/rustup.rs&#34;&gt;rust-lang-nursery/rustup.rs: The Rust toolchain installer&lt;/a&gt;の方です。インストールガイドなどはこちらから。&lt;a href=&#34;https://www.rustup.rs/&#34;&gt;rustup.rs - The Rust toolchain installer&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;なんかベータ版のようですが推奨していいんですかね…。&lt;/p&gt;
-
-&lt;p&gt;とりあえずmultirustを入れたままコマンドを叩いてみます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ curl https://sh.rustup.rs -sSf | sh
-info: downloading installer
-warning: it looks like you have an existing installation of multirust
-warning: rustup cannot be installed alongside multirust
-warning: run `/usr/local/lib/rustlib/uninstall.sh` as root and delete `/home/kim/.multirust/version` before installing rustup
-error: cannot install while multirust is installed
-rustup: command failed: /tmp/tmp.9kjQj9WT5O/rustup-init
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ふーむ。アンインストールしろ、と。一応指示された通りmultirust自体はアンインストールせずにversionだけを削除します。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ sudo /usr/local/lib/rustlib/uninstall.sh
-install: uninstalling component &#39;multirust&#39;
-
-    multirust is uninstalled.
-$ rm -rf ~/.multirust/version
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;もう一度。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ curl https://sh.rustup.rs -sSf | sh
-info: downloading installer
-
-Welcome to Rust!
-
-This will download and install the official compiler for the Rust programming 
-language, and its package manager, Cargo.
-
-It will add the cargo, rustc, rustup and other commands to Cargo&#39;s bin 
-directory, located at:
-
-  /home/kim/.cargo/bin
-
-This path will then be added to your PATH environment variable by modifying the 
-profile file located at:
-
-  /home/kim/.profile
-
-You can uninstall at any time with rustup self uninstall and these changes will 
-be reverted.
-
-WARNING: This is beta software.
-
-Current installation options:
-
-     default toolchain: stable
-  modify PATH variable: yes
-
-1) Proceed with installation (default)
-2) Customize installation
-3) Cancel installation
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;選択肢が出ました。とりあえず1を選択します。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;error: toolchain &#39;stable&#39; is not installed
-info: caused by: not a directory: &#39;/home/kim/.multirust/toolchains/stable-x86_64-unknown-linux-gnu&#39;
-rustup: command failed: /tmp/tmp.nugK4VN4p8/rustup-init
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;えー。ちょっと…。仕方ないのでシンボリックリンクを貼って騙してみます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ ls ~/.multirust/toolchains/
-beta  nightly  stable
-$ ln -s ~/.multirust/toolchains/{stable,stable-x86_64-unknown-linux-gnu}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;3度目の正直なるか&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ curl https://sh.rustup.rs -sSf | sh
-info: downloading installer
-
-Welcome to Rust!
-
-This will download and install the official compiler for the Rust programming 
-language, and its package manager, Cargo.
-
-It will add the cargo, rustc, rustup and other commands to Cargo&#39;s bin 
-directory, located at:
-
-  /home/kim/.cargo/bin
-
-This path will then be added to your PATH environment variable by modifying the 
-profile file located at:
-
-  /home/kim/.profile
-
-You can uninstall at any time with rustup self uninstall and these changes will 
-be reverted.
-
-WARNING: This is beta software.
-
-Current installation options:
-
-     default toolchain: stable
-  modify PATH variable: yes
-
-1) Proceed with installation (default)
-2) Customize installation
-3) Cancel installation
-1
-
-info: updating existing rustup installation
-
-
-Rust is installed now. Great!
-
-To get started you need Cargo&#39;s bin directory in your PATH environment variable.
-Next time you log in this will be done automatically.
-
-To configure your current shell run source $HOME/.cargo/env.
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;インストール出来たよう。しかしセットアップは &lt;code&gt;~/.profile&lt;/code&gt; に書かれたようなので &lt;code&gt;.zshrc&lt;/code&gt; は自分で更新します。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-diff&#34;&gt;diff --git a/zshrc b/zshrc
-index 0178873..589c6a5 100644
---- a/zshrc
-+++ b/zshrc
-@@ -213,7 +213,7 @@ export PATSHOME=~/compile/ATS2-Postiats-$ATS_VERSION/
- export PATH=$PATSHOME/bin:$PATH
- export PATSHOMERELOC=~/compile/ATS2-Postiats-contrib-$ATS_VERSION
- 
--export PATH=$PATH:~/.multirust/toolchains/stable/cargo/bin
-+export PATH=&amp;quot;$HOME/.cargo/bin:$PATH&amp;quot;
- 
- # OPAM configuration
- . /home/kim/.opam/opam-init/init.sh &amp;gt; /dev/null 2&amp;gt; /dev/null || true
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;使ってみます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;rustup 0.1.12 (c6e430a 2016-05-12)
-The Rust toolchain installer
-
-USAGE:
-    rustup [FLAGS] [SUBCOMMAND]
-
-FLAGS:
-    -v, --verbose    Enable verbose output
-    -h, --help       Prints help information
-    -V, --version    Prints version information
-
-SUBCOMMANDS:
-    show         Show the active and installed toolchains
-    update       Update Rust toolchains
-    default      Set the default toolchain
-    toolchain    Modify or query the installed toolchains
-    target       Modify a toolchain&#39;s supported targets
-    override     Modify directory toolchain overrides
-    run          Run a command with an environment configured for a given toolchain
-    which        Display which binary will be run for a given command
-    doc          Open the documentation for the current toolchain.
-    self         Modify the rustup installation
-    telemetry    rustup telemetry commands
-    help         Prints this message or the help of the given subcommand(s)
-
-rustup installs The Rust Programming Language from the official
-release channels, enabling you to easily switch between stable, beta,
-and nightly compilers and keep them updated. It makes cross-compiling
-simpler with binary builds of the standard library for common platforms.
-
-If you are new to Rust consider running `rustup doc --book`
-to learn Rust.
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;multirustを使っていたら馴染めそうですね。&lt;/p&gt;
-
-&lt;p&gt;一応どこにインストールされたのか確認。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ which rustc
-/home/kim/.cargo/bin/rustc
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ふむふむ。ちょいとアップデートしてみます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ rustup update
-info: syncing channel updates for &#39;stable-x86_64-unknown-linux-gnu&#39;
-info: downloading component &#39;rustc&#39;
- 43.2 MiB /  43.2 MiB (100 %)   2.1 MiB/s ETA:   0 s                
-info: downloading component &#39;rust-std&#39;
- 55.3 MiB /  55.3 MiB (100 %)   3.0 MiB/s ETA:   0 s                
-info: downloading component &#39;rust-docs&#39;
-  6.4 MiB /   6.4 MiB (100 %)   2.9 MiB/s ETA:   0 s                
-info: downloading component &#39;cargo&#39;
-  4.1 MiB /   4.1 MiB (100 %)   2.3 MiB/s ETA:   0 s                
-info: rolling back changes
-error: could not read component file: &#39;/home/kim/.multirust/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/manifest-&#39;
-info: syncing channel updates for &#39;stable-x86_64-unknown-linux-gnu&#39;
-info: downloading component &#39;rustc&#39;
- 43.2 MiB /  43.2 MiB (100 %) 953.6 KiB/s ETA:   0 s                
-info: downloading component &#39;rust-std&#39;
- 55.3 MiB /  55.3 MiB (100 %)   1.8 MiB/s ETA:   0 s                
-info: downloading component &#39;rust-docs&#39;
-  6.4 MiB /   6.4 MiB (100 %)   2.2 MiB/s ETA:   0 s                
-info: downloading component &#39;cargo&#39;
-  4.1 MiB /   4.1 MiB (100 %)   1.5 MiB/s ETA:   0 s                
-info: rolling back changes
-error: could not read component file: &#39;/home/kim/.multirust/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/manifest-&#39;
-info: syncing channel updates for &#39;beta-x86_64-unknown-linux-gnu&#39;
-info: downloading component &#39;rustc&#39;
- 44.8 MiB /  44.8 MiB (100 %)   1.4 MiB/s ETA:   0 s                
-info: downloading component &#39;rust-std&#39;
- 57.9 MiB /  57.9 MiB (100 %)   2.9 MiB/s ETA:   0 s                
-info: downloading component &#39;rust-docs&#39;
-  7.0 MiB /   7.0 MiB (100 %)   1.8 MiB/s ETA:   0 s                
-info: downloading component &#39;cargo&#39;
-  4.1 MiB /   4.1 MiB (100 %)   1.3 MiB/s ETA:   0 s                
-info: installing component &#39;rustc&#39;
-info: installing component &#39;rust-std&#39;
-info: installing component &#39;rust-docs&#39;
-info: installing component &#39;cargo&#39;
-info: syncing channel updates for &#39;nightly-x86_64-unknown-linux-gnu&#39;
-info: downloading component &#39;rustc&#39;
- 46.5 MiB /  46.5 MiB (100 %) 924.8 KiB/s ETA:   0 s                
-info: downloading component &#39;rust-std&#39;
- 59.0 MiB /  59.0 MiB (100 %)   2.4 MiB/s ETA:   0 s                
-info: downloading component &#39;rust-docs&#39;
-  7.3 MiB /   7.3 MiB (100 %)   1.8 MiB/s ETA:   0 s                
-info: downloading component &#39;cargo&#39;
-  4.1 MiB /   4.1 MiB (100 %)   3.2 MiB/s ETA:   0 s                
-info: installing component &#39;rustc&#39;
-info: installing component &#39;rust-std&#39;
-info: installing component &#39;rust-docs&#39;
-info: installing component &#39;cargo&#39;
-info: checking for self-updates
-info: rustup is up to date
-
-                           stable update failed - rustc 1.9.0 (e4e8b6668 2016-05-18)
-  stable-x86_64-unknown-linux-gnu update failed - rustc 1.9.0 (e4e8b6668 2016-05-18)
-                                 beta installed - rustc 1.10.0-beta.2 (39f3c16cc 2016-05-26)
-                              nightly installed - rustc 1.11.0-nightly (0554abac6 2016-06-10)
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;あれ、なんかコケてる…。シンボリックリンクが悪さしたかな…。しかし試しに手元のプロダクトをコンパイルしてみたら通ったので使えているよう。&lt;/p&gt;
-
-&lt;p&gt;さて、クロスコンパイルの方はどうでしょうか。以前Raspberry Pi向けにクロスコンパイルしました &lt;a href=&#34;http://keens.github.io/blog/2016/05/04/rustdebeametaruraspberry_pinolchika/&#34;&gt;RustでベアメタルRaspberry PiのLチカ | κeenのHappy Hacκing Blog&lt;/a&gt;。これは動くでしょうか。&lt;/p&gt;
-
-&lt;p&gt;とりあえずインストール可能なターゲットを確認&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ rustup target list
-error: toolchain &#39;stable-x86_64-unknown-linux-gnu&#39; does not support components
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;…………。無理矢理addしてみます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ rustup target add nightly-arm-unknown-linux-gnueabihf
-error: toolchain &#39;stable-x86_64-unknown-linux-gnu&#39; does not support components
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;…………………………………。&lt;/p&gt;
-
-&lt;p&gt;なんか変ですね。&lt;/p&gt;
-
-&lt;p&gt;一旦&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ rm ~/.multirust/toolchains/stable-x86_64-unknown-linux-gnu
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;してもう一度 &lt;code&gt;rustup update&lt;/code&gt; します。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ rustup update
-info: syncing channel updates for &#39;stable-x86_64-unknown-linux-gnu&#39;
-info: downloading component &#39;rustc&#39;
- 43.2 MiB /  43.2 MiB (100 %)   2.6 MiB/s ETA:   0 s                
-info: downloading component &#39;rust-std&#39;
- 55.3 MiB /  55.3 MiB (100 %)   3.7 MiB/s ETA:   0 s                
-info: downloading component &#39;rust-docs&#39;
-  6.4 MiB /   6.4 MiB (100 %)   5.0 MiB/s ETA:   0 s                
-info: downloading component &#39;cargo&#39;
-info: installing component &#39;rustc&#39;
-info: installing component &#39;rust-std&#39;
-info: installing component &#39;rust-docs&#39;
-info: installing component &#39;cargo&#39;
-info: syncing channel updates for &#39;beta-x86_64-unknown-linux-gnu&#39;
-info: syncing channel updates for &#39;beta-x86_64-unknown-linux-gnu&#39;
-info: syncing channel updates for &#39;nightly-x86_64-unknown-linux-gnu&#39;
-info: syncing channel updates for &#39;nightly-x86_64-unknown-linux-gnu&#39;
-info: checking for self-updates
-info: rustup is up to date
-
-                            stable installed - rustc 1.9.0 (e4e8b6668 2016-05-18)
-                              beta unchanged - rustc 1.10.0-beta.2 (39f3c16cc 2016-05-26)
-     beta-x86_64-unknown-linux-gnu unchanged - rustc 1.10.0-beta.2 (39f3c16cc 2016-05-26)
-                           nightly unchanged - rustc 1.11.0-nightly (0554abac6 2016-06-10)
-  nightly-x86_64-unknown-linux-gnu unchanged - rustc 1.11.0-nightly (0554abac6 2016-06-10)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;あれ、今回は上手くいった。やっぱりシンボリックリンクが悪かったよう。リトライ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ rustup target list
-aarch64-apple-ios
-aarch64-unknown-linux-gnu
-arm-linux-androideabi
-arm-unknown-linux-gnueabi
-arm-unknown-linux-gnueabihf
-armv7-apple-ios
-armv7-unknown-linux-gnueabihf
-armv7s-apple-ios
-i386-apple-ios
-i586-pc-windows-msvc
-i586-unknown-linux-gnu
-i686-apple-darwin
-i686-pc-windows-gnu
-i686-pc-windows-msvc
-i686-unknown-freebsd
-i686-unknown-linux-gnu
-i686-unknown-linux-musl
-mips-unknown-linux-gnu
-mips-unknown-linux-musl
-mipsel-unknown-linux-gnu
-mipsel-unknown-linux-musl
-powerpc-unknown-linux-gnu
-powerpc64-unknown-linux-gnu
-powerpc64le-unknown-linux-gnu
-x86_64-apple-darwin
-x86_64-apple-ios
-x86_64-pc-windows-gnu
-x86_64-pc-windows-msvc
-x86_64-rumprun-netbsd
-x86_64-unknown-freebsd
-x86_64-unknown-linux-gnu (default)
-x86_64-unknown-linux-musl
-x86_64-unknown-netbsd
-$ rustup target add --toolchain nightly arm-unknown-linux-gnueabihf
-info: downloading component &#39;rust-std&#39; for &#39;arm-unknown-linux-gnueabihf&#39;
- 62.6 MiB /  62.6 MiB (100 %)   1.4 MiB/s ETA:   0 s                
-info: installing component &#39;rust-std&#39; for &#39;arm-unknown-linux-gnueabihf&#39;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;んー、ちゃんとnightlyが入ったのか分からない。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ rustup show
-installed toolchains
---------------------
-
-stable
-stable-x86_64-unknown-linux-gnu (default)
-beta
-beta-x86_64-unknown-linux-gnu
-nightly
-nightly-x86_64-unknown-linux-gnu
-
-active toolchain
-----------------
-
-stable-x86_64-unknown-linux-gnu (default)
-rustc 1.9.0 (e4e8b6668 2016-05-18)
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;しかし件のARM向けプロジェクトのクロスコンパイルは出来たよう。&lt;/p&gt;
-
-&lt;p&gt;もう一度listを見る。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ rustup target list
-aarch64-apple-ios
-aarch64-linux-android
-aarch64-unknown-linux-gnu
-arm-linux-androideabi
-arm-unknown-linux-gnueabi
-arm-unknown-linux-gnueabihf (installed)
-armv7-apple-ios
-armv7-unknown-linux-gnueabihf
-armv7s-apple-ios
-i386-apple-ios
-i586-pc-windows-msvc
-i586-unknown-linux-gnu
-i686-apple-darwin
-i686-linux-android
-i686-pc-windows-gnu
-i686-pc-windows-msvc
-i686-unknown-freebsd
-i686-unknown-linux-gnu
-i686-unknown-linux-musl
-mips-unknown-linux-gnu
-mips-unknown-linux-musl
-mipsel-unknown-linux-gnu
-mipsel-unknown-linux-musl
-powerpc-unknown-linux-gnu
-powerpc64-unknown-linux-gnu
-powerpc64le-unknown-linux-gnu
-x86_64-apple-darwin
-x86_64-apple-ios
-x86_64-pc-windows-gnu
-x86_64-pc-windows-msvc
-x86_64-rumprun-netbsd
-x86_64-unknown-freebsd
-x86_64-unknown-linux-gnu (default)
-x86_64-unknown-linux-musl
-x86_64-unknown-netbsd
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;arm-unknown-linux-gnueabihf (installed)&lt;/code&gt; とあるのでインストール出来ているよう。しかし本当にnightlyなのか。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;rustup target list --toolchain stable
-aarch64-apple-ios
-aarch64-unknown-linux-gnu
-arm-linux-androideabi
-arm-unknown-linux-gnueabi
-arm-unknown-linux-gnueabihf
-armv7-apple-ios
-armv7-unknown-linux-gnueabihf
-armv7s-apple-ios
-i386-apple-ios
-i586-pc-windows-msvc
-i586-unknown-linux-gnu
-i686-apple-darwin
-i686-pc-windows-gnu
-i686-pc-windows-msvc
-i686-unknown-freebsd
-i686-unknown-linux-gnu
-i686-unknown-linux-musl
-mips-unknown-linux-gnu
-mips-unknown-linux-musl
-mipsel-unknown-linux-gnu
-mipsel-unknown-linux-musl
-powerpc-unknown-linux-gnu
-powerpc64-unknown-linux-gnu
-powerpc64le-unknown-linux-gnu
-x86_64-apple-darwin
-x86_64-apple-ios
-x86_64-pc-windows-gnu
-x86_64-pc-windows-msvc
-x86_64-rumprun-netbsd
-x86_64-unknown-freebsd
-x86_64-unknown-linux-gnu (default)
-x86_64-unknown-linux-musl
-x86_64-unknown-netbsd
-$ rustup target list --toolchain nightly
-aarch64-apple-ios
-aarch64-linux-android
-aarch64-unknown-linux-gnu
-arm-linux-androideabi
-arm-unknown-linux-gnueabi
-arm-unknown-linux-gnueabihf (installed)
-armv7-apple-ios
-armv7-unknown-linux-gnueabihf
-armv7s-apple-ios
-i386-apple-ios
-i586-pc-windows-msvc
-i586-unknown-linux-gnu
-i686-apple-darwin
-i686-linux-android
-i686-pc-windows-gnu
-i686-pc-windows-msvc
-i686-unknown-freebsd
-i686-unknown-linux-gnu
-i686-unknown-linux-musl
-mips-unknown-linux-gnu
-mips-unknown-linux-musl
-mipsel-unknown-linux-gnu
-mipsel-unknown-linux-musl
-powerpc-unknown-linux-gnu
-powerpc64-unknown-linux-gnu
-powerpc64le-unknown-linux-gnu
-x86_64-apple-darwin
-x86_64-apple-ios
-x86_64-pc-windows-gnu
-x86_64-pc-windows-msvc
-x86_64-rumprun-netbsd
-x86_64-unknown-freebsd
-x86_64-unknown-linux-gnu (default)
-x86_64-unknown-linux-musl
-x86_64-unknown-netbsd
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;どうやら本当にnightlyのよう。&lt;/p&gt;
-
-&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
-
-&lt;p&gt;色々あたふたとしましたがrustupをインストールして使ってみました。multirustを使っているとインストールあたりでやや難はありそうですがそれ以降は普通に使えそうです。&lt;/p&gt;
-
-&lt;p&gt;皆様もお試しあれ。&lt;/p&gt;</description>
     </item>
     
   </channel>
