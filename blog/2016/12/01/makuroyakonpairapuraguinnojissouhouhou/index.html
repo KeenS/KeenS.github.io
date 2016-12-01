@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+    <head>
+        
+        <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+
+        <title>マクロやコンパイラプラグインの実装方法色々 | κeenのHappy Hacκing Blog</title>
+        <link rel="stylesheet" href='http://fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css' />
+        <link rel="stylesheet" href="/libraries/normalize.3.0.1.css" />
+        <link rel="stylesheet" href="/css/liquorice.css" />
+        <link rel="shortcut icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon-144-precomposed.png" sizes="144x144" />
+        <link rel="alternate" href="" type="application/rss+xml" title="κeenのHappy Hacκing Blog" />
+        
+        <script>
+         (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+             (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+                                  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+         })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+         ga('create', 'UA-43779888-1', 'auto');
+         ga('send', 'pageview');
+
+        </script>
+        
+        <link rel="stylesheet" href="/highlight.js/styles/xcode.css" />
+<script src="/highlight.js/highlight.min.js"></script>
+<script>hljs.initHighlightingOnLoad();</script>
+<script type="text/x-mathjax-config">
+ MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
+</script>
+<script type="text/javascript"
+        src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML">
+</script>
+<meta http-equiv="X-UA-Compatible" CONTENT="IE=EmulateIE7" />
+
+    </head>
+    <body class="li-body">
+
+<header class="li-page-header">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-brand li-left">
+                <a href="/">κeenのHappy Hacκing Blog</a> | Lispエイリアンの狂想曲</div>
+                <div class="li-menu li-right">
+                    <span class="li-menu-icon" onclick="javascript:toggle('menu');">&#9776;</span>
+                    <ul id="menu2" class="li-menu-items">
+                        
+                            <li><a href="/about/"> About </a></li>
+                        
+                            <li><a href="/index.xml"> Atom </a></li>
+                        
+                            <li><a href="/post/"> Blog </a></li>
+                        
+                            <li><a href="/slide/"> Slide </a></li>
+                        
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="sixteen columns">
+                <ul id="menu" class="li-menu-items li-menu-mobile">
+                    
+                        <li><a href="/about/"> About </a></li>
+                    
+                        <li><a href="/index.xml"> Atom </a></li>
+                    
+                        <li><a href="/post/"> Blog </a></li>
+                    
+                        <li><a href="/slide/"> Slide </a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+
+
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <article class="li-article">
+                    <header class="li-article-header">
+                        <h1 class="li-article-title">マクロやコンパイラプラグインの実装方法色々</h1>
+                        <div class="li-article-meta">
+    <time class="li-article-date">2016-12-01</time>
+    <ul class="li-article-tag">
+    
+        <li>
+            <a href="/categories/%e8%a8%80%e8%aa%9e%e5%ae%9f%e8%a3%85">言語実装</a>
+        </li>
+    
+        <li>
+            <a href="/categories/%e3%83%9e%e3%82%af%e3%83%ad">マクロ</a>
+        </li>
+    
+        <li>
+            <a href="/categories/advent-calendar">Advent Calendar</a>
+        </li>
+    
+        <li>
+            <a href="/categories/advent-calendar-2016">Advent Calendar 2016</a>
+        </li>
+    
+</ul>
+
+</div>
+
+                    </header>
+                    <section>
+                        <p>このエントリは<a href="http://qiita.com/advent-calendar/2016/lang_dev">言語実装 Advent Calendar 2016 - Qiita</a>2日目の記事です。</p>
+
+<p>κeenです。マクロなどのコンパイル時に何か処理をしてコード生成する機構の実現方法が言語によって様々にあるなぁと思ったのでちょっと探ってみます</p>
+
+<p></p>
+
+<p>なんか文字だけ並んでても味気ないのでサンプルマクロも付けときますね。</p>
+
+<h1 id="コンパイラにマクロ専用言語のインタプリタ機能を付けるやつ">コンパイラにマクロ専用言語のインタプリタ機能を付けるやつ</h1>
+
+<p>Rustの<code>macro_rules</code>やSchemeの<code>syntax-rules</code>が該当します。</p>
+
+<pre><code class="language-scheme">(define-syntax define-protocol
+  (syntax-rules ()
+    ((define-protocol (name type ...) (method arg ...) ...)
+     (begin
+       (define method
+         (make-generic))
+       ...
+       (define name
+         (lambda (type ...)
+           (lambda methods
+             (add-methods methods (list (list method arg ...) ...)))))))))
+</code></pre>
+
+<p>制限が強い上に無駄にコンパイラの機能が増えるので個人的にはあまり好きじゃないですね…。</p>
+
+<h1 id="コンパイラでもホスト言語を動かすやつ">コンパイラでもホスト言語を動かすやつ</h1>
+
+<p>コンパイラとランタイムが一緒になっているCommon Lispなんかで使われる方法です。</p>
+
+<pre><code class="language-common-lisp">(defmacro dotimes-unroll ((i n unroll) &amp;body body)
+  (let ((n_      (gensym &quot;n&quot;)))
+    `(let ((,n_ ,n))
+       (do ((,i 0))
+           ((&lt; ,n_ (the fixnum (+ ,unroll ,i)))
+            (do ((,i ,i (the fixnum (1+ ,i))))
+                ((&lt; ,n_ (the fixnum (1+ ,i))))
+              ,@body
+              ))
+         ,@(loop :repeat unroll :append (append body `((setq ,i (the fixnum (1+ ,i))))))))))
+
+</code></pre>
+
+<p>マクロがなくなるまで再帰的にマクロ展開をします。
+ユーザが好き勝手書けてしかも手軽に使えるので割と好きです。まあ、でも言語を選びますね。</p>
+
+<h1 id="コンパイラプラグインとしてdlopenするやつ">コンパイラプラグインとしてdlopenするやつ</h1>
+
+<p>Rustのコンパイラプラグインが相当します。</p>
+
+<pre><code class="language-toml">[lib]
+crate-type = [&quot;dylib&quot;]
+plugin = true
+</code></pre>
+
+<pre><code class="language-rust">fn codegen&lt;'cx&gt;(cx: &amp;'cx mut ExtCtxt, text: String, file: String)
+        -&gt; Box&lt;MacResult + 'cx&gt; {
+    let mut output = Vec::new();
+    let doc = Document::parse(&amp;text)
+        .expect(&quot;failed to parse thrift file&quot;)
+        .expect(&quot;EOF while parsing thrift file&quot;);
+    {
+        let ns = find_rust_namespace(&amp;doc).expect(&quot;cannot find namespace&quot;);
+    output.write_all(format!(&quot;mod {} {{&quot;, ns.module).as_ref()).expect(&quot;internal error failed to write the vec&quot;);
+    }
+    compile(doc, &amp;mut output).expect(&quot;failed to generate code&quot;);
+    output.write_all(format!(&quot;}}&quot;).as_ref()).expect(&quot;internal error failed to write the vec&quot;);
+    let output = match std::str::from_utf8(&amp;output) {
+        Ok(s) =&gt; s,
+        Err(_) =&gt; &quot;&quot;,
+    };
+
+    trace!(&quot;{}&quot;, output);
+
+
+    let parser = new_parser_from_source_str(cx.parse_sess(), file, output.to_string());
+
+    struct ExpandResult&lt;'a&gt; {
+        p: parse::parser::Parser&lt;'a&gt;,
+    }
+    impl&lt;'a&gt; base::MacResult for ExpandResult&lt;'a&gt; {
+        fn make_items(mut self: Box&lt;ExpandResult&lt;'a&gt;&gt;)
+                      -&gt; Option&lt;SmallVector&lt;ptr::P&lt;ast::Item&gt;&gt;&gt; {
+            let mut ret = SmallVector::zero();
+            while self.p.token != token::Eof {
+                match panictry!(self.p.parse_item()) {
+                    Some(item) =&gt; ret.push(item),
+                    None =&gt; panic!(self.p.diagnostic().span_fatal(self.p.span,
+                                                                  &amp;format!(&quot;expected item, found `{}`&quot;,
+                                                                           self.p.this_token_to_string())))
+                }
+            }
+            Some(ret)
+        }
+    }
+
+    Box::new(ExpandResult { p: parser })
+
+}
+
+
+fn macro_thrift&lt;'cx&gt;(cx: &amp;'cx mut ExtCtxt, sp: Span, tts: &amp;[TokenTree])
+                     -&gt; Box&lt;MacResult + 'cx&gt; {
+
+    let text = match get_single_str_from_tts(cx, sp, tts, &quot;thrift!&quot;) {
+        Some(f) =&gt; f,
+        None =&gt; return DummyResult::expr(sp),
+    };
+
+    codegen(cx, text, &quot;trift!&quot;.to_string())
+}
+
+
+#[plugin_registrar]
+pub fn plugin_registrar(reg: &amp;mut Registry) {
+    reg.register_macro(&quot;thrift&quot;, macro_thrift);
+    reg.register_macro(&quot;thrift_file&quot;, macro_thrift_file);
+}
+
+</code></pre>
+
+<p>一旦dllを作ってそれをプラグインとしてロードするという手間もありますし、ユーザが触れるASTも複雑なのであまり好きではないです。
+まあ、これは準クオートだとかのユーザインターフェースの問題だったりするんですが。
+ただ表現力はホスト言語が使えるので自由に使えます。</p>
+
+<h1 id="言語の仕組みを使ってライブラリをコンパイラにロードする">言語の仕組みを使ってライブラリをコンパイラにロードする</h1>
+
+<p>私が地味に好きな言語に<a href="http://www.mirah.org/">mirah</a>というのがあります。その言語での実現方法が少し好きでした。
+mirahはJVMで動くRuby風言語で、コンパイラは既にセルフホストされています。つまりコンパイラもJVMで動く訳です。</p>
+
+<p>Javaには<a href="https://docs.oracle.com/javase/tutorial/sound/SPI-intro.html">SPI</a>というものがあって明示的にクラスやインスタンスを指定しなくてもJVMが実装を捜してくれる機能があります。
+その機能にのっかることでマクロを.classファイルにコンパイルしてクラスパスに置いておくだけでマクロが使えるようになります。</p>
+
+<pre><code class="language-mirah">$ExtensionsRegistration[['java.util.Map']]
+class MapExtensions
+  macro def [](key)
+    quote { `@call.target`.get(`key`) }
+  end
+end
+
+class Builtins implements ExtensionsProvider
+
+  def register(type_system:ExtensionsService):void
+    type_system.macro_registration(MapExtensions.class)
+  end
+end
+</code></pre>
+
+<p>中々面白いですね。</p>
+
+<h1 id="おわりに">おわりに</h1>
+
+<p>なんか実装コード1つない雑な記事で申し訳ありませんがmirahのマクロの仕組みがちょっと気に入ったので書こうと思った次第です。</p>
+
+<p>あとはOCamlのppxやHaskellのTHも気になるのですが調べきれませんでした。はい。</p>
+                    </section>
+                </article>
+            </div>
+        </div>
+
+        <div class="row li-author">
+    <div class="sixteen columns">
+        Written by <strong>κeen</strong>
+    </div>
+</div>
+
+
+        <div class="row li-pagination">
+            <div class="eight columns">
+                <div class="li-pagination-previous">
+                    
+                        Later article<br />
+                        <a href="/blog/2016/12/01/rustdebaitoretsuwoatsukautokinotips"> Rustでバイト列を扱う時のtips</a>
+                    
+                </div>
+            </div>
+            <div class="eight columns">
+                <div class="li-pagination-next">
+                    
+                        Older article<br />
+                        <a href="/blog/2016/12/01/4nenkantsuzuitashibuya_lispnolispmeetup"> 4年間続いたShibuya.lispのLispMeetUp</a>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+<footer class="li-page-footer">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-page-footer-legal">
+                    &copy; 2016. All rights reserved. 
+                </div>
+                <div class="li-page-footer-theme">
+                    <span class=""><a href="https://github.com/eliasson/liquorice/">liquorice</a> is a theme for <a href="http://hugo.spf13.com">hugo</a></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+
+    <script type="text/javascript">
+    <!--
+    function toggle(id) {
+        var e = document.getElementById(id);
+        e.style.display == 'block' ? e.style.display = 'none' : e.style.display = 'block';
+    }
+    
+    </script>
+    <script type="text/javascript">
+    <!--
+        var _gaq = _gaq || [];
+        _gaq.push(['_setAccount', ""]);
+        _gaq.push(['_trackPageview']);
+
+        (function() {
+        var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+        ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+        var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+        })();
+    -->
+    </script>
+    </body>
+</html>
+
