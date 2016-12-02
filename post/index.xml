@@ -6,8 +6,231 @@
     <description>Recent content in Post-rsses on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Fri, 02 Dec 2016 14:00:11 +0900</lastBuildDate>
+    <lastBuildDate>Fri, 02 Dec 2016 17:52:30 +0900</lastBuildDate>
     <atom:link href="/post/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Rustのプロセス</title>
+      <link>/blog/2016/12/02/rustnopurosesu</link>
+      <pubDate>Fri, 02 Dec 2016 17:52:30 +0900</pubDate>
+      
+      <guid>/blog/2016/12/02/rustnopurosesu</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2016/rust-lang-2&#34;&gt;Rust その2 Advent Calendar 2016 - Qiita&lt;/a&gt;3日目の記事です。&lt;/p&gt;
+
+&lt;p&gt;κeenです。Rustの&lt;a href=&#34;https://doc.rust-lang.org/std/process/index.html&#34;&gt;&lt;code&gt;std::process&lt;/code&gt;&lt;/a&gt;の扱い方を紹介します。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;
+
+&lt;h1 id=&#34;ビルダー&#34;&gt;ビルダー&lt;/h1&gt;
+
+&lt;p&gt;これはビルダーになっていて、以下のように使えます。公式ドキュメントの例です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let output = Command::new(&amp;quot;sh&amp;quot;)
+    .arg(&amp;quot;-c&amp;quot;)
+    .arg(&amp;quot;echo hello&amp;quot;)
+    .output()
+    .expect(&amp;quot;failed to execute process&amp;quot;);
+
+let hello = output.stdout;
+println!(&amp;quot;{}&amp;quot;, std::str::from_utf8(&amp;amp;hello).unwrap());
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;hello
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;環境変数も渡せます&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let output = Command::new(&amp;quot;sh&amp;quot;)
+    .arg(&amp;quot;-c&amp;quot;)
+    // 環境変数を参照するコマンド
+    .arg(&amp;quot;echo $HELLO&amp;quot;)
+    // 環境変数を設定する
+    .env(&amp;quot;HELLO&amp;quot;, &amp;quot;hello, world&amp;quot;)
+    .output()
+    .expect(&amp;quot;failed to execute process&amp;quot;);
+
+let hello = output.stdout;
+println!(&amp;quot;{}&amp;quot;, std::str::from_utf8(&amp;amp;hello).unwrap());
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;hello, world
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;あるいは実行するディレクトリも指定出来ます&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let output = Command::new(&amp;quot;ls&amp;quot;)
+    // プロセスを実行するディレクトリを指定する
+    .current_dir(&amp;quot;/&amp;quot;)
+    .output()
+    .expect(&amp;quot;failed to execute process&amp;quot;);
+
+let hello = output.stdout;
+println!(&amp;quot;{}&amp;quot;, std::str::from_utf8(&amp;amp;hello).unwrap());
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;bin
+boot
+cdrom
+core
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;出力&#34;&gt;出力&lt;/h1&gt;
+
+&lt;p&gt;上の例では &lt;code&gt;output&lt;/code&gt; でstdio,stderr, exitstatus取り出していますが、子プロセスとして実行することも出来ます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let mut child = Command::new(&amp;quot;ls&amp;quot;)
+    .current_dir(&amp;quot;/&amp;quot;)
+    // outputではなくspawnを使う
+    .spawn()
+    .expect(&amp;quot;failed to execute process&amp;quot;);
+let status = child.wait().unwrap();
+println!(&amp;quot;{}&amp;quot;, status);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;bin  boot  cdrom  core  dev  etc  home  initrd.img  initrd.img.old  lib  lib32  lib64  libx32  lost+found  media  mnt  opt  proc  root  run  sbin  snap  srv  sys  tmp  usr  var  vmlinuz  vmlinuz.old
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;この場合、子プロセスはRustへではなく直接stdoutへ出力するのでSIGPIPEが送られません。&lt;/p&gt;
+
+&lt;p&gt;あるいは出力先を手で指定することも出来ます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let child = Command::new(&amp;quot;ls&amp;quot;)
+    .current_dir(&amp;quot;/&amp;quot;)
+    // stdoutをnullにする
+    .stdout(Stdio::null())
+    .spawn()
+    .expect(&amp;quot;failed to execute process&amp;quot;);
+let status = child.wait().unwrap();
+println!(&amp;quot;{}&amp;quot;, status);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ここではstdoutをnull ioに指定しています。他には&lt;code&gt;inherit&lt;/code&gt;で親プロセスのものを引き継ぐか、&lt;code&gt;piped&lt;/code&gt;で次のプロセスに渡すことも出来ます&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;// 1つめのプロセスを作る
+let mut child1 = Command::new(&amp;quot;ls&amp;quot;)
+    .current_dir(&amp;quot;/&amp;quot;)
+    // 出力は親プロセスへパイプする
+    .stdout(Stdio::piped())
+    .spawn()
+    .expect(&amp;quot;failed to execute process&amp;quot;);
+
+// 2つめのプロセスを作る
+let mut child2 = Command::new(&amp;quot;grep&amp;quot;)
+    .arg(&amp;quot;bin&amp;quot;)
+    // 入力は親プロセスへパイプする
+    .stdin(Stdio::piped())
+    .spawn()
+    .expect(&amp;quot;failed to execute process&amp;quot;);
+
+{
+    // Someと分かっているのでunwrapする。
+    // この辺はrustの型システテムの限界。
+    let out = child1.stdout.as_mut().unwrap();
+    let in_ = child2.stdin.as_mut().unwrap();
+    // 1つめのプロセスの出力から2つめのプロセスの入力へデータをコピーする
+    io::copy(out, in_).unwrap();
+}
+
+
+let status1 = child1.wait().unwrap();
+let status2 = child2.wait().unwrap();
+println!(&amp;quot;{}, {}&amp;quot;, status1, status2);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;bin
+sbin
+exit code: 0, exit code: 0
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ちょっと繋ぎ込みが面倒ですし&lt;code&gt;io::copy&lt;/code&gt;を使って手でコピーしてるのが頂けませんね。&lt;/p&gt;
+
+&lt;h1 id=&#34;unix&#34;&gt;Unix&lt;/h1&gt;
+
+&lt;p&gt;Unixに依存することを認めてしまえばもうちょっと色々なことが出来ます。&lt;/p&gt;
+
+&lt;p&gt;1つには&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::os::unix::process::CommandExt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;するといくつか追加のメソドが生えてくる仕組みになってます。&lt;/p&gt;
+
+&lt;p&gt;例えば、&lt;code&gt;exec&lt;/code&gt; が使えます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let error = Command::new(&amp;quot;ls&amp;quot;)
+    .current_dir(&amp;quot;/&amp;quot;)
+    // execを呼ぶ
+    .exec();
+
+println!(&amp;quot;after exec!!&amp;quot;);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;exec&lt;/code&gt;した後はRustのプロセスを別のものに置き換えてしまうので&lt;code&gt;println!(&amp;quot;after exec!!&amp;quot;);&lt;/code&gt;の行が実行されません。
+されるとしたら何らかの理由で&lt;code&gt;exec&lt;/code&gt;に失敗した場合だけです。なので面白いことに&lt;code&gt;exec&lt;/code&gt;の返り値はエラーのみです。&lt;/p&gt;
+
+&lt;p&gt;あるいは、&lt;code&gt;unsafe&lt;/code&gt;なコードを認めるなら先のプロセスの繋ぎ込みはもうちょっとスマートに書けます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::os::unix::io::{AsRawFd, FromRawFd};
+let mut child1 = Command::new(&amp;quot;ls&amp;quot;)
+    .current_dir(&amp;quot;/&amp;quot;)
+    // 標準出力をパイプする
+    .stdout(Stdio::piped())
+    .spawn()
+    .expect(&amp;quot;failed to spawn a process&amp;quot;);
+
+let mut child2 = Command::new(&amp;quot;grep&amp;quot;)
+    .arg(&amp;quot;bin&amp;quot;)
+    // 標準入力は手で作ったStdioオブジェクトにする。
+    // ここでは1つめのプロセスの標準出力を直接繋ぐ。
+    .stdin(unsafe{Stdio::from_raw_fd(child1.stdout.as_ref().unwrap().as_raw_fd())})
+    .spawn()
+    .expect(&amp;quot;failed to spawn a process&amp;quot;);
+
+// 直接繋いでしまったのでコピーの必要はない
+
+let status1 = child1.wait().unwrap();
+let status2 = child2.wait().unwrap();
+println!(&amp;quot;{}, {}&amp;quot;, status1, status2);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;bin
+sbin
+exit code: 0, exit code: 0
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;Stdio&lt;/code&gt;がfdと行き来出来るのでそれを経由することでパイプを作れます。&lt;/p&gt;
+
+&lt;p&gt;もちろん、ファイルに書き出すことも出来ます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::os::unix::io::{AsRawFd, FromRawFd};
+
+let file = File::create(&amp;quot;test.txt&amp;quot;).unwrap();
+// ファイルからFDを経由してStdioを作る
+let out = unsafe{Stdio::from_raw_fd(file.as_raw_fd())};
+let mut child1 = Command::new(&amp;quot;ls&amp;quot;)
+    .current_dir(&amp;quot;/&amp;quot;)
+    .stdout(out)
+    .spawn()
+    .expect(&amp;quot;failed to spawn a process&amp;quot;);
+
+let status1 = child1.wait().unwrap();
+println!(&amp;quot;{}&amp;quot;, status1);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat test.txt
+bin
+boot
+cdrom
+core
+dev
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;おわりに&#34;&gt;おわりに&lt;/h1&gt;
+
+&lt;p&gt;最初は思ったよりCのプロセス回りのAPIと違って戸惑いますが馴れてしまえば使いやすいAPIでしょう。&lt;/p&gt;</description>
+    </item>
     
     <item>
       <title>新しいコンパイラバックエンドcretonne</title>
@@ -134,6 +357,7 @@ $ cd cretonne-sample
 &lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;extern crate cretonne;
 use cretonne::ir::*;
 use cretonne::ir::{types as ty};
+use cretonne::ir::{immediates as imm};
 use cretonne::isa;
 use cretonne::settings::{self, Configurable};
 use cretonne::{write_function, legalize_function, verify_function};
@@ -2480,40 +2704,6 @@ puts &amp;quot;a &amp;lt; b =&amp;gt; #{a &amp;lt; b}&amp;quot;
 
 &lt;p&gt;マクロ周りが便利になるなど、興味深い変更がありましたね。
 みなさんもこれを機にmirahを使ってみて下さい。&lt;/p&gt;</description>
-    </item>
-    
-    <item>
-      <title>私がコードを書くときテストは書かない</title>
-      <link>/blog/2016/08/02/watashigako_dowokakutokitesutohakakanai</link>
-      <pubDate>Tue, 02 Aug 2016 00:12:22 +0900</pubDate>
-      
-      <guid>/blog/2016/08/02/watashigako_dowokakutokitesutohakakanai</guid>
-      <description>&lt;p&gt;ちょっとポエムというか自分語りを。会社の同期と話してて少し刺激されたので。あとは&lt;a href=&#34;https://note.mu/ruiu/n/n1083b2a5d547&#34;&gt;ソースコードって実際のところどういうふうに書いていますか？｜Rui Ueyama｜note&lt;/a&gt;にも刺激されて。
-
-発端は同期が最近は何か書いてもイケてなくて後で丸っと書き直すことが多くてつらい、という話を始めたこと。
-自分は、そんなの普通だろと返した。少なくとも自分の中では当たり前だった。
-ふと考えてみたらそうじゃない人も沢山いる気がした。当たり前じゃない人に、自分の当たり前を喋ってみたら面白そうということで自分がコードを書くときにやることを語る。&lt;/p&gt;
-
-&lt;p&gt;コードを書き始めた時点では仕様は完全には固まっていない。アプリケーションの構成とかは決まってるけど、ソフトウェアの中身はほとんど何も決まっていない。
-まずは手を着けやすそうな所から始める。最初は必ずHello Worldから。そしてmainの中にPoCを書いてイメージを掴む。
-そこから一気に飛躍して、ディレクトリ構成を決める。mainは三枚下ろしにして各ディレクトリ下に入れる。これでアプリケーションの骨格が見える。ここまでトップダウン。この状態でアプリケーションを走らせるとPoCが動く。&lt;/p&gt;
-
-&lt;p&gt;次はボトムアップのフェーズで、骨格に肉付けしていく。1度に考えることが一箇所で済むように、順番を考えながら気儘にコードを加えていく。だいたいデータアクセス層のインターフェース、データアクセス層の実装のスタブ、サービス層のスタブ、メインルーチン、サービス層、くらいの順番。抽象すると必要そうなものを定義する、定義したものを使う、定義したものを実装する。多少型が違ってコンパイルが通らなくても気にしない。エラー処理やエッジケースは全部スタブのまま。コードのあちこちに &lt;code&gt;FIXME&lt;/code&gt; が散らばる。条件分岐の枝は全ては書かない。頭のコンテキストスイッチで死んでしまう。集中したい枝以外はFIXMEで埋める。こんなもんかな、と思ったところでちゃんとコンパイルが通るように修正する。ここまでテスト無し、データアクセス層の実装無し。&lt;/p&gt;
-
-&lt;p&gt;ここからようやく永続データのスキーマやアプリケーションの仕様を決める。コードを見ればどういうデータにパターンでアクセスして、どういうエッジケースがあるかが分かるからサクサク決まる。&lt;/p&gt;
-
-&lt;p&gt;データのスキーマが決まったので最後データアクセス層を実装出来る。そしたら動くものが完成する。動いたものをポチポチやってみて実装が正しいことを確認する。&lt;/p&gt;
-
-&lt;p&gt;このまま細かい実装を詰めていくかというとそうならない。仕様を見て、コードを見て、イケてない所を全部書き直す。まずはインターフェースを変える、型を変える。意図的にコードを壊す。あとはコンパイルエラーで修正箇所が全て分かる。ついでにFIXMEも片付けていく。エラーが取れてアプリケーションが再度動くようになったら、リファクタの完了。納得のいくコードになっている筈。ここでようやく仕様を固定するためにテストを書く。全てのコードが出来てからテストを書くからホワイトボックスに近いテストになる。&lt;/p&gt;
-
-&lt;p&gt;どうしてこのようなプロセスを経るかと考えてみた。ポールグレアムも言っているように、私にとってのアプリケーションは、アプリケーションのドメインを記述するための巨大な言語（ライブラリ）と、それを使った非常に小さな実装からなる。
-そして言語と実装の境界は何度も押したり引いたりしてようやく固まる。この手順は境界が固まるまでの過程だ。DSLを作るにはまずどのようなAPIがあれば便利か理解する必要がある。理解するのに一番手っ取り早い方法は一旦実装してみることだ。
-ある人は言うだろう、「何を七面倒な。最初からちゃんと設計していれば手戻りがないものを。」と。違う。こういうときに私はよく詰将棋を引き合いに出す。
-新聞の片隅にある詰将棋を解いてみる。新聞とにらめっこしてアレコレ考えても中々上手くいかない。
-ところが将棋盤を引っ張り出してきて、パチパチ駒を動かしてみると簡単に解けることがある。ここは実は銀を持っていた、ここで馬が効くからこの手は指せない。
-人間先を読むには想像力が足りなすぎる。目の前に現物がないと気付けないことが多い。だから先に実装する。一度作ってしまえば壊してもコンパイラが助けてくれる。&lt;/p&gt;
-
-&lt;p&gt;一度目でアタリを付ける。二度目で実線を書く。作って、壊して、また作る。&lt;/p&gt;</description>
     </item>
     
   </channel>
