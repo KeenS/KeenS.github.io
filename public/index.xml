@@ -6,8 +6,231 @@
     <description>Recent content on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Fri, 02 Dec 2016 14:00:11 +0900</lastBuildDate>
+    <lastBuildDate>Fri, 02 Dec 2016 17:52:30 +0900</lastBuildDate>
     <atom:link href="/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Rustのプロセス</title>
+      <link>/blog/2016/12/02/rustnopurosesu</link>
+      <pubDate>Fri, 02 Dec 2016 17:52:30 +0900</pubDate>
+      
+      <guid>/blog/2016/12/02/rustnopurosesu</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2016/rust-lang-2&#34;&gt;Rust その2 Advent Calendar 2016 - Qiita&lt;/a&gt;3日目の記事です。&lt;/p&gt;
+
+&lt;p&gt;κeenです。Rustの&lt;a href=&#34;https://doc.rust-lang.org/std/process/index.html&#34;&gt;&lt;code&gt;std::process&lt;/code&gt;&lt;/a&gt;の扱い方を紹介します。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;
+
+&lt;h1 id=&#34;ビルダー&#34;&gt;ビルダー&lt;/h1&gt;
+
+&lt;p&gt;これはビルダーになっていて、以下のように使えます。公式ドキュメントの例です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let output = Command::new(&amp;quot;sh&amp;quot;)
+    .arg(&amp;quot;-c&amp;quot;)
+    .arg(&amp;quot;echo hello&amp;quot;)
+    .output()
+    .expect(&amp;quot;failed to execute process&amp;quot;);
+
+let hello = output.stdout;
+println!(&amp;quot;{}&amp;quot;, std::str::from_utf8(&amp;amp;hello).unwrap());
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;hello
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;環境変数も渡せます&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let output = Command::new(&amp;quot;sh&amp;quot;)
+    .arg(&amp;quot;-c&amp;quot;)
+    // 環境変数を参照するコマンド
+    .arg(&amp;quot;echo $HELLO&amp;quot;)
+    // 環境変数を設定する
+    .env(&amp;quot;HELLO&amp;quot;, &amp;quot;hello, world&amp;quot;)
+    .output()
+    .expect(&amp;quot;failed to execute process&amp;quot;);
+
+let hello = output.stdout;
+println!(&amp;quot;{}&amp;quot;, std::str::from_utf8(&amp;amp;hello).unwrap());
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;hello, world
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;あるいは実行するディレクトリも指定出来ます&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let output = Command::new(&amp;quot;ls&amp;quot;)
+    // プロセスを実行するディレクトリを指定する
+    .current_dir(&amp;quot;/&amp;quot;)
+    .output()
+    .expect(&amp;quot;failed to execute process&amp;quot;);
+
+let hello = output.stdout;
+println!(&amp;quot;{}&amp;quot;, std::str::from_utf8(&amp;amp;hello).unwrap());
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;bin
+boot
+cdrom
+core
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;出力&#34;&gt;出力&lt;/h1&gt;
+
+&lt;p&gt;上の例では &lt;code&gt;output&lt;/code&gt; でstdio,stderr, exitstatus取り出していますが、子プロセスとして実行することも出来ます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let mut child = Command::new(&amp;quot;ls&amp;quot;)
+    .current_dir(&amp;quot;/&amp;quot;)
+    // outputではなくspawnを使う
+    .spawn()
+    .expect(&amp;quot;failed to execute process&amp;quot;);
+let status = child.wait().unwrap();
+println!(&amp;quot;{}&amp;quot;, status);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;bin  boot  cdrom  core  dev  etc  home  initrd.img  initrd.img.old  lib  lib32  lib64  libx32  lost+found  media  mnt  opt  proc  root  run  sbin  snap  srv  sys  tmp  usr  var  vmlinuz  vmlinuz.old
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;この場合、子プロセスはRustへではなく直接stdoutへ出力するのでSIGPIPEが送られません。&lt;/p&gt;
+
+&lt;p&gt;あるいは出力先を手で指定することも出来ます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let child = Command::new(&amp;quot;ls&amp;quot;)
+    .current_dir(&amp;quot;/&amp;quot;)
+    // stdoutをnullにする
+    .stdout(Stdio::null())
+    .spawn()
+    .expect(&amp;quot;failed to execute process&amp;quot;);
+let status = child.wait().unwrap();
+println!(&amp;quot;{}&amp;quot;, status);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ここではstdoutをnull ioに指定しています。他には&lt;code&gt;inherit&lt;/code&gt;で親プロセスのものを引き継ぐか、&lt;code&gt;piped&lt;/code&gt;で次のプロセスに渡すことも出来ます&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;// 1つめのプロセスを作る
+let mut child1 = Command::new(&amp;quot;ls&amp;quot;)
+    .current_dir(&amp;quot;/&amp;quot;)
+    // 出力は親プロセスへパイプする
+    .stdout(Stdio::piped())
+    .spawn()
+    .expect(&amp;quot;failed to execute process&amp;quot;);
+
+// 2つめのプロセスを作る
+let mut child2 = Command::new(&amp;quot;grep&amp;quot;)
+    .arg(&amp;quot;bin&amp;quot;)
+    // 入力は親プロセスへパイプする
+    .stdin(Stdio::piped())
+    .spawn()
+    .expect(&amp;quot;failed to execute process&amp;quot;);
+
+{
+    // Someと分かっているのでunwrapする。
+    // この辺はrustの型システテムの限界。
+    let out = child1.stdout.as_mut().unwrap();
+    let in_ = child2.stdin.as_mut().unwrap();
+    // 1つめのプロセスの出力から2つめのプロセスの入力へデータをコピーする
+    io::copy(out, in_).unwrap();
+}
+
+
+let status1 = child1.wait().unwrap();
+let status2 = child2.wait().unwrap();
+println!(&amp;quot;{}, {}&amp;quot;, status1, status2);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;bin
+sbin
+exit code: 0, exit code: 0
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ちょっと繋ぎ込みが面倒ですし&lt;code&gt;io::copy&lt;/code&gt;を使って手でコピーしてるのが頂けませんね。&lt;/p&gt;
+
+&lt;h1 id=&#34;unix&#34;&gt;Unix&lt;/h1&gt;
+
+&lt;p&gt;Unixに依存することを認めてしまえばもうちょっと色々なことが出来ます。&lt;/p&gt;
+
+&lt;p&gt;1つには&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::os::unix::process::CommandExt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;するといくつか追加のメソドが生えてくる仕組みになってます。&lt;/p&gt;
+
+&lt;p&gt;例えば、&lt;code&gt;exec&lt;/code&gt; が使えます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let error = Command::new(&amp;quot;ls&amp;quot;)
+    .current_dir(&amp;quot;/&amp;quot;)
+    // execを呼ぶ
+    .exec();
+
+println!(&amp;quot;after exec!!&amp;quot;);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;exec&lt;/code&gt;した後はRustのプロセスを別のものに置き換えてしまうので&lt;code&gt;println!(&amp;quot;after exec!!&amp;quot;);&lt;/code&gt;の行が実行されません。
+されるとしたら何らかの理由で&lt;code&gt;exec&lt;/code&gt;に失敗した場合だけです。なので面白いことに&lt;code&gt;exec&lt;/code&gt;の返り値はエラーのみです。&lt;/p&gt;
+
+&lt;p&gt;あるいは、&lt;code&gt;unsafe&lt;/code&gt;なコードを認めるなら先のプロセスの繋ぎ込みはもうちょっとスマートに書けます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::os::unix::io::{AsRawFd, FromRawFd};
+let mut child1 = Command::new(&amp;quot;ls&amp;quot;)
+    .current_dir(&amp;quot;/&amp;quot;)
+    // 標準出力をパイプする
+    .stdout(Stdio::piped())
+    .spawn()
+    .expect(&amp;quot;failed to spawn a process&amp;quot;);
+
+let mut child2 = Command::new(&amp;quot;grep&amp;quot;)
+    .arg(&amp;quot;bin&amp;quot;)
+    // 標準入力は手で作ったStdioオブジェクトにする。
+    // ここでは1つめのプロセスの標準出力を直接繋ぐ。
+    .stdin(unsafe{Stdio::from_raw_fd(child1.stdout.as_ref().unwrap().as_raw_fd())})
+    .spawn()
+    .expect(&amp;quot;failed to spawn a process&amp;quot;);
+
+// 直接繋いでしまったのでコピーの必要はない
+
+let status1 = child1.wait().unwrap();
+let status2 = child2.wait().unwrap();
+println!(&amp;quot;{}, {}&amp;quot;, status1, status2);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;bin
+sbin
+exit code: 0, exit code: 0
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;Stdio&lt;/code&gt;がfdと行き来出来るのでそれを経由することでパイプを作れます。&lt;/p&gt;
+
+&lt;p&gt;もちろん、ファイルに書き出すことも出来ます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::os::unix::io::{AsRawFd, FromRawFd};
+
+let file = File::create(&amp;quot;test.txt&amp;quot;).unwrap();
+// ファイルからFDを経由してStdioを作る
+let out = unsafe{Stdio::from_raw_fd(file.as_raw_fd())};
+let mut child1 = Command::new(&amp;quot;ls&amp;quot;)
+    .current_dir(&amp;quot;/&amp;quot;)
+    .stdout(out)
+    .spawn()
+    .expect(&amp;quot;failed to spawn a process&amp;quot;);
+
+let status1 = child1.wait().unwrap();
+println!(&amp;quot;{}&amp;quot;, status1);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat test.txt
+bin
+boot
+cdrom
+core
+dev
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;おわりに&#34;&gt;おわりに&lt;/h1&gt;
+
+&lt;p&gt;最初は思ったよりCのプロセス回りのAPIと違って戸惑いますが馴れてしまえば使いやすいAPIでしょう。&lt;/p&gt;</description>
+    </item>
     
     <item>
       <title>新しいコンパイラバックエンドcretonne</title>
@@ -134,6 +357,7 @@ $ cd cretonne-sample
 &lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;extern crate cretonne;
 use cretonne::ir::*;
 use cretonne::ir::{types as ty};
+use cretonne::ir::{immediates as imm};
 use cretonne::isa;
 use cretonne::settings::{self, Configurable};
 use cretonne::{write_function, legalize_function, verify_function};
@@ -3279,420 +3503,6 @@ assert_eq!(5, num);
 &lt;li&gt;&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/functions.html&#34;&gt;関数&lt;/a&gt;&lt;/li&gt;
 &lt;li&gt;&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/closures.html&#34;&gt;クロージャ&lt;/a&gt;&lt;/li&gt;
 &lt;/ul&gt;</description>
-    </item>
-    
-    <item>
-      <title>SMLでモナド</title>
-      <link>/blog/2016/10/10/smldemonado</link>
-      <pubDate>Mon, 10 Oct 2016 11:05:38 +0900</pubDate>
-      
-      <guid>/blog/2016/10/10/smldemonado</guid>
-      <description>&lt;p&gt;κeenです。ML Workshop 2016でなんかSMLで型クラスする発表があったらしいので追ってみます。&lt;/p&gt;
-
-&lt;p&gt;implicit parameterをexplicitに渡すのではなく、モジュールとファンクタを使った実装です。&lt;/p&gt;
-
-&lt;p&gt;&lt;/p&gt;
-
-&lt;h1 id=&#34;前置き&#34;&gt;前置き&lt;/h1&gt;
-
-&lt;p&gt;Haskell風の中置演算子を使うので&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-standard-ml&#34;&gt;infix 4 &amp;lt;$&amp;gt; &amp;lt;$ $&amp;gt;  &amp;lt;*&amp;gt; &amp;lt;* *&amp;gt;
-infix 1 &amp;gt;&amp;gt;= &amp;gt;&amp;gt;
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;を予め宣言しておきます。&lt;/p&gt;
-
-&lt;h1 id=&#34;最初の試み&#34;&gt;最初の試み&lt;/h1&gt;
-
-&lt;p&gt;さて、(MLの機能の方ではない)functorを考えましょうか。functorには &lt;code&gt;fmap&lt;/code&gt; が要求され、&lt;code&gt;&amp;lt;$&amp;gt;&lt;/code&gt; なんかが実装されます。それを素直に表したらこうなるでしょうか。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-standard-ml&#34;&gt;signature FUNCTOR_MIN = sig
-    type &#39;a t
-    val fmap: (&#39;a -&amp;gt; &#39;b) -&amp;gt; &#39;a t -&amp;gt; &#39;b t
-end
-
-signature FUNCTOR = sig
-    include FUNCTOR_MIN
-    val &amp;lt;$&amp;gt; : (&#39;a -&amp;gt; &#39;b) * &#39;a t -&amp;gt; &#39;b t
-    val &amp;lt;$ : &#39;a *  &#39;b t -&amp;gt;  &#39;a t
-    val $&amp;gt; : &#39;a t *  &#39;b  -&amp;gt;  &#39;b t
-    val void: &#39;a t -&amp;gt; unit t
-end
-
-functor MkFunctor(Fun: FUNCTOR_MIN): FUNCTOR = struct
-    open Fun
-
-    fun f &amp;lt;$&amp;gt; fa = fmap f fa
-    fun a &amp;lt;$ fb =  (fn _ =&amp;gt; a) &amp;lt;$&amp;gt; fb
-    fun fa $&amp;gt; b = b &amp;lt;$ fa
-    fun void fa = () &amp;lt;$ fa
-end
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;さて、さらにそのサブクラスのapplicativeも作ります。 &lt;code&gt;include&lt;/code&gt; を使うことで &lt;code&gt;FUNCTOR&lt;/code&gt; を継承することを表します。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-standard-ml&#34;&gt;signature APPLICATIVE_MIN = sig
-    include FUNCTOR
-
-    val pure: &#39;a -&amp;gt; &#39;a t
-    val ap : (&#39;a -&amp;gt; &#39;b) t -&amp;gt; &#39;a t -&amp;gt; &#39;b t
-end
-
-signature APPLICATIVE = sig
-    include APPLICATIVE_MIN
-
-    val &amp;lt;*&amp;gt; : (&#39;a -&amp;gt; &#39;b) t * &#39;a t -&amp;gt; &#39;b t
-    val *&amp;gt; : &#39;a t * &#39;b t -&amp;gt; &#39;b t
-    val &amp;lt;* : &#39;a t * &#39;b t -&amp;gt; &#39;a t
-end
-
-functor MkApplicative(App: APPLICATIVE_MIN): APPLICATIVE = struct
-    open App
-
-    fun af &amp;lt;*&amp;gt; aa = ap af aa
-    fun aa *&amp;gt; ab = pure (fn _ =&amp;gt; fn x =&amp;gt; x) &amp;lt;*&amp;gt; aa &amp;lt;*&amp;gt; ab
-    fun aa &amp;lt;* ab = pure (fn x =&amp;gt; fn _ =&amp;gt; x) &amp;lt;*&amp;gt; aa &amp;lt;*&amp;gt; ab
-end
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;さらにmonadも作りましょうか。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-standard-ml&#34;&gt;signature MONAD_MIN = sig
-    include APPLICATIVE
-
-    val bind : &#39;a t -&amp;gt; (&#39;a -&amp;gt; &#39;b t) -&amp;gt; &#39;b t
-end
-
-signature MONAD = sig
-    include MONAD_MIN
-
-    val return: &#39;a -&amp;gt; &#39;a t
-    val &amp;gt;&amp;gt;= : &#39;a t * (&#39;a -&amp;gt; &#39;b t) -&amp;gt; &#39;b t
-    val &amp;gt;&amp;gt; : &#39;a t * &#39;b t -&amp;gt; &#39;b t
-end
-
-
-functor MkMonad(M: MONAD_MIN): MONAD = struct
-    open M
-
-    val return = pure
-    fun ma &amp;gt;&amp;gt;= f = bind ma f
-    fun ma &amp;gt;&amp;gt; mb = ma &amp;gt;&amp;gt;= (fn _ =&amp;gt; mb)
-
-end
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ちょっと使ってみましょう。1つ1つインスタンスを作ってあげます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-standard-ml&#34;&gt;structure OptionFunc = MkFunctor(
-  struct
-      type &#39;a t = &#39;a option
-      fun fmap f = Option.map f
-  end)
-
-structure OptionApp = MkApplicative(
-  struct
-      open OptionFunc
-      fun pure x = SOME(x)
-      fun ap af aa = case (af, aa) of
-                         (SOME(f), SOME(a)) =&amp;gt; SOME(f a)
-                       | _ =&amp;gt; NONE
-  end)
-
-structure OptionMonad = MkMonad(
-  struct
-      open OptionApp
-      fun bind ma f = case ma of
-                          SOME(a) =&amp;gt; f a
-                        | NONE =&amp;gt; NONE
-  end)
-
-
-local
-    open OptionMonad
-in
-    fun add x y = x + y
-    fun println s = print (s ^ &amp;quot;\n&amp;quot;)
-
-    val ret1 = add &amp;lt;$&amp;gt; SOME(1) &amp;lt;*&amp;gt; SOME(2)
-    val ret2 = SOME(1) &amp;gt;&amp;gt;= (fn x =&amp;gt;
-               SOME(2) &amp;gt;&amp;gt;= (fn y =&amp;gt;
-               return (x + y)))
-    val () = Option.app (println o Int.toString) ret1 (* =&amp;gt; 3 *)
-    val () = Option.app (println o Int.toString) ret2 (* =&amp;gt; 3 *)
-end
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;動きました。&lt;/p&gt;
-
-&lt;p&gt;さて、一見これで良さそうですがML Workshopでの発表では問題点を2点指摘しています。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;Monadのインスタンスが欲しいだけなのにFunctorまで遡って作らないといけない&lt;/li&gt;
-&lt;li&gt;ダイアモンド継承が起きた時に共通の親クラスの実装の一貫性を保障出来ない&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;とのことです。私はこの問題点自体割と疑問なのですがまあ、問題らしいです。&lt;/p&gt;
-
-&lt;h1 id=&#34;解決案&#34;&gt;解決案&lt;/h1&gt;
-
-&lt;p&gt;継承のやり方をちょいと変えます。&lt;code&gt;Functor&lt;/code&gt; までは先程と同じなのですが、Applicativeは
-APPLICATIVE_MINにFUNCTORをincludeしません。また、衝突の問題から型が &lt;code&gt;applicative&lt;/code&gt;になります（同じと言っちゃいましたがFunctorの方も &lt;code&gt;functor_&lt;/code&gt; になってます）。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-standard-ml&#34;&gt;signature APPLICATIVE_MIN = sig
-    type &#39;a applicative
-    val pure: &#39;a -&amp;gt; &#39;a applicative
-    val ap : (&#39;a -&amp;gt; &#39;b) applicative -&amp;gt; &#39;a applicative -&amp;gt; &#39;b applicative
-end
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;そしてAPPLICATIVEの方でincludeします。ここで &lt;code&gt;sharing&lt;/code&gt; 制約を付けます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-standard-ml&#34;&gt;signature APPLICATIVE = sig
-    include FUNCTOR APPLICATIVE_MIN
-    sharing type functor_ = applicative
-
-    val &amp;lt;*&amp;gt; : (&#39;a -&amp;gt; &#39;b) applicative * &#39;a applicative -&amp;gt; &#39;b applicative
-    val *&amp;gt; : &#39;a applicative * &#39;b applicative -&amp;gt; &#39;b applicative
-    val &amp;lt;* : &#39;a applicative * &#39;b applicative -&amp;gt; &#39;a applicative
-end
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;で、 &lt;code&gt;APPLICATIVE_MIN&lt;/code&gt; から &lt;code&gt;FUNCTOR_MIN&lt;/code&gt; を生成するファンクタを作ります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-standard-ml&#34;&gt;functor ApplicativeMinToFunctorMin(A: APPLICATIVE_MIN): FUNCTOR_MIN = struct
-    open A
-    type &#39;a functor_ = &#39;a applicative
-    fun fmap f = ap (pure f)
-end
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;applicativeからfunctor????感ありますがとりあえず進みます。&lt;/p&gt;
-
-&lt;p&gt;で、 &lt;code&gt;MkApplicative&lt;/code&gt; は一旦内部で &lt;code&gt;Functor&lt;/code&gt; を作ってそれを &lt;code&gt;open&lt;/code&gt; します。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-standard-ml&#34;&gt;functor MkApplicative(App: APPLICATIVE_MIN): APPLICATIVE = struct
-    type &#39;a applicative = &#39;a App.applicative
-
-    structure FunctorMin = ApplicativeMinToFunctorMin(App)
-    structure Functor = MkFunctor(FunctorMin)
-    open App Functor
-
-    fun af &amp;lt;*&amp;gt; aa = ap af aa
-    fun aa *&amp;gt; ab = pure (fn _ =&amp;gt; fn x =&amp;gt; x) &amp;lt;*&amp;gt; aa &amp;lt;*&amp;gt; ab
-    fun aa &amp;lt;* ab = pure (fn x =&amp;gt; fn _ =&amp;gt; x) &amp;lt;*&amp;gt; aa &amp;lt;*&amp;gt; ab
-end
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;モナドも同じですね。ただ、 &lt;code&gt;MONAD_MIN&lt;/code&gt; から &lt;code&gt;APPLICATIVE_MIN&lt;/code&gt; を生成する必要があるので &lt;code&gt;MONAD_MIN&lt;/code&gt; のシグネチャに &lt;code&gt;return&lt;/code&gt; が増えてます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-standard-ml&#34;&gt;signature MONAD_MIN = sig
-    type &#39;a monad
-    val return: &#39;a -&amp;gt; &#39;a monad
-    val bind : &#39;a monad -&amp;gt; (&#39;a -&amp;gt; &#39;b monad) -&amp;gt; &#39;b monad
-end
-
-signature MONAD = sig
-    include APPLICATIVE MONAD_MIN
-    sharing type applicative = monad
-    val &amp;gt;&amp;gt;= : &#39;a monad * (&#39;a -&amp;gt; &#39;b monad) -&amp;gt; &#39;b monad
-    val &amp;gt;&amp;gt; : &#39;a monad * &#39;b monad -&amp;gt; &#39;b monad
-end
-
-functor MonadMinToApplicativeMin(M: MONAD_MIN): APPLICATIVE_MIN = struct
-    open M
-    type &#39;a applicative = &#39;a monad
-    val pure = return
-    fun ap mf ma =  bind mf (fn f =&amp;gt;
-                    bind ma (fn a =&amp;gt;
-                    return (f a)))
-end
-
-functor MkMonad(M: MONAD_MIN): MONAD = struct
-    type &#39;a monad = &#39;a M.monad
-    structure AppMin = MonadMinToApplicativeMin(M)
-    structure App = MkApplicative(AppMin)
-    open M App
-
-    fun ma &amp;gt;&amp;gt;= f = bind ma f
-    fun ma &amp;gt;&amp;gt; mb = ma &amp;gt;&amp;gt;= (fn _ =&amp;gt; mb)
-
-end
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ちょっと &lt;code&gt;ap&lt;/code&gt; の実装イケてないなぁと思いつつ先に進みます。&lt;/p&gt;
-
-&lt;p&gt;さて、使ってみましょう。今度はファンクタの適用は一回で済みます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-standard-ml&#34;&gt;structure ListMonad = MkMonad(struct
-                                   type &#39;a monad = &#39;a list
-                                   fun return x = [x]
-                                   fun bind ma f = List.concat (List.map f ma)
-                              end)
-local
-    open ListMonad
-in
-    val ret = [1, 2, 3] &amp;gt;&amp;gt;= (fn x =&amp;gt;
-              [4, 5, 6] &amp;gt;&amp;gt;= (fn y =&amp;gt;
-              return (x + y)))
-    fun println s = print (s ^ &amp;quot;\n&amp;quot;)
-
-    val () = List.app (println o Int.toString) ret
-end
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;動きます。
-ご覧の通り、ファンクタの適用は1回で済んでますし、親クラスのインスタンス全て自分で生成しているので実装の一貫性も保障出来ます。ダイアモンド継承が来ても安心ですね！&lt;/p&gt;
-
-&lt;h1 id=&#34;感想&#34;&gt;感想&lt;/h1&gt;
-
-&lt;p&gt;私は最初のアプローチの方が好きですね（率直）。&lt;/p&gt;
-
-&lt;p&gt;それぞれのクラスのインスタンスを作るのは自然だと思いますし実はWorkshopのアプローチは表層上の問題でダイアモンド継承を解決出来ていません。名前衝突が起きます。モジュールの名前衝突ならまだ気合で( &lt;code&gt;val &amp;gt;&amp;gt;= = Monad.&amp;gt;&amp;gt;=&lt;/code&gt; のように全て手で)解決出来ますが、シグネチャの方は解決策はなさそうです(いや、シグネチャを使わずに全て手で書き直すとかは可能ですが)。どうせ完全には解決出来てない問題のために実装が曲がるのは好みではないです。&lt;/p&gt;
-
-&lt;h1 id=&#34;付録a-ダイアモンド継承に強そうなアプローチ&#34;&gt;付録A ダイアモンド継承に強そうなアプローチ&lt;/h1&gt;
-
-&lt;p&gt;単純に親クラスのインクルードをやめます。んで親クラスは名前空間の汚染を防ぐためにモジュールに入ったまま受け取ることにします。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-standard-ml&#34;&gt;infix 4 &amp;lt;$&amp;gt; &amp;lt;$ $&amp;gt;  &amp;lt;*&amp;gt; &amp;lt;* *&amp;gt;
-infix 1 &amp;gt;&amp;gt;= &amp;gt;&amp;gt;
-
-signature FUNCTOR_MIN = sig
-    type &#39;a t
-    val fmap: (&#39;a -&amp;gt; &#39;b) -&amp;gt; &#39;a t -&amp;gt; &#39;b t
-end
-
-signature FUNCTOR = sig
-    include FUNCTOR_MIN
-    val &amp;lt;$&amp;gt; : (&#39;a -&amp;gt; &#39;b) * &#39;a t -&amp;gt; &#39;b t
-    val &amp;lt;$ : &#39;a *  &#39;b t -&amp;gt;  &#39;a t
-    val $&amp;gt; : &#39;a t *  &#39;b  -&amp;gt;  &#39;b t
-    val void: &#39;a t -&amp;gt; unit t
-end
-
-functor MkFunctor(Fun: FUNCTOR_MIN): FUNCTOR = struct
-    open Fun
-
-    fun f &amp;lt;$&amp;gt; fa = fmap f fa
-    fun a &amp;lt;$ fb =  (fn _ =&amp;gt; a) &amp;lt;$&amp;gt; fb
-    fun fa $&amp;gt; b = b &amp;lt;$ fa
-    fun void fa = () &amp;lt;$ fa
-end
-
-signature APPLICATIVE_MIN = sig
-    type &#39;a t
-    val pure: &#39;a -&amp;gt; &#39;a t
-    val ap : (&#39;a -&amp;gt; &#39;b) t -&amp;gt; &#39;a t -&amp;gt; &#39;b t
-end
-
-signature APPLICATIVE = sig
-    include APPLICATIVE_MIN
-
-    val &amp;lt;*&amp;gt; : (&#39;a -&amp;gt; &#39;b) t * &#39;a t -&amp;gt; &#39;b t
-    val *&amp;gt; : &#39;a t * &#39;b t -&amp;gt; &#39;b t
-    val &amp;lt;* : &#39;a t * &#39;b t -&amp;gt; &#39;a t
-end
-
-functor MkApplicative(App: sig
-                          structure Functor: FUNCTOR
-                          include APPLICATIVE_MIN
-                          sharing type Functor.t = t
-                         end): APPLICATIVE = struct
-    open App
-    type &#39;a t = &#39;a t
-
-    fun af &amp;lt;*&amp;gt; aa = ap af aa
-    fun aa *&amp;gt; ab = pure (fn _ =&amp;gt; fn x =&amp;gt; x) &amp;lt;*&amp;gt; aa &amp;lt;*&amp;gt; ab
-    fun aa &amp;lt;* ab = pure (fn x =&amp;gt; fn _ =&amp;gt; x) &amp;lt;*&amp;gt; aa &amp;lt;*&amp;gt; ab
-end
-
-
-signature MONAD_MIN = sig
-    type &#39;a t
-    val return: &#39;a -&amp;gt; &#39;a t
-    val bind : &#39;a t -&amp;gt; (&#39;a -&amp;gt; &#39;b t) -&amp;gt; &#39;b t
-end
-
-signature MONAD = sig
-    include MONAD_MIN
-    val &amp;gt;&amp;gt;= : &#39;a t * (&#39;a -&amp;gt; &#39;b t) -&amp;gt; &#39;b t
-    val &amp;gt;&amp;gt; : &#39;a t * &#39;b t -&amp;gt; &#39;b t
-end
-
-
-functor MkMonad(M: sig
-                    structure Applicative: APPLICATIVE
-                    include MONAD_MIN
-                    sharing type Applicative.t = t
-                end): MONAD = struct
-    open M
-    type &#39;a t = &#39;a t
-
-    fun ma &amp;gt;&amp;gt;= f = bind ma f
-    fun ma &amp;gt;&amp;gt; mb = ma &amp;gt;&amp;gt;= (fn _ =&amp;gt; mb)
-
-end
-
-
-structure ListFunctor = MkFunctor(struct
-                                       type &#39;a t = &#39;a list
-                                       val fmap = List.map end)
-structure ListApplicative = MkApplicative(struct
-                                               structure Functor = ListFunctor
-                                               type &#39;a t = &#39;a list
-                                               fun pure x = [x]
-                                               fun ap af aa = List.concat (List.map (fn a =&amp;gt; List.map (fn f =&amp;gt; f a) af) aa)
-                                           end)
-structure ListMonad = MkMonad(struct
-                                   structure Applicative = ListApplicative
-                                   type &#39;a t = &#39;a list
-                                   fun return x = [x]
-                                   fun bind ma f = List.concat (List.map f ma)
-                               end)
-local
-    open ListFunctor
-    open ListApplicative
-    open ListMonad
-in
-    fun add x y = x + y
-    val ret1 = [1, 2, 3] &amp;gt;&amp;gt;= (fn x =&amp;gt;
-               [4, 5, 6] &amp;gt;&amp;gt;= (fn y =&amp;gt;
-               return (x + y)))
-    val ret2 = add &amp;lt;$&amp;gt; [1, 2, 3] &amp;lt;*&amp;gt; pure 1
-    fun println s = print (s ^ &amp;quot;\n&amp;quot;)
-
-    val () = List.app (println o Int.toString) ret1
-    val () = List.app (println o Int.toString) ret2
-end
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;付録b-do記法&#34;&gt;付録B do記法&lt;/h1&gt;
-
-&lt;p&gt;ちょっと &lt;code&gt;&amp;gt;&amp;gt;=&lt;/code&gt; が入り乱れるのはつらいですね。&lt;a href=&#34;https://github.com/br0ns/PreML&#34;&gt;PreML&lt;/a&gt;というSMLのプリプロセッサがあって、do記法（など）のシンタックスシュガーを提供してくれます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-standard-ml&#34;&gt;val ret = do with ListMonad;
-    x &amp;lt;- [1, 2, 3];
-    y &amp;lt;- [4, 5, 6];
-    return (x + y)
-end
-fun println s = print (s ^ &amp;quot;\n&amp;quot;)
-
-val () = List.app (println o Int.toString) ret
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;生成されるコードはこれです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-standard-ml&#34;&gt;val ret = let infix 0 &amp;gt;&amp;gt;= val op&amp;gt;&amp;gt;= = ListMonad.&amp;gt;&amp;gt;= val return = ListMonad.return in ( 
-         [1, 2, 3] ) &amp;gt;&amp;gt;= (fn  x =&amp;gt; ( 
-         [4, 5, 6] ) &amp;gt;&amp;gt;= (fn  y =&amp;gt; 
-    return (x + y) ) ) end 
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;マシになりましたね。&lt;/p&gt;</description>
     </item>
     
   </channel>
