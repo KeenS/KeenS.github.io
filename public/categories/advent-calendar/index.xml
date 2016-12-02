@@ -9,6 +9,366 @@
     <atom:link href="/categories/advent-calendar/index.xml" rel="self" type="application/rss+xml" />
     
     <item>
+      <title>新しいコンパイラバックエンドcretonne</title>
+      <link>/blog/2016/12/02/atarashiikonpairabakkuendocretonne</link>
+      <pubDate>Fri, 02 Dec 2016 14:00:11 +0900</pubDate>
+      
+      <guid>/blog/2016/12/02/atarashiikonpairabakkuendocretonne</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2016/lang_dev&#34;&gt;言語実装 Advent Calendar 2016 - Qiita&lt;/a&gt;3日目の記事です。&lt;/p&gt;
+
+&lt;p&gt;κeenです。先日、Rustの開発者フォーラムに新しいバックエンドして&lt;a href=&#34;https://github.com/stoklund/cretonne&#34;&gt;cretonne&lt;/a&gt;が&lt;a href=&#34;https://internals.rust-lang.org/t/possible-alternative-compiler-backend-cretonne/4275&#34;&gt;提案されていました&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;ちょっと気になったのでそれを紹介します。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;
+
+&lt;h1 id=&#34;概略&#34;&gt;概略&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/stoklund/cretonne&#34;&gt;GitHub&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://cretonne.readthedocs.io/en/latest/index.html&#34;&gt;ドキュメント&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;フォーラムによると、WebAssemblyをエンコードするために作られたコンパイラバックエンドで、FirefoxのJSエンジンであるSpiderMonkeyに載せる予定だそうです。JITが主な目的？&lt;/p&gt;
+
+&lt;p&gt;LLVMのように最適化を頑張る方ではなくてコードを吐くまでのレイテンシを気にして作られているとのこと。なのでcretonne自身は最適化を行いません。&lt;/p&gt;
+
+&lt;p&gt;特徴はドキュメントの&lt;a href=&#34;http://cretonne.readthedocs.io/en/latest/compare-llvm.html&#34;&gt;LLVMとの比較&lt;/a&gt;によくまとまってますが、&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;LLVMは複数種類の中間言語を持つのに対してcretonneは1種類&lt;/li&gt;
+&lt;li&gt;アセンブラもディスアセンブラもない
+
+&lt;ul&gt;
+&lt;li&gt;コードジェネレータが吐く命令だけサポート&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;中間言語はISA非依存で、legalization / instruction selectionをするとISA固有のアノテーションが付く&lt;/li&gt;
+&lt;li&gt;最大抽象単位が関数(LLVMはモジュール)。cretonneは関数のインライン化とかもしない。&lt;/li&gt;
+&lt;li&gt;Extended Basic Blockを使う(LLVMはBasic Block)。
+
+&lt;ul&gt;
+&lt;li&gt;ebbは分岐命令のfalse branchを指定せず、fall throughする。よくあるマシン語に近い。&lt;/li&gt;
+&lt;li&gt;分岐の合流はebbに引数を持たせることで行う(LLVMはphi nodeを使う)。&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;undefined behaviorが存在しない&lt;/strong&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;なんとなくWebAssemblyを意識した仕様ですね。&lt;/p&gt;
+
+&lt;h1 id=&#34;雰囲気&#34;&gt;雰囲気&lt;/h1&gt;
+
+&lt;p&gt;以下のCのコードは&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;float
+average(const float *array, size_t count)
+{
+    double sum = 0;
+    for (size_t i = 0; i &amp;lt; count; i++)
+        sum += array[i];
+    return sum / count;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;以下のcretonneのIRに落ちるそうです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;function average(i32, i32) -&amp;gt; f32 {
+    ss1 = stack_slot 8, align 4   ; Stack slot for ``sum``.
+
+ebb1(v1: i32, v2: i32):
+    v3 = f64const 0x0.0
+    stack_store v3, ss1
+    brz v2, ebb3                  ; Handle count == 0.
+    v4 = iconst.i32 0
+    br ebb2(v4)
+
+ebb2(v5: i32):
+    v6 = imul_imm v5, 4
+    v7 = iadd v1, v6
+    v8 = heap_load.f32 v7         ; array[i]
+    v9 = fext.f64 v8
+    v10 = stack_load.f64 ss1
+    v11 = fadd v9, v10
+    stack_store v11, ss1
+    v12 = iadd_imm v5, 1
+    v13 = icmp ult v12, v2
+    brnz v13, ebb2(v12)           ; Loop backedge.
+    v14 = stack_load.f64 ss1
+    v15 = cvt_utof.f64 v2
+    v16 = fdiv v14, v15
+    v17 = ftrunc.f32 v16
+    return v17
+
+ebb3:
+    v100 = f32const qNaN
+    return v100
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;まあ、実際はファイルヘッダとかも付きますがこんな感じです。&lt;/p&gt;
+
+&lt;p&gt;ebbに引数があったりebbの途中で平気でブランチしてたり中々やんちゃですね。&lt;/p&gt;
+
+&lt;h1 id=&#34;使ってみる&#34;&gt;使ってみる&lt;/h1&gt;
+
+&lt;p&gt;コードを吐くところまでやりたかったのですがまだ絶賛開発中ということもあってそのような操作が見当りませんでした。&lt;/p&gt;
+
+&lt;p&gt;ということでファイルの方を扱ってると面白みがないのでRust APIの方で関数を構築して正当性を検証してから中間言語を吐き出してみます。&lt;/p&gt;
+
+&lt;h2 id=&#34;一歩&#34;&gt;一歩&lt;/h2&gt;
+
+&lt;p&gt;まずはcretonneをcloneしてきます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cargo new cretonne-sample --bin
+$ cd cretonne-sample
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;んでCargo.tomlのdependenciesに&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;cretonne = {path = &amp;quot;path/cretonne/lib/cretonne/&amp;quot;}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;を追加します。どうやらトップレベルのプロジェクトはただのユーティリティのようでした。本体は&lt;code&gt;lib/cretonne/&lt;/code&gt;以下にいます。&lt;/p&gt;
+
+&lt;p&gt;そしてmainファイルの中身はこうです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;extern crate cretonne;
+use cretonne::ir::*;
+use cretonne::ir::{types as ty};
+use cretonne::isa;
+use cretonne::settings::{self, Configurable};
+use cretonne::{write_function, legalize_function, verify_function};
+
+fn main() {
+    let mut func = {
+        let name = FunctionName::new(&amp;quot;average&amp;quot;);
+        let mut sig = Signature::new();
+        sig.argument_types.push(ArgumentType::new(ty::I32));
+        sig.argument_types.push(ArgumentType::new(ty::I32));
+        sig.return_types.push(ArgumentType::new(ty::F32));
+        Function::with_name_signature(name, sig)
+    };
+
+    let isa = {
+        let mut b = settings::builder();
+        b.set(&amp;quot;opt_level&amp;quot;, &amp;quot;fastest&amp;quot;).unwrap();
+        let f = settings::Flags::new(&amp;amp;b);
+        let builder = isa::lookup(&amp;quot;intel&amp;quot;).unwrap();
+        builder.finish(f)
+    };
+    verify_function(&amp;amp;func).unwrap();
+    legalize_function(&amp;amp;mut func, isa.as_ref());
+    let mut o = String::new();
+    write_function(&amp;amp;mut o, &amp;amp;func, Some(isa.as_ref())).unwrap();
+    println!(&amp;quot;{}&amp;quot;, o);
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;function average(i32, i32) -&amp;gt; f32 {
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;おおまかには&lt;code&gt;func&lt;/code&gt;を構築して&lt;code&gt;isa&lt;/code&gt;を決めて&lt;code&gt;verify_function&lt;/code&gt;で検証、さらに&lt;code&gt;legalize_function&lt;/code&gt;で今回のアーキテクチャ向けに微調整、&lt;code&gt;write_function&lt;/code&gt;で書き出しです。&lt;/p&gt;
+
+&lt;h2 id=&#34;スタックスロットの追加&#34;&gt;スタックスロットの追加&lt;/h2&gt;
+
+&lt;p&gt;まあ、スタック領域ですね。8byteの領域を確保します。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;func&lt;/code&gt;にstack_slotsフィールドがあるのでそこにpushします。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
+    let mut func = {
+        ....
+    };
+
+
+    {
+        let k = func.stack_slots.push(StackSlotData::new(8));
+    }
+
+    let isa = {
+        ....
+    };
+    ....
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;function average(i32, i32) -&amp;gt; f32 {
+    ss0 = stack_slot 8
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;push&lt;/code&gt;の返り値はスタック領域を指すキーです。&lt;/p&gt;
+
+&lt;h2 id=&#34;ebbの追加&#34;&gt;EBBの追加&lt;/h2&gt;
+
+&lt;p&gt;&lt;code&gt;func&lt;/code&gt;構造体のフィールドに&lt;code&gt;dfg&lt;/code&gt;がいて、そいつを色々いじります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
+    let mut func = {
+        ....
+    };
+
+
+    {
+        let k = func.stack_slots.push(StackSlotData::new(8));
+        let cur = &amp;amp;mut Cursor::new(&amp;amp;mut func.layout);
+        let ebb0 = func.dfg.make_ebb();
+        let v1 = func.dfg.append_ebb_arg(ebb0, types::I32);
+        let v2 = func.dfg.append_ebb_arg(ebb0, types::I32);
+
+        cur.insert_ebb(ebb0);
+    }
+
+    let isa = {
+        ....
+    };
+    ....
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;function average(i32, i32) -&amp;gt; f32 {
+    ss0 = stack_slot 8
+
+ebb0(vx0: i32, vx1: i32):
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;EBBの追加にはカーソルを決めてあげて、dfgにebbを作ってあげて、カーソルの位置にebbの追加という形になります。&lt;/p&gt;
+
+&lt;p&gt;EBBには任意に引数を追加出来ます。&lt;code&gt;append_ebb_arg&lt;/code&gt;の返り値はSSAの変数です。&lt;/p&gt;
+
+&lt;h2 id=&#34;命令を追加する&#34;&gt;命令を追加する&lt;/h2&gt;
+
+&lt;p&gt;命令はpythonのスクリプトによって生成されるので補完が効かず、中々扱いづらいですが頑張ります。&lt;/p&gt;
+
+&lt;p&gt;さて、今回コードの検証を入れているので以下のようなコードは検証に落ちてしまいます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    ....
+    {
+        let k = func.stack_slots.push(StackSlotData::new(8));
+        let cur = &amp;amp;mut Cursor::new(&amp;amp;mut func.layout);
+        let dfg = &amp;amp;mut func.dfg;
+        let ebb0 = dfg.make_ebb();
+        let v1 = dfg.append_ebb_arg(ebb0, types::I32);
+        let v2 = dfg.append_ebb_arg(ebb0, types::I32);
+        cur.insert_ebb(ebb0);
+
+        let v3 = dfg.ins(cur).f64const(imm::Ieee64::new(0.0));
+    }
+    ....
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;thread &#39;main&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: Error { location: Ebb(Ebb(0)), message: &amp;quot;block does not end in a terminator instruction!&amp;quot; }&#39;, ../src/libcore/result.rs:799
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;最後の命令が定数であるため、正常なブロックと見做されないのです。&lt;/p&gt;
+
+&lt;p&gt;ひとまずv3を返すことで凌ぎます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    ....
+    {
+        ....
+        let mut varg = VariableArgs::new();
+        varg.push(v3);
+        let _ = dfg.ins(cur).return_(varg);
+    }
+    ....
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;function average(i32, i32) -&amp;gt; f32 {
+    ss0 = stack_slot 8
+
+                    ebb0(vx0: i32, vx1: i32):
+[-]                     v0 = f64const 0.0
+[-]                     return v0
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;命令の頭に付いてる &lt;code&gt;[-]&lt;/code&gt;はlegalizeすると付くようです。&lt;/p&gt;
+
+&lt;h2 id=&#34;ブランチ&#34;&gt;ブランチ&lt;/h2&gt;
+
+&lt;p&gt;もう1つebbを追加してあげる必要があります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    {
+        let k = func.stack_slots.push(StackSlotData::new(8));
+        let cur = &amp;amp;mut Cursor::new(&amp;amp;mut func.layout);
+        let dfg = &amp;amp;mut func.dfg;
+        let ebb0 = dfg.make_ebb();
+        let ebb3 = dfg.make_ebb();  // &amp;lt;- ebb3を作成
+        let v1 = dfg.append_ebb_arg(ebb0, types::I32);
+        let v2 = dfg.append_ebb_arg(ebb0, types::I32);
+        cur.insert_ebb(ebb0);
+        let v3 = dfg.ins(cur).f64const(imm::Ieee64::new(0.0));
+        dfg.ins(cur).brz(v2, ebb3, VariableArgs::new()); // &amp;lt;-ebb3にジャンプ
+
+        let mut varg = VariableArgs::new();
+        varg.push(v3);
+        let _ = dfg.ins(cur).return_(varg);
+
+        cur.insert_ebb(ebb3); // &amp;lt;- ebb3を追加
+    }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;function average(i32, i32) -&amp;gt; f32 {
+    ss0 = stack_slot 8
+
+                    ebb0(vx0: i32, vx1: i32):
+[-]                     v0 = f64const 0.0
+[-]                     brz vx1, ebb1
+[-]                     return v0
+
+                    ebb1:
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;残り&#34;&gt;残り&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;{
+        let k = func.stack_slots.push(StackSlotData::new(8));
+        let cur = &amp;amp;mut Cursor::new(&amp;amp;mut func.layout);
+        let dfg = &amp;amp;mut func.dfg;
+
+        let ebb0 = dfg.make_ebb();
+        let v1 = dfg.append_ebb_arg(ebb0, types::I32);
+        let v2 = dfg.append_ebb_arg(ebb0, types::I32);
+
+        let ebb2 =  dfg.make_ebb();
+        let v5 = dfg.append_ebb_arg(ebb0, types::I32);
+
+        let ebb3 = dfg.make_ebb();
+
+        cur.insert_ebb(ebb0);
+        let v3 = dfg.ins(cur).f64const(imm::Ieee64::new(0.0));
+        dfg.ins(cur).brz(v2, ebb3, VariableArgs::new());
+        let v4 = dfg.ins(cur).iconst(types::I32, 0);
+        let mut ebb2_arg = VariableArgs::new();
+        ebb2_arg.push(v4);
+        dfg.ins(cur).jump(ebb2, ebb2_arg);
+
+        cur.insert_ebb(ebb2);
+        let v6 = dfg.ins(cur).imul_imm(v5, 4);
+        let v7 = dfg.ins(cur).iadd(v1, v6);
+        dfg.ins(cur).jump(ebb3, VariableArgs::new());
+
+        cur.insert_ebb(ebb3);
+    }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;こんな感じで進めていこうと思いましたがどうやらまだstack/heapを触る命令がない？？ようなので詰みました。&lt;/p&gt;
+
+&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;コンパイラバックエンドcretonneについて紹介しました&lt;/li&gt;
+&lt;li&gt;cretonneのRust APIを触ってみましたがダメでした。&lt;/li&gt;
+&lt;/ul&gt;</description>
+    </item>
+    
+    <item>
       <title>Rustでバイト列を扱う時のtips</title>
       <link>/blog/2016/12/01/rustdebaitoretsuwoatsukautokinotips</link>
       <pubDate>Thu, 01 Dec 2016 14:29:33 +0900</pubDate>
@@ -2457,389 +2817,6 @@ SML# からデータベースに接続したい方の一助になれば幸いで
  &lt;a class=&#34;footnote-return&#34; href=&#34;#fnref:2&#34;&gt;&lt;sup&gt;[return]&lt;/sup&gt;&lt;/a&gt;&lt;/li&gt;
 &lt;/ol&gt;
 &lt;/div&gt;</description>
-    </item>
-    
-    <item>
-      <title>Rustで小さなツールを作ってみる(後編)</title>
-      <link>/blog/2015/11/29/rustdechiisanatsu_ruwotsukuttemiru_kouhen_</link>
-      <pubDate>Sun, 29 Nov 2015 13:54:39 +0900</pubDate>
-      
-      <guid>/blog/2015/11/29/rustdechiisanatsu_ruwotsukuttemiru_kouhen_</guid>
-      <description>&lt;p&gt;この記事は&lt;a href=&#34;http://qiita.com/advent-calendar/2015/rust-lang&#34;&gt;Rust Advent Calendar 2015&lt;/a&gt; 2日目の記事です。&lt;br /&gt;
-前 &lt;a href=&#34;/blog/2015/11/14/rustdechiisanatsu_ruwotsukuttemiru/&#34;&gt;Rustで小さなツールを作ってみる(前編)&lt;/a&gt;&lt;br /&gt;
-次 &lt;a href=&#34;/blog/2015/11/29/cargonotsukaikata/&#34;&gt;Cargoの使い方&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;κeenです。昨日の記事で作りかけだったIRCの生ログのDBへのインポートの続きです。今日はDBへのインポートをやります。&lt;/p&gt;
-
-&lt;p&gt;&lt;/p&gt;
-
-&lt;p&gt;とはいってもRustでDBを扱った経験がないので探り探りです。&lt;/p&gt;
-
-&lt;h1 id=&#34;要件&#34;&gt;要件&lt;/h1&gt;
-
-&lt;p&gt;今回は簡単なのでORMは要らない気がしますが、サンプルということでORMも使いましょう。さらに、サンプルということでクエリビルダも使いましょう。&lt;/p&gt;
-
-&lt;p&gt;…と思ったのですが中々良いライブラリがありませんでした。ドキュメントもろくにないまま放置されてる&lt;a href=&#34;https://github.com/deuterium-orm/deuterium&#34;&gt;deuterium&lt;/a&gt;と開発途中でまだpostgresしかサポートされていない&lt;a href=&#34;https://github.com/ivanceras/rustorm&#34;&gt;rustorm&lt;/a&gt;/&lt;a href=&#34;https://github.com/ivanceras/codegenta&#34;&gt;codegenta&lt;/a&gt;くらいしかないようです。うぅ。
-最近話題になった&lt;a href=&#34;https://github.com/sgrif/diesel&#34;&gt;diesel&lt;/a&gt;もまだ若すぎるようです。&lt;/p&gt;
-
-&lt;p&gt;ということでシンプルなDBIを使います。そろそろ牡蠣の美味しい季節ですしSQL生書きしましょう。当たると怖いですが。で、テスト用にsqlite3を、（今回は使いませんが）本番用（？）にMySQLを使える奴を捜しましょう。&lt;/p&gt;
-
-&lt;h1 id=&#34;ライブラリ捜し&#34;&gt;ライブラリ捜し&lt;/h1&gt;
-
-&lt;p&gt;まずは&lt;a href=&#34;https://crates.io&#34;&gt;crates.io&lt;/a&gt;を捜します。&amp;rdquo;sqlite&amp;rdquo;で捜せばいいでしょうか。&lt;/p&gt;
-
-&lt;p&gt;MySQLとSQLite3をサポートしているライブラリ…&lt;a href=&#34;https://github.com/sfackler/r2d2&#34;&gt;r2d2&lt;/a&gt;がそれのようです。
-コネクションプールのライブラリなので何か違う気がしますが、mysqlもsqlite3も扱えて、結果コネクションを抽象化してくれるので大体大丈夫です。&lt;/p&gt;
-
-&lt;p&gt;蛇足ですが、名前はJavaにc3p0というコネクションプールがあるのでそこから来ているのでしょう。&lt;/p&gt;
-
-&lt;h1 id=&#34;スキーマ定義&#34;&gt;スキーマ定義&lt;/h1&gt;
-
-&lt;p&gt;SQLiteを使い慣れないのですが大したことやってないので大丈夫でしょう。&lt;code&gt;DATETIME&lt;/code&gt; 型がないのが苦しいですね。&lt;/p&gt;
-
-&lt;p&gt;自然キーが文字列や複合キーなのでサロゲートキーを使って自然キーにUNIQUE制約をかけてますがちょっと気持悪いですね。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sql&#34;&gt;-- _*_ mode: sql; sql-product: &#39;sqlite _*_
-
-CREATE TABLE servers(
-        id   INTEGER PRIMARY KEY,
-        name  TEXT NOT NULL UNIQUE,
-        address TEXT
-        );
-m
-CREATE TABLE channels(
-        id INTEGER PRIMARY KEY,
-        server_id INTEGER REFERENCES servers(id) ON UPDATE CASCADE,
-        name TEXT NOT NULL,
-        UNIQUE(server_id, name)
-        );
-
-CREATE TABLE entries(
-        id INTEGER PRIMARY KEY,
-        channel_id INTEGER REFERENCES channels(id) ON UPDATE CASCADE,
-        user_id INTEGER REFERENCES users(i) ON UPDATE CASCADE,
-        type TEXT NOT NULL,
-        body TEXT NOT NULL,
-        created_at TEXT NOT NULL
-        );
-
-CREATE TABLE users(
-        id INTEGER PRIMARY KEY,
-        server_id INTEGER REFERENCES servers(id) ON UPDATE CASCADE,
-        name TEXT NOT NULL,
-        UNIQUE(server_id, name)
-        );
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これをetc/schema.sqlに保存します。&lt;/p&gt;
-
-&lt;h1 id=&#34;モデル定義&#34;&gt;モデル定義&lt;/h1&gt;
-
-&lt;p&gt;折角シンプルなツールを作っているのでモデルは使わない。&lt;/p&gt;
-
-&lt;h1 id=&#34;コネクションまで&#34;&gt;コネクションまで&lt;/h1&gt;
-
-&lt;p&gt;あらかじめ&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ sqlite test.db &amp;lt; etc/schema.sql
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;としてDBを作っておきましょう。&lt;/p&gt;
-
-&lt;p&gt;Cargo.tomlのdependenciesには&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-toml&#34;&gt;r2d2_sqlite = &amp;quot;0.0.3&amp;quot;
-r2d2 = &amp;quot;0.6.1&amp;quot;
-rusqlite = &amp;quot;0.4.0&amp;quot;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;を追記。&lt;/p&gt;
-
-&lt;p&gt;src/main.rsの先頭部分に&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;extern crate r2d2;
-extern crate r2d2_sqlite;
-extern crate rusqlite;
-use std::sync::Arc;
-use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::SqliteError;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;を追記しましょう。&lt;/p&gt;
-
-&lt;p&gt;そしてmainの中に次を追加。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let manager = SqliteConnectionManager::new(&amp;quot;test.db&amp;quot;).unwrap();
-    let config = r2d2::Config::builder().pool_size(16).build();
-    let pool = Arc::new(r2d2::Pool::new(config, manager).unwrap());
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これで一旦コンパイル。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo build
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これが通れば良いです。&lt;/p&gt;
-
-&lt;h1 id=&#34;はじめての挿入&#34;&gt;はじめての挿入&lt;/h1&gt;
-
-&lt;p&gt;INSERTを発行してみましょう。&lt;code&gt;on_channel_dir&lt;/code&gt;の引数を変える必要があります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn on_channel_dir(path: &amp;amp;Path, pool: Arc&amp;lt;r2d2::Pool&amp;lt;SqliteConnectionManager&amp;gt;&amp;gt;) 
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;併せて、呼び出しも&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        on_channel_dir(&amp;amp;path, pool.clone());
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;となります。&lt;/p&gt;
-
-&lt;p&gt;そうしたら&lt;code&gt;on_channel_dir&lt;/code&gt;の中で&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let channel = &amp;amp;dirname[..at];
-    let server = &amp;amp;dirname[at+1..];
-    println!(&amp;quot;{} at {}&amp;quot;, channel, server);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;としていた辺でまずはserversへのインサートを発行しましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let conn = pool.get().unwrap();
-    let server_id = match conn.execute(&amp;quot;INSERT INTO servers (name) VALUES ($1)&amp;quot;, &amp;amp;[&amp;amp;server]) {
-        // unique constraint failed
-        Err(SqliteError{code: 19, message:_}) =&amp;gt; conn.query_row(&amp;quot;SELECT id FROM servers WHERE name = $1&amp;quot;, &amp;amp;[&amp;amp;server], |r| r.get(0)).unwrap(),
-        Ok(_) =&amp;gt; conn.last_insert_rowid(),
-        e =&amp;gt; {e.unwrap(); return}
-    };
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;プールからコネクションを持ってきて&lt;code&gt;INSERT&lt;/code&gt;を発行します。成功するか既にUNIQUEな名前が存在していて失敗したらサーバのidを持ってきます。それ以外の失敗だったらそのままパニックしていいでしょう。&lt;/p&gt;
-
-&lt;p&gt;しかしラッパがちょっと雑すぎやしませんかね。エラーステータスくらいenumでラップして欲しかった。&lt;/p&gt;
-
-&lt;p&gt;同じくチャネルもインサートしましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let channel_id = match conn.execute(&amp;quot;INSERT INTO channels (name, server_id) VALUES ($1, $2)&amp;quot;, &amp;amp;[&amp;amp;channel, &amp;amp;server_id]) {
-        // unique constraint failed
-        Err(SqliteError{code: 19, message:_}) =&amp;gt; conn.query_row(&amp;quot;SELECT id FROM channels WHERE name = $1&amp;quot;, &amp;amp;[&amp;amp;channel], |r| r.get(0)).unwrap(),
-        Ok(_) =&amp;gt; conn.last_insert_rowid(),
-        e =&amp;gt; {e.unwrap(); return}
-
-    };
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;こういうupsertというかinsert or get_idってどうやるのが正解なんでしょう。DB力が低い…&lt;/p&gt;
-
-&lt;h1 id=&#34;エントリのインサート&#34;&gt;エントリのインサート&lt;/h1&gt;
-
-&lt;p&gt;同じく&lt;code&gt;on_log&lt;/code&gt;の引数を増やします。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn on_log(log: &amp;amp;Path, channel_id: i64,  pool: Arc&amp;lt;r2d2::Pool&amp;lt;SqliteConnectionManager&amp;gt;&amp;gt;) {
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;呼び出し側も。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        let pool_ = pool.clone();
-        Builder::new().name(pathname).spawn(move|| on_log(&amp;amp;log, channel_id, pool_))
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;move&lt;/code&gt;する前に&lt;code&gt;clone&lt;/code&gt;しないとダメですね。所有権難しい。&lt;/p&gt;
-
-&lt;p&gt;さて、今度は色々することがあります。
-まず、dateとtimeをくっつけてdatetimeにしましょう。timeがイミュータブルだったので&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        let mut time = ...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;とし、その下で&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        time.tm_mday = date.tm_mday;
-        time.tm_mon = date.tm_mon;
-        time.tm_year = date.tm_year;
-        let created_at = time.to_timespec();
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;とします。わざわざ&lt;code&gt;to_timespec&lt;/code&gt;で変換してるのは&lt;code&gt;Timespec&lt;/code&gt;だとDBライブラリが良い感じに変換してくれるからですね。&lt;/p&gt;
-
-&lt;p&gt;次にメッセージの抜き出し部分も値を返すように変更。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        let (user, type_, body) = match &amp;amp;msg[0..1] {
-            &amp;quot;!&amp;quot; =&amp;gt; (&amp;quot;server&amp;quot;, &amp;quot;sysmsg&amp;quot;, &amp;amp;msg[1..]),
-            &amp;quot;+&amp;quot; =&amp;gt; (&amp;quot;server&amp;quot;, &amp;quot;join&amp;quot;, &amp;amp;msg[1..]),
-            &amp;quot;-&amp;quot; =&amp;gt; (&amp;quot;server&amp;quot;, &amp;quot;part&amp;quot;, &amp;amp;msg[1..]),
-            &amp;quot;&amp;lt;&amp;quot; =&amp;gt; match msg.find(&#39;&amp;gt;&#39;).map(|e| (&amp;amp;msg[1..e], &amp;amp;msg[e+1..])) {
-                Some((user, body)) =&amp;gt; (user, &amp;quot;msg&amp;quot;, body),
-                None =&amp;gt; {
-                    warn!(&amp;quot;cannot parse the entry; skipping&amp;quot;);
-                    continue;
-                }
-            },
-            _ =&amp;gt; (&amp;quot;server&amp;quot;, &amp;quot;notice&amp;quot;, &amp;amp;msg[1..]),
-        };
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ここまで来たらあとはユーザとエントリをインサートするだけですね。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        let conn = pool.get().unwrap();
-        let user_id = match conn.execute(&amp;quot;INSERT INTO users (name) VALUES ($1)&amp;quot;, &amp;amp;[&amp;amp;user]) {
-            // unique constraint failed
-            Err(SqliteError{code: 19, message:_}) =&amp;gt; conn.query_row(&amp;quot;SELECT id FROM users WHERE name = $1&amp;quot;, &amp;amp;[&amp;amp;user], |r| r.get(0)).unwrap(),
-            Ok(_) =&amp;gt; conn.last_insert_rowid(),
-            e =&amp;gt; {e.unwrap(); return}
-        };
-        conn.execute(&amp;quot;INSERT INTO entries (channel_id, user_id, type, body, created_at) VALUES ($1, $2, $3, $4, $5)&amp;quot;, &amp;amp;[&amp;amp;channel_id, &amp;amp;user_id, &amp;amp;type_, &amp;amp;body, &amp;amp;created_at]);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;一旦これで走らせてみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo run --release
-...
-thread &#39;/home/kim/log/#hongo@utmc/2015-02-15.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2015-08-18.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-12-13.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2015-10-13.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-02-26.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-05-23.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2015-04-30.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2013-10-18.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2015-10-14.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-01-19.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-08-12.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: GetTimeout(())&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-06-03.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: GetTimeout(())&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2015-02-05.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: GetTimeout(())&#39;, ../src/libcore/result.rs:736
-...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;あちゃー。マルチスレッドでINSERTしてるのでロックが掛かってますね。SQLiteはファイルロックしか持たないので並列インサートはつらそう。&lt;/p&gt;
-
-&lt;h1 id=&#34;トランザクション&#34;&gt;トランザクション&lt;/h1&gt;
-
-&lt;p&gt;はい、そういう時のトランザクションですよ。&lt;/p&gt;
-
-&lt;p&gt;最後のユーザやエントリーをインサートしてる部分で使ってみます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;        let conn = pool.get().unwrap();
-        let trx = conn.transaction().unwrap();
-        let user_id = match conn.execute(&amp;quot;INSERT INTO users (name) VALUES ($1)&amp;quot;, &amp;amp;[&amp;amp;user]) {
-            // unique constraint failed
-            Err(SqliteError{code: 19, message:_}) =&amp;gt; conn.query_row(&amp;quot;SELECT id FROM users WHERE name = $1&amp;quot;, &amp;amp;[&amp;amp;user], |r| r.get(0)).unwrap(),
-            Ok(_) =&amp;gt; conn.last_insert_rowid(),
-            e =&amp;gt; {e.unwrap(); return}
-        };
-        trx.commit();
-        let trx = conn.transaction().unwrap();
-        conn.execute(&amp;quot;INSERT INTO entries (channel_id, user_id, type, body, created_at) VALUES ($1, $2, $3, $4, $5)&amp;quot;, &amp;amp;[&amp;amp;channel_id, &amp;amp;user_id, &amp;amp;type_, &amp;amp;body, &amp;amp;created_at]);
-        trx.commit();
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;排他制御が目的なのでトランザクションを2回取ってます。&lt;/p&gt;
-
-&lt;p&gt;これだとどうなるかというと&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;$ cargo run --release
-...
-thread &#39;/home/kim/log/#hongo@utmc/2015-02-15.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2015-08-18.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-12-13.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2015-10-13.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-02-26.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-05-23.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2015-04-30.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2013-10-18.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2015-10-14.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-01-19.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: SqliteError { code: 5, message: &amp;quot;database is locked&amp;quot; }&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-08-12.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: GetTimeout(())&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2014-06-03.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: GetTimeout(())&#39;, ../src/libcore/result.rs:736
-thread &#39;/home/kim/log/#hongo@utmc/2015-02-05.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: GetTimeout(())&#39;, ../src/libcore/result.rs:736
-...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;エラーは減ったもののまだ出ます。&lt;/p&gt;
-
-&lt;h1 id=&#34;その他&#34;&gt;その他&lt;/h1&gt;
-
-&lt;p&gt;他にスレッドプールを使って並列度を下げる、ワーカースレッドを使ってSQLiteへの書き込みを1スレッドにするなども試したのですが上手く行きませんでした。&lt;/p&gt;
-
-&lt;p&gt;スレッドプールについては、今回エラーハンドリングのためにスレッドを立てている訳ですが、パニックを出してスレッドが死ぬとあまり思わしくない挙動をするのでダメでした。&lt;/p&gt;
-
-&lt;p&gt;ワーカースレッドは書き込んだ後にまたchannel_idなどを受け取らないといけないのでやめました。promiseなどを使えば上手くいきそうな気もしますが色々面倒そうなので止めておきます。&lt;/p&gt;
-
-&lt;h1 id=&#34;コネクション&#34;&gt;コネクション&lt;/h1&gt;
-
-&lt;p&gt;並列度を下げる方法はもう1つあります。&lt;/p&gt;
-
-&lt;p&gt;mainの中で&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let config = r2d2::Config::builder().pool_size(16).build();
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;としていたのを覚えていますでしょうか。これはコネクションプールに16個のコネクションを持っています。この数を落とせばなんとかならないでしょうか。&lt;/p&gt;
-
-&lt;p&gt;結論からいうとダメでした。今度は複数スレッドがコネクションを取り合ってタイムアウトが発生してしまいます。&lt;/p&gt;
-
-&lt;h1 id=&#34;並列度を下げる&#34;&gt;並列度を下げる&lt;/h1&gt;
-
-&lt;p&gt;最後の最後、本当に並列度を下げる方法があります。スレッドを立てていた部分で&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    let threads = logs.map(|log| {
-        let log = log.unwrap().path();
-        let pathname = log.to_string_lossy().to_string();
-        Builder::new().name(pathname).spawn(move|| on_log(&amp;amp;log))
-    }).collect::&amp;lt;Vec&amp;lt;_&amp;gt;&amp;gt;();
-    for thread in threads {
-        let _ = thread.unwrap().join();
-    }
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;としていました。これはファイル数分並列に実行してしまいます。ここを抑えましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    for log in logs {
-        let log = log.unwrap().path();
-        let pathname = log.to_string_lossy().to_string();
-        let pool_ = pool.clone();
-        let _ = Builder::new().name(pathname).spawn(move|| on_log(&amp;amp;log, channel_id, pool_)).unwrap().join();
-    }
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;spawn&lt;/code&gt;してそのまま&lt;code&gt;join&lt;/code&gt;します。こうすれば並列度を抑えつつパニックをスレッドに分離出来ます。&lt;/p&gt;
-
-&lt;p&gt;これで実行するとどうなるかというと&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo run --release
-...
-thread &#39;/home/kim/log/#lisp-ja@freenode/2015-04-08.txt&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: GetTimeout(())&#39;, ../src/libcore/result.rs:736
-...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;いくつかタイムアウトを出します。えー。並列度1でこれならもうどうしようもないでしょう。&lt;/p&gt;
-
-&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
-
-&lt;p&gt;さて、小さなツールを作るというタイトルにしては後半(執筆が)重い内容になってしまいました。というか、sqlite3の問題もしますが。&lt;/p&gt;
-
-&lt;p&gt;このブログの内容としては&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;rustでディレクトリを扱った&lt;/li&gt;
-&lt;li&gt;ファイルを扱った&lt;/li&gt;
-&lt;li&gt;文字列を扱った&lt;/li&gt;
-&lt;li&gt;日付を扱った&lt;/li&gt;
-&lt;li&gt;スレッドを扱った&lt;/li&gt;
-&lt;li&gt;ロガーライブラリを扱った&lt;/li&gt;
-&lt;li&gt;エラーハンドリングをした&lt;/li&gt;
-&lt;li&gt;パニックのハンドリングをした&lt;/li&gt;
-&lt;li&gt;DBを扱った&lt;/li&gt;
-&lt;li&gt;sqlite3に並列書き込みはつらい&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;ボツ案も含めれば私個人はORMやスレッドプール、チャネルも扱いましたが関係ないですね。&lt;/p&gt;
-
-&lt;p&gt;こういう簡単なツールでも思ったより色々な機能を触れるのでみなさん試してみてはいかがでしょうか。&lt;/p&gt;
-
-&lt;p&gt;ソースコード全体は&lt;a href=&#34;https://github.com/KeenS/irc_log&#34;&gt;ここ&lt;/a&gt;においておきます。&lt;/p&gt;
-
-&lt;p&gt;因みに本筋とは外れますが、今回のSQLiteの問題を扱うには一旦CSVファイルに書き出してからCSVインポートでバルクインサートが考えられます。
-CSVに書き出すのはちまちまやってもいいし今回のデータ量ならオンメモリ構築して一気に書き出しも出来るでしょう。あるいはSQLiteをやめてMySQLを使う。&lt;/p&gt;</description>
     </item>
     
   </channel>

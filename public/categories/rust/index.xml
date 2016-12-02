@@ -9,6 +9,366 @@
     <atom:link href="/categories/rust/index.xml" rel="self" type="application/rss+xml" />
     
     <item>
+      <title>新しいコンパイラバックエンドcretonne</title>
+      <link>/blog/2016/12/02/atarashiikonpairabakkuendocretonne</link>
+      <pubDate>Fri, 02 Dec 2016 14:00:11 +0900</pubDate>
+      
+      <guid>/blog/2016/12/02/atarashiikonpairabakkuendocretonne</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2016/lang_dev&#34;&gt;言語実装 Advent Calendar 2016 - Qiita&lt;/a&gt;3日目の記事です。&lt;/p&gt;
+
+&lt;p&gt;κeenです。先日、Rustの開発者フォーラムに新しいバックエンドして&lt;a href=&#34;https://github.com/stoklund/cretonne&#34;&gt;cretonne&lt;/a&gt;が&lt;a href=&#34;https://internals.rust-lang.org/t/possible-alternative-compiler-backend-cretonne/4275&#34;&gt;提案されていました&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;ちょっと気になったのでそれを紹介します。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;
+
+&lt;h1 id=&#34;概略&#34;&gt;概略&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/stoklund/cretonne&#34;&gt;GitHub&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://cretonne.readthedocs.io/en/latest/index.html&#34;&gt;ドキュメント&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;フォーラムによると、WebAssemblyをエンコードするために作られたコンパイラバックエンドで、FirefoxのJSエンジンであるSpiderMonkeyに載せる予定だそうです。JITが主な目的？&lt;/p&gt;
+
+&lt;p&gt;LLVMのように最適化を頑張る方ではなくてコードを吐くまでのレイテンシを気にして作られているとのこと。なのでcretonne自身は最適化を行いません。&lt;/p&gt;
+
+&lt;p&gt;特徴はドキュメントの&lt;a href=&#34;http://cretonne.readthedocs.io/en/latest/compare-llvm.html&#34;&gt;LLVMとの比較&lt;/a&gt;によくまとまってますが、&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;LLVMは複数種類の中間言語を持つのに対してcretonneは1種類&lt;/li&gt;
+&lt;li&gt;アセンブラもディスアセンブラもない
+
+&lt;ul&gt;
+&lt;li&gt;コードジェネレータが吐く命令だけサポート&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;中間言語はISA非依存で、legalization / instruction selectionをするとISA固有のアノテーションが付く&lt;/li&gt;
+&lt;li&gt;最大抽象単位が関数(LLVMはモジュール)。cretonneは関数のインライン化とかもしない。&lt;/li&gt;
+&lt;li&gt;Extended Basic Blockを使う(LLVMはBasic Block)。
+
+&lt;ul&gt;
+&lt;li&gt;ebbは分岐命令のfalse branchを指定せず、fall throughする。よくあるマシン語に近い。&lt;/li&gt;
+&lt;li&gt;分岐の合流はebbに引数を持たせることで行う(LLVMはphi nodeを使う)。&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;undefined behaviorが存在しない&lt;/strong&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;なんとなくWebAssemblyを意識した仕様ですね。&lt;/p&gt;
+
+&lt;h1 id=&#34;雰囲気&#34;&gt;雰囲気&lt;/h1&gt;
+
+&lt;p&gt;以下のCのコードは&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;float
+average(const float *array, size_t count)
+{
+    double sum = 0;
+    for (size_t i = 0; i &amp;lt; count; i++)
+        sum += array[i];
+    return sum / count;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;以下のcretonneのIRに落ちるそうです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;function average(i32, i32) -&amp;gt; f32 {
+    ss1 = stack_slot 8, align 4   ; Stack slot for ``sum``.
+
+ebb1(v1: i32, v2: i32):
+    v3 = f64const 0x0.0
+    stack_store v3, ss1
+    brz v2, ebb3                  ; Handle count == 0.
+    v4 = iconst.i32 0
+    br ebb2(v4)
+
+ebb2(v5: i32):
+    v6 = imul_imm v5, 4
+    v7 = iadd v1, v6
+    v8 = heap_load.f32 v7         ; array[i]
+    v9 = fext.f64 v8
+    v10 = stack_load.f64 ss1
+    v11 = fadd v9, v10
+    stack_store v11, ss1
+    v12 = iadd_imm v5, 1
+    v13 = icmp ult v12, v2
+    brnz v13, ebb2(v12)           ; Loop backedge.
+    v14 = stack_load.f64 ss1
+    v15 = cvt_utof.f64 v2
+    v16 = fdiv v14, v15
+    v17 = ftrunc.f32 v16
+    return v17
+
+ebb3:
+    v100 = f32const qNaN
+    return v100
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;まあ、実際はファイルヘッダとかも付きますがこんな感じです。&lt;/p&gt;
+
+&lt;p&gt;ebbに引数があったりebbの途中で平気でブランチしてたり中々やんちゃですね。&lt;/p&gt;
+
+&lt;h1 id=&#34;使ってみる&#34;&gt;使ってみる&lt;/h1&gt;
+
+&lt;p&gt;コードを吐くところまでやりたかったのですがまだ絶賛開発中ということもあってそのような操作が見当りませんでした。&lt;/p&gt;
+
+&lt;p&gt;ということでファイルの方を扱ってると面白みがないのでRust APIの方で関数を構築して正当性を検証してから中間言語を吐き出してみます。&lt;/p&gt;
+
+&lt;h2 id=&#34;一歩&#34;&gt;一歩&lt;/h2&gt;
+
+&lt;p&gt;まずはcretonneをcloneしてきます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cargo new cretonne-sample --bin
+$ cd cretonne-sample
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;んでCargo.tomlのdependenciesに&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;cretonne = {path = &amp;quot;path/cretonne/lib/cretonne/&amp;quot;}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;を追加します。どうやらトップレベルのプロジェクトはただのユーティリティのようでした。本体は&lt;code&gt;lib/cretonne/&lt;/code&gt;以下にいます。&lt;/p&gt;
+
+&lt;p&gt;そしてmainファイルの中身はこうです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;extern crate cretonne;
+use cretonne::ir::*;
+use cretonne::ir::{types as ty};
+use cretonne::isa;
+use cretonne::settings::{self, Configurable};
+use cretonne::{write_function, legalize_function, verify_function};
+
+fn main() {
+    let mut func = {
+        let name = FunctionName::new(&amp;quot;average&amp;quot;);
+        let mut sig = Signature::new();
+        sig.argument_types.push(ArgumentType::new(ty::I32));
+        sig.argument_types.push(ArgumentType::new(ty::I32));
+        sig.return_types.push(ArgumentType::new(ty::F32));
+        Function::with_name_signature(name, sig)
+    };
+
+    let isa = {
+        let mut b = settings::builder();
+        b.set(&amp;quot;opt_level&amp;quot;, &amp;quot;fastest&amp;quot;).unwrap();
+        let f = settings::Flags::new(&amp;amp;b);
+        let builder = isa::lookup(&amp;quot;intel&amp;quot;).unwrap();
+        builder.finish(f)
+    };
+    verify_function(&amp;amp;func).unwrap();
+    legalize_function(&amp;amp;mut func, isa.as_ref());
+    let mut o = String::new();
+    write_function(&amp;amp;mut o, &amp;amp;func, Some(isa.as_ref())).unwrap();
+    println!(&amp;quot;{}&amp;quot;, o);
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;function average(i32, i32) -&amp;gt; f32 {
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;おおまかには&lt;code&gt;func&lt;/code&gt;を構築して&lt;code&gt;isa&lt;/code&gt;を決めて&lt;code&gt;verify_function&lt;/code&gt;で検証、さらに&lt;code&gt;legalize_function&lt;/code&gt;で今回のアーキテクチャ向けに微調整、&lt;code&gt;write_function&lt;/code&gt;で書き出しです。&lt;/p&gt;
+
+&lt;h2 id=&#34;スタックスロットの追加&#34;&gt;スタックスロットの追加&lt;/h2&gt;
+
+&lt;p&gt;まあ、スタック領域ですね。8byteの領域を確保します。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;func&lt;/code&gt;にstack_slotsフィールドがあるのでそこにpushします。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
+    let mut func = {
+        ....
+    };
+
+
+    {
+        let k = func.stack_slots.push(StackSlotData::new(8));
+    }
+
+    let isa = {
+        ....
+    };
+    ....
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;function average(i32, i32) -&amp;gt; f32 {
+    ss0 = stack_slot 8
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;push&lt;/code&gt;の返り値はスタック領域を指すキーです。&lt;/p&gt;
+
+&lt;h2 id=&#34;ebbの追加&#34;&gt;EBBの追加&lt;/h2&gt;
+
+&lt;p&gt;&lt;code&gt;func&lt;/code&gt;構造体のフィールドに&lt;code&gt;dfg&lt;/code&gt;がいて、そいつを色々いじります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
+    let mut func = {
+        ....
+    };
+
+
+    {
+        let k = func.stack_slots.push(StackSlotData::new(8));
+        let cur = &amp;amp;mut Cursor::new(&amp;amp;mut func.layout);
+        let ebb0 = func.dfg.make_ebb();
+        let v1 = func.dfg.append_ebb_arg(ebb0, types::I32);
+        let v2 = func.dfg.append_ebb_arg(ebb0, types::I32);
+
+        cur.insert_ebb(ebb0);
+    }
+
+    let isa = {
+        ....
+    };
+    ....
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;function average(i32, i32) -&amp;gt; f32 {
+    ss0 = stack_slot 8
+
+ebb0(vx0: i32, vx1: i32):
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;EBBの追加にはカーソルを決めてあげて、dfgにebbを作ってあげて、カーソルの位置にebbの追加という形になります。&lt;/p&gt;
+
+&lt;p&gt;EBBには任意に引数を追加出来ます。&lt;code&gt;append_ebb_arg&lt;/code&gt;の返り値はSSAの変数です。&lt;/p&gt;
+
+&lt;h2 id=&#34;命令を追加する&#34;&gt;命令を追加する&lt;/h2&gt;
+
+&lt;p&gt;命令はpythonのスクリプトによって生成されるので補完が効かず、中々扱いづらいですが頑張ります。&lt;/p&gt;
+
+&lt;p&gt;さて、今回コードの検証を入れているので以下のようなコードは検証に落ちてしまいます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    ....
+    {
+        let k = func.stack_slots.push(StackSlotData::new(8));
+        let cur = &amp;amp;mut Cursor::new(&amp;amp;mut func.layout);
+        let dfg = &amp;amp;mut func.dfg;
+        let ebb0 = dfg.make_ebb();
+        let v1 = dfg.append_ebb_arg(ebb0, types::I32);
+        let v2 = dfg.append_ebb_arg(ebb0, types::I32);
+        cur.insert_ebb(ebb0);
+
+        let v3 = dfg.ins(cur).f64const(imm::Ieee64::new(0.0));
+    }
+    ....
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;thread &#39;main&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: Error { location: Ebb(Ebb(0)), message: &amp;quot;block does not end in a terminator instruction!&amp;quot; }&#39;, ../src/libcore/result.rs:799
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;最後の命令が定数であるため、正常なブロックと見做されないのです。&lt;/p&gt;
+
+&lt;p&gt;ひとまずv3を返すことで凌ぎます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    ....
+    {
+        ....
+        let mut varg = VariableArgs::new();
+        varg.push(v3);
+        let _ = dfg.ins(cur).return_(varg);
+    }
+    ....
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;function average(i32, i32) -&amp;gt; f32 {
+    ss0 = stack_slot 8
+
+                    ebb0(vx0: i32, vx1: i32):
+[-]                     v0 = f64const 0.0
+[-]                     return v0
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;命令の頭に付いてる &lt;code&gt;[-]&lt;/code&gt;はlegalizeすると付くようです。&lt;/p&gt;
+
+&lt;h2 id=&#34;ブランチ&#34;&gt;ブランチ&lt;/h2&gt;
+
+&lt;p&gt;もう1つebbを追加してあげる必要があります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    {
+        let k = func.stack_slots.push(StackSlotData::new(8));
+        let cur = &amp;amp;mut Cursor::new(&amp;amp;mut func.layout);
+        let dfg = &amp;amp;mut func.dfg;
+        let ebb0 = dfg.make_ebb();
+        let ebb3 = dfg.make_ebb();  // &amp;lt;- ebb3を作成
+        let v1 = dfg.append_ebb_arg(ebb0, types::I32);
+        let v2 = dfg.append_ebb_arg(ebb0, types::I32);
+        cur.insert_ebb(ebb0);
+        let v3 = dfg.ins(cur).f64const(imm::Ieee64::new(0.0));
+        dfg.ins(cur).brz(v2, ebb3, VariableArgs::new()); // &amp;lt;-ebb3にジャンプ
+
+        let mut varg = VariableArgs::new();
+        varg.push(v3);
+        let _ = dfg.ins(cur).return_(varg);
+
+        cur.insert_ebb(ebb3); // &amp;lt;- ebb3を追加
+    }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;function average(i32, i32) -&amp;gt; f32 {
+    ss0 = stack_slot 8
+
+                    ebb0(vx0: i32, vx1: i32):
+[-]                     v0 = f64const 0.0
+[-]                     brz vx1, ebb1
+[-]                     return v0
+
+                    ebb1:
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;残り&#34;&gt;残り&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;{
+        let k = func.stack_slots.push(StackSlotData::new(8));
+        let cur = &amp;amp;mut Cursor::new(&amp;amp;mut func.layout);
+        let dfg = &amp;amp;mut func.dfg;
+
+        let ebb0 = dfg.make_ebb();
+        let v1 = dfg.append_ebb_arg(ebb0, types::I32);
+        let v2 = dfg.append_ebb_arg(ebb0, types::I32);
+
+        let ebb2 =  dfg.make_ebb();
+        let v5 = dfg.append_ebb_arg(ebb0, types::I32);
+
+        let ebb3 = dfg.make_ebb();
+
+        cur.insert_ebb(ebb0);
+        let v3 = dfg.ins(cur).f64const(imm::Ieee64::new(0.0));
+        dfg.ins(cur).brz(v2, ebb3, VariableArgs::new());
+        let v4 = dfg.ins(cur).iconst(types::I32, 0);
+        let mut ebb2_arg = VariableArgs::new();
+        ebb2_arg.push(v4);
+        dfg.ins(cur).jump(ebb2, ebb2_arg);
+
+        cur.insert_ebb(ebb2);
+        let v6 = dfg.ins(cur).imul_imm(v5, 4);
+        let v7 = dfg.ins(cur).iadd(v1, v6);
+        dfg.ins(cur).jump(ebb3, VariableArgs::new());
+
+        cur.insert_ebb(ebb3);
+    }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;こんな感じで進めていこうと思いましたがどうやらまだstack/heapを触る命令がない？？ようなので詰みました。&lt;/p&gt;
+
+&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;コンパイラバックエンドcretonneについて紹介しました&lt;/li&gt;
+&lt;li&gt;cretonneのRust APIを触ってみましたがダメでした。&lt;/li&gt;
+&lt;/ul&gt;</description>
+    </item>
+    
+    <item>
       <title>Rustでバイト列を扱う時のtips</title>
       <link>/blog/2016/12/01/rustdebaitoretsuwoatsukautokinotips</link>
       <pubDate>Thu, 01 Dec 2016 14:29:33 +0900</pubDate>
@@ -3692,200 +4052,6 @@ if (opt != nullPointer) {
 &lt;p&gt;となる筈です。&lt;/p&gt;
 
 &lt;p&gt;ゼロコスト抽象化すごい!&lt;/p&gt;</description>
-    </item>
-    
-    <item>
-      <title>RustのHigher-Kinded type Trait</title>
-      <link>/blog/2016/02/28/rustnohigherkinded_type_trait</link>
-      <pubDate>Sun, 28 Feb 2016 14:40:59 +0900</pubDate>
-      
-      <guid>/blog/2016/02/28/rustnohigherkinded_type_trait</guid>
-      <description>&lt;p&gt;κeenです。少し前の話になりますがRustの関連型を駆使してHigher Kinded type Trait（高階型トレイト）を実現してしまったものが出回ってたのでそれについて。
-本来RustはHKTをサポートしていませんが不思議なことに実装出来てしまっているのです。&lt;/p&gt;
-
-&lt;p&gt;HKTについて微塵も知らない方にも分かるように解説していきます。
-&lt;/p&gt;
-
-&lt;h1 id=&#34;map-可能なトレイト&#34;&gt;&lt;code&gt;map&lt;/code&gt; 可能なトレイト&lt;/h1&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://doc.rust-lang.org/core/option/enum.Option.html#method.map&#34;&gt;&lt;code&gt;Option&lt;/code&gt;&lt;/a&gt;、&lt;a href=&#34;https://doc.rust-lang.org/core/result/enum.Result.html#method.map&#34;&gt;&lt;code&gt;Result&lt;/code&gt;&lt;/a&gt;、etc 色々なトレイトが &lt;code&gt;map&lt;/code&gt; メソッドを実装しています。&lt;/p&gt;
-
-&lt;p&gt;それぞれ型シグネチャを抜き出してみましょう。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;Option: &lt;code&gt;map&amp;lt;U, F: FnOnce(T) -&amp;gt; U&amp;gt;(self, f: F) -&amp;gt; Option&amp;lt;U&amp;gt;&lt;/code&gt;&lt;/li&gt;
-&lt;li&gt;Result: &lt;code&gt;map&amp;lt;U, F: FnOnce(T) -&amp;gt; U&amp;gt;(self, op: F) -&amp;gt; Result&amp;lt;U, E&amp;gt;&lt;/code&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;驚く程似てますね。これを抽象化して「&lt;code&gt;map&lt;/code&gt;メソッドを持つ」トレイトを定義したくなるかもしれません。
-しかしそれは簡単には書けません。何故なら&lt;code&gt;map&lt;/code&gt;はコンテナ型、つまり「型引数を取る型」に定義される型だからです。
-現在のRustは「型引数を取る型」に対するジェネリクスはサポートしていません。もし書こうとするとこのようになるでしょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Mappable&amp;lt;M&amp;lt;_&amp;gt;, T&amp;gt; where Self: M&amp;lt;T&amp;gt; {
-  fn map&amp;lt;U, F: FunOnce(T) -&amp;gt; U&amp;gt;(self, f: F) -&amp;gt; M&amp;lt;U&amp;gt;;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;M&amp;lt;_&amp;gt;&lt;/code&gt; なんて型パラメータを書くことは出来ませんし&lt;code&gt;M&amp;lt;T&amp;gt;&lt;/code&gt;や&lt;code&gt;M&amp;lt;U&amp;gt;&lt;/code&gt;も無理があります。残念ですね。&lt;/p&gt;
-
-&lt;h1 id=&#34;iterator-との違い&#34;&gt;&lt;code&gt;Iterator&lt;/code&gt; との違い&lt;/h1&gt;
-
-&lt;p&gt;さて、&lt;code&gt;Iterator&lt;/code&gt;にも&lt;a href=&#34;https://doc.rust-lang.org/std/iter/trait.Iterator.html#method.map&#34;&gt;&lt;code&gt;map&lt;/code&gt;&lt;/a&gt;はあります。
-これこそが求めている「&lt;code&gt;.map&lt;/code&gt; 可能なトレイト」ではないのでしょうか。
-これはおおよそは合っているのですがやや期待とは違う動作をします。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;Option&lt;/code&gt;の&lt;code&gt;map&lt;/code&gt;は不自由なく使えます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let o = Some(1);
-let o = o.map(|i| i + 1);
-println!(&amp;quot;{:?}&amp;quot;, o);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;一方、&lt;code&gt;Vec&lt;/code&gt;は全く同じような書き方は出来ません。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let v = vec![1];
-let v = v.map(|i| i + 1);
-println!(&amp;quot;{:?}&amp;quot;, v);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;lt;anon&amp;gt;:3:11: 3:25 error: no method named `map` found for type `collections::vec::Vec&amp;lt;_&amp;gt;` in the current scope
-&amp;lt;anon&amp;gt;:3 let v = v.map(|i| i + 1);
-                   ^~~~~~~~~~~~~~
-&amp;lt;anon&amp;gt;:3:11: 3:25 note: the method `map` exists but the following trait bounds were not satisfied: `collections::vec::Vec&amp;lt;_&amp;gt; : core::iter::Iterator`, `[_] : core::iter::Iterator`
-error: aborting due to previous error
-playpen: application terminated with error code 101
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;正しくは、こうです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let v = vec![1];
-let v: Vec&amp;lt;i32&amp;gt; = v.iter().map(|i| i + 1).collect();
-println!(&amp;quot;{:?}&amp;quot;, v);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;色々実装上のノイズが乗っているのでやや例として不適切だったかもしれませんが、注目して欲しい部分はここです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let v: Vec&amp;lt;i32&amp;gt; = ...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;Vec&lt;/code&gt;から取り出したイテレータなのに&lt;code&gt;Vec&lt;/code&gt;に戻すためにわざわざ型アノテーションを書く必要があります。&lt;/p&gt;
-
-&lt;p&gt;どうしてこうなるかというとイテレータを取り出した時点で元のコンテナ型が&lt;code&gt;Vec&amp;lt;&amp;gt;&lt;/code&gt;であるという情報が失われているからです。
-これはRustの型システム上どうしても仕方のないことで、なので恐らくRustは「&lt;code&gt;map&lt;/code&gt;可能なトレイト」などを定義せず、コレクションの操作を&lt;code&gt;Iterator&lt;/code&gt;に集約しているんだと思います。
-この方式はある程度は上手くいきますが&lt;code&gt;Option&lt;/code&gt;や&lt;code&gt;Result&lt;/code&gt;はIteratorになれはしてもIteratorからは作れない(2要素のイテレータからOptionは作れない)ので独自でmapメソッドを持つことになってしまいます。&lt;/p&gt;
-
-&lt;h1 id=&#34;map-可能なトレイト-again&#34;&gt;&lt;code&gt;map&lt;/code&gt; 可能なトレイト again&lt;/h1&gt;
-
-&lt;p&gt;先程そういうのは作れないと言ったばかりですが実はどうにかする方法がなくもないです。先程の(仮想の)定義を思い出して下さい。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Mappable&amp;lt;M&amp;lt;_&amp;gt;, T&amp;gt; where Self: M&amp;lt;T&amp;gt; {
-  fn map&amp;lt;U, F: FunOnce(T) -&amp;gt; U&amp;gt;(self, f: F) -&amp;gt; M&amp;lt;U&amp;gt;;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ジェネリクスになっている登場人物は&lt;code&gt;M&amp;lt;_&amp;gt;&lt;/code&gt;、&lt;code&gt;U&lt;/code&gt;、&lt;code&gt;T&lt;/code&gt; ですね。しかし&lt;code&gt;M&amp;lt;_&amp;gt;&lt;/code&gt;は実際にはそのまま使われいる訳ではなく&lt;code&gt;M&amp;lt;T&amp;gt;&lt;/code&gt;または&lt;code&gt;M&amp;lt;U&amp;gt;&lt;/code&gt;の形でのみ使われています。
-では、&lt;code&gt;M&amp;lt;T&amp;gt;&lt;/code&gt;、&lt;code&gt;M&amp;lt;U&amp;gt;&lt;/code&gt;をパラメータに取るようにしてはどうでしょうか。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Mappable&amp;lt;T, MT&amp;gt; where Self: MT {
-  fn map&amp;lt;U, MU, F: FunOnce(T) -&amp;gt; U&amp;gt;(self, f: F) -&amp;gt; MU;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これで出来…てません。これは欲しい、正しいもの &lt;em&gt;も&lt;/em&gt; 作れてはいるのですが正しくないものも含んでいます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;impl &amp;lt;T, MT: Option&amp;lt;T&amp;gt; Mappable&amp;lt;MT, T&amp;gt;  for Option&amp;lt;T&amp;gt; {
-  fn map&amp;lt;U, MU, F: FunOnce(T) -&amp;gt; U&amp;gt;(self, f: F) -&amp;gt; MU {...}
-}
-
-let r: Result&amp;lt;String, ()&amp;gt; = Some(1).map(|i| i.to_string());
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;Option&lt;/code&gt; に対する&lt;code&gt;map&lt;/code&gt;を&lt;code&gt;Result&lt;/code&gt;で受けようとしています。
-これはもちろんおかしなことですが上記の型定義に従うとこういうことが出来てしまいます。
-もうちょっというと上のトレイトの定義はこういう「おかしなこと」が起こるような実装をしろ、と言っている訳で、実際には実装出来ません。&lt;/p&gt;
-
-&lt;p&gt;本来なら自由パラメータが3つなのに4つの自由パラメータを取ってしまったので不整合が起きる訳です。
-では、自由パラメータを3つにして1つを従属パラメータにしてはどうでしょうか。それは&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/associated-types.html&#34;&gt;関連型&lt;/a&gt;を使えばRustでも出来ます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Mappable&amp;lt;T, U, MT&amp;gt; where Self: MT {
-  type MU;
-  fn map&amp;lt;F: FunOnce(T) -&amp;gt; U&amp;gt;(self, f: F) -&amp;gt; MU;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;実は、これである程度上手くいきます。
-もちろん、実際に&lt;code&gt;M&amp;lt;_&amp;gt;&lt;/code&gt;を取れるのに比べると不自由で下手をするとバグる(MUを無関係な型に定義できてしまう)可能性があるのですが、先程の4パラメータの時と比べて
-トレイトが定義された時点で返す型は決まっているのでちゃんと実装出来ますし、使う時に不整合が起きることもありません。&lt;/p&gt;
-
-&lt;h1 id=&#34;hkt&#34;&gt;HKT&lt;/h1&gt;
-
-&lt;p&gt;さて、先の&lt;code&gt;Mappable&lt;/code&gt;の仮想定義、&lt;code&gt;map&lt;/code&gt;関数を除いて汎用的にするとこうなりますね。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait HKT&amp;lt;T, U, MT&amp;gt; where Self: MT {
-  type MU;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;Self: MT&lt;/code&gt; というアノテーションをつけてますが実際には使えません。&lt;code&gt;impl&lt;/code&gt;を書くときに気をつけて実装するしかないです。なのでこうなります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait HKT&amp;lt;T, U&amp;gt; {
-  type MU;
-}
-
-impl &amp;lt;T, U&amp;gt; HKT&amp;lt;T, U&amp;gt; for Option&amp;lt;T&amp;gt; {
-  type MU = Option&amp;lt;U&amp;gt;;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;さて、こう書くとするとこういうことも出来てしまいます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait HKT&amp;lt;T, U&amp;gt; {
-  type MU;
-}
-
-impl &amp;lt;S, T, U&amp;gt; HKT&amp;lt;T, U&amp;gt; for Option&amp;lt;S&amp;gt; {
-  type MU = Option&amp;lt;U&amp;gt;;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;T&lt;/code&gt;とは独立な&lt;code&gt;S&lt;/code&gt;に対するコンテナに対して実装できてしまうのです。「実装するときに気をつける」とはいいましたが制約を書けるなら書いた方がいいです。こうしましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait HKT&amp;lt;U&amp;gt; {
-  type T;
-  type MU;
-}
-
-impl &amp;lt;T, U&amp;gt; HKT&amp;lt;U&amp;gt; for Option&amp;lt;T&amp;gt; {
-  type T = T;
-  type MU = Option&amp;lt;U&amp;gt;;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これで冒頭に紹介したHKTの実装になりました。&lt;/p&gt;
-
-&lt;p&gt;逆にこのHKTの実装からMappableを定義するには、こうです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Mappable&amp;lt;U&amp;gt;: HKT&amp;lt;U&amp;gt; {
-  fn map&amp;lt;F: FunOnce(Self::T) -&amp;gt; U&amp;gt;(self, f: F) -&amp;gt; Self::MU;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;hktについてもっと&#34;&gt;HKTについてもっと&lt;/h1&gt;
-
-&lt;p&gt;ようやく話題のHKTの元実装です。こちら。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://gist.github.com/14427/af90a21b917d2892eace&#34;&gt;Higher-kinded type trait&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;ずいぶんとモナモナしいですがやはり高階型を使った一番実績のある構造はこのあたりでしょう。&lt;/p&gt;
-
-&lt;p&gt;こういうのを扱えるとプログラミングの幅が広がりますね。&lt;/p&gt;
-
-&lt;h1 id=&#34;ノート&#34;&gt;ノート&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;モナドの話題が出ましたがRustでモナドを実現するには高階型だけでなく複数ある関数トレイトのどれを選ぶかだとかその他諸々の問題を扱う必要があるようです。
-&lt;a href=&#34;https://m4rw3r.github.io/rust-and-monad-trait/&#34;&gt;Rust and the Monad trait - Not just higher kinded types · m4rw3r&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;</description>
     </item>
     
   </channel>
