@@ -6,8 +6,368 @@
     <description>Recent content in Post-rsses on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Thu, 01 Dec 2016 14:29:33 +0900</lastBuildDate>
+    <lastBuildDate>Fri, 02 Dec 2016 14:00:11 +0900</lastBuildDate>
     <atom:link href="/post/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>新しいコンパイラバックエンドcretonne</title>
+      <link>/blog/2016/12/02/atarashiikonpairabakkuendocretonne</link>
+      <pubDate>Fri, 02 Dec 2016 14:00:11 +0900</pubDate>
+      
+      <guid>/blog/2016/12/02/atarashiikonpairabakkuendocretonne</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2016/lang_dev&#34;&gt;言語実装 Advent Calendar 2016 - Qiita&lt;/a&gt;3日目の記事です。&lt;/p&gt;
+
+&lt;p&gt;κeenです。先日、Rustの開発者フォーラムに新しいバックエンドして&lt;a href=&#34;https://github.com/stoklund/cretonne&#34;&gt;cretonne&lt;/a&gt;が&lt;a href=&#34;https://internals.rust-lang.org/t/possible-alternative-compiler-backend-cretonne/4275&#34;&gt;提案されていました&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;ちょっと気になったのでそれを紹介します。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;
+
+&lt;h1 id=&#34;概略&#34;&gt;概略&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/stoklund/cretonne&#34;&gt;GitHub&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://cretonne.readthedocs.io/en/latest/index.html&#34;&gt;ドキュメント&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;フォーラムによると、WebAssemblyをエンコードするために作られたコンパイラバックエンドで、FirefoxのJSエンジンであるSpiderMonkeyに載せる予定だそうです。JITが主な目的？&lt;/p&gt;
+
+&lt;p&gt;LLVMのように最適化を頑張る方ではなくてコードを吐くまでのレイテンシを気にして作られているとのこと。なのでcretonne自身は最適化を行いません。&lt;/p&gt;
+
+&lt;p&gt;特徴はドキュメントの&lt;a href=&#34;http://cretonne.readthedocs.io/en/latest/compare-llvm.html&#34;&gt;LLVMとの比較&lt;/a&gt;によくまとまってますが、&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;LLVMは複数種類の中間言語を持つのに対してcretonneは1種類&lt;/li&gt;
+&lt;li&gt;アセンブラもディスアセンブラもない
+
+&lt;ul&gt;
+&lt;li&gt;コードジェネレータが吐く命令だけサポート&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;中間言語はISA非依存で、legalization / instruction selectionをするとISA固有のアノテーションが付く&lt;/li&gt;
+&lt;li&gt;最大抽象単位が関数(LLVMはモジュール)。cretonneは関数のインライン化とかもしない。&lt;/li&gt;
+&lt;li&gt;Extended Basic Blockを使う(LLVMはBasic Block)。
+
+&lt;ul&gt;
+&lt;li&gt;ebbは分岐命令のfalse branchを指定せず、fall throughする。よくあるマシン語に近い。&lt;/li&gt;
+&lt;li&gt;分岐の合流はebbに引数を持たせることで行う(LLVMはphi nodeを使う)。&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;undefined behaviorが存在しない&lt;/strong&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;なんとなくWebAssemblyを意識した仕様ですね。&lt;/p&gt;
+
+&lt;h1 id=&#34;雰囲気&#34;&gt;雰囲気&lt;/h1&gt;
+
+&lt;p&gt;以下のCのコードは&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;float
+average(const float *array, size_t count)
+{
+    double sum = 0;
+    for (size_t i = 0; i &amp;lt; count; i++)
+        sum += array[i];
+    return sum / count;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;以下のcretonneのIRに落ちるそうです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;function average(i32, i32) -&amp;gt; f32 {
+    ss1 = stack_slot 8, align 4   ; Stack slot for ``sum``.
+
+ebb1(v1: i32, v2: i32):
+    v3 = f64const 0x0.0
+    stack_store v3, ss1
+    brz v2, ebb3                  ; Handle count == 0.
+    v4 = iconst.i32 0
+    br ebb2(v4)
+
+ebb2(v5: i32):
+    v6 = imul_imm v5, 4
+    v7 = iadd v1, v6
+    v8 = heap_load.f32 v7         ; array[i]
+    v9 = fext.f64 v8
+    v10 = stack_load.f64 ss1
+    v11 = fadd v9, v10
+    stack_store v11, ss1
+    v12 = iadd_imm v5, 1
+    v13 = icmp ult v12, v2
+    brnz v13, ebb2(v12)           ; Loop backedge.
+    v14 = stack_load.f64 ss1
+    v15 = cvt_utof.f64 v2
+    v16 = fdiv v14, v15
+    v17 = ftrunc.f32 v16
+    return v17
+
+ebb3:
+    v100 = f32const qNaN
+    return v100
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;まあ、実際はファイルヘッダとかも付きますがこんな感じです。&lt;/p&gt;
+
+&lt;p&gt;ebbに引数があったりebbの途中で平気でブランチしてたり中々やんちゃですね。&lt;/p&gt;
+
+&lt;h1 id=&#34;使ってみる&#34;&gt;使ってみる&lt;/h1&gt;
+
+&lt;p&gt;コードを吐くところまでやりたかったのですがまだ絶賛開発中ということもあってそのような操作が見当りませんでした。&lt;/p&gt;
+
+&lt;p&gt;ということでファイルの方を扱ってると面白みがないのでRust APIの方で関数を構築して正当性を検証してから中間言語を吐き出してみます。&lt;/p&gt;
+
+&lt;h2 id=&#34;一歩&#34;&gt;一歩&lt;/h2&gt;
+
+&lt;p&gt;まずはcretonneをcloneしてきます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cargo new cretonne-sample --bin
+$ cd cretonne-sample
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;んでCargo.tomlのdependenciesに&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;cretonne = {path = &amp;quot;path/cretonne/lib/cretonne/&amp;quot;}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;を追加します。どうやらトップレベルのプロジェクトはただのユーティリティのようでした。本体は&lt;code&gt;lib/cretonne/&lt;/code&gt;以下にいます。&lt;/p&gt;
+
+&lt;p&gt;そしてmainファイルの中身はこうです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;extern crate cretonne;
+use cretonne::ir::*;
+use cretonne::ir::{types as ty};
+use cretonne::isa;
+use cretonne::settings::{self, Configurable};
+use cretonne::{write_function, legalize_function, verify_function};
+
+fn main() {
+    let mut func = {
+        let name = FunctionName::new(&amp;quot;average&amp;quot;);
+        let mut sig = Signature::new();
+        sig.argument_types.push(ArgumentType::new(ty::I32));
+        sig.argument_types.push(ArgumentType::new(ty::I32));
+        sig.return_types.push(ArgumentType::new(ty::F32));
+        Function::with_name_signature(name, sig)
+    };
+
+    let isa = {
+        let mut b = settings::builder();
+        b.set(&amp;quot;opt_level&amp;quot;, &amp;quot;fastest&amp;quot;).unwrap();
+        let f = settings::Flags::new(&amp;amp;b);
+        let builder = isa::lookup(&amp;quot;intel&amp;quot;).unwrap();
+        builder.finish(f)
+    };
+    verify_function(&amp;amp;func).unwrap();
+    legalize_function(&amp;amp;mut func, isa.as_ref());
+    let mut o = String::new();
+    write_function(&amp;amp;mut o, &amp;amp;func, Some(isa.as_ref())).unwrap();
+    println!(&amp;quot;{}&amp;quot;, o);
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;function average(i32, i32) -&amp;gt; f32 {
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;おおまかには&lt;code&gt;func&lt;/code&gt;を構築して&lt;code&gt;isa&lt;/code&gt;を決めて&lt;code&gt;verify_function&lt;/code&gt;で検証、さらに&lt;code&gt;legalize_function&lt;/code&gt;で今回のアーキテクチャ向けに微調整、&lt;code&gt;write_function&lt;/code&gt;で書き出しです。&lt;/p&gt;
+
+&lt;h2 id=&#34;スタックスロットの追加&#34;&gt;スタックスロットの追加&lt;/h2&gt;
+
+&lt;p&gt;まあ、スタック領域ですね。8byteの領域を確保します。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;func&lt;/code&gt;にstack_slotsフィールドがあるのでそこにpushします。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
+    let mut func = {
+        ....
+    };
+
+
+    {
+        let k = func.stack_slots.push(StackSlotData::new(8));
+    }
+
+    let isa = {
+        ....
+    };
+    ....
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;function average(i32, i32) -&amp;gt; f32 {
+    ss0 = stack_slot 8
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;push&lt;/code&gt;の返り値はスタック領域を指すキーです。&lt;/p&gt;
+
+&lt;h2 id=&#34;ebbの追加&#34;&gt;EBBの追加&lt;/h2&gt;
+
+&lt;p&gt;&lt;code&gt;func&lt;/code&gt;構造体のフィールドに&lt;code&gt;dfg&lt;/code&gt;がいて、そいつを色々いじります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
+    let mut func = {
+        ....
+    };
+
+
+    {
+        let k = func.stack_slots.push(StackSlotData::new(8));
+        let cur = &amp;amp;mut Cursor::new(&amp;amp;mut func.layout);
+        let ebb0 = func.dfg.make_ebb();
+        let v1 = func.dfg.append_ebb_arg(ebb0, types::I32);
+        let v2 = func.dfg.append_ebb_arg(ebb0, types::I32);
+
+        cur.insert_ebb(ebb0);
+    }
+
+    let isa = {
+        ....
+    };
+    ....
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;function average(i32, i32) -&amp;gt; f32 {
+    ss0 = stack_slot 8
+
+ebb0(vx0: i32, vx1: i32):
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;EBBの追加にはカーソルを決めてあげて、dfgにebbを作ってあげて、カーソルの位置にebbの追加という形になります。&lt;/p&gt;
+
+&lt;p&gt;EBBには任意に引数を追加出来ます。&lt;code&gt;append_ebb_arg&lt;/code&gt;の返り値はSSAの変数です。&lt;/p&gt;
+
+&lt;h2 id=&#34;命令を追加する&#34;&gt;命令を追加する&lt;/h2&gt;
+
+&lt;p&gt;命令はpythonのスクリプトによって生成されるので補完が効かず、中々扱いづらいですが頑張ります。&lt;/p&gt;
+
+&lt;p&gt;さて、今回コードの検証を入れているので以下のようなコードは検証に落ちてしまいます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    ....
+    {
+        let k = func.stack_slots.push(StackSlotData::new(8));
+        let cur = &amp;amp;mut Cursor::new(&amp;amp;mut func.layout);
+        let dfg = &amp;amp;mut func.dfg;
+        let ebb0 = dfg.make_ebb();
+        let v1 = dfg.append_ebb_arg(ebb0, types::I32);
+        let v2 = dfg.append_ebb_arg(ebb0, types::I32);
+        cur.insert_ebb(ebb0);
+
+        let v3 = dfg.ins(cur).f64const(imm::Ieee64::new(0.0));
+    }
+    ....
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;thread &#39;main&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: Error { location: Ebb(Ebb(0)), message: &amp;quot;block does not end in a terminator instruction!&amp;quot; }&#39;, ../src/libcore/result.rs:799
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;最後の命令が定数であるため、正常なブロックと見做されないのです。&lt;/p&gt;
+
+&lt;p&gt;ひとまずv3を返すことで凌ぎます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    ....
+    {
+        ....
+        let mut varg = VariableArgs::new();
+        varg.push(v3);
+        let _ = dfg.ins(cur).return_(varg);
+    }
+    ....
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;function average(i32, i32) -&amp;gt; f32 {
+    ss0 = stack_slot 8
+
+                    ebb0(vx0: i32, vx1: i32):
+[-]                     v0 = f64const 0.0
+[-]                     return v0
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;命令の頭に付いてる &lt;code&gt;[-]&lt;/code&gt;はlegalizeすると付くようです。&lt;/p&gt;
+
+&lt;h2 id=&#34;ブランチ&#34;&gt;ブランチ&lt;/h2&gt;
+
+&lt;p&gt;もう1つebbを追加してあげる必要があります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    {
+        let k = func.stack_slots.push(StackSlotData::new(8));
+        let cur = &amp;amp;mut Cursor::new(&amp;amp;mut func.layout);
+        let dfg = &amp;amp;mut func.dfg;
+        let ebb0 = dfg.make_ebb();
+        let ebb3 = dfg.make_ebb();  // &amp;lt;- ebb3を作成
+        let v1 = dfg.append_ebb_arg(ebb0, types::I32);
+        let v2 = dfg.append_ebb_arg(ebb0, types::I32);
+        cur.insert_ebb(ebb0);
+        let v3 = dfg.ins(cur).f64const(imm::Ieee64::new(0.0));
+        dfg.ins(cur).brz(v2, ebb3, VariableArgs::new()); // &amp;lt;-ebb3にジャンプ
+
+        let mut varg = VariableArgs::new();
+        varg.push(v3);
+        let _ = dfg.ins(cur).return_(varg);
+
+        cur.insert_ebb(ebb3); // &amp;lt;- ebb3を追加
+    }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;function average(i32, i32) -&amp;gt; f32 {
+    ss0 = stack_slot 8
+
+                    ebb0(vx0: i32, vx1: i32):
+[-]                     v0 = f64const 0.0
+[-]                     brz vx1, ebb1
+[-]                     return v0
+
+                    ebb1:
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;残り&#34;&gt;残り&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;{
+        let k = func.stack_slots.push(StackSlotData::new(8));
+        let cur = &amp;amp;mut Cursor::new(&amp;amp;mut func.layout);
+        let dfg = &amp;amp;mut func.dfg;
+
+        let ebb0 = dfg.make_ebb();
+        let v1 = dfg.append_ebb_arg(ebb0, types::I32);
+        let v2 = dfg.append_ebb_arg(ebb0, types::I32);
+
+        let ebb2 =  dfg.make_ebb();
+        let v5 = dfg.append_ebb_arg(ebb0, types::I32);
+
+        let ebb3 = dfg.make_ebb();
+
+        cur.insert_ebb(ebb0);
+        let v3 = dfg.ins(cur).f64const(imm::Ieee64::new(0.0));
+        dfg.ins(cur).brz(v2, ebb3, VariableArgs::new());
+        let v4 = dfg.ins(cur).iconst(types::I32, 0);
+        let mut ebb2_arg = VariableArgs::new();
+        ebb2_arg.push(v4);
+        dfg.ins(cur).jump(ebb2, ebb2_arg);
+
+        cur.insert_ebb(ebb2);
+        let v6 = dfg.ins(cur).imul_imm(v5, 4);
+        let v7 = dfg.ins(cur).iadd(v1, v6);
+        dfg.ins(cur).jump(ebb3, VariableArgs::new());
+
+        cur.insert_ebb(ebb3);
+    }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;こんな感じで進めていこうと思いましたがどうやらまだstack/heapを触る命令がない？？ようなので詰みました。&lt;/p&gt;
+
+&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;コンパイラバックエンドcretonneについて紹介しました&lt;/li&gt;
+&lt;li&gt;cretonneのRust APIを触ってみましたがダメでした。&lt;/li&gt;
+&lt;/ul&gt;</description>
+    </item>
     
     <item>
       <title>Rustでバイト列を扱う時のtips</title>
@@ -2154,190 +2514,6 @@ puts &amp;quot;a &amp;lt; b =&amp;gt; #{a &amp;lt; b}&amp;quot;
 人間先を読むには想像力が足りなすぎる。目の前に現物がないと気付けないことが多い。だから先に実装する。一度作ってしまえば壊してもコンパイラが助けてくれる。&lt;/p&gt;
 
 &lt;p&gt;一度目でアタリを付ける。二度目で実線を書く。作って、壊して、また作る。&lt;/p&gt;</description>
-    </item>
-    
-    <item>
-      <title>シェル芸十八般</title>
-      <link>/blog/2016/07/13/shierugeijuuhachihan</link>
-      <pubDate>Wed, 13 Jul 2016 23:34:03 +0900</pubDate>
-      
-      <guid>/blog/2016/07/13/shierugeijuuhachihan</guid>
-      <description>&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;武芸十八般のひとつシェル芸ってワードがふと湧いてきたけどどちらかというとシェル芸十八般とかの方がよさそう。grep, cut, xargs,&amp;hellip;&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/753211663927513088&#34;&gt;2016年7月13日&lt;/a&gt;&lt;/blockquote&gt;
-&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;
-&lt;/p&gt;
-
-&lt;h1 id=&#34;cat&#34;&gt;&lt;code&gt;cat&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;ファイルの内容を吐くのに使う。 -n とか使えそうなオプションがあるが滅多に使わない&lt;/p&gt;
-
-&lt;h2 id=&#34;例&#34;&gt;例&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;cat file
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;head&#34;&gt;&lt;code&gt;head&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;標準入力の先頭のほうだけを切り取る。大きなファイルに対して処理する前にちょろっと試すのに使う&lt;/p&gt;
-
-&lt;h2 id=&#34;例-1&#34;&gt;例&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;cat large_file | head -n 10 | ...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;tail&#34;&gt;&lt;code&gt;tail&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;標準入力の末尾のほうだけを切り取る。&lt;code&gt;-f&lt;/code&gt; オプションでよく使う&lt;/p&gt;
-
-&lt;h2 id=&#34;例-2&#34;&gt;例&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;tail -f log_file | grep -ie error -e &#39;$&#39;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;grep&#34;&gt;&lt;code&gt;grep&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;globally regexp print. 汎用フィルタとして様々に活躍する他飛び道具的な使い方もある。&lt;/p&gt;
-
-&lt;h2 id=&#34;例-3&#34;&gt;例&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;cat file | grep some_word
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;cat file | grep -v &amp;quot;^[ \n\t]+$&amp;quot;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;echo hello | grep -o .
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;awk&#34;&gt;&lt;code&gt;awk&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;プログラミング言語awk。だいたい &lt;code&gt;cut&lt;/code&gt; の上位互換として使われる。&lt;/p&gt;
-
-&lt;h2 id=&#34;例-4&#34;&gt;例&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;ls -l | awk &#39;{print $3}&#39;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;seq 1 100 | awk &#39;BEGIN{sum=0}{sum+=$0}END{print sum}&#39;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;sed&#34;&gt;&lt;code&gt;sed&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;プログラミング言語sed。だいたい &lt;code&gt;s/RE/replace/&lt;/code&gt; が使われるが使いこなすと深い。&lt;/p&gt;
-
-&lt;h2 id=&#34;例-5&#34;&gt;例&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;cat log_file | sed &#39;s/error/ERROR/gi&#39;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;cat some.csv | sed 1d
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;xargs&#34;&gt;&lt;code&gt;xargs&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;標準入力を横に並べる、コマンドを並列に実行する、繰り返し実行をするなどストリーム内での制御機構的働きをする&lt;/p&gt;
-
-&lt;h2 id=&#34;例-6&#34;&gt;例&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;seq 1 10 | xargs echo
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;find . -type f | xargs -P $(nproc) grep FIXME
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;inc(){ echo $(( 1 + $1 ));}
-export -f sum
-seq 1 10 | xargs -I@ bash -c &#39;sum @&#39;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;find&#34;&gt;&lt;code&gt;find&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;複雑なクエリ式を書けるコマンド。(シェルに依存してしまう)ワイルドカード展開の肩代わりなんかも出来る。xargsに繋げることが多い。&lt;/p&gt;
-
-&lt;h2 id=&#34;例-7&#34;&gt;例&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;find . -type f -name &#39;*.md&#39; -exec basename &#39;{}&#39; .md \;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;sort&#34;&gt;&lt;code&gt;sort&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;ほぼ次のuniqに繋げるために使うことが多い。あるいはuniqした結果を使う。&lt;/p&gt;
-
-&lt;h2 id=&#34;例-8&#34;&gt;例&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;cat .histfile | grep &#39;|&#39; | sed &#39;s/|/\n/g&#39; | awk &#39;{print $1}&#39; | LANG=C sort | uniq -c | LANG=C sort
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;uniq&#34;&gt;&lt;code&gt;uniq&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;多くは頻度のカウントに使う。&lt;/p&gt;
-
-&lt;h1 id=&#34;tar&#34;&gt;&lt;code&gt;tar&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;リモートホストとファイルをやりとりするのに使う。&lt;/p&gt;
-
-&lt;h2 id=&#34;例-9&#34;&gt;例&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;ssh stepper ssh host1 tar czf - -C &#39;/var/log/somedir/&#39; stdout.log stderr.log | tar xzf - -C /tmp
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;zcat&#34;&gt;&lt;code&gt;zcat&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;圧縮ファイル扱うのに使う。よくtarと組み合わせる。
-プロセスが分かれる分マルチコアを使えるのでtarのzオプション使うより速いかもしれない。&lt;/p&gt;
-
-&lt;h2 id=&#34;例-10&#34;&gt;例&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;zcat some.tar.gz | tar tf - | xargs -I@ -n 1 basename @ .java
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;date&#34;&gt;&lt;code&gt;date&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;日付操作用コマンド。BSD系とGNU系で全然違う。つらい。&lt;/p&gt;
-
-&lt;h2 id=&#34;例-11&#34;&gt;例&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;find logs -type f -name &#39;*.log&#39; | xargs -I@ dirname @ | sed &#39;s|logs/||&#39; | tr / - | xargs -I@ date --date=@ +%w | sort | uniq -c
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;tr&#34;&gt;&lt;code&gt;tr&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;文字置換、削除。&lt;code&gt;sed&lt;/code&gt;で出来るじゃんとか言わない。&lt;/p&gt;
-
-&lt;h2 id=&#34;例-12&#34;&gt;例&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;cat data.list | tr -c &#39;[a-zA-Z0-9\n]&#39; _ | xargs touch
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;curl&#34;&gt;&lt;code&gt;curl&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;なんでもプロトコル喋る人。結果を標準出力に吐くのでREST APIを叩いた後シェル芸に繋げやすい。&lt;/p&gt;
-
-&lt;h2 id=&#34;例-13&#34;&gt;例&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;curl http://example.io/status | jq -r &#39;.status&#39;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;jq&#34;&gt;&lt;code&gt;jq&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;チューリング完全言語jq。REST API叩いてjsonが返ってきた時に使うと便利。&lt;/p&gt;
-
-&lt;h1 id=&#34;od&#34;&gt;&lt;code&gt;od&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;バイナリデータを扱うのに使う。&lt;/p&gt;
-
-&lt;h2 id=&#34;例-14&#34;&gt;例&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;cat /dev/urandom | od -x | head -n 10 | ...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;tee&#34;&gt;&lt;code&gt;tee&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;T字管のようにパイプを分岐させるのに使う。あるいはシェルの機能であるリダイレクトをコマンドとして実行するのに使う。&lt;/p&gt;
-
-&lt;h2 id=&#34;例-15&#34;&gt;例&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;cat nginx.conf | ssh stepper ssh host1 sudo tee /etc/nginx/nginx.conf &amp;gt; /dev/null
-&lt;/code&gt;&lt;/pre&gt;</description>
     </item>
     
   </channel>
