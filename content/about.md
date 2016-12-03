@@ -11,14 +11,14 @@ menu: "main"
 ## Me
 
 - 2011-04 - 2013-03 東京大学理科I類
-- 2013-04 - 2015-03 東京大学理学部数学科
-- 2015-04 - 現在    サイバーエージェント(エンジニア)
+- 2013-04 - 2015-03 東京大学理学部数学科(中退)
+- 2015-04 - 2016-12 サイバーエージェント(エンジニア)
 
 
 ## Activities
 
-- 2014-06 - 現在     [Shibuya.lisp](http://shibuya.lisp-users.org/)の運営
-- 2016-02 - 現在     [Rustドキュメント翻訳プロジェクト](https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/)
+- 2014-06 - 2017-01 [Shibuya.lisp](http://shibuya.lisp-users.org/)の運営
+- 2016-02 - 現在    [Rustドキュメント翻訳プロジェクト](https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/)
 - 2013 [ISUCON3](http://isucon.net) 学生賞
 - 2014 [ISUCON4](http://isucon.net) 学生賞
 
@@ -31,12 +31,13 @@ menu: "main"
 - COOKPAD: [κeen](http://cookpad.com/kitchen/3303629)
 - Qiita: [blackenedgold](https://qiita.com/blackenedgold)
 - SlideShare: [blackenedgold](http://www.slideshare.net/blackenedgold)
-- [LinkedIn](https://www.linkedin.com/in/%E8%88%9C%E7%90%B3-%E5%BF%97%E6%9D%91-765b4310a?trk=hp-identity-headline)
 
 ## Main Interests
 
 - Emacs
 - Lisp
+- Rust
+- ML
 - 言語処理系(主にインタプリタ)
   - GC
   - 最適化
@@ -45,3 +46,4 @@ menu: "main"
   - 継続
 - Linux
 - システムプログラミング
+- 数学基礎論
