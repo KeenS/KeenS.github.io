@@ -15,7 +15,7 @@ description:
 ===
 # About Me
 ---------
-![κeenのアイコン](/images/icon.png) <!-- .element: style="position:absolute;right:0;z-index:-1" -->
+![κeenのアイコン](/images/kappa.png) <!-- .element: style="position:absolute;right:0;z-index:-1" -->
 
  * κeen
  * [@blackenedgold](https://twitter.com/blackenedgold)
