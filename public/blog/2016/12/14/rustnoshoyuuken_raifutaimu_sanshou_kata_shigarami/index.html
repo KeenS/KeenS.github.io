@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+    <head>
+        
+        <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+
+        <title>Rustの所有権、ライフタイム、参照、型、しがらみ | κeenのHappy Hacκing Blog</title>
+        <link rel="stylesheet" href='http://fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css' />
+        <link rel="stylesheet" href="/libraries/normalize.3.0.1.css" />
+        <link rel="stylesheet" href="/css/liquorice.css" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+        <link rel="icon" type="image/png" href="/favicon-32x32.png" sizes="32x32">
+        <link rel="icon" type="image/png" href="/favicon-16x16.png" sizes="16x16">
+        <link rel="manifest" href="/manifest.json">
+        <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#5bbad5">
+        <meta name="theme-color" content="#ffffff">
+        <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon-144-precomposed.png" sizes="144x144" />
+        <link rel="alternate" href="" type="application/rss+xml" title="κeenのHappy Hacκing Blog" />
+        
+        <script>
+         (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+             (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+                                  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+         })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+         ga('create', 'UA-43779888-1', 'auto');
+         ga('send', 'pageview');
+
+        </script>
+        
+        <link rel="stylesheet" href="/highlight.js/styles/xcode.css" />
+<script src="/highlight.js/highlight.min.js"></script>
+<script>hljs.initHighlightingOnLoad();</script>
+<script type="text/x-mathjax-config">
+ MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
+</script>
+<script type="text/javascript"
+        src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML">
+</script>
+<meta http-equiv="X-UA-Compatible" CONTENT="IE=EmulateIE7" />
+
+    </head>
+    <body class="li-body">
+
+<header class="li-page-header">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-brand li-left">
+                <a href="/">κeenのHappy Hacκing Blog</a> | Lispエイリアンの狂想曲</div>
+                <div class="li-menu li-right">
+                    <span class="li-menu-icon" onclick="javascript:toggle('menu');">&#9776;</span>
+                    <ul id="menu2" class="li-menu-items">
+                        
+                            <li><a href="/about/"> About </a></li>
+                        
+                            <li><a href="/index.xml"> Atom </a></li>
+                        
+                            <li><a href="/post/"> Blog </a></li>
+                        
+                            <li><a href="/slide/"> Slide </a></li>
+                        
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="sixteen columns">
+                <ul id="menu" class="li-menu-items li-menu-mobile">
+                    
+                        <li><a href="/about/"> About </a></li>
+                    
+                        <li><a href="/index.xml"> Atom </a></li>
+                    
+                        <li><a href="/post/"> Blog </a></li>
+                    
+                        <li><a href="/slide/"> Slide </a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+
+
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <article class="li-article">
+                    <header class="li-article-header">
+                        <h1 class="li-article-title">Rustの所有権、ライフタイム、参照、型、しがらみ</h1>
+                        <div class="li-article-meta">
+    <time class="li-article-date">2016-12-14</time>
+    <ul class="li-article-tag">
+    
+        <li>
+            <a href="/categories/rust">Rust</a>
+        </li>
+    
+        <li>
+            <a href="/categories/%e5%9e%8b">型</a>
+        </li>
+    
+</ul>
+
+</div>
+
+                    </header>
+                    <section>
+                        <p>κeenです。Rustには所有権やらライフタイムやら参照やらがあって型システムが面倒ですよね。線形（アフィン）と言われてるのに「あれ？」と思う部分もあるので詳しく探っていこうと思います。</p>
+
+<p>尚、この記事は型システムに興味のある人向けです。単にRustを書きたい方に有用な情報があるかは分かりません。</p>
+
+<p></p>
+
+<h1 id="線形型-アフィン型">線形型？アフィン型？</h1>
+
+<p>はじめにこの辺をハッキりさせておきたいです。
+アフィン型は線形型に弱化規則を許す型です。
+プログラミング的に言えば線形型は <code>free</code> しないと型エラーになるけどアフィン型はそうでない。
+Rustはご存知の通り <code>free</code> 相当のものを手で書くことはないのでアフィンな気がしますし、昔のドキュメントにもそう書いてました。</p>
+
+<p>しかし実際に実行されるプログラムではコンパイラが差し込んだ <code>free</code> が実行されるので <code>free</code> を省略出来るというシンタックスシュガーの類な気もします。</p>
+
+<p>ただまあ、 <code>free</code> を差し込む位置を特定するのに弱化規則を使った場所で推論している筈なのでアフィンを使ってる筈ですよね。</p>
+
+<p>ってことで今回の記事はアフィン型で統一したいと思います。</p>
+
+<h1 id="参照も値">参照も値</h1>
+
+<p>なんとなく、構文が用意されているので参照自体特別な存在な気がしますが、そんなことはありません。</p>
+
+<pre><code class="language-rust">fn take_any&lt;T&gt;(t: T) -&gt; T {
+    t
+}
+</code></pre>
+
+<p>このように任意の値を取れる関数を用意してあげます。
+すると、以下のように所有、参照、可変参照全て渡せます。</p>
+
+<pre><code class="language-rust">let s = &quot;foo&quot;.to_string();
+let mut s = take_any(s);
+take_any(&amp;s);
+take_any(&amp;mut s);
+</code></pre>
+
+<h1 id="は-copy-mut-は違う"><code>&amp;</code> は <code>Copy</code> 、 <code>&amp;mut</code> は違う</h1>
+
+<p>先と同じように <code>Copy</code> を実装した型を受け取る関数を書いてみましょう。</p>
+
+<pre><code class="language-rust">fn take_copy&lt;T: Copy&gt;(t: T) -&gt; T {
+    t
+}
+</code></pre>
+
+<p>これに参照を渡してあげると、 <code>&amp;mut</code> がエラーになります。</p>
+
+<pre><code class="language-rust">let mut s = &quot;foo&quot;.to_string();
+take_copy(&amp;s);
+take_copy(&amp;mut s); // error[E0277]: the trait bound `&amp;mut std::string::String: std::marker::Copy` is not satisfied
+</code></pre>
+
+<p>もちろん、 <code>Copy</code> なので普通に何度も使えます。線形型でいう <code>!</code> に近いですね。違いますけど。</p>
+
+<pre><code class="language-rust">let s = &quot;foo&quot;.to_string();
+let ref_s = &amp;s;
+let x: &amp;String = ref_s;
+let y: &amp;String = ref_s;
+// Copy(が要求するClone)に実装されているメソッドを陽に呼ぶ
+let z: &amp;String = (&amp;ref_s).clone();
+</code></pre>
+
+<p>また、 <code>Copy</code> への参照は参照外しが可能です。</p>
+
+<pre><code class="language-rust">let x: isize = 1;
+let ref_x = &amp;x;
+let x: isize = *x;
+</code></pre>
+
+<p>なので、 <code>&amp;&amp;</code> や <code>&amp;mut&amp;</code> は <code>&amp;</code> への参照（<code>Copy</code>への参照）なので <code>&amp;</code> へ参照外しが可能ですが、 <code>&amp;&amp;mut</code> は<code>&amp;mut</code>への参照（<code>Copy</code>ではない値への参照）なので参照外し出来ません。<code>&amp;mut&amp;</code> や <code>&amp;&amp;mut</code> とややこしいですね。</p>
+
+<pre><code class="language-rust">let mut s = &quot;foo&quot;.to_string();
+// &amp;&amp;
+{
+    let ref_ref_s = &amp;&amp;s;
+    let ref_s: &amp;String = *ref_refs;
+}
+// &amp;mut &amp;
+{
+    let refmut_ref_s = &amp;mut &amp; s;
+    let reft_s: &amp;String = *s;
+}
+
+// &amp;&amp;mut
+{
+    let ref_refmut_s = &amp;&amp;mut s;
+    let refmut_s: &amp;mut String = *s; // error[E0389]: cannot borrow data mutably in a `&amp;` reference
+}
+</code></pre>
+
+<p>ということで <code>&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;T</code> が <code>&amp;T</code> に参照外し出来る理由も分かったかと思います。</p>
+
+<h1 id="mut-は-deref"><code>&amp;mut</code> は <code>Deref</code></h1>
+
+<p>さて、 <code>&amp;mut</code> がたまに <code>&amp;</code> のように振る舞うことがありますが、これは <code>Deref</code> のせいです。</p>
+
+<pre><code class="language-rust">use std::ops::Deref;
+
+let mut s = &quot;foo&quot;.to_string();
+let refmut_s = &amp;mut s;
+{
+    // derefを陽に呼ぶ
+    let ref_s: &amp;string = refmut_s.deref();
+}
+
+{
+    // 暗黙のDerefによる型強制
+    let ref_s: &amp;string = refmut_s;
+}
+
+
+</code></pre>
+
+<p>rustは<a href="https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/deref-coercions.html"><code>deref</code> による型強制</a>を行うため、無言で <code>&amp;mut</code> を <code>&amp;</code> に変換することが出来ます。</p>
+
+<hr />
+
+<p>さて、ここまでで <code>&amp;</code> や <code>&amp;mut</code> もただの値であること、アフィン型に反しないことを調べました。
+次はライフタイムについて探ります。</p>
+
+<h1 id="ライフタイムとサブタイピング">ライフタイムとサブタイピング</h1>
+
+<p>実は、Rustにはサブタイピングがあります。ライフタイムです。ライフタイムにはサブタイプ関係があるのです。</p>
+
+<p>このように、2つの引数が厳密に同じライフタイムであることを要求する関数を用意します。</p>
+
+<pre><code class="language-rust">fn take_two_ref&lt;'a&gt;(_: &amp;'a String, _: &amp;'a String) {
+}
+</code></pre>
+
+<p>これに、違うライフタイムを持つ型を放り込んでみます。</p>
+
+<pre><code class="language-rust">{
+    let a = &quot;aaa&quot;.to_string();
+    let ref_a = &amp;a;
+    {
+        let b = &quot;bbb&quot;.to_string();
+        let ref_b = &amp;b;
+        take_two_ref(ref_a, ref_b);
+    }
+}
+</code></pre>
+
+<p>これはコンパイルが通ります。明示的にライフタイムを書くとこうです。これは有効な構文ではないです（余談ですがラベル付きbreak文のための構文と衝突します）。</p>
+
+<pre><code class="language-rust">'a: {
+    let a = &quot;aaa&quot;.to_string();
+    let ref_a = &amp;'a a;
+    'b: {
+        let b = &quot;bbb&quot;.to_string();
+        let ref_b = &amp;'b b;
+        take_two_ref::&lt;'b&gt;(ref_a, ref_b);
+    }
+}
+</code></pre>
+
+<p>大は小を兼ねるので <code>'a</code> は <code>'b</code> のサブタイプになっています。
+ちょっと言葉がややこしいのですが、スコープが狭いライフタイムの方が大きい型です。狭い方が大きい。この言い回しに馴れてない人に説明すると、上の例でいえば <code>'b</code> を要求する部分に渡せるのは <code>'a</code> と <code>'b</code> 2つありますが、 <code>'a</code> を要求する部分に渡せるのは <code>'a</code> だけです。 2つと1つだったら2つの方が大きいですよね。</p>
+
+<p>さて、今回の例ではちゃんとスコープの入れ子とサブタイプ関係が一致していました。</p>
+
+<pre><code class="language-rust">'a: {----------
+              |
+              |
+    'b: {--   |
+          |   |
+          |   |
+          |   |
+    }------   |
+}--------------
+
+</code></pre>
+
+<p>参照を取るときは参照のライフタイムが元のライフタイムのサブタイプになっている必要があります。</p>
+
+<p>この関係に反するとエラーになります。</p>
+
+<pre><code class="language-rust">let ref_s: &amp;String;
+{
+    let s = &quot;foo&quot;.to_string();
+    ref_s = &amp;s; // error: `s` does not live long enough
+}
+</code></pre>
+
+<p>図示するとこうでしょうか。</p>
+
+<pre><code class="language-rust">let ref_s: &amp;String;
+{
+    let s = &quot;foo&quot;.to_string();-----
+    ref_s = &amp;s; ----------------  |
+                               |  |
+}------------------------------+---
+                               |
+--------------------------------
+</code></pre>
+
+<p>ライフタイムといえどある種、型なんですね。余談ですが確かリージョンの論文には「リージョンはプログラム全体を静的に伝播する型のようなもの」と表現していた気がします。既存の型と直行するので型とは別とも言えますし、タプルのように両方並べたものを型と言うことも出来ますね。</p>
+
+<h1 id="所有型とライフタイムと-static">所有型とライフタイムと <code>'static</code></h1>
+
+<p>適切な語彙がなかったので勝手に所有型と名付けましたが、参照でない型のことを指しています。（先の例で見せた通り、参照型にも所有権はあるので適切ではないですがひとまず我慢して下さい。）</p>
+
+<p>さて、なんとなくライフタイムと参照型は結び付いている気がしますが、参照じゃない型にもライフタイムはあります。</p>
+
+<pre><code class="language-rust">fn take_two_value&lt;'a, T: 'a, S: 'a&gt;(_: T, _: S){}
+</code></pre>
+
+<p>このように、任意の2つの型を取るけども両方ともにライフタイムを要求する関数を書いてみます。</p>
+
+<p>これに、所有型を渡すことが出来ます。</p>
+
+<pre><code class="language-rust">let t = &quot;t&quot;.to_string();
+{
+    let s = &quot;s&quot;.to_string();
+    let s_ref = &amp;s;
+        take_two_value(t, s_ref);
+}
+</code></pre>
+
+<p>ということで、所有型にもライフタイムはあります。</p>
+
+<p>ところで、ライフタイムのボトム型相当のものに <code>'static</code> というものがあります。
+グローバル変数やリテラルなどに割り当てられるライフタイムで、プログラムが死ぬまで生き続けます。</p>
+
+<pre><code class="language-rust">static foo: &amp;'static isize = &amp;3;
+static bar: isize = 3;
+
+fn main() {
+    let x: &amp;'static str = &quot;x&quot;;
+    let ref_bar: &amp;'static isize = &amp;bar
+}
+</code></pre>
+
+<p><code>'static</code> のみを受け取る関数を書いてみましょう。</p>
+
+<pre><code class="language-rust">fn take_static&lt;T: 'static&gt;(_: T){}
+</code></pre>
+
+<p>もちろん、先の例に出たstaticな値達を渡せます。</p>
+
+<pre><code class="language-rust">static foo: &amp;'static isize = &amp;3;
+static bar: isize = 3;
+
+fn main() {
+    let x: &amp;'static str = &quot;x&quot;;
+    let ref_bar: &amp;'static isize = &amp;bar;
+    take_static(foo);
+    take_static(x);
+    take_static(ref_bar);
+}
+</code></pre>
+
+<p>実は、これに所有型を渡せます。</p>
+
+<pre><code class="language-rust">let s = &quot;foo&quot;.to_string();
+take_static(s);
+</code></pre>
+
+<p>そして、任意の参照型は渡せません。</p>
+
+<pre><code class="language-rust">let s = &quot;foo&quot;.to_string();
+take_static(&amp;s); // error: `s` does not live long enough
+</code></pre>
+
+<p>ということで所有型には <code>'static</code> というライフタイムが付いているのでした。
+<code>'static</code> イメージとしては「自分がその値を保持している限り無効になることはない型」ですかね。</p>
+
+<p>これに関連するTipsとして関数や構造体のジェネリクスで所有型しか受け取らないようにするには <code>&lt;T: 'static&gt;</code> が使えます。</p>
+
+<hr />
+
+<p>さてさて、これまた参照型は特別扱いされることなく他のRustの値と同じようにライフタイムで管理されていることを調べました。</p>
+
+<p>最後に今回到達出来なかった謎、「参照を取る」について考えたいと思います。</p>
+
+<h1 id="mut-の規則"><code>&amp;mut</code> の規則</h1>
+
+<p>みなさん御存じの通り、<code>&amp;mut</code> を取ると値への他の操作が許されなくなります。</p>
+
+<pre><code class="language-rust">let mut s = &quot;foo&quot;.to_string();
+let refmut_s = &amp;mut s;
+let t = s;  // error[E0505]: cannot move out of `s` because it is borrowed
+let ref_s = &amp;s; // error[E0502]: cannot borrow `s` as immutable because it is also borrowed as mutable
+</code></pre>
+
+<p><code>&amp;mut T</code> と <code>T</code> が相互排他的なのでこれは線形論理のシーケント計算っぽく書くと以下のような規則を考えれば良さそうです。</p>
+
+<pre><code>Γ, T:'a |- Σ
+-------------- &amp;mut-intro
+Γ, &amp;'b mut (T:'a) |- Σ
+where 'a &lt;: 'b
+
+Γ, &amp;'a mut (T:'b) |- &amp;'a mut (T: 'b), Σ
+----------------------- &amp;mut-elim
+Γ, T: 'b |- Σ
+</code></pre>
+
+<p>型付け規則の書き方になれてないのでシーケント計算で書きましたがサブタイプの記述で困りましたね。</p>
+
+<h1 id="の謎"><code>&amp;</code> の謎</h1>
+
+<p>さて、問題は <code>&amp;</code> です。 <code>&amp;</code> は <code>Copy</code> なのでそこら中に生えてきます。
+なので <code>&amp;-elim</code> のような規則では対応出来ません。</p>
+
+<p>ただ、ライフタイムによる制約があるので「参照のライフタイムが死ぬときに元の値が復活する」ような規則を考えたくなります。</p>
+
+<p>しかし、それでもだめです。複数回 <code>&amp;</code> を取れてしまうので、以下のように複数のライフタイムを持つ場合で破綻します。<code>&amp; T</code> と <code>T</code> の間でなにかしらのしがらみがある筈です。</p>
+
+<pre><code class="language-rust">let s = &quot;foo&quot;.to_string();
+{
+    let ref_s1 = &amp;s;
+    {
+        let ref_s2 = &amp;s;
+    }
+}
+</code></pre>
+
+<p>それに、 <code>&amp;mut</code> と <code>&amp;</code> が相互排他であることも説明出来る規則でないといけません。謎が多い。</p>
+
+<hr />
+
+<h1 id="まとめ">まとめ</h1>
+
+<p>さて、Rustの型システムのリソース管理回りを探ってみました。とりあえず分かったことを纏めると</p>
+
+<ul>
+<li>値には全てアフィン型が付く
+
+<ul>
+<li>参照型も例外ではない</li>
+</ul></li>
+<li>値には全てライフタイムが付く
+
+<ul>
+<li>所有型も例外ではない</li>
+</ul></li>
+<li>「参照を取る」のセマンティクスが謎
+
+<ul>
+<li>勿論、直感的には分かる</li>
+<li>どういう規則なんだろう</li>
+<li>アフィン型とライフタイム両方が絡むはず。</li>
+</ul></li>
+</ul>
+
+<p>特に論文も読んでないのでちょっと遠回りだったかもしれません。
+もしかしたら論文漁ったら一発で解決するのかも。
+詳しい方、 <code>&amp;</code> の謎を教えて下さい。</p>
+                    </section>
+                </article>
+            </div>
+        </div>
+
+        <div class="row li-author">
+    <div class="sixteen columns">
+        Written by <strong>κeen</strong>
+    </div>
+</div>
+
+
+        <div class="row li-pagination">
+            <div class="eight columns">
+                <div class="li-pagination-previous">
+                    
+                        &nbsp;
+                    
+                </div>
+            </div>
+            <div class="eight columns">
+                <div class="li-pagination-next">
+                    
+                        Older article<br />
+                        <a href="/blog/2016/12/03/rustnostructtotraittteniteruyone"> Rustのstructとtraitって似てるよね</a>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+<footer class="li-page-footer">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-page-footer-legal">
+                    &copy; 2016. All rights reserved. 
+                </div>
+                <div class="li-page-footer-theme">
+                    <span class=""><a href="https://github.com/eliasson/liquorice/">liquorice</a> is a theme for <a href="http://hugo.spf13.com">hugo</a></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+
+    <script type="text/javascript">
+    <!--
+    function toggle(id) {
+        var e = document.getElementById(id);
+        e.style.display == 'block' ? e.style.display = 'none' : e.style.display = 'block';
+    }
+    
+    </script>
+    <script type="text/javascript">
+    <!--
+        var _gaq = _gaq || [];
+        _gaq.push(['_setAccount', ""]);
+        _gaq.push(['_trackPageview']);
+
+        (function() {
+        var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+        ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+        var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+        })();
+    -->
+    </script>
+    </body>
+</html>
+
