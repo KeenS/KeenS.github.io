@@ -8,6 +8,8 @@ title: Rustの所有権、ライフタイム、参照、型、しがらみ
 
 尚、この記事は型システムに興味のある人向けです。単にRustを書きたい方に有用な情報があるかは分かりません。
 
+2016-212-14T15:28Z09:00 加筆訂正しました。
+
 <!--more-->
 
 #  線形型？アフィン型？
@@ -162,10 +164,10 @@ fn take_two_ref<'a>(_: &'a String, _: &'a String) {
 
 ``` rust
 'a: {
-    let a = "aaa".to_string();
+    let a: 'a String = "aaa".to_string();
     let ref_a = &'a a;
     'b: {
-        let b = "bbb".to_string();
+        let b: 'b String = "bbb".to_string();
         let ref_b = &'b b;
         take_two_ref::<'b>(ref_a, ref_b);
     }
@@ -235,11 +237,11 @@ let t = "t".to_string();
 {
     let s = "s".to_string();
     let s_ref = &s;
-        take_two_value(t, s_ref);
+    take_two_value(t, s_ref);
 }
 ```
 
-ということで、所有型にもライフタイムはあります。
+ということで、所有型にもライフタイムはあります（多分）。
 
 ところで、ライフタイムのボトム型相当のものに `'static` というものがあります。
 グローバル変数やリテラルなどに割り当てられるライフタイムで、プログラムが死ぬまで生き続けます。
@@ -290,7 +292,7 @@ let s = "foo".to_string();
 take_static(&s); // error: `s` does not live long enough
 ```
 
-ということで所有型には `'static` というライフタイムが付いているのでした。
+ということで所有型には `'static` というライフタイムが付いているようです（？）。
 `'static` イメージとしては「自分がその値を保持している限り無効になることはない型」ですかね。
 
 これに関連するTipsとして関数や構造体のジェネリクスで所有型しか受け取らないようにするには `<T: 'static>` が使えます。
@@ -318,12 +320,12 @@ let ref_s = &s; // error[E0502]: cannot borrow `s` as immutable because it is al
 ```
 Γ, T:'a |- Σ
 -------------- &mut-intro
-Γ, &'b mut (T:'a) |- Σ
+Γ, (&'a mut T): 'b |- Σ
 where 'a <: 'b
 
-Γ, &'a mut (T:'b) |- &'a mut (T: 'b), Σ
+Γ, (&'a mut T):'b |- (&'a mut T): 'b, Σ
 ----------------------- &mut-elim
-Γ, T: 'b |- Σ
+Γ, T: 'a |- Σ
 ```
 
 型付け規則の書き方になれてないのでシーケント計算で書きましたがサブタイプの記述で困りましたね。
@@ -358,7 +360,8 @@ let s = "foo".to_string();
 * 値には全てアフィン型が付く
   + 参照型も例外ではない
 * 値には全てライフタイムが付く
-  + 所有型も例外ではない
+  + 所有型も例外ではないっぽい
+  + もしかしたら所有型はライフタイムを無視している？
 * 「参照を取る」のセマンティクスが謎
   + 勿論、直感的には分かる
   + どういう規則なんだろう
