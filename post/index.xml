@@ -6,8 +6,365 @@
     <description>Recent content in Post-rsses on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Sat, 03 Dec 2016 22:06:18 +0900</lastBuildDate>
+    <lastBuildDate>Wed, 14 Dec 2016 11:19:12 +0900</lastBuildDate>
     <atom:link href="/post/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Rustの所有権、ライフタイム、参照、型、しがらみ</title>
+      <link>/blog/2016/12/14/rustnoshoyuuken_raifutaimu_sanshou_kata_shigarami</link>
+      <pubDate>Wed, 14 Dec 2016 11:19:12 +0900</pubDate>
+      
+      <guid>/blog/2016/12/14/rustnoshoyuuken_raifutaimu_sanshou_kata_shigarami</guid>
+      <description>&lt;p&gt;κeenです。Rustには所有権やらライフタイムやら参照やらがあって型システムが面倒ですよね。線形（アフィン）と言われてるのに「あれ？」と思う部分もあるので詳しく探っていこうと思います。&lt;/p&gt;
+
+&lt;p&gt;尚、この記事は型システムに興味のある人向けです。単にRustを書きたい方に有用な情報があるかは分かりません。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;
+
+&lt;h1 id=&#34;線形型-アフィン型&#34;&gt;線形型？アフィン型？&lt;/h1&gt;
+
+&lt;p&gt;はじめにこの辺をハッキりさせておきたいです。
+アフィン型は線形型に弱化規則を許す型です。
+プログラミング的に言えば線形型は &lt;code&gt;free&lt;/code&gt; しないと型エラーになるけどアフィン型はそうでない。
+Rustはご存知の通り &lt;code&gt;free&lt;/code&gt; 相当のものを手で書くことはないのでアフィンな気がしますし、昔のドキュメントにもそう書いてました。&lt;/p&gt;
+
+&lt;p&gt;しかし実際に実行されるプログラムではコンパイラが差し込んだ &lt;code&gt;free&lt;/code&gt; が実行されるので &lt;code&gt;free&lt;/code&gt; を省略出来るというシンタックスシュガーの類な気もします。&lt;/p&gt;
+
+&lt;p&gt;ただまあ、 &lt;code&gt;free&lt;/code&gt; を差し込む位置を特定するのに弱化規則を使った場所で推論している筈なのでアフィンを使ってる筈ですよね。&lt;/p&gt;
+
+&lt;p&gt;ってことで今回の記事はアフィン型で統一したいと思います。&lt;/p&gt;
+
+&lt;h1 id=&#34;参照も値&#34;&gt;参照も値&lt;/h1&gt;
+
+&lt;p&gt;なんとなく、構文が用意されているので参照自体特別な存在な気がしますが、そんなことはありません。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn take_any&amp;lt;T&amp;gt;(t: T) -&amp;gt; T {
+    t
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このように任意の値を取れる関数を用意してあげます。
+すると、以下のように所有、参照、可変参照全て渡せます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let s = &amp;quot;foo&amp;quot;.to_string();
+let mut s = take_any(s);
+take_any(&amp;amp;s);
+take_any(&amp;amp;mut s);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;は-copy-mut-は違う&#34;&gt;&lt;code&gt;&amp;amp;&lt;/code&gt; は &lt;code&gt;Copy&lt;/code&gt; 、 &lt;code&gt;&amp;amp;mut&lt;/code&gt; は違う&lt;/h1&gt;
+
+&lt;p&gt;先と同じように &lt;code&gt;Copy&lt;/code&gt; を実装した型を受け取る関数を書いてみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn take_copy&amp;lt;T: Copy&amp;gt;(t: T) -&amp;gt; T {
+    t
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これに参照を渡してあげると、 &lt;code&gt;&amp;amp;mut&lt;/code&gt; がエラーになります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let mut s = &amp;quot;foo&amp;quot;.to_string();
+take_copy(&amp;amp;s);
+take_copy(&amp;amp;mut s); // error[E0277]: the trait bound `&amp;amp;mut std::string::String: std::marker::Copy` is not satisfied
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;もちろん、 &lt;code&gt;Copy&lt;/code&gt; なので普通に何度も使えます。線形型でいう &lt;code&gt;!&lt;/code&gt; に近いですね。違いますけど。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let s = &amp;quot;foo&amp;quot;.to_string();
+let ref_s = &amp;amp;s;
+let x: &amp;amp;String = ref_s;
+let y: &amp;amp;String = ref_s;
+// Copy(が要求するClone)に実装されているメソッドを陽に呼ぶ
+let z: &amp;amp;String = (&amp;amp;ref_s).clone();
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;また、 &lt;code&gt;Copy&lt;/code&gt; への参照は参照外しが可能です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let x: isize = 1;
+let ref_x = &amp;amp;x;
+let x: isize = *x;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;なので、 &lt;code&gt;&amp;amp;&amp;amp;&lt;/code&gt; や &lt;code&gt;&amp;amp;mut&amp;amp;&lt;/code&gt; は &lt;code&gt;&amp;amp;&lt;/code&gt; への参照（&lt;code&gt;Copy&lt;/code&gt;への参照）なので &lt;code&gt;&amp;amp;&lt;/code&gt; へ参照外しが可能ですが、 &lt;code&gt;&amp;amp;&amp;amp;mut&lt;/code&gt; は&lt;code&gt;&amp;amp;mut&lt;/code&gt;への参照（&lt;code&gt;Copy&lt;/code&gt;ではない値への参照）なので参照外し出来ません。&lt;code&gt;&amp;amp;mut&amp;amp;&lt;/code&gt; や &lt;code&gt;&amp;amp;&amp;amp;mut&lt;/code&gt; とややこしいですね。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let mut s = &amp;quot;foo&amp;quot;.to_string();
+// &amp;amp;&amp;amp;
+{
+    let ref_ref_s = &amp;amp;&amp;amp;s;
+    let ref_s: &amp;amp;String = *ref_refs;
+}
+// &amp;amp;mut &amp;amp;
+{
+    let refmut_ref_s = &amp;amp;mut &amp;amp; s;
+    let reft_s: &amp;amp;String = *s;
+}
+
+// &amp;amp;&amp;amp;mut
+{
+    let ref_refmut_s = &amp;amp;&amp;amp;mut s;
+    let refmut_s: &amp;amp;mut String = *s; // error[E0389]: cannot borrow data mutably in a `&amp;amp;` reference
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ということで &lt;code&gt;&amp;amp;&amp;amp;&amp;amp;&amp;amp;&amp;amp;&amp;amp;&amp;amp;&amp;amp;&amp;amp;&amp;amp;&amp;amp;&amp;amp;&amp;amp;&amp;amp;&amp;amp;&amp;amp;&amp;amp;&amp;amp;&amp;amp;T&lt;/code&gt; が &lt;code&gt;&amp;amp;T&lt;/code&gt; に参照外し出来る理由も分かったかと思います。&lt;/p&gt;
+
+&lt;h1 id=&#34;mut-は-deref&#34;&gt;&lt;code&gt;&amp;amp;mut&lt;/code&gt; は &lt;code&gt;Deref&lt;/code&gt;&lt;/h1&gt;
+
+&lt;p&gt;さて、 &lt;code&gt;&amp;amp;mut&lt;/code&gt; がたまに &lt;code&gt;&amp;amp;&lt;/code&gt; のように振る舞うことがありますが、これは &lt;code&gt;Deref&lt;/code&gt; のせいです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::ops::Deref;
+
+let mut s = &amp;quot;foo&amp;quot;.to_string();
+let refmut_s = &amp;amp;mut s;
+{
+    // derefを陽に呼ぶ
+    let ref_s: &amp;amp;string = refmut_s.deref();
+}
+
+{
+    // 暗黙のDerefによる型強制
+    let ref_s: &amp;amp;string = refmut_s;
+}
+
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;rustは&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/deref-coercions.html&#34;&gt;&lt;code&gt;deref&lt;/code&gt; による型強制&lt;/a&gt;を行うため、無言で &lt;code&gt;&amp;amp;mut&lt;/code&gt; を &lt;code&gt;&amp;amp;&lt;/code&gt; に変換することが出来ます。&lt;/p&gt;
+
+&lt;hr /&gt;
+
+&lt;p&gt;さて、ここまでで &lt;code&gt;&amp;amp;&lt;/code&gt; や &lt;code&gt;&amp;amp;mut&lt;/code&gt; もただの値であること、アフィン型に反しないことを調べました。
+次はライフタイムについて探ります。&lt;/p&gt;
+
+&lt;h1 id=&#34;ライフタイムとサブタイピング&#34;&gt;ライフタイムとサブタイピング&lt;/h1&gt;
+
+&lt;p&gt;実は、Rustにはサブタイピングがあります。ライフタイムです。ライフタイムにはサブタイプ関係があるのです。&lt;/p&gt;
+
+&lt;p&gt;このように、2つの引数が厳密に同じライフタイムであることを要求する関数を用意します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn take_two_ref&amp;lt;&#39;a&amp;gt;(_: &amp;amp;&#39;a String, _: &amp;amp;&#39;a String) {
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これに、違うライフタイムを持つ型を放り込んでみます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;{
+    let a = &amp;quot;aaa&amp;quot;.to_string();
+    let ref_a = &amp;amp;a;
+    {
+        let b = &amp;quot;bbb&amp;quot;.to_string();
+        let ref_b = &amp;amp;b;
+        take_two_ref(ref_a, ref_b);
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これはコンパイルが通ります。明示的にライフタイムを書くとこうです。これは有効な構文ではないです（余談ですがラベル付きbreak文のための構文と衝突します）。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;&#39;a: {
+    let a = &amp;quot;aaa&amp;quot;.to_string();
+    let ref_a = &amp;amp;&#39;a a;
+    &#39;b: {
+        let b = &amp;quot;bbb&amp;quot;.to_string();
+        let ref_b = &amp;amp;&#39;b b;
+        take_two_ref::&amp;lt;&#39;b&amp;gt;(ref_a, ref_b);
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;大は小を兼ねるので &lt;code&gt;&#39;a&lt;/code&gt; は &lt;code&gt;&#39;b&lt;/code&gt; のサブタイプになっています。
+ちょっと言葉がややこしいのですが、スコープが狭いライフタイムの方が大きい型です。狭い方が大きい。この言い回しに馴れてない人に説明すると、上の例でいえば &lt;code&gt;&#39;b&lt;/code&gt; を要求する部分に渡せるのは &lt;code&gt;&#39;a&lt;/code&gt; と &lt;code&gt;&#39;b&lt;/code&gt; 2つありますが、 &lt;code&gt;&#39;a&lt;/code&gt; を要求する部分に渡せるのは &lt;code&gt;&#39;a&lt;/code&gt; だけです。 2つと1つだったら2つの方が大きいですよね。&lt;/p&gt;
+
+&lt;p&gt;さて、今回の例ではちゃんとスコープの入れ子とサブタイプ関係が一致していました。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;&#39;a: {----------
+              |
+              |
+    &#39;b: {--   |
+          |   |
+          |   |
+          |   |
+    }------   |
+}--------------
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;参照を取るときは参照のライフタイムが元のライフタイムのサブタイプになっている必要があります。&lt;/p&gt;
+
+&lt;p&gt;この関係に反するとエラーになります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let ref_s: &amp;amp;String;
+{
+    let s = &amp;quot;foo&amp;quot;.to_string();
+    ref_s = &amp;amp;s; // error: `s` does not live long enough
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;図示するとこうでしょうか。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let ref_s: &amp;amp;String;
+{
+    let s = &amp;quot;foo&amp;quot;.to_string();-----
+    ref_s = &amp;amp;s; ----------------  |
+                               |  |
+}------------------------------+---
+                               |
+--------------------------------
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ライフタイムといえどある種、型なんですね。余談ですが確かリージョンの論文には「リージョンはプログラム全体を静的に伝播する型のようなもの」と表現していた気がします。既存の型と直行するので型とは別とも言えますし、タプルのように両方並べたものを型と言うことも出来ますね。&lt;/p&gt;
+
+&lt;h1 id=&#34;所有型とライフタイムと-static&#34;&gt;所有型とライフタイムと &lt;code&gt;&#39;static&lt;/code&gt;&lt;/h1&gt;
+
+&lt;p&gt;適切な語彙がなかったので勝手に所有型と名付けましたが、参照でない型のことを指しています。（先の例で見せた通り、参照型にも所有権はあるので適切ではないですがひとまず我慢して下さい。）&lt;/p&gt;
+
+&lt;p&gt;さて、なんとなくライフタイムと参照型は結び付いている気がしますが、参照じゃない型にもライフタイムはあります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn take_two_value&amp;lt;&#39;a, T: &#39;a, S: &#39;a&amp;gt;(_: T, _: S){}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このように、任意の2つの型を取るけども両方ともにライフタイムを要求する関数を書いてみます。&lt;/p&gt;
+
+&lt;p&gt;これに、所有型を渡すことが出来ます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let t = &amp;quot;t&amp;quot;.to_string();
+{
+    let s = &amp;quot;s&amp;quot;.to_string();
+    let s_ref = &amp;amp;s;
+        take_two_value(t, s_ref);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ということで、所有型にもライフタイムはあります。&lt;/p&gt;
+
+&lt;p&gt;ところで、ライフタイムのボトム型相当のものに &lt;code&gt;&#39;static&lt;/code&gt; というものがあります。
+グローバル変数やリテラルなどに割り当てられるライフタイムで、プログラムが死ぬまで生き続けます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;static foo: &amp;amp;&#39;static isize = &amp;amp;3;
+static bar: isize = 3;
+
+fn main() {
+    let x: &amp;amp;&#39;static str = &amp;quot;x&amp;quot;;
+    let ref_bar: &amp;amp;&#39;static isize = &amp;amp;bar
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;&#39;static&lt;/code&gt; のみを受け取る関数を書いてみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn take_static&amp;lt;T: &#39;static&amp;gt;(_: T){}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;もちろん、先の例に出たstaticな値達を渡せます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;static foo: &amp;amp;&#39;static isize = &amp;amp;3;
+static bar: isize = 3;
+
+fn main() {
+    let x: &amp;amp;&#39;static str = &amp;quot;x&amp;quot;;
+    let ref_bar: &amp;amp;&#39;static isize = &amp;amp;bar;
+    take_static(foo);
+    take_static(x);
+    take_static(ref_bar);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;実は、これに所有型を渡せます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let s = &amp;quot;foo&amp;quot;.to_string();
+take_static(s);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そして、任意の参照型は渡せません。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let s = &amp;quot;foo&amp;quot;.to_string();
+take_static(&amp;amp;s); // error: `s` does not live long enough
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ということで所有型には &lt;code&gt;&#39;static&lt;/code&gt; というライフタイムが付いているのでした。
+&lt;code&gt;&#39;static&lt;/code&gt; イメージとしては「自分がその値を保持している限り無効になることはない型」ですかね。&lt;/p&gt;
+
+&lt;p&gt;これに関連するTipsとして関数や構造体のジェネリクスで所有型しか受け取らないようにするには &lt;code&gt;&amp;lt;T: &#39;static&amp;gt;&lt;/code&gt; が使えます。&lt;/p&gt;
+
+&lt;hr /&gt;
+
+&lt;p&gt;さてさて、これまた参照型は特別扱いされることなく他のRustの値と同じようにライフタイムで管理されていることを調べました。&lt;/p&gt;
+
+&lt;p&gt;最後に今回到達出来なかった謎、「参照を取る」について考えたいと思います。&lt;/p&gt;
+
+&lt;h1 id=&#34;mut-の規則&#34;&gt;&lt;code&gt;&amp;amp;mut&lt;/code&gt; の規則&lt;/h1&gt;
+
+&lt;p&gt;みなさん御存じの通り、&lt;code&gt;&amp;amp;mut&lt;/code&gt; を取ると値への他の操作が許されなくなります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let mut s = &amp;quot;foo&amp;quot;.to_string();
+let refmut_s = &amp;amp;mut s;
+let t = s;  // error[E0505]: cannot move out of `s` because it is borrowed
+let ref_s = &amp;amp;s; // error[E0502]: cannot borrow `s` as immutable because it is also borrowed as mutable
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;&amp;amp;mut T&lt;/code&gt; と &lt;code&gt;T&lt;/code&gt; が相互排他的なのでこれは線形論理のシーケント計算っぽく書くと以下のような規則を考えれば良さそうです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;Γ, T:&#39;a |- Σ
+-------------- &amp;amp;mut-intro
+Γ, &amp;amp;&#39;b mut (T:&#39;a) |- Σ
+where &#39;a &amp;lt;: &#39;b
+
+Γ, &amp;amp;&#39;a mut (T:&#39;b) |- &amp;amp;&#39;a mut (T: &#39;b), Σ
+----------------------- &amp;amp;mut-elim
+Γ, T: &#39;b |- Σ
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;型付け規則の書き方になれてないのでシーケント計算で書きましたがサブタイプの記述で困りましたね。&lt;/p&gt;
+
+&lt;h1 id=&#34;の謎&#34;&gt;&lt;code&gt;&amp;amp;&lt;/code&gt; の謎&lt;/h1&gt;
+
+&lt;p&gt;さて、問題は &lt;code&gt;&amp;amp;&lt;/code&gt; です。 &lt;code&gt;&amp;amp;&lt;/code&gt; は &lt;code&gt;Copy&lt;/code&gt; なのでそこら中に生えてきます。
+なので &lt;code&gt;&amp;amp;-elim&lt;/code&gt; のような規則では対応出来ません。&lt;/p&gt;
+
+&lt;p&gt;ただ、ライフタイムによる制約があるので「参照のライフタイムが死ぬときに元の値が復活する」ような規則を考えたくなります。&lt;/p&gt;
+
+&lt;p&gt;しかし、それでもだめです。複数回 &lt;code&gt;&amp;amp;&lt;/code&gt; を取れてしまうので、以下のように複数のライフタイムを持つ場合で破綻します。&lt;code&gt;&amp;amp; T&lt;/code&gt; と &lt;code&gt;T&lt;/code&gt; の間でなにかしらのしがらみがある筈です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let s = &amp;quot;foo&amp;quot;.to_string();
+{
+    let ref_s1 = &amp;amp;s;
+    {
+        let ref_s2 = &amp;amp;s;
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;それに、 &lt;code&gt;&amp;amp;mut&lt;/code&gt; と &lt;code&gt;&amp;amp;&lt;/code&gt; が相互排他であることも説明出来る規則でないといけません。謎が多い。&lt;/p&gt;
+
+&lt;hr /&gt;
+
+&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;p&gt;さて、Rustの型システムのリソース管理回りを探ってみました。とりあえず分かったことを纏めると&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;値には全てアフィン型が付く
+
+&lt;ul&gt;
+&lt;li&gt;参照型も例外ではない&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;値には全てライフタイムが付く
+
+&lt;ul&gt;
+&lt;li&gt;所有型も例外ではない&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;「参照を取る」のセマンティクスが謎
+
+&lt;ul&gt;
+&lt;li&gt;勿論、直感的には分かる&lt;/li&gt;
+&lt;li&gt;どういう規則なんだろう&lt;/li&gt;
+&lt;li&gt;アフィン型とライフタイム両方が絡むはず。&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;特に論文も読んでないのでちょっと遠回りだったかもしれません。
+もしかしたら論文漁ったら一発で解決するのかも。
+詳しい方、 &lt;code&gt;&amp;amp;&lt;/code&gt; の謎を教えて下さい。&lt;/p&gt;</description>
+    </item>
     
     <item>
       <title>Rustのstructとtraitって似てるよね</title>
@@ -2530,109 +2887,6 @@ $ cargo install
 darcsに馴れてる方は好きにして下さい。&lt;/p&gt;
 
 &lt;p&gt;因みにその後のコマンドはちゃんと動くので&lt;a href=&#34;http://pijul.org/documentation/getting-started/&#34;&gt;公式ガイド&lt;/a&gt;に従えば使えます。&lt;/p&gt;</description>
-    </item>
-    
-    <item>
-      <title>Rustでシェル作った</title>
-      <link>/blog/2016/09/04/rustdeshierutsukutta</link>
-      <pubDate>Sun, 04 Sep 2016 16:26:20 +0900</pubDate>
-      
-      <guid>/blog/2016/09/04/rustdeshierutsukutta</guid>
-      <description>&lt;p&gt;κeenです。
-先日、先輩社員と話してるとシェルを作る話になりました。
-だいたいのコンピュータサイエンスの学生なら学部生の頃に課題でシェルを作りますが数学科にいた私は作ったことありませんでした。
-でも、その時「今ならシェルなんて作ろうと思えばすぐに作れますよ」なんて言っちゃったのでなんか作りました。
-まあ、習作程度の雑なものです。&lt;/p&gt;
-
-&lt;p&gt;
-作ったのはこれ、&lt;a href=&#34;https://github.com/KeenS/igaguri&#34;&gt;KeenS/igaguri: my toy shell written in Rust&lt;/a&gt;。
-名前は、Shellは木の実を覆う殻のようにカーネルを覆う殻とのことなのでRustのロゴに似てる毬栗を選びました。&lt;/p&gt;
-
-&lt;h1 id=&#34;パーサ&#34;&gt;パーサ&lt;/h1&gt;
-
-&lt;p&gt;パーサコンビネータライブラリの&lt;a href=&#34;https://github.com/Geal/nom&#34;&gt;nom&lt;/a&gt;を使いました。&lt;/p&gt;
-
-&lt;p&gt;雰囲気こんな感じ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;named!(token&amp;lt;String&amp;gt;, map!(map_res!(is_a!(&amp;quot;abcdefghijklmnopqlrstuvwxyzABCDEFGHIJKLMNOPQLRSTUVWXYZ-!$%^&amp;amp;@/1234567890&amp;quot;), str::from_utf8), |i: &amp;amp;str| i.to_string()));
-named!(pipe, tag!(&amp;quot;|&amp;quot;));
-named!(redirect_out&amp;lt;String&amp;gt;, chain!(tag!(&amp;quot;&amp;gt;&amp;quot;) ~ opt!(multispace) ~ filename: token, || filename));
-
-named!(command&amp;lt;Ast&amp;gt;, chain!(
-    opt!(multispace)
-        ~ cmd: separated_list!(multispace, token)
-        ~ outfile: opt!(chain!(multispace ~ out: redirect_out, || out))
-        ~ opt!(multispace), || Ast::Command{cmd: cmd, out: outfile}));
-named!(parse&amp;lt;Ast&amp;gt;, map!(separated_list!(pipe, command), Ast::Pipe));
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;入力ハンドリング&#34;&gt;入力ハンドリング&lt;/h1&gt;
-
-&lt;p&gt;readlineのRust実装、&lt;a href=&#34;https://github.com/kkawakam/rustyline&#34;&gt;rustyline&lt;/a&gt;を使いました。&lt;/p&gt;
-
-&lt;p&gt;それっぽいからとりあえず、で選んだものの、複数行入力（履歴）とか考えるともうちょっとリッチなものを選んだ方が良かったかもしれません。&lt;/p&gt;
-
-&lt;h1 id=&#34;実行&#34;&gt;実行&lt;/h1&gt;
-
-&lt;p&gt;最初、&lt;a href=&#34;https://github.com/rust-lang/libc&#34;&gt;libcバインディング&lt;/a&gt;の &lt;code&gt;pipe&lt;/code&gt; や &lt;code&gt;fork&lt;/code&gt; 、 &lt;code&gt;execve&lt;/code&gt; なんかを考えてましたが、標準ライブラリの &lt;a href=&#34;https://doc.rust-lang.org/std/process/struct.Command.html&#34;&gt;&lt;code&gt;std::process::Command&lt;/code&gt;&lt;/a&gt;で実現出来そうだったのでそれを使いました。&lt;/p&gt;
-
-&lt;p&gt;こんな感じ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;Command::new(cmd)
-    .args(&amp;amp;terms)
-    .stdin(stdin)
-    .stdout(stdout)
-    .stderr(stderr)
-    .spawn()
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;パイプ-リダイレクト&#34;&gt;パイプ/リダイレクト&lt;/h2&gt;
-
-&lt;p&gt;一応、パイプも標準ライブラリでサポートされてるのでそれを使いました。&lt;/p&gt;
-
-&lt;p&gt;ただ、普通のCとは違って子プロセスと親プロセスの間に一旦パイプを作って、子プロセスの出力の生のfdを取り出して、次の子プロセスの入力に与えて、と案外面倒でした。 &lt;code&gt;unsafe&lt;/code&gt; も出てくれば &lt;code&gt;unreachable&lt;/code&gt; も出てくるのでもう少し書き直したい。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let mut si = stdin;
-let mut itr = commands.into_iter().peekable();
-unsafe {
-    while let Some(command) = itr.next() {
-        if itr.peek().is_some() {
-            let process =
-                try!(self.run(command, si, Stdio::piped(), Stdio::inherit()));
-            si = Stdio::from_raw_fd(process.stdout.unwrap().into_raw_fd());
-        } else {
-            return self.run(command, si, stdout, stderr);
-        }
-    }
-}
-unreachable!()
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;リダイレクトも似たようなもので、ファイルを作って生のfdを取り出して、とやります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let stdout = out.map(|f| {
-    unsafe {
-        let file = File::create(f)
-        // FIXME: do not panic
-            .unwrap();
-        Stdio::from_raw_fd(file.into_raw_fd())
-    }
-
-}).unwrap_or(stdout);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;おわりに&#34;&gt;おわりに&lt;/h1&gt;
-
-&lt;p&gt;昨日の夜からちょろっと作り始めてさっきそれっぽく動くようになった程度なのでまだ適当にしか動きません。
-パイプと標準出力のリダイレクトだけで、 &lt;code&gt;cd&lt;/code&gt; なんかのシェルコマンドもなければシェル変数もありません。
-が、そろそろ飽きたのでこの辺で。&lt;/p&gt;
-
-&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;そろそろ飽きてきた&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/772334565264232454&#34;&gt;2016年9月4日&lt;/a&gt;&amp;lt;/
-blockquote&amp;gt;
-&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
-
-&lt;p&gt;シェルコマンドとシェル変数くらいはいつか実装しようかな。&lt;/p&gt;</description>
     </item>
     
   </channel>
