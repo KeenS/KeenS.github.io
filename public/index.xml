@@ -6,8 +6,613 @@
     <description>Recent content on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Wed, 14 Dec 2016 11:19:12 +0900</lastBuildDate>
+    <lastBuildDate>Sat, 24 Dec 2016 22:51:46 +0900</lastBuildDate>
     <atom:link href="/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Rustのライフタイムを使ったスコープ解析</title>
+      <link>/blog/2016/12/24/rustnoraifutaimuwotsukattasuko_pukaiseki</link>
+      <pubDate>Sat, 24 Dec 2016 22:51:46 +0900</pubDate>
+      
+      <guid>/blog/2016/12/24/rustnoraifutaimuwotsukattasuko_pukaiseki</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2016/rust-lang-2&#34;&gt;Rust その2 Advent Calendar 2016 - Qiita&lt;/a&gt;の25日目の記事です。&lt;/p&gt;
+
+&lt;p&gt;κeenです。大トリに小ネタで申し訳ないのですが最近書いたコードでちょっと便利だなと思ったテクニックを紹介します。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;
+
+&lt;p&gt;次のような言語のインタプリタを作ることを考えます。意味論はエスパーして下さい。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;x = 1
+y = 2
+println(&amp;quot;x = &amp;quot;, x)
+println(&amp;quot;y = &amp;quot;, y)
+
+println(&amp;quot;--&amp;quot;)
+
+{
+    x = 3
+    println(&amp;quot;x = &amp;quot;, x)
+    println(&amp;quot;y = &amp;quot;, y)
+}
+
+println(&amp;quot;--&amp;quot;)
+
+println(&amp;quot;x = &amp;quot;, x)
+println(&amp;quot;y = &amp;quot;, y)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;この実行結果は&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;x = 1
+y = 2
+--
+x = 3
+y = 2
+--
+x = 1
+y = 2
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;になりますね。このインタプリタをRustで作りましょう。&lt;/p&gt;
+
+&lt;h1 id=&#34;初期実装&#34;&gt;初期実装&lt;/h1&gt;
+
+&lt;p&gt;雛形はこんなもんでしょうか。後でリファレンスが出てきてややこしくなるので値は全て所有権を貰っています。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;#[derive(Debug, Clone)]
+struct AST(Vec&amp;lt;Stmt&amp;gt;);
+
+#[derive(Debug, Clone)]
+enum Stmt {
+    Subst(String, Expr),
+    Print(Vec&amp;lt;Expr&amp;gt;),
+    Block(Vec&amp;lt;Stmt&amp;gt;),
+}
+
+
+#[derive(Debug, Clone)]
+enum Expr {
+    Str(String),
+    Num(isize),
+    Var(String),
+}
+
+
+struct Interpreter {
+    // これを実装する
+}
+
+impl Interpreter {
+    pub fn new() -&amp;gt; Self {
+        Interpreter{}
+    }
+
+    fn run(&amp;amp;mut self, ast: AST) {
+        for stmt in ast.0 {
+            self.run_stmt(stmt);
+        }
+    }
+
+    fn run_stmt(&amp;amp;mut self, stmt: Stmt) {
+        // これを実装する
+    }
+}
+
+fn main() {
+    let ast = {
+        use Stmt::*;
+        use Expr::*;
+        AST(
+            vec![
+                Subst(&amp;quot;x&amp;quot;.to_string(), Num(1)),
+                Subst(&amp;quot;y&amp;quot;.to_string(), Num(2)),
+                Print(vec![Str(&amp;quot;x = &amp;quot;.to_string()), Var(&amp;quot;x&amp;quot;.to_string())]),
+                Print(vec![Str(&amp;quot;y = &amp;quot;.to_string()), Var(&amp;quot;y&amp;quot;.to_string())]),
+                Print(vec![Str(&amp;quot;--&amp;quot;.to_string())]),
+                Block(vec![
+                    Subst(&amp;quot;x&amp;quot;.to_string(), Num(3)),
+                    Print(vec![Str(&amp;quot;x = &amp;quot;.to_string()), Var(&amp;quot;x&amp;quot;.to_string())]),
+                    Print(vec![Str(&amp;quot;y = &amp;quot;.to_string()), Var(&amp;quot;y&amp;quot;.to_string())]),
+                ]),
+                Print(vec![Str(&amp;quot;--&amp;quot;.to_string())]),
+                Print(vec![Str(&amp;quot;x = &amp;quot;.to_string()), Var(&amp;quot;x&amp;quot;.to_string())]),
+                Print(vec![Str(&amp;quot;y = &amp;quot;.to_string()), Var(&amp;quot;y&amp;quot;.to_string())]),
+            ]
+        )
+    };
+    let mut interpreter = Interpreter::new();
+
+    interpreter.run(ast);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;(コンストラクタ関数作っときゃよかったかも)&lt;/p&gt;
+
+&lt;p&gt;今回の本質ではないのでパーサは用意してません。&lt;/p&gt;
+
+&lt;p&gt;さて、とりあえずのところ変数の管理のためにシンボルテーブルが必要です。実装しましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;//...
+
+use std::collections::HashMap;
+struct Interpreter {
+    symbol_table: HashMap&amp;lt;String, Expr&amp;gt;,
+}
+
+impl Interpreter {
+    pub fn new() -&amp;gt; Self {
+        Interpreter{
+            symbol_table: HashMap::new(),
+        }
+    }
+
+    fn add_to_scope(&amp;amp;mut self, name: String, expr: Expr) {
+        self.symbol_table.insert(name, expr);
+    }
+
+    fn find_scope(&amp;amp;self, name: &amp;amp;str) -&amp;gt; Expr {
+        self.symbol_table
+            .get(name)
+            .expect(&amp;quot;reference to unknown variable&amp;quot;)
+            .clone()
+    }
+
+  //...
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;簡略化のためにcloneやpanicしてますがご愛嬌。&lt;/p&gt;
+
+&lt;p&gt;これがあれば&lt;code&gt;run_stmt&lt;/code&gt;のそれっぽい実装は出来ます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    fn run_stmt(&amp;amp;mut self, stmt: Stmt) {
+        use Stmt::*;
+
+        match stmt {
+            Subst(name, expr) =&amp;gt; {
+                let expr = self.eval(expr);
+                self.add_to_scope(name, expr);
+            },
+            Print(exprs) =&amp;gt; {
+                for expr in exprs {
+                    self.print_expr(expr);
+                }
+                println!(&amp;quot;&amp;quot;);
+            },
+            Block(stmts) =&amp;gt; {
+                for stmt in stmts {
+                    self.run_stmt(stmt);
+                }
+            },
+        }
+
+    }
+
+    fn eval(&amp;amp;self, expr: Expr) -&amp;gt; Expr {
+        use Expr::*;
+        match expr {
+            Var(v) =&amp;gt; self.find_scope(&amp;amp;v),
+            e @ Str(_) |
+            e @ Num(_) =&amp;gt; e
+        }
+    }
+
+    fn print_expr(&amp;amp;self, expr: Expr) {
+        use Expr::*;
+        match self.eval(expr) {
+            Str(ref s) =&amp;gt; print!(&amp;quot;{}&amp;quot;, s),
+            Num(ref n) =&amp;gt; print!(&amp;quot;{}&amp;quot;, n),
+            Var(_) =&amp;gt; panic!(&amp;quot;reference to unknown variable&amp;quot;) ,
+        }
+    }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;さて、これを走らせてみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cargo run
+x = 1
+y = 2
+--
+x = 3
+y = 2
+--
+x = 3
+y = 2
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;スコープを実装していないので最後の&lt;code&gt;x&lt;/code&gt;が3になっていますね。スコープを実装しましょう。&lt;/p&gt;
+
+&lt;p&gt;スコープを実装するには簡単にはハッシュテーブルを複数持てば良さそうです。
+3段にネストしたスコープなら3つのハッシュテーブルを持ちます。
+そしてスコープを抜けた時にそのスコープに対応するハッシュテーブルを消せば（忘れれば）良さそうです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct Interpreter {
+   // スコープに対応したテーブル達。
+   symbol_tables: Vec&amp;lt;HashMap&amp;lt;String, Expr&amp;gt;&amp;gt;,
+   // 今どのスコープを指しているか。
+   // スコープを抜けてもベクトルは縮まないのでこれが必要。
+   pos: usize,
+}
+
+impl Interpreter {
+    pub fn new() -&amp;gt; Self {
+        // 新しいフィールドの初期化
+        Interpreter{
+            symbol_tables: Vec::new(),
+            // ややこしくなるが、0で初期化しているのでpos-1番目のハッシュマップが現スコープのテーブルになる
+            pos: 0,
+        }
+    }
+
+    // スコープに入る処理。
+    fn in_scope(&amp;amp;mut self) {
+        let pos = self.pos;
+        // スコープから抜けてもハッシュマップは消えないので
+        // 入る → 出る → 入るをしたときに既にテーブルがある場合が出てくる。
+        // 必要なテーブルが既にある場合とない場合で条件分岐
+        if self.symbol_tables.len() &amp;lt;= pos {
+            self.symbol_tables.push(HashMap::new())
+        } else {
+            // 既にテーブルがある場合は古い情報を消す
+            self.symbol_tables[pos - 1].clear()
+        }
+        // ポジションは忘れずインクリメント
+        self.pos += 1;
+    }
+
+    // スコープから抜ける処理
+    fn out_scope(&amp;amp;mut self) {
+        // スコープから抜けるのはデクリメントのみでOK
+        self.pos -= 1;
+    }
+
+    pub fn run(&amp;amp;mut self, ast: AST) {
+        // in_scope が増えた
+        self.in_scope();
+        for stmt in ast.0 {
+            self.run_stmt(stmt);
+        }
+        // out_scope が増えた
+        self.out_scope();
+    }
+
+    fn add_to_scope(&amp;amp;mut self, name: String, expr: Expr) {
+        // 現在のスコープに変数を入れる
+        let pos = self.pos - 1;
+        self.symbol_tables[pos].insert(name, expr);
+    }
+
+    fn find_scope(&amp;amp;self, name: &amp;amp;str) -&amp;gt; Expr {
+        let pos = self.pos;
+        // 一番内側(現在)のスコープから外側のスコープの順に調べていく。
+        // `[0..pos]` や `rev()` に注意。
+        for table in self.symbol_tables[0..pos].iter().rev() {
+            if let Some(e) = table.get(name) {
+                return e.clone()
+            }
+        }
+        // どこにもなければ未定義変数
+        panic!(&amp;quot;reference to unknown variable&amp;quot;)
+    }
+
+    fn run_stmt(&amp;amp;mut self, stmt: Stmt) {
+        use Stmt::*;
+
+        match stmt {
+            // ..
+            Block(stmts) =&amp;gt; {
+                // in_scope が増えた
+                self.in_scope();
+                for stmt in stmts {
+                    self.run_stmt(stmt);
+                }
+                // out_scope が増えた
+                self.out_scope();
+            },
+        }
+
+    }
+
+    // ..
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これで走らせてみます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cargo run
+x = 1
+y = 2
+--
+x = 3
+y = 2
+--
+x = 1
+y = 2
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;はい。動きました。&lt;/p&gt;
+
+&lt;h1 id=&#34;scope-の導入&#34;&gt;&lt;code&gt;Scope&lt;/code&gt; の導入&lt;/h1&gt;
+
+&lt;p&gt;さて、上のコードでは&lt;code&gt;in_scope&lt;/code&gt;と&lt;code&gt;out_scope&lt;/code&gt;が対で現れました。というか現れないといけません。
+でもプログラミングエラーで&lt;code&gt;out_scope&lt;/code&gt;を忘れるなんてことはよくある話です（現に私はこのサンプルを書いてて間違えかけました）。これをRustのライフタイムの仕組みに乗っけて自動で解決しようというのが今回のお話。&lt;/p&gt;
+
+&lt;p&gt;手法は簡単で、とりあえず&lt;code&gt;Scope&lt;/code&gt;という型を用意します。そして&lt;code&gt;new&lt;/code&gt;する時に&lt;code&gt;in_scope&lt;/code&gt;を呼んであげて、&lt;code&gt;drop&lt;/code&gt;する時に&lt;code&gt;out_scope&lt;/code&gt;を呼んであげます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::ops::Drop;
+struct Scope&amp;lt;&#39;a&amp;gt;(&amp;amp;&#39;a mut Interpreter);
+
+impl &amp;lt;&#39;a&amp;gt;Scope&amp;lt;&#39;a&amp;gt; {
+    fn new(inpr: &amp;amp;&#39;a mut Interpreter) -&amp;gt; Self {
+        inpr.in_scope();
+        Scope(inpr)
+    }
+}
+
+impl &amp;lt;&#39;a&amp;gt;Drop for Scope&amp;lt;&#39;a&amp;gt; {
+    fn drop(&amp;amp;mut self) {
+        self.0.out_scope()
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;さて、この&lt;code&gt;&amp;amp;mut Interpreter&lt;/code&gt;で参照しているというのが丁度良くて、Scopeの分岐というのを防ぐことが出来ます。こういうやつですね。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;let scope1 = Scope::new(&amp;amp;mut intr);
+let scope2 = Scope::new(&amp;amp;mut intr); // error: 既に&amp;amp;mut されている変数は&amp;amp;mut出来ない
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;では、これを使ってみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    pub fn run(&amp;amp;mut self, ast: AST) {
+        // in_scopeをScope::new()に置き換えた
+        let scope = Scope::new(self);
+        for stmt in ast.0 {
+            // scopeに渡してしまったのでselfはsope.0で参照する必要がある
+            scope.0.run_stmt(stmt);
+        }
+        // out_scopeは自動で呼ばれる
+    }
+
+    // run_stmtのBlockも同様に書き換える
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cargo run
+x = 1
+y = 2
+--
+x = 3
+y = 2
+--
+x = 1
+y = 2
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;動きました。でも、あまり&lt;code&gt;scope.0&lt;/code&gt;なんて使いたくないですよね。出来れば透過的に扱いたい。
+そんなときのために&lt;code&gt;Deref&lt;/code&gt; と &lt;code&gt;DerefMut&lt;/code&gt; です。Rustは型が合わなければ自動で&lt;code&gt;deref&lt;/code&gt;を呼んでくれます。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;Deref&lt;/code&gt; と &lt;code&gt;DerefMut&lt;/code&gt; を実装しましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::ops::{Deref, DerefMut};
+impl &amp;lt;&#39;a&amp;gt; Deref for Scope&amp;lt;&#39;a&amp;gt; {
+    type Target = Interpreter;
+    fn deref(&amp;amp;self) -&amp;gt; &amp;amp;Interpreter {
+        self.0
+    }
+}
+
+impl &amp;lt;&#39;a&amp;gt; DerefMut for Scope&amp;lt;&#39;a&amp;gt; {
+    fn deref_mut(&amp;amp;mut self) -&amp;gt; &amp;amp;mut Interpreter {
+        self.0
+    }
+}
+
+impl Interpreter {
+    // ..
+
+    pub fn run(&amp;amp;mut self, ast: AST) {
+        // deref_mutするために mutをつける
+        let mut scope = Scope::new(self);
+        for stmt in ast.0 {
+            // scope.0しなくてもInterpreterのメソッドが呼べる
+            scope.run_stmt(stmt);
+        }
+    }
+
+   // ..
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;生成と消滅が対になるものはRustのオブジェクトで管理出来るよ&lt;/li&gt;
+&lt;li&gt;シンプルなラッパー型は&lt;code&gt;Deref&lt;/code&gt;や&lt;code&gt;DerefMut&lt;/code&gt;を実装しておくと便利だよ&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h1 id=&#34;参考&#34;&gt;参考&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/drop.html&#34;&gt;Drop&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/deref-coercions.html&#34;&gt;&lt;code&gt;Deref&lt;/code&gt; による型強制&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h1 id=&#34;付録a&#34;&gt;付録A&lt;/h1&gt;
+
+&lt;p&gt;最終的なソースコード全文を掲載します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;#[derive(Debug, Clone)]
+struct AST(Vec&amp;lt;Stmt&amp;gt;);
+
+#[derive(Debug, Clone)]
+enum Stmt {
+    Subst(String, Expr),
+    Print(Vec&amp;lt;Expr&amp;gt;),
+    Block(Vec&amp;lt;Stmt&amp;gt;),
+}
+
+
+#[derive(Debug, Clone)]
+enum Expr {
+    Str(String),
+    Num(isize),
+    Var(String),
+}
+
+
+use std::collections::HashMap;
+struct Interpreter {
+   symbol_tables: Vec&amp;lt;HashMap&amp;lt;String, Expr&amp;gt;&amp;gt;,
+   pos: usize,
+}
+
+use std::ops::{Drop, Deref, DerefMut};
+struct Scope&amp;lt;&#39;a&amp;gt;(&amp;amp;&#39;a mut Interpreter);
+
+impl &amp;lt;&#39;a&amp;gt;Scope&amp;lt;&#39;a&amp;gt; {
+    fn new(inpr: &amp;amp;&#39;a mut Interpreter) -&amp;gt; Self {
+        inpr.in_scope();
+        Scope(inpr)
+    }
+}
+
+impl &amp;lt;&#39;a&amp;gt;Drop for Scope&amp;lt;&#39;a&amp;gt; {
+    fn drop(&amp;amp;mut self) {
+        self.0.out_scope()
+    }
+}
+
+impl &amp;lt;&#39;a&amp;gt; Deref for Scope&amp;lt;&#39;a&amp;gt; {
+    type Target = Interpreter;
+    fn deref(&amp;amp;self) -&amp;gt; &amp;amp;Interpreter {
+        self.0
+    }
+}
+
+impl &amp;lt;&#39;a&amp;gt; DerefMut for Scope&amp;lt;&#39;a&amp;gt; {
+    fn deref_mut(&amp;amp;mut self) -&amp;gt; &amp;amp;mut Interpreter {
+        self.0
+    }
+}
+
+impl Interpreter {
+    pub fn new() -&amp;gt; Self {
+        Interpreter{
+            symbol_tables: Vec::new(),
+            pos: 0,
+        }
+    }
+
+    fn in_scope(&amp;amp;mut self) {
+        let pos = self.pos;
+        if self.symbol_tables.len() &amp;lt;= pos {
+            self.symbol_tables.push(HashMap::new())
+        } else {
+            self.symbol_tables[pos - 1].clear()
+        }
+        self.pos += 1;
+    }
+
+    fn out_scope(&amp;amp;mut self) {
+        self.pos -= 1;
+    }
+
+    pub fn run(&amp;amp;mut self, ast: AST) {
+        let mut scope = Scope::new(self);
+        for stmt in ast.0 {
+            scope.run_stmt(stmt);
+        }
+    }
+
+    fn add_to_scope(&amp;amp;mut self, name: String, expr: Expr) {
+        let pos = self.pos - 1;
+        self.symbol_tables[pos].insert(name, expr);
+    }
+
+    fn find_scope(&amp;amp;self, name: &amp;amp;str) -&amp;gt; Expr {
+        let pos = self.pos;
+        for table in self.symbol_tables[0..pos].iter().rev() {
+            if let Some(e) = table.get(name) {
+                return e.clone()
+            }
+        }
+        panic!(&amp;quot;reference to unknown variable&amp;quot;)
+    }
+
+    fn run_stmt(&amp;amp;mut self, stmt: Stmt) {
+        use Stmt::*;
+
+        match stmt {
+            Subst(name, expr) =&amp;gt; {
+                let expr = self.eval(expr);
+                self.add_to_scope(name, expr);
+            },
+            Print(exprs) =&amp;gt; {
+                for expr in exprs {
+                    self.print_expr(expr);
+                }
+                println!(&amp;quot;&amp;quot;);
+            },
+            Block(stmts) =&amp;gt; {
+                let scope = Scope::new(self);
+
+                for stmt in stmts {
+                    scope.0.run_stmt(stmt);
+                }
+            },
+        }
+
+    }
+
+    fn eval(&amp;amp;self, expr: Expr) -&amp;gt; Expr {
+        use Expr::*;
+        match expr {
+            Var(v) =&amp;gt; self.find_scope(&amp;amp;v),
+            e @ Str(_) |
+            e @ Num(_) =&amp;gt; e
+        }
+    }
+
+    fn print_expr(&amp;amp;self, expr: Expr) {
+        use Expr::*;
+        match self.eval(expr) {
+            Str(ref s) =&amp;gt; print!(&amp;quot;{}&amp;quot;, s),
+            Num(ref n) =&amp;gt; print!(&amp;quot;{}&amp;quot;, n),
+            Var(_) =&amp;gt; panic!(&amp;quot;reference to unknown variable&amp;quot;) ,
+        }
+    }
+}
+
+fn main() {
+    let ast = {
+        use Stmt::*;
+        use Expr::*;
+        AST(
+            vec![
+                Subst(&amp;quot;x&amp;quot;.to_string(), Num(1)),
+                Subst(&amp;quot;y&amp;quot;.to_string(), Num(2)),
+                Print(vec![Str(&amp;quot;x = &amp;quot;.to_string()), Var(&amp;quot;x&amp;quot;.to_string())]),
+                Print(vec![Str(&amp;quot;y = &amp;quot;.to_string()), Var(&amp;quot;y&amp;quot;.to_string())]),
+                Print(vec![Str(&amp;quot;--&amp;quot;.to_string())]),
+                Block(vec![
+                    Subst(&amp;quot;x&amp;quot;.to_string(), Num(3)),
+                    Print(vec![Str(&amp;quot;x = &amp;quot;.to_string()), Var(&amp;quot;x&amp;quot;.to_string())]),
+                    Print(vec![Str(&amp;quot;y = &amp;quot;.to_string()), Var(&amp;quot;y&amp;quot;.to_string())]),
+                ]),
+                Print(vec![Str(&amp;quot;--&amp;quot;.to_string())]),
+                Print(vec![Str(&amp;quot;x = &amp;quot;.to_string()), Var(&amp;quot;x&amp;quot;.to_string())]),
+                Print(vec![Str(&amp;quot;y = &amp;quot;.to_string()), Var(&amp;quot;y&amp;quot;.to_string())]),
+            ]
+        )
+    };
+    let mut interpreter = Interpreter::new();
+
+    interpreter.run(ast);
+}
+&lt;/code&gt;&lt;/pre&gt;</description>
+    </item>
     
     <item>
       <title>Rustの所有権、ライフタイム、参照、型、しがらみ</title>
@@ -3092,315 +3697,6 @@ To learn more, run the command again with --verbose.
 &lt;p&gt;スタックを作ってどうこう、とかも考えたのですが上手くいきませんでした。悲しい。&lt;/p&gt;
 
 &lt;p&gt;ということで小ネタでした。&lt;/p&gt;</description>
-    </item>
-    
-    <item>
-      <title>Scala 2.12.0変更点</title>
-      <link>/slide/Scala_2_12_0henkouten/</link>
-      <pubDate>Fri, 04 Nov 2016 13:19:01 +0900</pubDate>
-      
-      <guid>/slide/Scala_2_12_0henkouten/</guid>
-      <description>&lt;section data-markdown
-    data-separator=&#34;\n===\n&#34;
-    data-vertical=&#34;\n---\n&#34;
-    data-notes=&#34;^Note:&#34;&gt;
-&lt;script type=&#34;text/template&#34;&gt;
-# Scala 2.12.0変更点
-----------------------
-サイバーエージェント ScalaMeetUp
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-===
-# About Me
----------
-![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
-
- * κeen
- * [@blackenedgold](https://twitter.com/blackenedgold)
- * Github: [KeenS](https://github.com/KeenS)
- * AI Studio Dev Group
- * Lisp, ML, Rust, Shell Scriptあたりを書きます
-
-===
-
-# サマリー
-----------
-全部[公式ページ](http://www.scala-lang.org/news/2.12.0)に詳細あるよ
-
-* Java8向けの互換性向上したよ
-  + トレイトがinterfaceに
-  + 無名関数がlambdaに
-  + SAMとScalaの関数が統合
-* コンパイラが少し賢くなったよ
-  + いくつかでinvokedynamicを使うように
-  + 中間状態をやめた
-  + 最適化をするように
-* ライブラリ改善した
-  + EitherがRight Biasedに
-  + Futureが強化
-* 非互換いくつか
-
-
-===
-
-# トレイトがinterfaceに
------------------------
-
-``` scala
-trait Foo {
-  def foo(): String = &#34;foo&#34;
-  def bar(): String
-}
-```
-
-===
-
-# トレイトがinterfaceに
------------------------
-
-
-```
-$ scalac-2.11 Trait.scala
-$ ls
-Foo$class.class  Foo.class  Trait.scala
-$ javap Foo
-Compiled from &#34;Trait.scala&#34;
-public interface Foo {
-  public abstract java.lang.String foo();
-  public abstract java.lang.String bar();
-}
-$ javap &#39;Foo$class&#39;
-Compiled from &#34;Trait.scala&#34;
-public abstract class Foo$class {
-  public static java.lang.String foo(Foo);
-  public static void $init$(Foo);
-}
-
-```
-
-===
-
-# トレイトがinterfaceに
------------------------
-
-```
-$ scalac-2.12 Trait.scala
-$ ls
-Foo.class  Trait.scala
-$ javap Foo
-Compiled from &#34;Trait.scala&#34;
-public interface Foo {
-  public static java.lang.String foo$(Foo);
-  public java.lang.String foo();
-  public abstract java.lang.String bar();
-  public static void $init$(Foo);
-
-```
-
-===
-
-# 無名関数がlambdaに
------------------------
-
-```
-class Foo {
-  val f = () =&gt; &#34;string&#34;
-}
-```
-
-===
-
-# 無名関数がlambdaに
------------------------
-
-
-```
-$ scalac-2.11 Trait.scala
-$ ls
-Foo$$anonfun$1.class  Foo.class  Trait.scala
-$ javap Foo
-Compiled from &#34;Trait.scala&#34;
-public class Foo {
-  public scala.Function0&lt;java.lang.String&gt; f();
-  public Foo();
-}
-$ javap  &#39;Foo$$anonfun$1
-Compiled from &#34;Trait.scala&#34;
-public final class Foo$$anonfun$1 extends scala.runtime.AbstractFunction0&lt;java.lang.String&gt; implements scala.Serializable {
-  public static final long serialVersionUID;
-  public final java.lang.String apply();
-  public final java.lang.Object apply();
-  public Foo$$anonfun$1(Foo);
-}
-
-```
-
-===
-
-# 無名関数がlambdaに
------------------------
-
-```
-$ scalac-2.12 Trait.scala
-$ ls
-Foo.class  Trait.scala
-$ javap -p Foo
-Compiled from &#34;Trait.scala&#34;
-public class Foo {
-  private final scala.Function0&lt;java.lang.String&gt; f;
-  public scala.Function0&lt;java.lang.String&gt; f();
-  public static final java.lang.String $anonfun$f$1();
-  public Foo();
-  private static java.lang.Object $deserializeLambda$(java.lang.invoke.SerializedLambda);
-$ javap -c -p Foo
-Compiled from &#34;Trait.scala&#34;
-public class Foo {
-  private final scala.Function0&lt;java.lang.String&gt; f;
-
-  public scala.Function0&lt;java.lang.String&gt; f();
-    Code:
-       0: aload_0
-       1: getfield      #19                 // Field f:Lscala/Function0;
-       4: areturn
-
-  public static final java.lang.String $anonfun$f$1();
-    Code:
-       0: ldc           #25                 // String string
-       2: areturn
-
-  public Foo();
-    Code:
-       0: aload_0
-       1: invokespecial #29                 // Method java/lang/Object.&#34;&lt;init&gt;&#34;:()V
-       4: aload_0
-       5: invokedynamic #49,  0             // InvokeDynamic #0:apply:()Lscala/Function0;
-      10: putfield      #19                 // Field f:Lscala/Function0;
-      13: return
-
-  private static java.lang.Object $deserializeLambda$(java.lang.invoke.SerializedLambda);
-    Code:
-       0: aload_0
-       1: invokedynamic #61,  0             // InvokeDynamic #1:lambdaDeserialize:(Ljava/lang/invoke/SerializedLambda;)Ljava/lang/Object;
-       6: areturn
-}
-```
-
-===
-
-# SAMとScalaの関数が統合
------------------------
-
-関数をSingle Abstract Methodに出来る
-
-```
-scala&gt; val runRunnable: Runnable = () =&gt; println(&#34;Run!&#34;)
-runRunnable: Runnable = $$Lambda$1073/754978432@7cf283e1
-scala&gt; runRunnable.run()
-Run!
-```
-
-JavaでLambdaが期待される箇所にScalaの無名関数を書ける
-
-===
-
-# SAMとScalaの関数が統合
------------------------
-
-逆に、JavaのLambdaでScalaの関数を作れる
-
-```
-public class A {
-  scala.Function1&lt;String, String&gt; f = s -&gt; s.trim();
-}
-```
-
-===
-
-# 最適化
---------
-とりあえずDead Code Elimination
-
-```
-class Foo {
-  def add1(i: Int) = {
-    val unused = 1 + i
-    1 + i
-  }
-
-}
-
-```
-
-===
-
-# 最適化
---------
-
-```
-$ scalac Trait.java
-$ javap -c Foo
-...
-  public int add1(int);
-    Code:
-       0: iconst_1
-       1: iload_1
-       2: iadd
-       3: istore_2
-       4: iconst_1
-       5: iload_1
-       6: iadd
-       7: ireturn
-...
-}
-
-```
-
-===
-
-# 最適化
---------
-
-```
-$ scalac -opt:l:method Trait.java
-$ javap -c Foo
-...
-  public int add1(int);
-    Code:
-       0: iconst_1
-       1: iload_1
-       2: iadd
-       3: ireturn
-...
-```
-
-===
-
-# 非互換
---------
-
-* Object initialization locks and lambdas
-  + 無名関数が元のクラスのメソッドになったので変にデッドロックするかも
-* Lambdas capturing outer instances
-  + 無名関数が元のクラスのメソッドになったのでスコープが少し変わる
-  + シリアライズに影響出るかも
-* SAM conversion precedes implicits
-  + SAM conversionとimplicit comversionだとSAMが優先される
-
-===
-
-# 非互換
---------
-
-* SAM conversion in overloading resolution
-  + なんか型が面倒になった
-* Inferred types for fields
-  + なんかよく分かんなかった
-* Changed syntax trees (affects macro and compiler plugin authors)
-  + 変わったらしい
-
-&lt;/script&gt;
-&lt;/section&gt;
-</description>
     </item>
     
   </channel>

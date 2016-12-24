@@ -9,6 +9,611 @@
     <atom:link href="/categories/rust/index.xml" rel="self" type="application/rss+xml" />
     
     <item>
+      <title>Rustのライフタイムを使ったスコープ解析</title>
+      <link>/blog/2016/12/24/rustnoraifutaimuwotsukattasuko_pukaiseki</link>
+      <pubDate>Sat, 24 Dec 2016 22:51:46 +0900</pubDate>
+      
+      <guid>/blog/2016/12/24/rustnoraifutaimuwotsukattasuko_pukaiseki</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2016/rust-lang-2&#34;&gt;Rust その2 Advent Calendar 2016 - Qiita&lt;/a&gt;の25日目の記事です。&lt;/p&gt;
+
+&lt;p&gt;κeenです。大トリに小ネタで申し訳ないのですが最近書いたコードでちょっと便利だなと思ったテクニックを紹介します。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;
+
+&lt;p&gt;次のような言語のインタプリタを作ることを考えます。意味論はエスパーして下さい。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;x = 1
+y = 2
+println(&amp;quot;x = &amp;quot;, x)
+println(&amp;quot;y = &amp;quot;, y)
+
+println(&amp;quot;--&amp;quot;)
+
+{
+    x = 3
+    println(&amp;quot;x = &amp;quot;, x)
+    println(&amp;quot;y = &amp;quot;, y)
+}
+
+println(&amp;quot;--&amp;quot;)
+
+println(&amp;quot;x = &amp;quot;, x)
+println(&amp;quot;y = &amp;quot;, y)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;この実行結果は&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;x = 1
+y = 2
+--
+x = 3
+y = 2
+--
+x = 1
+y = 2
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;になりますね。このインタプリタをRustで作りましょう。&lt;/p&gt;
+
+&lt;h1 id=&#34;初期実装&#34;&gt;初期実装&lt;/h1&gt;
+
+&lt;p&gt;雛形はこんなもんでしょうか。後でリファレンスが出てきてややこしくなるので値は全て所有権を貰っています。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;#[derive(Debug, Clone)]
+struct AST(Vec&amp;lt;Stmt&amp;gt;);
+
+#[derive(Debug, Clone)]
+enum Stmt {
+    Subst(String, Expr),
+    Print(Vec&amp;lt;Expr&amp;gt;),
+    Block(Vec&amp;lt;Stmt&amp;gt;),
+}
+
+
+#[derive(Debug, Clone)]
+enum Expr {
+    Str(String),
+    Num(isize),
+    Var(String),
+}
+
+
+struct Interpreter {
+    // これを実装する
+}
+
+impl Interpreter {
+    pub fn new() -&amp;gt; Self {
+        Interpreter{}
+    }
+
+    fn run(&amp;amp;mut self, ast: AST) {
+        for stmt in ast.0 {
+            self.run_stmt(stmt);
+        }
+    }
+
+    fn run_stmt(&amp;amp;mut self, stmt: Stmt) {
+        // これを実装する
+    }
+}
+
+fn main() {
+    let ast = {
+        use Stmt::*;
+        use Expr::*;
+        AST(
+            vec![
+                Subst(&amp;quot;x&amp;quot;.to_string(), Num(1)),
+                Subst(&amp;quot;y&amp;quot;.to_string(), Num(2)),
+                Print(vec![Str(&amp;quot;x = &amp;quot;.to_string()), Var(&amp;quot;x&amp;quot;.to_string())]),
+                Print(vec![Str(&amp;quot;y = &amp;quot;.to_string()), Var(&amp;quot;y&amp;quot;.to_string())]),
+                Print(vec![Str(&amp;quot;--&amp;quot;.to_string())]),
+                Block(vec![
+                    Subst(&amp;quot;x&amp;quot;.to_string(), Num(3)),
+                    Print(vec![Str(&amp;quot;x = &amp;quot;.to_string()), Var(&amp;quot;x&amp;quot;.to_string())]),
+                    Print(vec![Str(&amp;quot;y = &amp;quot;.to_string()), Var(&amp;quot;y&amp;quot;.to_string())]),
+                ]),
+                Print(vec![Str(&amp;quot;--&amp;quot;.to_string())]),
+                Print(vec![Str(&amp;quot;x = &amp;quot;.to_string()), Var(&amp;quot;x&amp;quot;.to_string())]),
+                Print(vec![Str(&amp;quot;y = &amp;quot;.to_string()), Var(&amp;quot;y&amp;quot;.to_string())]),
+            ]
+        )
+    };
+    let mut interpreter = Interpreter::new();
+
+    interpreter.run(ast);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;(コンストラクタ関数作っときゃよかったかも)&lt;/p&gt;
+
+&lt;p&gt;今回の本質ではないのでパーサは用意してません。&lt;/p&gt;
+
+&lt;p&gt;さて、とりあえずのところ変数の管理のためにシンボルテーブルが必要です。実装しましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;//...
+
+use std::collections::HashMap;
+struct Interpreter {
+    symbol_table: HashMap&amp;lt;String, Expr&amp;gt;,
+}
+
+impl Interpreter {
+    pub fn new() -&amp;gt; Self {
+        Interpreter{
+            symbol_table: HashMap::new(),
+        }
+    }
+
+    fn add_to_scope(&amp;amp;mut self, name: String, expr: Expr) {
+        self.symbol_table.insert(name, expr);
+    }
+
+    fn find_scope(&amp;amp;self, name: &amp;amp;str) -&amp;gt; Expr {
+        self.symbol_table
+            .get(name)
+            .expect(&amp;quot;reference to unknown variable&amp;quot;)
+            .clone()
+    }
+
+  //...
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;簡略化のためにcloneやpanicしてますがご愛嬌。&lt;/p&gt;
+
+&lt;p&gt;これがあれば&lt;code&gt;run_stmt&lt;/code&gt;のそれっぽい実装は出来ます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    fn run_stmt(&amp;amp;mut self, stmt: Stmt) {
+        use Stmt::*;
+
+        match stmt {
+            Subst(name, expr) =&amp;gt; {
+                let expr = self.eval(expr);
+                self.add_to_scope(name, expr);
+            },
+            Print(exprs) =&amp;gt; {
+                for expr in exprs {
+                    self.print_expr(expr);
+                }
+                println!(&amp;quot;&amp;quot;);
+            },
+            Block(stmts) =&amp;gt; {
+                for stmt in stmts {
+                    self.run_stmt(stmt);
+                }
+            },
+        }
+
+    }
+
+    fn eval(&amp;amp;self, expr: Expr) -&amp;gt; Expr {
+        use Expr::*;
+        match expr {
+            Var(v) =&amp;gt; self.find_scope(&amp;amp;v),
+            e @ Str(_) |
+            e @ Num(_) =&amp;gt; e
+        }
+    }
+
+    fn print_expr(&amp;amp;self, expr: Expr) {
+        use Expr::*;
+        match self.eval(expr) {
+            Str(ref s) =&amp;gt; print!(&amp;quot;{}&amp;quot;, s),
+            Num(ref n) =&amp;gt; print!(&amp;quot;{}&amp;quot;, n),
+            Var(_) =&amp;gt; panic!(&amp;quot;reference to unknown variable&amp;quot;) ,
+        }
+    }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;さて、これを走らせてみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cargo run
+x = 1
+y = 2
+--
+x = 3
+y = 2
+--
+x = 3
+y = 2
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;スコープを実装していないので最後の&lt;code&gt;x&lt;/code&gt;が3になっていますね。スコープを実装しましょう。&lt;/p&gt;
+
+&lt;p&gt;スコープを実装するには簡単にはハッシュテーブルを複数持てば良さそうです。
+3段にネストしたスコープなら3つのハッシュテーブルを持ちます。
+そしてスコープを抜けた時にそのスコープに対応するハッシュテーブルを消せば（忘れれば）良さそうです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct Interpreter {
+   // スコープに対応したテーブル達。
+   symbol_tables: Vec&amp;lt;HashMap&amp;lt;String, Expr&amp;gt;&amp;gt;,
+   // 今どのスコープを指しているか。
+   // スコープを抜けてもベクトルは縮まないのでこれが必要。
+   pos: usize,
+}
+
+impl Interpreter {
+    pub fn new() -&amp;gt; Self {
+        // 新しいフィールドの初期化
+        Interpreter{
+            symbol_tables: Vec::new(),
+            // ややこしくなるが、0で初期化しているのでpos-1番目のハッシュマップが現スコープのテーブルになる
+            pos: 0,
+        }
+    }
+
+    // スコープに入る処理。
+    fn in_scope(&amp;amp;mut self) {
+        let pos = self.pos;
+        // スコープから抜けてもハッシュマップは消えないので
+        // 入る → 出る → 入るをしたときに既にテーブルがある場合が出てくる。
+        // 必要なテーブルが既にある場合とない場合で条件分岐
+        if self.symbol_tables.len() &amp;lt;= pos {
+            self.symbol_tables.push(HashMap::new())
+        } else {
+            // 既にテーブルがある場合は古い情報を消す
+            self.symbol_tables[pos - 1].clear()
+        }
+        // ポジションは忘れずインクリメント
+        self.pos += 1;
+    }
+
+    // スコープから抜ける処理
+    fn out_scope(&amp;amp;mut self) {
+        // スコープから抜けるのはデクリメントのみでOK
+        self.pos -= 1;
+    }
+
+    pub fn run(&amp;amp;mut self, ast: AST) {
+        // in_scope が増えた
+        self.in_scope();
+        for stmt in ast.0 {
+            self.run_stmt(stmt);
+        }
+        // out_scope が増えた
+        self.out_scope();
+    }
+
+    fn add_to_scope(&amp;amp;mut self, name: String, expr: Expr) {
+        // 現在のスコープに変数を入れる
+        let pos = self.pos - 1;
+        self.symbol_tables[pos].insert(name, expr);
+    }
+
+    fn find_scope(&amp;amp;self, name: &amp;amp;str) -&amp;gt; Expr {
+        let pos = self.pos;
+        // 一番内側(現在)のスコープから外側のスコープの順に調べていく。
+        // `[0..pos]` や `rev()` に注意。
+        for table in self.symbol_tables[0..pos].iter().rev() {
+            if let Some(e) = table.get(name) {
+                return e.clone()
+            }
+        }
+        // どこにもなければ未定義変数
+        panic!(&amp;quot;reference to unknown variable&amp;quot;)
+    }
+
+    fn run_stmt(&amp;amp;mut self, stmt: Stmt) {
+        use Stmt::*;
+
+        match stmt {
+            // ..
+            Block(stmts) =&amp;gt; {
+                // in_scope が増えた
+                self.in_scope();
+                for stmt in stmts {
+                    self.run_stmt(stmt);
+                }
+                // out_scope が増えた
+                self.out_scope();
+            },
+        }
+
+    }
+
+    // ..
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これで走らせてみます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cargo run
+x = 1
+y = 2
+--
+x = 3
+y = 2
+--
+x = 1
+y = 2
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;はい。動きました。&lt;/p&gt;
+
+&lt;h1 id=&#34;scope-の導入&#34;&gt;&lt;code&gt;Scope&lt;/code&gt; の導入&lt;/h1&gt;
+
+&lt;p&gt;さて、上のコードでは&lt;code&gt;in_scope&lt;/code&gt;と&lt;code&gt;out_scope&lt;/code&gt;が対で現れました。というか現れないといけません。
+でもプログラミングエラーで&lt;code&gt;out_scope&lt;/code&gt;を忘れるなんてことはよくある話です（現に私はこのサンプルを書いてて間違えかけました）。これをRustのライフタイムの仕組みに乗っけて自動で解決しようというのが今回のお話。&lt;/p&gt;
+
+&lt;p&gt;手法は簡単で、とりあえず&lt;code&gt;Scope&lt;/code&gt;という型を用意します。そして&lt;code&gt;new&lt;/code&gt;する時に&lt;code&gt;in_scope&lt;/code&gt;を呼んであげて、&lt;code&gt;drop&lt;/code&gt;する時に&lt;code&gt;out_scope&lt;/code&gt;を呼んであげます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::ops::Drop;
+struct Scope&amp;lt;&#39;a&amp;gt;(&amp;amp;&#39;a mut Interpreter);
+
+impl &amp;lt;&#39;a&amp;gt;Scope&amp;lt;&#39;a&amp;gt; {
+    fn new(inpr: &amp;amp;&#39;a mut Interpreter) -&amp;gt; Self {
+        inpr.in_scope();
+        Scope(inpr)
+    }
+}
+
+impl &amp;lt;&#39;a&amp;gt;Drop for Scope&amp;lt;&#39;a&amp;gt; {
+    fn drop(&amp;amp;mut self) {
+        self.0.out_scope()
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;さて、この&lt;code&gt;&amp;amp;mut Interpreter&lt;/code&gt;で参照しているというのが丁度良くて、Scopeの分岐というのを防ぐことが出来ます。こういうやつですね。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;let scope1 = Scope::new(&amp;amp;mut intr);
+let scope2 = Scope::new(&amp;amp;mut intr); // error: 既に&amp;amp;mut されている変数は&amp;amp;mut出来ない
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;では、これを使ってみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    pub fn run(&amp;amp;mut self, ast: AST) {
+        // in_scopeをScope::new()に置き換えた
+        let scope = Scope::new(self);
+        for stmt in ast.0 {
+            // scopeに渡してしまったのでselfはsope.0で参照する必要がある
+            scope.0.run_stmt(stmt);
+        }
+        // out_scopeは自動で呼ばれる
+    }
+
+    // run_stmtのBlockも同様に書き換える
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cargo run
+x = 1
+y = 2
+--
+x = 3
+y = 2
+--
+x = 1
+y = 2
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;動きました。でも、あまり&lt;code&gt;scope.0&lt;/code&gt;なんて使いたくないですよね。出来れば透過的に扱いたい。
+そんなときのために&lt;code&gt;Deref&lt;/code&gt; と &lt;code&gt;DerefMut&lt;/code&gt; です。Rustは型が合わなければ自動で&lt;code&gt;deref&lt;/code&gt;を呼んでくれます。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;Deref&lt;/code&gt; と &lt;code&gt;DerefMut&lt;/code&gt; を実装しましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::ops::{Deref, DerefMut};
+impl &amp;lt;&#39;a&amp;gt; Deref for Scope&amp;lt;&#39;a&amp;gt; {
+    type Target = Interpreter;
+    fn deref(&amp;amp;self) -&amp;gt; &amp;amp;Interpreter {
+        self.0
+    }
+}
+
+impl &amp;lt;&#39;a&amp;gt; DerefMut for Scope&amp;lt;&#39;a&amp;gt; {
+    fn deref_mut(&amp;amp;mut self) -&amp;gt; &amp;amp;mut Interpreter {
+        self.0
+    }
+}
+
+impl Interpreter {
+    // ..
+
+    pub fn run(&amp;amp;mut self, ast: AST) {
+        // deref_mutするために mutをつける
+        let mut scope = Scope::new(self);
+        for stmt in ast.0 {
+            // scope.0しなくてもInterpreterのメソッドが呼べる
+            scope.run_stmt(stmt);
+        }
+    }
+
+   // ..
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;生成と消滅が対になるものはRustのオブジェクトで管理出来るよ&lt;/li&gt;
+&lt;li&gt;シンプルなラッパー型は&lt;code&gt;Deref&lt;/code&gt;や&lt;code&gt;DerefMut&lt;/code&gt;を実装しておくと便利だよ&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h1 id=&#34;参考&#34;&gt;参考&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/drop.html&#34;&gt;Drop&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/deref-coercions.html&#34;&gt;&lt;code&gt;Deref&lt;/code&gt; による型強制&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h1 id=&#34;付録a&#34;&gt;付録A&lt;/h1&gt;
+
+&lt;p&gt;最終的なソースコード全文を掲載します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;#[derive(Debug, Clone)]
+struct AST(Vec&amp;lt;Stmt&amp;gt;);
+
+#[derive(Debug, Clone)]
+enum Stmt {
+    Subst(String, Expr),
+    Print(Vec&amp;lt;Expr&amp;gt;),
+    Block(Vec&amp;lt;Stmt&amp;gt;),
+}
+
+
+#[derive(Debug, Clone)]
+enum Expr {
+    Str(String),
+    Num(isize),
+    Var(String),
+}
+
+
+use std::collections::HashMap;
+struct Interpreter {
+   symbol_tables: Vec&amp;lt;HashMap&amp;lt;String, Expr&amp;gt;&amp;gt;,
+   pos: usize,
+}
+
+use std::ops::{Drop, Deref, DerefMut};
+struct Scope&amp;lt;&#39;a&amp;gt;(&amp;amp;&#39;a mut Interpreter);
+
+impl &amp;lt;&#39;a&amp;gt;Scope&amp;lt;&#39;a&amp;gt; {
+    fn new(inpr: &amp;amp;&#39;a mut Interpreter) -&amp;gt; Self {
+        inpr.in_scope();
+        Scope(inpr)
+    }
+}
+
+impl &amp;lt;&#39;a&amp;gt;Drop for Scope&amp;lt;&#39;a&amp;gt; {
+    fn drop(&amp;amp;mut self) {
+        self.0.out_scope()
+    }
+}
+
+impl &amp;lt;&#39;a&amp;gt; Deref for Scope&amp;lt;&#39;a&amp;gt; {
+    type Target = Interpreter;
+    fn deref(&amp;amp;self) -&amp;gt; &amp;amp;Interpreter {
+        self.0
+    }
+}
+
+impl &amp;lt;&#39;a&amp;gt; DerefMut for Scope&amp;lt;&#39;a&amp;gt; {
+    fn deref_mut(&amp;amp;mut self) -&amp;gt; &amp;amp;mut Interpreter {
+        self.0
+    }
+}
+
+impl Interpreter {
+    pub fn new() -&amp;gt; Self {
+        Interpreter{
+            symbol_tables: Vec::new(),
+            pos: 0,
+        }
+    }
+
+    fn in_scope(&amp;amp;mut self) {
+        let pos = self.pos;
+        if self.symbol_tables.len() &amp;lt;= pos {
+            self.symbol_tables.push(HashMap::new())
+        } else {
+            self.symbol_tables[pos - 1].clear()
+        }
+        self.pos += 1;
+    }
+
+    fn out_scope(&amp;amp;mut self) {
+        self.pos -= 1;
+    }
+
+    pub fn run(&amp;amp;mut self, ast: AST) {
+        let mut scope = Scope::new(self);
+        for stmt in ast.0 {
+            scope.run_stmt(stmt);
+        }
+    }
+
+    fn add_to_scope(&amp;amp;mut self, name: String, expr: Expr) {
+        let pos = self.pos - 1;
+        self.symbol_tables[pos].insert(name, expr);
+    }
+
+    fn find_scope(&amp;amp;self, name: &amp;amp;str) -&amp;gt; Expr {
+        let pos = self.pos;
+        for table in self.symbol_tables[0..pos].iter().rev() {
+            if let Some(e) = table.get(name) {
+                return e.clone()
+            }
+        }
+        panic!(&amp;quot;reference to unknown variable&amp;quot;)
+    }
+
+    fn run_stmt(&amp;amp;mut self, stmt: Stmt) {
+        use Stmt::*;
+
+        match stmt {
+            Subst(name, expr) =&amp;gt; {
+                let expr = self.eval(expr);
+                self.add_to_scope(name, expr);
+            },
+            Print(exprs) =&amp;gt; {
+                for expr in exprs {
+                    self.print_expr(expr);
+                }
+                println!(&amp;quot;&amp;quot;);
+            },
+            Block(stmts) =&amp;gt; {
+                let scope = Scope::new(self);
+
+                for stmt in stmts {
+                    scope.0.run_stmt(stmt);
+                }
+            },
+        }
+
+    }
+
+    fn eval(&amp;amp;self, expr: Expr) -&amp;gt; Expr {
+        use Expr::*;
+        match expr {
+            Var(v) =&amp;gt; self.find_scope(&amp;amp;v),
+            e @ Str(_) |
+            e @ Num(_) =&amp;gt; e
+        }
+    }
+
+    fn print_expr(&amp;amp;self, expr: Expr) {
+        use Expr::*;
+        match self.eval(expr) {
+            Str(ref s) =&amp;gt; print!(&amp;quot;{}&amp;quot;, s),
+            Num(ref n) =&amp;gt; print!(&amp;quot;{}&amp;quot;, n),
+            Var(_) =&amp;gt; panic!(&amp;quot;reference to unknown variable&amp;quot;) ,
+        }
+    }
+}
+
+fn main() {
+    let ast = {
+        use Stmt::*;
+        use Expr::*;
+        AST(
+            vec![
+                Subst(&amp;quot;x&amp;quot;.to_string(), Num(1)),
+                Subst(&amp;quot;y&amp;quot;.to_string(), Num(2)),
+                Print(vec![Str(&amp;quot;x = &amp;quot;.to_string()), Var(&amp;quot;x&amp;quot;.to_string())]),
+                Print(vec![Str(&amp;quot;y = &amp;quot;.to_string()), Var(&amp;quot;y&amp;quot;.to_string())]),
+                Print(vec![Str(&amp;quot;--&amp;quot;.to_string())]),
+                Block(vec![
+                    Subst(&amp;quot;x&amp;quot;.to_string(), Num(3)),
+                    Print(vec![Str(&amp;quot;x = &amp;quot;.to_string()), Var(&amp;quot;x&amp;quot;.to_string())]),
+                    Print(vec![Str(&amp;quot;y = &amp;quot;.to_string()), Var(&amp;quot;y&amp;quot;.to_string())]),
+                ]),
+                Print(vec![Str(&amp;quot;--&amp;quot;.to_string())]),
+                Print(vec![Str(&amp;quot;x = &amp;quot;.to_string()), Var(&amp;quot;x&amp;quot;.to_string())]),
+                Print(vec![Str(&amp;quot;y = &amp;quot;.to_string()), Var(&amp;quot;y&amp;quot;.to_string())]),
+            ]
+        )
+    };
+    let mut interpreter = Interpreter::new();
+
+    interpreter.run(ast);
+}
+&lt;/code&gt;&lt;/pre&gt;</description>
+    </item>
+    
+    <item>
       <title>Rustの所有権、ライフタイム、参照、型、しがらみ</title>
       <link>/blog/2016/12/14/rustnoshoyuuken_raifutaimu_sanshou_kata_shigarami</link>
       <pubDate>Wed, 14 Dec 2016 11:19:12 +0900</pubDate>
@@ -3837,428 +4442,6 @@ Total LL D-Cache Misses...7,721 (0%)
 &lt;p&gt;私にとっては薮蛇にκLispの実装の筋が悪いことが分かったりしてショックでしたがまあ、簡単にプロファイルをとれるツールを紹介しました。&lt;/p&gt;
 
 &lt;p&gt;Rustで高速なアプリケーションを作りたい方、利用してみては如何でしょうか。&lt;/p&gt;</description>
-    </item>
-    
-    <item>
-      <title>RustでベアメタルRaspberry PiのLチカ</title>
-      <link>/blog/2016/05/04/rustdebeametaruraspberry_pinolchika</link>
-      <pubDate>Wed, 04 May 2016 11:43:26 +0900</pubDate>
-      
-      <guid>/blog/2016/05/04/rustdebeametaruraspberry_pinolchika</guid>
-      <description>&lt;p&gt;κeenです。GWもくもく会で机の片隅で埃被ってたRSPiのベアメタルを触ってみたのでその成果報告を。
-ベアメタルについて知らない人でも読めるように書きます。そしてアセンブラもCも出てきませんし、半田付けも必要ありません。
-Rustしか使いません。&lt;/p&gt;
-
-&lt;p&gt;Rustは分かるけどLチカは全く知らない、けど興味のある方は是非読んでみて下さい。
-&lt;/p&gt;
-
-&lt;h1 id=&#34;ベアメタルって&#34;&gt;ベアメタルって？&lt;/h1&gt;
-
-&lt;p&gt;普段我々が使っているパソコンはOSの上で動いています。
-OSはざっくりいうとハードウェアへのアクセスを抽象化し、プロセスという単位でプログラムの実行を分離します。
-ベアメタルはそのOSがない状態、ハードウェアの初期化やプロトコルなどは自分でやるしメモリ管理だとかも自分でやる環境です。
-丁度ハードウェアが抽象化されてなくて機械が生で見えているようなのでこう呼ぶようです。&lt;/p&gt;
-
-&lt;p&gt;OSがないのは中々イメージつきづらいですが、標準出力なんてものはないのでHello Worldも動きませんしメモリも仮想化されていないのでmallocも発効出来ません。
-さらにはスタックとヒープみたいな区別もOSが与えてくれるものなので、自分で作らない限りスタック領域も使えません。
-自分で書いたプログラムが唯一走るプログラムなのでプロセスの感覚でプログラムを終了させてはいけません。&lt;/p&gt;
-
-&lt;p&gt;なんでそんな環境でプログラムしたいかというといくつかモチベーションがありそうです。1つはOSそのものを作ってみたい人が練習がてら。
-もう1つにはOSが動かないような小さな環境だとそれしか選択肢がない。&lt;/p&gt;
-
-&lt;p&gt;RSPiの場合はOSが動くので選択肢がないという訳ではないのですが私はそういう小さなデバイスを持っていないので実験台としてRSPiを使いました。&lt;/p&gt;
-
-&lt;p&gt;さて、Hello Worldすら動かないシステムでの入門的なプログラムは信号のON/OFFを切り替えてあげるだけで出来るLEDをチカチカさせるプログラムという訳です。&lt;/p&gt;
-
-&lt;h1 id=&#34;raspberry-pi&#34;&gt;Raspberry Pi&lt;/h1&gt;
-
-&lt;p&gt;言わずと知れた名刺サイズの小型コンピュータ、Raspberry Piです。
-Raspberry Piと一口にいっても&lt;a href=&#34;https://ja.wikipedia.org/wiki/Raspberry_Pi&#34;&gt;色々種類がある&lt;/a&gt;のですが、私が持っているのはRaspberry Pi 1 Model Bの後期モデルです(Raspberry Pi 1 Model Bは販売途中で仕様がアップグレードしてメモリが増えた)。&lt;/p&gt;
-
-&lt;p&gt;ARMv6アーキテクチャのチップ(ARM1176JZF-S)で動いていて、SDカードから起動します。特別なライターなどは必要なく、PCからSDカードに書き込んでRSPiに挿して電源を繋ぐだけで簡単に起動出来る訳です。
-さらに配線とかが必要なGPIOに加えてボードにLEDもついているので物理の知識必要なくて今回のようにLチカだけをやりたいなら手軽に遊べます。&lt;/p&gt;
-
-&lt;h1 id=&#34;準備&#34;&gt;準備&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;Raspberry Pi 1 Model B&lt;/li&gt;
-&lt;li&gt;USB - micro USBケーブル(Raspberry Piへの給電用)&lt;/li&gt;
-&lt;li&gt;SDカード(FAT32でフォーマットしておく)&lt;/li&gt;
-&lt;li&gt;GCCのARM向けクロスコンパイラ(後述)&lt;/li&gt;
-&lt;li&gt;RustのARM向けクロスコンパイラ(後述)&lt;/li&gt;
-&lt;li&gt;ブートローダ(後述)&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h2 id=&#34;gccのクロスコンパイラ&#34;&gt;GCCのクロスコンパイラ&lt;/h2&gt;
-
-&lt;p&gt;GCCのクロスコンパイラは&lt;a href=&#34;https://launchpad.net/gcc-arm-embedded&#34;&gt;GCC ARM Embedded in Launchpad&lt;/a&gt;というプロジェクトがあるので簡単に用意出来ます。Ubuntu環境なら&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;sudo apt install gcc-arm-linux-gnueabihf
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;でインストールできます。どうやらRSPiには不動小数点数計算ユニット(FPU)がついているようなのでhf(Hardware Float)で大丈夫みたいです。
-HomebrewやPacmanにもパッケージはあるようです。&lt;/p&gt;
-
-&lt;h2 id=&#34;rustのクロスコンパイラ&#34;&gt;Rustのクロスコンパイラ&lt;/h2&gt;
-
-&lt;p&gt;次にRustのクロスコンパイラですが、&lt;a href=&#34;https://github.com/brson/multirust&#34;&gt;multirust&lt;/a&gt;を使うと簡単にインストール出来ます。今回はunstable機能も使うのでnightlyコンパイラを使います。
-因みに私が昔インストールしたmultirustだと古くて以下のコマンドが実行出来なかったので出来ない方はmultirustをアップデートして試してみて下さい。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;# インストール可能なターゲットを確認
-$ multirust list-available-targets nightly
-aarch64-apple-ios
-aarch64-unknown-linux-gnu
-arm-linux-androideabi
-arm-unknown-linux-gnueabi
-arm-unknown-linux-gnueabihf
-armv7-apple-ios
-armv7-unknown-linux-gnueabihf
-armv7s-apple-ios
-i386-apple-ios
-i586-pc-windows-msvc
-i586-unknown-linux-gnu
-i686-apple-darwin
-i686-pc-windows-gnu
-i686-pc-windows-msvc
-i686-unknown-linux-gnu
-mips-unknown-linux-gnu
-mips-unknown-linux-musl
-mipsel-unknown-linux-gnu
-mipsel-unknown-linux-musl
-powerpc-unknown-linux-gnu
-powerpc64-unknown-linux-gnu
-powerpc64le-unknown-linux-gnu
-x86_64-apple-darwin
-x86_64-apple-ios
-x86_64-pc-windows-gnu
-x86_64-pc-windows-msvc
-x86_64-rumprun-netbsd
-x86_64-unknown-freebsd
-x86_64-unknown-linux-gnu
-x86_64-unknown-linux-musl
-x86_64-unknown-netbsd
-# インストール
-$ multirust add-target nightly arm-unknown-linux-gnueabihf
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;ブートローダ&#34;&gt;ブートローダ&lt;/h2&gt;
-
-&lt;p&gt;まず、ブートローダが何をするものなのかから説明しましょう。興味がない人は飛ばして下さい。&lt;/p&gt;
-
-&lt;h3 id=&#34;説明&#34;&gt;説明&lt;/h3&gt;
-
-&lt;p&gt;Raspberry PiにはCPUとGPUが両方ついているのでやや面倒です。&lt;/p&gt;
-
-&lt;p&gt;CPU/GPUは電源がONになってすぐは何の機能もない、ただの命令を実行する機械です。メモリにすらアクセス出来ません。RSPiにSDカードを挿したところでSDカードのプロトコルを喋らないとそこに書いてあるプログラムが読めません。
-SDカードのプロトコルを喋るプログラム(BIOS)は、RSPiに組込みで入っています。これは普段我々が使うメモリ(RAM)とは別の場所(ROM)に入っています。&lt;/p&gt;
-
-&lt;p&gt;最初はGPUがそいつを起動し、(この時点ではCPUは起動してない)SDカードを読みにいきます。名前決め打ちでbootcode.binという名前のプログラムを、RAMではなくGPU(のL2キャッシュ)に直接ロードして実行します(メモリはまだ使えません)。
-GPUのキャッシュは非常に小さいのでbootcode.binは小さなプログラムでないといけません。&lt;/p&gt;
-
-&lt;p&gt;bootcode.binはRAMを有効にしてstart.elfをRAMに読み込み、GPUがそれを実行します。start.elfはRAMを使えるのである程度大きくても構いません。&lt;/p&gt;
-
-&lt;p&gt;start.elfはconfig.txt、cmdline.txtとkernel.imgを読みにいき、kernel.imgを0x8000番地のメモリに配置します。そしてconfgやcmdlineに基いてCPUを設定してkernel.imgに引数を渡しつつ実行します。&lt;/p&gt;
-
-&lt;p&gt;このkernel.imgは普段はLinuxカーネルなどのカーネル、今回は我々が作るLチカのプログラムです。&lt;/p&gt;
-
-&lt;p&gt;参考: &lt;a href=&#34;http://kernhack.hatenablog.com/entry/2014/01/11/102237&#34;&gt;Raspberry Piのブートプロセスメモ - φ(・・*)ゞ ｳｰﾝ　カーネルとか弄ったりのメモ&lt;/a&gt;
-昔はloader.binもあったようですが今はなくて大丈夫なようです。&lt;/p&gt;
-
-&lt;h3 id=&#34;インストール&#34;&gt;インストール&lt;/h3&gt;
-
-&lt;p&gt;bootcode.bin, start.elfは&lt;a href=&#34;https://github.com/raspberrypi/firmware/tree/master/boot&#34;&gt;こちら&lt;/a&gt;から入手出来ます。config.txtとcmdline.txtはなくていいようです。&lt;/p&gt;
-
-&lt;p&gt;こいつらはSDカードに放り込んでおきます。&lt;/p&gt;
-
-&lt;h1 id=&#34;環境確認&#34;&gt;環境確認&lt;/h1&gt;
-
-&lt;p&gt;まずはコンパイラツールチェーンが正常に動くか確認しましょう。
-以下にrustコードを。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;#![feature(lang_items, asm)]
-#![crate_type = &amp;quot;staticlib&amp;quot;]
-#![no_std]
-
-#[no_mangle]
-pub extern fn main() {
-    loop{}
-}
-
-
-#[no_mangle]
-pub extern fn _sbrk() {}
-#[no_mangle]
-pub extern fn _exit() {}
-#[no_mangle]
-pub extern fn _kill() {}
-#[no_mangle]
-pub extern fn _getpid() {}
-
-
-#[lang = &amp;quot;eh_personality&amp;quot;]
-extern fn eh_personality() {}
-
-#[lang = &amp;quot;panic_fmt&amp;quot;]
-extern fn panic_fmt() {}
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;さて、今回作るのは &lt;code&gt;#![crate_type = &amp;quot;staticlib&amp;quot;]&lt;/code&gt; を使って静的リンクライブラリを作れと指定しています。そして &lt;code&gt;#[no_mangle] pub extern fn main() {&lt;/code&gt; でC言語と同じような規則でmain関数を定義する(アセンブラからmain関数を実行出来るようにする)と指定しています。
-ベアメタル環境なのでファイルだとか諸々のものはなく、stdを使えないので &lt;code&gt;#![no_std]&lt;/code&gt; を指定してstdを使わずにcoreライブラリを使うようにしました。その代わり&lt;code&gt;#[lang = &amp;quot;eh_personality&amp;quot;] extern fn eh_personality() {}&lt;/code&gt; と &lt;code&gt;#[lang = &amp;quot;panic_fmt&amp;quot;] extern fn panic_fmt() {}&lt;/code&gt; を実装してあげないといけません(この実装はあまりよろしくないのですが今回はとりあえずコンパイルが通るようにということでこうしてます)。&lt;/p&gt;
-
-&lt;p&gt;そしてよく分かってないのですがRustが &lt;code&gt;_sbrk&lt;/code&gt; 、 &lt;code&gt;_exit&lt;/code&gt; 、 &lt;code&gt;_kill&lt;/code&gt; 、 &lt;code&gt;_getpid&lt;/code&gt; のシンボルを捜しにいくのでとりあえずスタブを挿してます。&lt;/p&gt;
-
-&lt;p&gt;no_mangle, no_std, lang_itemsについて詳しくは&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/&#34;&gt;ドキュメント&lt;/a&gt;をご覧下さい。
-&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/ffi.html&#34;&gt;他言語関数インターフェイス&lt;/a&gt;、&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/no-stdlib.html&#34;&gt;No stdlib&lt;/a&gt;、&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/lang-items.html&#34;&gt;言語アイテム&lt;/a&gt;あたりが参考になるかと思います。&lt;/p&gt;
-
-&lt;p&gt;以下のようにコンパイル出来ればRustはOKです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;rustc --target arm-unknown-linux-gnueabihf --emit=obj test.rs
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;次に、elfファイルを作ります。これは以下のコマンドで出来ます。Cのクロスコンパイラを使っていますね。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ arm-none-eabi-gcc -O2 -mfpu=vfp -mfloat-abi=hard -march=armv6zk -mtune=arm1176jzf-s -nostartfiles test.o -o kernel.elf
-/usr/lib/gcc/arm-none-eabi/4.9.3/../../../arm-none-eabi/bin/ld: warning: cannot find entry symbol _start; defaulting to 0000000000008000
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;-mで始まるオプションはRaspberry Piのチップ固有の指定、 -nostartfiles はベアメアルで動かすのに必要な指定ですね。&lt;/p&gt;
-
-&lt;p&gt;最後にelfファイルからimgファイルを作ります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;arm-none-eabi-objcopy kernel.elf -O binary kernel.img
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;私もよく分かってないのですがobjファイルが不完全なバイナリファイル、elfが完全なバイナリファイル、imgがelfを実際のメモリに展開した時のものそのままなんですかね。
-逆にいうとOSのない環境で動かすには生のimgが欲しいけどそれを作るのは難しいから一旦elfを作ってそこからimgを生成している？&lt;/p&gt;
-
-&lt;p&gt;さて、とりあえずここまで来れば環境は整いました。あとはプログラムを書くだけです。&lt;/p&gt;
-
-&lt;h1 id=&#34;lチカ&#34;&gt;Lチカ&lt;/h1&gt;
-
-&lt;p&gt;RSPiにくっついているLEDはデバイスとしてはGPIOのように見えるみたいです。
-そしてGPIOはMemory Mapped IO、特定の位置のメモリを読み書きすることでデバイスをいじれるようになってるみたいです。
-このセットアップは誰がやったんだって気になりますがBIOSなんですかね。&lt;/p&gt;
-
-&lt;p&gt;さて、この「特定の位置のメモリ」ですが、Raspberry Pi 1だと &lt;code&gt;0x20200000&lt;/code&gt; から始まるアドレス、のようです。2だと &lt;code&gt;3F200000&lt;/code&gt; のよう。&lt;/p&gt;
-
-&lt;p&gt;そして0x20200000からいくつかの32bitレジスタが配列のように並んでいる訳ですがこれまたRSPi+やRSP 2とRSPi 1はLEDに対応するレジスタがやや違うようです。&lt;/p&gt;
-
-&lt;p&gt;面倒なのでコピペで済ませると(私はCのコードからRustに移植しました。)&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;// Raspberry Pi2
-//pub const GPIO_BASE: u32 = 0x3F200000;
-// other
-pub const GPIO_BASE: u32 = 0x20200000;
-
-
-
-// Raspberrp Pi+ or Raspberry Pi2
-//pub const LED_GPFSEL: isize   = GPIO_GPFSEL4;
-//pub const LED_GPFBIT: i32     = 21;
-//pub const LED_GPSET: isize    = GPIO_GPSET1;
-//pub const LED_GPCLR: isize    = GPIO_GPCLR1;
-//pub const LED_GPIO_BIT: isize = 15;
-//  other
-pub const LED_GPFSEL: isize = GPIO_GPFSEL1;
-pub const LED_GPFBIT: i32 = 18;
-pub const LED_GPCLR: isize = GPIO_GPCLR0;
-pub const LED_GPSET: isize = GPIO_GPSET0;
-pub const LED_GPIO_BIT: i32 = 16;
-
-pub const GPIO_GPFSEL0: isize   = 0;
-pub const GPIO_GPFSEL1: isize   = 1;
-pub const GPIO_GPFSEL2: isize   = 2;
-pub const GPIO_GPFSEL3: isize   = 3;
-pub const GPIO_GPFSEL4: isize   = 4;
-pub const GPIO_GPFSEL5: isize   = 5;
-pub const GPIO_GPSET0: isize    = 7;
-pub const GPIO_GPSET1: isize    = 8;
-pub const GPIO_GPCLR0: isize    = 10;
-pub const GPIO_GPCLR1: isize    = 11;
-pub const GPIO_GPLEV0: isize    = 13;
-pub const GPIO_GPLEV1: isize    = 14;
-pub const GPIO_GPEDS0: isize    = 16;
-pub const GPIO_GPEDS1: isize    = 17;
-pub const GPIO_GPREN0: isize    = 19;
-pub const GPIO_GPREN1: isize    = 20;
-pub const GPIO_GPFEN0: isize    = 22;
-pub const GPIO_GPFEN1: isize    = 23;
-pub const GPIO_GPHEN0: isize    = 25;
-pub const GPIO_GPHEN1: isize    = 26;
-pub const GPIO_GPLEN0: isize    = 28;
-pub const GPIO_GPLEN1: isize    = 29;
-pub const GPIO_GPAREN0: isize   = 31;
-pub const GPIO_GPAREN1: isize   = 32;
-pub const GPIO_GPAFEN0: isize   = 34;
-pub const GPIO_GPAFEN1: isize   = 35;
-pub const GPIO_GPPUD: isize     = 37;
-pub const GPIO_GPPUDCLK0: isize = 38;
-pub const GPIO_GPPUDCLK1: isize = 39;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;こうなります(cfgを使ってないです。ごめんなさい。)。&lt;/p&gt;
-
-&lt;p&gt;次にLチカですが、
-LEDに対応するGPIOをwriteに初期化する→ループ{LEDに対応するGPIOをセットする → スリープ → LEDに対応するGPIOをクリアする → スリープ}&lt;/p&gt;
-
-&lt;p&gt;のプログラムを書きます。&lt;/p&gt;
-
-&lt;p&gt;色々試したのですが簡単なプログラムだと最適化で消えてしまうので消えないように工夫する必要があります。&lt;/p&gt;
-
-&lt;p&gt;スリープはとりあえずタイマーを使わずに空ループを回すのですが、ループの中身は空インラインアセンブラを使うと消えないようです。&lt;/p&gt;
-
-&lt;p&gt;また、メモリへの書き込みは&lt;a href=&#34;https://doc.rust-lang.org/core/intrinsics/&#34;&gt;intrinsic&lt;/a&gt;の&lt;a href=&#34;https://doc.rust-lang.org/core/intrinsics/fn.volatile_store.html&#34;&gt;volatile_store&lt;/a&gt;を使います。&lt;/p&gt;
-
-&lt;p&gt;ということでコードは以下です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;#![feature(lang_items, asm, core_intrinsics)]
-#![crate_type = &amp;quot;staticlib&amp;quot;]
-#![no_std]
-
-use core::intrinsics::volatile_store;
-
-// Raspberry Pi2
-//pub const GPIO_BASE: u32 = 0x3F200000;
-// other
-pub const GPIO_BASE: u32 = 0x20200000;
-
-
-
-// Raspberrp Pi+ or Raspberry Pi2
-//pub const LED_GPFSEL: isize   = GPIO_GPFSEL4;
-//pub const LED_GPFBIT: i32     = 21;
-//pub const LED_GPSET: isize    = GPIO_GPSET1;
-//pub const LED_GPCLR: isize    = GPIO_GPCLR1;
-//pub const LED_GPIO_BIT: isize = 15;
-//  other
-pub const LED_GPFSEL: isize = GPIO_GPFSEL1;
-pub const LED_GPFBIT: i32 = 18;
-pub const LED_GPCLR: isize = GPIO_GPCLR0;
-pub const LED_GPSET: isize = GPIO_GPSET0;
-pub const LED_GPIO_BIT: i32 = 16;
-
-pub const GPIO_GPFSEL0: isize   = 0;
-pub const GPIO_GPFSEL1: isize   = 1;
-pub const GPIO_GPFSEL2: isize   = 2;
-pub const GPIO_GPFSEL3: isize   = 3;
-pub const GPIO_GPFSEL4: isize   = 4;
-pub const GPIO_GPFSEL5: isize   = 5;
-pub const GPIO_GPSET0: isize    = 7;
-pub const GPIO_GPSET1: isize    = 8;
-pub const GPIO_GPCLR0: isize    = 10;
-pub const GPIO_GPCLR1: isize    = 11;
-pub const GPIO_GPLEV0: isize    = 13;
-pub const GPIO_GPLEV1: isize    = 14;
-pub const GPIO_GPEDS0: isize    = 16;
-pub const GPIO_GPEDS1: isize    = 17;
-pub const GPIO_GPREN0: isize    = 19;
-pub const GPIO_GPREN1: isize    = 20;
-pub const GPIO_GPFEN0: isize    = 22;
-pub const GPIO_GPFEN1: isize    = 23;
-pub const GPIO_GPHEN0: isize    = 25;
-pub const GPIO_GPHEN1: isize    = 26;
-pub const GPIO_GPLEN0: isize    = 28;
-pub const GPIO_GPLEN1: isize    = 29;
-pub const GPIO_GPAREN0: isize   = 31;
-pub const GPIO_GPAREN1: isize   = 32;
-pub const GPIO_GPAFEN0: isize   = 34;
-pub const GPIO_GPAFEN1: isize   = 35;
-pub const GPIO_GPPUD: isize     = 37;
-pub const GPIO_GPPUDCLK0: isize = 38;
-pub const GPIO_GPPUDCLK1: isize = 39;
-
-#[no_mangle]
-pub extern fn main() {
-    // GPIO_BASEを符号無し32bit整数を指すポインタにキャストする
-    let gpio = GPIO_BASE as *const u32;
-    // offsetを使うことでCの配列のようにポインタの何番地か先のメモリを指せる
-    let init   = unsafe {gpio.offset(LED_GPFSEL) as *mut u32};
-    let led_on = unsafe { gpio.offset(LED_GPSET) as *mut u32 };
-    let led_off = unsafe { gpio.offset(LED_GPCLR) as *mut u32 };
-
-    // LEDのGPIOを書き込みに設定
-    unsafe{
-        volatile_store(init, *(init) | 1 &amp;lt;&amp;lt; LED_GPFBIT);
-    }
-
-    loop {
-        // LEDをOFFにする
-        unsafe {
-            volatile_store(led_off, 1 &amp;lt;&amp;lt; LED_GPIO_BIT);
-        }
-        // 適当な長さbusy loopで時間を空ける
-        for _ in 1..500000 {
-            unsafe { asm!(&amp;quot;&amp;quot;); }
-        }
-
-        // LEDをONにする
-        unsafe {
-            volatile_store(led_on, 1 &amp;lt;&amp;lt; LED_GPIO_BIT);
-        }
-        // また適当な長さ空ける
-        for _ in 1..500000 {
-            unsafe { asm!(&amp;quot;&amp;quot;); }
-        }
-    }
-}
-
-
-#[no_mangle]
-pub extern fn _sbrk() {}
-#[no_mangle]
-pub extern fn _exit() {}
-#[no_mangle]
-pub extern fn _kill() {}
-#[no_mangle]
-pub extern fn _getpid() {}
-
-
-#[lang = &amp;quot;eh_personality&amp;quot;]
-extern fn eh_personality() {}
-
-#[lang = &amp;quot;panic_fmt&amp;quot;]
-extern fn panic_fmt() {}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これをkernel.rsとして保存し、&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;rustc  -O --target arm-unknown-linux-gnueabihf --emit=obj kernel.rs
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;でコンパイルします。どうやら使っていないのにrustが余計なシンボルを付けるようで、-Oをつけてそいつらをoptimize outさせないとコンパイルが通りませんでした。
-この辺、コンパイラのバージョンに依存しそうで怖いですね。&lt;/p&gt;
-
-&lt;p&gt;さて、あとは先程と同じく&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ arm-none-eabi-gcc -O2 -mfpu=vfp -mfloat-abi=hard -march=armv6zk -mtune=arm1176jzf-s -nostartfiles kernel.o -o kernel.elf
-$ arm-none-eabi-objcopy kernel.elf -O binary kernel.img
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;でイメージを作ってあげます。&lt;/p&gt;
-
-&lt;p&gt;そしたらこのkernel.imgをSDカードに放り込みます。&lt;/p&gt;
-
-&lt;p&gt;SDカードの中身はこうなっている筈です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ ls  /media/kim/6F6F-DCD9
-bootcode.bin  kernel.img  start.elf
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;このSDカードをRSPiに挿して、電源を繋いであげるとLEDがすごい勢いでチカチカする筈です。そうなったら成功です。おめでとうございます。&lt;/p&gt;
-
-&lt;h1 id=&#34;おわりに&#34;&gt;おわりに&lt;/h1&gt;
-
-&lt;p&gt;今回のコードは&lt;a href=&#34;https://github.com/KeenS/RaspPi&#34;&gt;ここ&lt;/a&gt;に置いておきます。とはいってもそのままではなくてCargo化したりMakefileを書いたり色々しています。&lt;/p&gt;
-
-&lt;p&gt;今回の作業をするにあたって参考にした資料のURLを挙げておきます。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;http://www.valvers.com/open-software/raspberry-pi/step01-bare-metal-programming-in-cpt1/&#34;&gt;Step01 – Bare Metal Programming in C Pt1 – Valvers&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;http://www.valvers.com/open-software/raspberry-pi/step02-bare-metal-programming-in-c-pt2/&#34;&gt;Step02 – Bare Metal Programming in C Pt2 – Valvers&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;http://blog.thiago.me/raspberry-pi-bare-metal-programming-with-rust/&#34;&gt;Raspberry Pi Bare Metal Programming with Rust&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;http://blog.bobuhiro11.net/2014/01-13-baremetal.html&#34;&gt;piでベアメタルプログラミング - bobuhiro11&amp;rsquo;s diary&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;</description>
     </item>
     
   </channel>
