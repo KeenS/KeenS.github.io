@@ -5,6 +5,8 @@ title: 気付いたらRustの環境構築がかなり楽になってた
 ---
 
 κeenです。ここのところRustの開発ツール回りでリリースが続いてセットアップが楽になってるようだったので最新の情報をお届けします。
+
+
 <!--more-->
 
 とりあえず私は既存の環境があるので一旦全て破棄してから再度セットアップしてみます。
@@ -44,16 +46,21 @@ $ cargo install racer
 
 まず、必要パッケージをインストールします。
 
-`racer` `rustfmt` `flycheck-rust` をインストールします。
+~~`racer` `rustfmt` `flycheck-rust` をインストールします。~~
 
+`racer` `flycheck-rust` をインストールします。rust-modeにrustfmtの機能が含まれているようでした。
+
+<blockquote class="twitter-tweet" data-conversation="none" data-lang="ja"><p lang="ja" dir="ltr"><a href="https://twitter.com/blackenedgold">@blackenedgold</a> rustfmtを emacsから使うの rust-modeが現在サポートしているので, rustfmt.elパッケージは不要ですね. rust-format-on-saveが non-nilなら保存時に rustfmtが実行されます.</p>&mdash; Syohei YOSHIDA (@syohex) <a href="https://twitter.com/syohex/status/814354653672415232">2016年12月29日</a></blockquote>
 
 ``` emacs-lisp
 ;;; racerやrustfmt、コンパイラにパスを通す
 (add-to-list 'exec-path (expand-file-name "~/.cargo/bin/"))
+;;; rust-modeでrust-format-on-saveをtにすると自動でrustfmtが走る
+(eval-after-load "rust-mode"
+  '(setq-default rust-format-on-save t))
 ;;; rustのファイルを編集するときにracerとflycheckを起動する
 (add-hook 'rust-mode-hook (lambda ()
                             (racer-mode)
-                            (rustfmt-enable-on-save)
                             (flycheck-rust-setup)))
 ;;; racerのeldocサポートを使う
 (add-hook 'racer-mode-hook #'eldoc-mode)
