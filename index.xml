@@ -6,417 +6,8 @@
     <description>Recent content on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Mon, 02 Jan 2017 10:46:39 +0900</lastBuildDate>
+    <lastBuildDate>Sun, 01 Jan 2017 22:12:01 +0900</lastBuildDate>
     <atom:link href="/index.xml" rel="self" type="application/rss+xml" />
-    
-    <item>
-      <title>QUICの中身が分からないから仕様読んでみた</title>
-      <link>/blog/2017/01/02/quicnonakamigawakaranaikarashiyouyondemita</link>
-      <pubDate>Mon, 02 Jan 2017 10:46:39 +0900</pubDate>
-      
-      <guid>/blog/2017/01/02/quicnonakamigawakaranaikarashiyouyondemita</guid>
-      <description>&lt;p&gt;κeenです。先日同期と話しててQUICの中身ってあまり知らないよねってことでQUICの仕様（ドラフト）を読んだのでまとめますね。あまりまとめきれてませんが。&lt;/p&gt;
-
-&lt;p&gt;&lt;strong&gt;※ドラフトは既に古くなっているのでこのブログの内容は現行では正しくない可能性があります。というか一部既に正しくないことが判明しています。ご注意下さい&lt;/strong&gt;&lt;/p&gt;
-
-&lt;p&gt;&lt;/p&gt;
-
-&lt;h1 id=&#34;背景&#34;&gt;背景&lt;/h1&gt;
-
-&lt;p&gt;仕様を読む前にQUICの背景から。
-HTTP/2でHTTPにストリームという概念が入りました。
-1つのコンテンツ毎に順にやりとりするのではなく、複数のコンテンツを並行して通信する仕組みです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;# 今まで
-[]--CCCBBBAAA--&amp;gt;[]
-
-# HTTP/2
-[]--ACCBCABBA--&amp;gt;[]
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;上の図でいえば例えばAのコンテンツがサーバの都合で遅くてもBやCのコンテンツが支える（Head of Line Blocking）ことなくクライアントに届きます。&lt;/p&gt;
-
-&lt;p&gt;ところで、この通信はTCP上で行われています。TCPは到達順序を保障するので例えば1パケット欠損したらそれ以後のパケットは（実際にはクライアントに到着しているにも関らず）待たされます(TCP Head of Line Blocking)。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;[]--ACCBCABB-X--&amp;gt;[]
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;この図でいえばAのパケットが欠損してますが、HTTP/2的にはAは無視してBやCのコンテンツをユーザに届けることは可能な訳です。
-この辺を改善したいというのがQUICのモチベーション。&lt;/p&gt;
-
-&lt;p&gt;もうちょっと言うとTCPの3way hand shakeだとかその上のTLS hand shakeだとかのオーバーヘッドの削減の目的もあります。
-TCPやTLSもRTTを減らそうと努力はしていますが、もっと抜本的な解決が必要とのことです。&lt;/p&gt;
-
-&lt;p&gt;ということでHTTP/2に特化してTCP+TLSを置き換えるための通信プロトコルとしてUDPベースのQUICが産まれました。&lt;/p&gt;
-
-&lt;p&gt;ここまではよくあるQUICの説明。でも、これだけだと情報が少なくてもやもやしますよね。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;HTTP/2に特化とはいうけどどこまで特化してるの？他のアプリケーションで使えないの？&lt;/li&gt;
-&lt;li&gt;どうしてTLSも統合してしまったの？分離出来なかったの？&lt;/li&gt;
-&lt;li&gt;UDPベースでどうやってコネクションの維持や輻輳制御してるの？&lt;/li&gt;
-&lt;li&gt;上記以外でQUICに特徴はないの？&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;などなど。これらの疑問を解決すべくQUICのドラフトを読んでいきます。&lt;/p&gt;
-
-&lt;hr /&gt;
-
-&lt;h1 id=&#34;quic&#34;&gt;QUIC&lt;/h1&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://tools.ietf.org/html/draft-tsvwg-quic-protocol-00&#34;&gt;これ&lt;/a&gt;を読んでいきます。Expires December 19, 2015と書いているのでかなり古いですが…。&lt;/p&gt;
-
-&lt;h2 id=&#34;イントロ&#34;&gt;イントロ&lt;/h2&gt;
-
-&lt;p&gt;QUICはHTTP/2のストリーム分割やフローコントロール、TLSのセキュリティ、TCPのコネクションセマンティクスや信頼性、輻輳制御を提供します。&lt;/p&gt;
-
-&lt;p&gt;QUICはUDPベースの通信プロトコルなので、完全にユーザーランドで完結します。
-これは重要な話で、レガシーなネットーワーク中間機器の上でもちゃんと通信出来ることを意味します。
-仕様化する前に実証実験をする上でとても重要な性質です。&lt;/p&gt;
-
-&lt;h2 id=&#34;用語&#34;&gt;用語&lt;/h2&gt;
-
-&lt;ul&gt;
-&lt;li&gt;クライアント: QUICコネクションを開始する端&lt;/li&gt;
-&lt;li&gt;サーバ: QUICコネクションを受け付ける端&lt;/li&gt;
-&lt;li&gt;エンドポイント: サーバ、またはクライアント&lt;/li&gt;
-&lt;li&gt;ストリーム: QUICコネクションの論理チャネル内を双方向に流れるバイト列の流れ&lt;/li&gt;
-&lt;li&gt;コネクション: 単一の暗号コンテキスト下のQUICエンドポイント同士のやりとり。複数のストリームを持つ。&lt;/li&gt;
-&lt;li&gt;コネクションID: QUICコネクションのID&lt;/li&gt;
-&lt;li&gt;QUIC Packet: QUICでパース可能な有効なUDPペイロード。QUICのパケットサイズとはUDPのペイロードのサイズを指す。&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h2 id=&#34;概要&#34;&gt;概要&lt;/h2&gt;
-
-&lt;p&gt;QUIC(+HTTP/2)のTCP+TLS(+HTTP/2)に対する利点は以下を改善することです。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;コネクション確立のレイテンシ&lt;/li&gt;
-&lt;li&gt;柔軟な輻輳制御&lt;/li&gt;
-&lt;li&gt;Head of Line Blockingなしに多重化&lt;/li&gt;
-&lt;li&gt;ヘッダやペイロードが認証/暗号化されている&lt;/li&gt;
-&lt;li&gt;ストリーム及びコネクションフローコントーロール&lt;/li&gt;
-&lt;li&gt;前方エラー訂正&lt;/li&gt;
-&lt;li&gt;コネクション移行&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;思ったより特徴ありますね。コネクション移行とか面白そう。
-さて、それぞれ見ていきます。忙しい人は概要まででもそれなりに役立つでしょう。&lt;/p&gt;
-
-&lt;h3 id=&#34;コネクション確立のレイテンシ&#34;&gt;コネクション確立のレイテンシ&lt;/h3&gt;
-
-&lt;p&gt;通常TCP+TLSだと1-3RTT必要なのに対してQUICは多くの場合0 RTTでコネクション確立出来ます。&lt;/p&gt;
-
-&lt;p&gt;多くの場合、といったので0 RTTで確立出来ない場合もある訳ですが、それが初めてサーバと繋ぐ時です。
-最初は1RTTかけてハンドシェイクを行います。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;# はじめて
-[client]                        [server]
-   |    empty client hello(CHLO)   |
-   |------------------------------&amp;gt;|
-   |        reject(REJ) +          |
-   |      source address token     |
-   |     server certificates       |
-   |&amp;lt;------------------------------|
-
-# 2回目以降
-
-[client]                        [server]
-   |      client hello(CHLO) +     |
-   |      cached credencials       |
-   |------------------------------&amp;gt;|
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ここで送られてくるソースアドレストークンは以降のCHLOでIPを確認するために使います。&lt;/p&gt;
-
-&lt;h3 id=&#34;柔軟な輻輳制御&#34;&gt;柔軟な輻輳制御&lt;/h3&gt;
-
-&lt;p&gt;QUICはプラガブルな輻輳制御を持っており、TCPより豊富なシグナルがあるのでTCPの輻輳制御アルゴリズムより賢く振る舞うことが出来ます。
-とはいっても現状の（ドラフト時点の）GoogleではTCPのアルゴリズムを流用しており別のアプローチを実験中とのこと。&lt;/p&gt;
-
-&lt;p&gt;詳細は&lt;a href=&#34;https://tools.ietf.org/html/draft-quic-loss-recovery&#34;&gt;ここ&lt;/a&gt;にあるとのことでしたが、リンク切れなのか真っ白なページしかありません。&lt;/p&gt;
-
-&lt;p&gt;さて、シグナルが豊富とのことでしたが、1例を出すとパケットの元のものと再送されたものでシーケンス番号が異ります(私はTCPの詳細を知らないのでよく分かりませんが輻輳制御のためにシーケンス番号を振っているのでしょう)。
-元と再送のものを区別出来るようになるのでTCPの曖昧性問題（というのがあるのでしょう）を解決出来るとのこと。&lt;/p&gt;
-
-&lt;p&gt;また、パケットを受け取ってからackを送るまでの時差と単調増加するシーケンス番号も一緒に送るのでRTTを計算することが出来ます。&lt;/p&gt;
-
-&lt;p&gt;最後に、ACKが256 NACKまでサポートする（らしい）のでTCPのSACKよりもリオーダリングに弾力性があり、パケロスやリオーダリングがある環境下でもパケット密度を高めることが出来るとのこと。これは後程記述があります。&lt;/p&gt;
-
-&lt;p&gt;この辺はTCPの輻輳制御から勉強しないと利点が分からないですね。宿題。&lt;/p&gt;
-
-&lt;h3 id=&#34;ストリーム及びコネクションフローコントーロール&#34;&gt;ストリーム及びコネクションフローコントーロール&lt;/h3&gt;
-
-&lt;p&gt;順番が前後しますがストリームの話。そういえばHTTP/2にバックプレッシャーありましたね。&lt;/p&gt;
-
-&lt;p&gt;ストリームレベル、コネクションレベルでのフロー制御が出来ます。
-ほぼHTTP/2と同等のストリーム制御が可能です。&lt;/p&gt;
-
-&lt;p&gt;ストリームレベルの制御は、まず、受け取り側がストリーム内のデータのどのオフセットまでを受け取るかを広報します。
-ストリームにデータが届いたら、WINDOW_UPDATEのフレームを投げて、受け取り可能なオフセットを更新します。&lt;/p&gt;
-
-&lt;p&gt;コネクションレベルの制御は、ストリーム合計でのバッファを制限するために使います。
-単純にストリームでやっている制御をコネクションレベルでやるだけです。&lt;/p&gt;
-
-&lt;p&gt;また、TCPにあるようにreceive-windowのオートチューニングもやるそうです。&lt;/p&gt;
-
-&lt;p&gt;この辺、HTTP/2に合わせた仕様なんですね。&lt;/p&gt;
-
-&lt;h3 id=&#34;多重化&#34;&gt;多重化&lt;/h3&gt;
-
-&lt;p&gt;TCP head of line blockingしない。因みにHTTP/2のヘッダはHPACKで圧縮して送るのでここはhead of line blockingします。&lt;/p&gt;
-
-&lt;h3 id=&#34;ヘッダやペイロードが認証-暗号化されている&#34;&gt;ヘッダやペイロードが認証/暗号化されている&lt;/h3&gt;
-
-&lt;p&gt;そもそもの話、TCPは平文で通信するのでreceive-windowの更新やらシーケンス番号を上書きしたりやらの攻撃が可能です（尤も、通信の最適化のために中間機器で行うこともありますが）。&lt;/p&gt;
-
-&lt;p&gt;QUICは一部のヘッダを除き暗号化されています。暗号化されていない部分も受理側によって認証されるのでインジェクションを阻止出来ます。&lt;/p&gt;
-
-&lt;p&gt;ここでTLSも統合している理由が分かりました。認証のためにTLSが必要なんですね。&lt;/p&gt;
-
-&lt;h3 id=&#34;前方エラー訂正&#34;&gt;前方エラー訂正&lt;/h3&gt;
-
-&lt;p&gt;Forward Error Correction (FEC)。シンプルなXORベースのFECをやるそうです。FECグループ内の1パケットがロスしてもFECパケットから復元出来るとのこと。すごい。&lt;/p&gt;
-
-&lt;h3 id=&#34;コネクション移行&#34;&gt;コネクション移行&lt;/h3&gt;
-
-&lt;p&gt;TCPは4-tuple(source address, port, destinacion address, port)でコネクションを判別しますが、それだと例えばスマホが電話通信（って呼称でいいのかな？）からWifiに切り替わった時にIPが変わりますし、NAT下でポート番号が変わることもあるので突発的にコネクションが切れてしまう訳です。&lt;/p&gt;
-
-&lt;p&gt;QUICはクライアントがランダム生成した64bitのコネクションIDで識別します。
-じゃあ、コネクションIDを被せにいったらハイジャック出来るじゃんと思えますが、TLSを前提にしているのでクライアント認証も自動でついていて、その辺には耐性があります。&lt;/p&gt;
-
-&lt;h2 id=&#34;パケットタイプとフォーマット&#34;&gt;パケットタイプとフォーマット&lt;/h2&gt;
-
-&lt;p&gt;4種類あります。バージョンネゴシエーションパケット、フレームパケット、FECパケット、パブリックリセットパケットです。&lt;/p&gt;
-
-&lt;p&gt;パケットはIPの断片化を防ぐためにパスのMTU（Message Transfer Unit）に収まる必要がありますが、MTUの発見はまだWIPだそうです。
-今とのころIPv6で1350byte、IPv4で1370byteを使っているとのこと。&lt;/p&gt;
-
-&lt;h3 id=&#34;共通ヘッダ&#34;&gt;共通ヘッダ&lt;/h3&gt;
-
-&lt;p&gt;全てのQUICパケットにつくヘッダです。
-長さは2-21byteの間になります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;     0        1        2        3        4            8
-+--------+--------+--------+--------+--------+---    ---+
-| Public |    Connection ID (0, 8, 32, or 64)    ...    | -&amp;gt;
-|Flags(8)|      (variable length)                       |
-+--------+--------+--------+--------+--------+---    ---+
-
-     9       10       11        12
-+--------+--------+--------+--------+
-|      Quic Version (32)            | -&amp;gt;
-|         (optional)                |
-+--------+--------+--------+--------+
-
-    13      14       15        16        17       18       19       20
-+--------+--------+--------+--------+--------+--------+--------+--------+
-|         Sequence Number (8, 16, 32, or 48)          |Private | FEC (8)|
-|                         (variable length)           |Flags(8)|  (opt) |
-+--------+--------+--------+--------+--------+--------+--------+--------+
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;private flags以下は暗号化されます。軽く説明しますね。それぞれの詳しい内容は仕様を読んで下さい。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;public flagsにパケットタイプなどが入っています。&lt;/li&gt;
-&lt;li&gt;コネクションIDが64bitだと過剰な場合はネゴって短かくすることも可能です。&lt;/li&gt;
-&lt;li&gt;シーケンス番号はフレームパケットに付与されます。1から始まり1づつ大きくなります。&lt;/li&gt;
-&lt;li&gt;シーケンス番号の下位64bitはTLSのnonceに使うことも出来ます。合理的ですね。&lt;/li&gt;
-&lt;li&gt;内部的には64bitでシーケンス番号を管理するけどパケットに載せるのは48bitまで。&lt;/li&gt;
-&lt;li&gt;48bit(n bit)でオーバーフローした時の曖昧性排除のために2^46個(2^(n-2)個)までしか同時にパケットを送れない&lt;/li&gt;
-&lt;li&gt;シーケンス番号が2^64-1に逹したらシーケンス番号のリミットでコネクションクローズが走る&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h3 id=&#34;バージョンネゴシエーションパケット&#34;&gt;バージョンネゴシエーションパケット&lt;/h3&gt;
-
-&lt;p&gt;WIP（って仕様に書いてある）&lt;/p&gt;
-
-&lt;h3 id=&#34;フレームパケット&#34;&gt;フレームパケット&lt;/h3&gt;
-
-&lt;p&gt;ヘッダに続いてこんな感じ&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;+--------+---...---+--------+---...---+
-| Type   | Payload | Type   | Payload |
-+--------+---...---+--------+---...---+
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;fecパケット&#34;&gt;FECパケット&lt;/h3&gt;
-
-&lt;p&gt;ヘッダに続いてこんなん&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;+-----...----+
-| Redundancy |
-+-----...----+
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;パブリックリセットパケット&#34;&gt;パブリックリセットパケット&lt;/h3&gt;
-
-&lt;p&gt;なんか面倒そうなので略&lt;/p&gt;
-
-&lt;h2 id=&#34;quicコネクションのライフサイクル&#34;&gt;QUICコネクションのライフサイクル&lt;/h2&gt;
-
-&lt;h3 id=&#34;コネクションの確立&#34;&gt;コネクションの確立&lt;/h3&gt;
-
-&lt;p&gt;バージョンネゴシエーションと暗号化/通信ハンドシェイクを一遍にやります。
-なんかまだWIPのようです。&lt;/p&gt;
-
-&lt;h3 id=&#34;データ転送&#34;&gt;データ転送&lt;/h3&gt;
-
-&lt;p&gt;多くは概要で説明した通り。
-暗号化ハンドシェイクも含めてストリーム内でデータをやりとりするが、ACKはQUICパケット単位。&lt;/p&gt;
-
-&lt;h4 id=&#34;ストリームのライフサイクル&#34;&gt;ストリームのライフサイクル&lt;/h4&gt;
-
-&lt;p&gt;ストリームはデータをストリームフレームに分割してデータ転送します。
-ストリームフレームは互いに順序逆転可能です。
-ストリームの生成/クローズはサーバ、クライアント両方から出来ます。
-ほとんどHTTP/2のストリームと同じですね。&lt;/p&gt;
-
-&lt;p&gt;ストリーム生成は特にネゴる必要なく簡単に可能です。ただ、ストリームIDが衝突しないようにサーバが作る時は偶数、クライアントが作る時は奇数を使います。
-0は無効、1は暗号化ハンドシェイクのために予約、3はHTTPヘッダの通信のために予約とされています。ヘッダだけは順序保障が必要なんですね。
-他の細かい規約は仕様を見て下さい。&lt;/p&gt;
-
-&lt;p&gt;一旦ストリームが開いたらデータ転送に自由に使えます。&lt;/p&gt;
-
-&lt;p&gt;ストリームの終了には3種類あります。&lt;/p&gt;
-
-&lt;ol&gt;
-&lt;li&gt;普通の終了: 双方向通信なのでFIN bitを立てて送信した後のhalf-closeとかの概念があります。&lt;/li&gt;
-&lt;li&gt;突然の終了: 何かしらのエラーがあった時などにRST_STREAMフレームを送ると強制終了出来ます。&lt;/li&gt;
-&lt;li&gt;コネクションが終了した時: まあ、当然ですね。&lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;h3 id=&#34;コネクションの終了&#34;&gt;コネクションの終了&lt;/h3&gt;
-
-&lt;p&gt;コネクションの終了にも2種類あります。&lt;/p&gt;
-
-&lt;ol&gt;
-&lt;li&gt;明示的な終了: CONNECTION_CLOSEを送ることでコネクションを終了出来ます。&lt;/li&gt;
-&lt;li&gt;暗黙的な終了: タイムアウト（デフォルト30秒）したらクローズします。通常はCONNECTION_CLOSEを送りますが、モバイルで電波をonにしたくないなどの理由があればsilent closeも可能です。&lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;p&gt;それ以外に、PUBLIC_RSTでコネクションをクローズ出来ます。TCPのRST相当（だそう）です。&lt;/p&gt;
-
-&lt;h2 id=&#34;フレームタイプとフォーマット&#34;&gt;フレームタイプとフォーマット&lt;/h2&gt;
-
-&lt;p&gt;前述の通りフレームパケットにはフレームが入っています。フレームタイプ毎にデータの解釈が変わります。
-1フレームは必ず1パケットに収まる必要があります。&lt;/p&gt;
-
-&lt;h3 id=&#34;フレームタイプ&#34;&gt;フレームタイプ&lt;/h3&gt;
-
-&lt;p&gt;スペシャルフレームと普通のフレームがあります。&lt;/p&gt;
-
-&lt;p&gt;スペシャルフレームは以下。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;+------------------+-----------------------------+
-| Type-field value |     Control Frame-type      |
-+------------------+-----------------------------+
-|     1fdooossB    |  STREAM                     |
-|     01ntllmmB    |  ACK                        |
-|     001xxxxxB    |  CONGESTION_FEEDBACK        |
-+------------------+-----------------------------+
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;通常のフレームは以下。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;+------------------+-----------------------------+
-| Type-field value |     Control Frame-type      |
-+------------------+-----------------------------+
-| 00000000B (0x00) |  PADDING                    |
-| 00000001B (0x01) |  RST_STREAM                 |
-| 00000010B (0x02) |  CONNECTION_CLOSE           |
-| 00000011B (0x03) |  GOAWAY                     |
-| 00000100B (0x04) |  WINDOW_UPDATE              |
-| 00000101B (0x05) |  BLOCKED                    |
-| 00000110B (0x06) |  STOP_WAITING               |
-| 00000110B (0x07) |  PING                       |
-+------------------+-----------------------------+
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これらのタイプについて仕様に載っている順に軽く説明します。詳しくは仕様を読んで下さい。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;STREAM: 暗黙的にstreamを作るのにもデータを送るのにも使います。&lt;/li&gt;
-&lt;li&gt;ACK: ackです。受け取った最大シーケンス番号とそれまでで欠損している番号のリストを送ります。前述の通り受理からACKまでの時差を入れたりと複雑なので仕様を読んで下さい。&lt;/li&gt;
-&lt;li&gt;STOP_WAITING: 特定以下のシーケンス番号のパケットを待たないように指示します。&lt;/li&gt;
-&lt;li&gt;WINDOW_UPDATE: コネクション/ストリームいずれかのウィンドウ余白を通知します。Stream ID 0がコネクションレベルのアップデートです。&lt;/li&gt;
-&lt;li&gt;BLOCKED: バックプレッシャーでこれ以上データを送信出来ない時に送ります。informational frameです(ほぼデバッグ用とのこと)。&lt;/li&gt;
-&lt;li&gt;CONGESTION_FEEDBACK: experimentalで、not usedとのこと。&lt;/li&gt;
-&lt;li&gt;PADDING: 0x00で埋められたデータを保持します。パケットをMTUまで埋めるのが目的なのかな？&lt;/li&gt;
-&lt;li&gt;RST_STREAM: ストリームの異常終了用。&lt;/li&gt;
-&lt;li&gt;PING: 生きてる？って訊くやつです。これを受けたらACKを返します。デフォルトで15秒毎に送ります。&lt;/li&gt;
-&lt;li&gt;CONNECTION_CLOSE: closeを通知するやつです。&lt;/li&gt;
-&lt;li&gt;GOAWAY: コネクションを止めるよ通知です。近くcloseするのでデータ送るのやめなよという通知です。新たなstreamが作れなくなります。&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;この後、RST_STREAMで使うエラーコードの列挙がありますが、「Chromiumではこう定義されてるよ」程度でしたので省略します。&lt;/p&gt;
-
-&lt;h2 id=&#34;プライオリティ&#34;&gt;プライオリティ&lt;/h2&gt;
-
-&lt;p&gt;HTTP/2のものを使うそうですが、まだ実装してないとのこと。&lt;/p&gt;
-
-&lt;h2 id=&#34;quic上のhttp-2&#34;&gt;QUIC上のHTTP/2&lt;/h2&gt;
-
-&lt;p&gt;いくつかHTTP/2と同じ機能を提供していますが、HTTP/2がQUICを使う時にどう統合するかのお話です。&lt;/p&gt;
-
-&lt;h3 id=&#34;ストリームマネジメント&#34;&gt;ストリームマネジメント&lt;/h3&gt;
-
-&lt;p&gt;QUICが代替機能を提供するのでHTTP/2レイヤで扱う必要はありません。HTTP/2のストリームIDはそのままQUICのストリームIDになります。&lt;/p&gt;
-
-&lt;h3 id=&#34;ヘッダー圧縮&#34;&gt;ヘッダー圧縮&lt;/h3&gt;
-
-&lt;p&gt;Stream ID 3で送ることになっている（QUICの仕様でHTTP/2のヘッダを扱うことになっている）。のでそれを使います。&lt;/p&gt;
-
-&lt;h3 id=&#34;http-2ヘッダのパース&#34;&gt;HTTP/2ヘッダのパース&lt;/h3&gt;
-
-&lt;p&gt;HTTP/2にあるストリームのSYNやプライオリティがQUICにないので一旦HTTP/2のヘッダを解釈してからそれを使います。
-酷い仕様ですね。&lt;/p&gt;
-
-&lt;h3 id=&#34;永続コネクション&#34;&gt;永続コネクション&lt;/h3&gt;
-
-&lt;p&gt;コネクションという概念がないのでHTTPにある&amp;rdquo;Connection&amp;rdquo;ヘッダが意味をなさない。ので、HTTPレベルでのコネクションハンドリングはしません。&lt;/p&gt;
-
-&lt;p&gt;これ、&amp;rdquo;Connection: upgrade&amp;rdquo;はどうするんですかねって思ったら次に書いてました。&lt;/p&gt;
-
-&lt;h3 id=&#34;httpでのquicネゴシエーション&#34;&gt;HTTPでのQUICネゴシエーション&lt;/h3&gt;
-
-&lt;p&gt;クライアントが普通のHTTPでアクセスした時にサーバはQUICを使いませんか、とネゴシエーションすることが出来ます。それが&lt;/p&gt;
-
-&lt;p&gt;&amp;ldquo;Alternate-Protocol: 123:quic&amp;rdquo;&lt;/p&gt;
-
-&lt;p&gt;です。同じホストの123ポートにQUICプロトコルでアクセスしにいきます。
-中間機器がUDPをブロックすることも考えてTCPにgraceful fallbackしろ、と書かれてます。&lt;/p&gt;
-
-&lt;p&gt;以上が仕様の主だった記述です。&lt;/p&gt;
-
-&lt;hr /&gt;
-
-&lt;h1 id=&#34;終わりに&#34;&gt;終わりに&lt;/h1&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://docs.google.com/document/d/1g5nIXAIkN_Y-7XJW5K45IblHd_L2f5LTaDUDwvZ5L6g/edit&#34;&gt;QUIC Crypto&lt;/a&gt;なるものを発見して読んだらQUIC Crypto protocol is destinated to die（QUIC Cryptoプロトコルは終了予定）と書いてあったのでTLS認証回りはTLS1.3のものに置き換えられるっぽい？&lt;/p&gt;
-
-&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;HTTP/2に特化とはいうけどどこまで特化してるの？他のアプリケーションで使えないの？&lt;br /&gt;
-→ ストリームやHTTP/2ヘッダなどが統合されているのでかなり扱いづらい。&lt;/li&gt;
-&lt;li&gt;どうしてTLSも統合してしまったの？分離出来なかったの？&lt;br /&gt;
-→ クライアント認証のために必要だった。TLS1.3からは分離出来る（？）&lt;/li&gt;
-&lt;li&gt;UDPベースでどうやってコネクションの維持や輻輳制御してるの？&lt;br /&gt;
-→ コネクションはコネクションIDで維持。輻輳制御は別の仕様（アクセス不可）に書いてある&lt;/li&gt;
-&lt;li&gt;上記以外でQUICに特徴はないの？&lt;br /&gt;
-→ 柔軟な輻輳制御、FEC、コネクション移行など&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;宿題:&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;TCPについても調べる。特に輻輳制御回り。&lt;/li&gt;
-&lt;li&gt;QUICの輻輳制御について調べる。&lt;/li&gt;
-&lt;li&gt;TLS1.3との統合について調べる&lt;/li&gt;
-&lt;/ul&gt;</description>
-    </item>
     
     <item>
       <title>2017年注目していきたい技術</title>
@@ -3315,6 +2906,544 @@ Makefile:50: ターゲット &#39;testRunner&#39; のレシピで失敗しまし
 * 「追加可能な型」は便利だよ
 * 型相当のものがあればダイナミックディスパッチ出来るよ
 * picrinに実装されてるよ `(picrin class)` `(picrin protocol)`
+
+&lt;/script&gt;
+&lt;/section&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Rustで非同期Thriftしたい</title>
+      <link>/slide/RustdehidoukiThriftshitai/</link>
+      <pubDate>Sat, 26 Nov 2016 13:07:29 +0900</pubDate>
+      
+      <guid>/slide/RustdehidoukiThriftshitai/</guid>
+      <description>&lt;section data-markdown
+    data-separator=&#34;\n===\n&#34;
+    data-vertical=&#34;\n---\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+&lt;script type=&#34;text/template&#34;&gt;
+
+# Rustで非同期Thrift
+----------------------
+[歌舞伎座.tech#12「メッセージフォーマット/RPC勉強会」 - connpass](https://kbkz.connpass.com/event/40629/)
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+===
+
+# About Me
+---------
+![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
+
+ * κeen
+ * [@blackenedgold](https://twitter.com/blackenedgold)
+ * Github: [KeenS](https://github.com/KeenS)
+ * サイバーエージェントのエンジニア
+ * Lisp, ML, Rust, Shell Scriptあたりを書きます
+
+===
+
+* &lt;span style=&#34;font-size:150%&#34;&gt;X&lt;/span&gt; RPCライブラリを使う話
+* &lt;span style=&#34;font-size:150%&#34;&gt;O&lt;/span&gt; RPCライブラリを作る話
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+===
+
+# RPC
+-----
+
+* Remote Procedure Call
+* リモートで呼べる
+* 言語跨げる
+* シリアライズフォーマットが決まれば大体出来る
+* Thrift, protobuf/gRPC, avro...
+* 大抵バイナリ
+  + JSONに比べて2倍くらい効率がいい
+
+===
+
+# Thrift
+--------
+
+* Facebook発(現apache)RPCフレームワーク
+* IDLから複数の言語向けのコードを吐ける
+* 対応言語多い
+* 新しい言語はthriftレポジトリフォークして追加
+
+===
+
+# Thrift vs gRPC
+----------------
+
+\                       | Thrift | gRPC
+------------------------|:------:|:----:
+ベース                  | 自前   | HTTP/2
+コード生成              | o      | o
+プロトコルのアップデート | o      | o
+通信の多重化            | トランスポート次第  | o (HTTP/2)
+認証                    | x  | o
+例外                    | ユーザ定義可能 | 事前定義のみ?
+対応言語                | 多い   | ほどほど
+その他                  | union  | timestamp, anyなど
+&lt;!-- .element: style=&#34; margin-right:auto; margin-left:auto&#34;--&gt;
+
+===
+
+# 何故Thrift?
+-------------
+
+* 仕事で使ってたから
+* 仕事は「gRPCかthrift、まあthriftでいっしょ」で決まった
+
+===
+
+# RustとThrift
+--------------
+いくつか実装がある
+
+===
+
+## [sgnr/rust-thrift](https://github.com/sgnr/rust-thrift)
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+===
+
+![sgnr/rust-thrift is deprecated](/images/thrift/sgnr-rust-thrift.png)
+
+===
+
+## [maximg/thrift](https://github.com/maximg/thrift)
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+===
+
+![maximg/thrift is deprecated](/images/thrift/maximg-thrift.png)
+
+===
+
+## [terminalcloud/thrift](https://github.com/terminalcloud/thrift)
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+===
+
+![terminalcloud/thrift is deprecated](/images/thrift/terminalcloud.png)
+
+===
+
+# [thehydroimpulse/thrust](https://github.com/thehydroimpulse/thrust)
+---------------------------
+
+* Thrift RPC in Rust (Async I/O)
+* 非同期!!
+* apache/thriftベースじゃない（フルスクラッチ）
+* コンパイラプラグインサポートとかも
+* 作りかけ
+  + `Latest commit 0a37b77 on 11 Apr`
+
+→ フォークすることに
+
+===
+
+# [Finagle](https://github.com/twitter/finagle)
+---------
+
+* **Scalaの** RPCフレームワーク
+* [You Server as a Function](https://monkey.org/~marius/funsrv.pdf)
+* Nettyベース
+* サーバとクライアント両方サポート
+* Twitter製
+* 良くも悪くもTwitterべったり
+
+===
+
+# Finagle Client
+--------
+
+* クライアントが賢い
+* RPCではTCPベースのLBが使えない
+  + クライアントはコネクション張りっぱなし
+* クライアントサイドロードバランシングが必要
+* Finagleはそこまでカバー
+* 他にもエラーが起きたサーバ外したり色々
+
+===
+
+# Tokio
+--------
+
+* **Rustの** RPCフレームワーク
+* mioベース
+* Finagleを参考に開発
+  + **開発中**
+* tokio-core
+  + コア部分
+* tokio-proto
+  + プロトコル実装のサポート
+  + 絶賛API変更中
+* tokio-service
+  + サービス実装のサポート
+
+
+===
+
+# TokioとFinagle
+-----------------
+
+  \           | Tokio       | Finagle
+--------------|:-----------:|:-------:
+コア          | [tokio-core](https://github.com/tokio-rs/tokio-core) | [finagle-core](https://github.com/twitter/finagle/tree/develop/finagle-core)
+Future        | [future](https://github.com/alexcrichton/futures-rs) | [twitter util](https://github.com/twitter/util)
+非同期エンジン | [mio](https://github.com/carllerche/mio) | [netty](http://netty.io/)
+&lt;!-- .element: style=&#34; margin-right:auto; margin-left:auto&#34;--&gt;
+
+
+===
+
+# [mio](https://github.com/carllerche/mio)
+------
+
+* 非同期イベントループライブラリ
+* イベントドリブン
+* ループ内ゼロアロケーション
+* `epoll` などの薄いラッパ
+* libuv, libevent, libev2などのRust版
+* ソケットだけでなく *ファイルIO* 、インメモリチャネルとかも監視出来る
+
+===
+
+# [future](https://github.com/alexcrichton/futures-rs)
+--------------
+
+* [Zero-cost futures in Rust · Aaron Turon](https://aturon.github.io/blog/2016/08/11/futures/)
+* ゼロコスト
+* 普通にFutureを使うとランタイムにステートマシンになる
+* 「将来実行される」という「状態」を第一級の値として表現する大事な手段
+* お型付けは大変
+    + `map` したら `Map&lt;A, fn (A)-&gt;B&gt;` の型が返ったり
+* ストリーミング指向のAPIもある
+
+===
+
+# [tokio-core](https://github.com/tokio-rs/tokio-core)
+--------------
+
+* 非同期IOのフレームワーク
+* Futureベース
+* フレームドIOとストリーミングIO
+* フレームワークというよりユーティリティ？
+  + mioとfutureを合わせて使う
+
+===
+
+# [tokio-proto](https://github.com/tokio-rs/tokio-proto)
+-------------
+
+* 主にバイナリ列&lt;-&gt;構造体の部分の面倒を見てくれる
+* API変更中…
+* バッファリングしてパースしやすくしてくれる
+* プロトコルの多重化やってくれる(後述)
+
+===
+
+# [tokio-service](https://github.com/tokio-rs/tokio-service)
+-----------------
+
+* タスクサーバの面倒見てくれる
+* 主にロードバランシング
+
+
+===
+
+# [Service](https://tokio-rs.github.io/tokio-service/tokio_service/trait.Service.html)
+-------------
+
+``` rust
+pub trait Service {
+    type Request;
+    type Response;
+    type Error;
+    type Future: Future&lt;Item=Self::Response, Error=Self::Error&gt;;
+    fn call(&amp;self, req: Self::Request) -&gt; Self::Future;
+}
+```
+
+===
+
+# Service
+----------
+
+* いわゆるハンドラ
+* インターフェースさえ満たせばいい
+  + ミドルウェアもハンドラも同じ扱い
+
+===
+
+# [NewService](https://tokio-rs.github.io/tokio-service/tokio_service/trait.NewService.html)
+--------------
+
+```rust
+pub trait NewService {
+    type Request;
+    type Response;
+    type Error;
+    type Instance: Service&lt;Request=Self::Request, Response=Self::Response, Error=Self::Error&gt;;
+    fn new_service(&amp;self) -&gt; Result&lt;Self::Instance&gt;;
+}
+
+impl&lt;F, R&gt; NewService for F where F: Fn() -&gt; Result&lt;R&gt;, R: Service
+```
+
+===
+
+# NewService
+------------
+
+* いわゆるAbstractServiceFactory的な存在
+* コア数に応じてサービスを作ってくれる
+* ただし`Service`を返す普通の関数も`NewService`になる
+* [example](https://github.com/tokio-rs/tokio-line/blob/master/examples/echo_client_server.rs#L21)
+
+
+===
+
+# tokio-thrift
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+===
+
+# [tokio-thrift](https://github.com/KeenS/tokio-thrift)
+--------------
+
+* [KeenS/tokio-thrift](https://github.com/KeenS/tokio-thrift)
+* この発表のために作った（作ってる）
+* tokioベースのrustのthriftサポート
+* thrustのフォーク
+* 基本ツール全て
+  + コードジェネレータ
+  + コンパイラプラグイン
+  + ランタイムライブラリ
+
+===
+
+# プロトコルスタック
+-------------------
+
+ユーザは実装に集中出来る仕組み
+
+```
++------------------------------------------------+
+| service   | tokio-service + 生成コード + ユーザ |
+|------------------------------------------------|
+| protocol  | tokio-proto   + tokio-thrift       |
+|------------------------------------------------|
+| transport | tokio-core                         |
++------------------------------------------------+
+```
+
+===
+
+# サンプルコード
+----------------
+
+* [これ](https://github.com/KeenS/tokio-thrift/blob/master/example/simple_server_client/src/main.rs)
+
+===
+
+# ユーザビリティ
+---------------
+
+* サーバ: ユーザはインターフェースに沿ったコードを書くだけ
+* クライアント: インターフェース通りに呼べる
+* 返り値はFuture
+* サーバ: 非同期実装と相性がいい
+* クライアント: 非同期通信をそのままエンコード
+
+===
+
+# 実装の話
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+===
+
+# Thriftのプロトコル
+-------------------
+
+* 現状binary protocolのみ
+  + fork元が実装してあった
+* compactとか需要ある？
+* 因みにJSONはやめとけ
+
+===
+
+# 所有権とゼロコピー
+-------------------
+
+* プロトコルのパースの部分の話
+* Rustっぽい部分
+* バッファの所有権をパース結果に渡すことでデータのコピーを避ける
+
+===
+
+# 所有権とゼロコピー
+-------------------
+バッファをresultにパースして
+
+```
+buffer
+  |
++-+---------------+
+|                 |
+-------------------
+| | | | | ... | | | &lt;- バイト列
+-------------------
+```
+
+===
+
+# 所有権とゼロコピー
+-------------------
+resultにデータの所有権を渡してしまう
+
+```
+ result   buffer
+   |        |
++--+----++--+-----+
+|       ||        |
+-------------------
+| | | | | ... | | | &lt;- バイト列
+-------------------
+```
+
+===
+
+# 複数メソッド
+-------------
+
+* 複数メソッドだと複数の引数/返値の型を扱う
+* コネクションのハンドラは1つ
+* 複数型をどうやって扱う？
+  + [enumを定義](https://github.com/KeenS/tokio-thrift/blob/master/example/simple_server_client/src/thrift.rs#L67)
+  + ゼロオーバーヘッド…
+
+===
+
+# 複数メソッド
+-------------
+
+```
+ (methodA) (methodB)
+     |         |
+     +----+----+
+          | &lt;----- enum化
+      [client]
+          |
+      [server]
+          | &lt;----- enumでディスパッチ
+     +----+-----+
+     |          |
+(handlerA) (handlerB)
+```
+
+===
+
+# つらい話
+-----------------
+
+* Thrift IDLのセマンティクスが書いてない
+  + throws節のフィールドは直積？直和？
+  + Javaで生成してみて推測するしかない
+* フォークライブラリの実装が不完全
+  + パーサはフルスクラッチで書き直した
+  + [パーサコンビネータ便利](https://github.com/KeenS/tokio-thrift/blob/master/tokio-thrift-codegen/src/parser.rs#L517)
+  + フォークした意味…
+* Rustにエンコード出来ないthriftの機能もある
+  + mapの定数は普通には無理
+  + エラーどうしよう(`Error`トレイトの実装とEnum)
+* 所有権の問題
+
+===
+
+# 言語との統合
+-------------
+
+* Rustには公式のシリアライズフレームワークがある
+* [rustc-serialize](https://github.com/rust-lang-nursery/rustc-serialize)
+* あるいはユーザ側のも
+* [serde](https://github.com/serde-rs/serde)
+* のっかりたいけどThriftに必要なデータがない
+  + フィールドのシーケンス番号とか
+* 今のところ自動生成に頼る
+  + フレームワークにフィードバックした方がいい？
+
+===
+
+# コード生成の話
+---------------
+
+* [コンパイラプラグイン](https://github.com/KeenS/tokio-thrift/blob/master/tokio-thrift-macros/tests/service.rs#L10)微妙
+  + 定義元ジャンプ、フィールド名補完などに難
+* CLI生成は悪手
+  + IDL変更する度CLI実行？
+  + 生成コードはコミット？
+    - CLIのバージョンがあるので基本はコミット。でも…
+* ビルドツール統合が最良
+  + FinagleにはScoogeがある
+  + tokio-thriftでもやりたい
+    - build.rsのサポート
+
+===
+
+# 多重化の話
+------------
+
+* 生のthrift on TCPだと通信を多重化出来ない
+* tokio-proto側でpipelineやmultiplexなどをサポート
+* pipeline: レスポンスを待たずに次のリクエスト
+* multiplex: リクエストとレスポンスが入り乱れてもよい。プロトコルオーバーヘッドがある
+* tokio-thriftは未対応
+
+===
+
+# Tokioの利点
+-------------
+
+* service: サーバとクライアント両方面倒見てくれる
+  + サーバもCPUの数だけハンドラをクローンしてくれたりする
+* protocol: 面倒毎が少ない(バッファ使ってくれる)
+* Futureベースの非同期
+* pipeline, multiplexによる多重化
+
+===
+
+# Tokioの欠点
+-------------
+
+* APIが不安定
+  + tokio-thriftは今動かないorz
+* thriftはストリーミング指向なのにバッファ使う
+* Rustの痒い所に当たる
+  + 返り値多相がない(`Future`を直接返せない)
+  + アロケーションが必要になる
+  + ダイナミックディスパッチが必要になる
+  + 他言語と同水準のコスト
+
+===
+
+# まとめ
+--------
+
+* Thriftは広さで勝負
+* コードジェネレータはビルドツールへの統合を
+* IDLは既存のコードに乗っかった方が楽（上と競合）
+* フレームワークを使うとみんな幸せ
+* RPCはインターフェースベースであるべき
+* 多重化はRPCより下のレイヤーで出来る
 
 &lt;/script&gt;
 &lt;/section&gt;
