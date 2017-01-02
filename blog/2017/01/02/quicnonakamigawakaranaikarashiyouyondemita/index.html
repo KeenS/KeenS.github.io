@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+    <head>
+        
+        <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+
+        <title>QUICの中身が分からないから仕様読んでみた | κeenのHappy Hacκing Blog</title>
+        <link rel="stylesheet" href='http://fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css' />
+        <link rel="stylesheet" href="/libraries/normalize.3.0.1.css" />
+        <link rel="stylesheet" href="/css/liquorice.css" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+        <link rel="icon" type="image/png" href="/favicon-32x32.png" sizes="32x32">
+        <link rel="icon" type="image/png" href="/favicon-16x16.png" sizes="16x16">
+        <link rel="manifest" href="/manifest.json">
+        <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#5bbad5">
+        <meta name="theme-color" content="#ffffff">
+        <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon-144-precomposed.png" sizes="144x144" />
+        <link rel="alternate" href="" type="application/rss+xml" title="κeenのHappy Hacκing Blog" />
+        
+        <script>
+         (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+             (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+                                  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+         })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+         ga('create', 'UA-43779888-1', 'auto');
+         ga('send', 'pageview');
+
+        </script>
+        
+        <link rel="stylesheet" href="/highlight.js/styles/xcode.css" />
+<script src="/highlight.js/highlight.min.js"></script>
+<script>hljs.initHighlightingOnLoad();</script>
+<script type="text/x-mathjax-config">
+ MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
+</script>
+<script type="text/javascript"
+        src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML">
+</script>
+<meta http-equiv="X-UA-Compatible" CONTENT="IE=EmulateIE7" />
+
+    </head>
+    <body class="li-body">
+
+<header class="li-page-header">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-brand li-left">
+                <a href="/">κeenのHappy Hacκing Blog</a> | Lispエイリアンの狂想曲</div>
+                <div class="li-menu li-right">
+                    <span class="li-menu-icon" onclick="javascript:toggle('menu');">&#9776;</span>
+                    <ul id="menu2" class="li-menu-items">
+                        
+                            <li><a href="/about/"> About </a></li>
+                        
+                            <li><a href="/index.xml"> Atom </a></li>
+                        
+                            <li><a href="/post/"> Blog </a></li>
+                        
+                            <li><a href="/slide/"> Slide </a></li>
+                        
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="sixteen columns">
+                <ul id="menu" class="li-menu-items li-menu-mobile">
+                    
+                        <li><a href="/about/"> About </a></li>
+                    
+                        <li><a href="/index.xml"> Atom </a></li>
+                    
+                        <li><a href="/post/"> Blog </a></li>
+                    
+                        <li><a href="/slide/"> Slide </a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+
+
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <article class="li-article">
+                    <header class="li-article-header">
+                        <h1 class="li-article-title">QUICの中身が分からないから仕様読んでみた</h1>
+                        <div class="li-article-meta">
+    <time class="li-article-date">2017-01-02</time>
+    <ul class="li-article-tag">
+    
+        <li>
+            <a href="/categories/quic">QUIC</a>
+        </li>
+    
+</ul>
+
+</div>
+
+                    </header>
+                    <section>
+                        <p>κeenです。先日同期と話しててQUICの中身ってあまり知らないよねってことでQUICの仕様（ドラフト）を読んだのでまとめますね。あまりまとめきれてませんが。</p>
+
+<p><strong>※ドラフトは既に古くなっているのでこのブログの内容は現行では正しくない可能性があります。というか一部既に正しくないことが判明しています。ご注意下さい</strong></p>
+
+<p></p>
+
+<h1 id="背景">背景</h1>
+
+<p>仕様を読む前にQUICの背景から。
+HTTP/2でHTTPにストリームという概念が入りました。
+1つのコンテンツ毎に順にやりとりするのではなく、複数のコンテンツを並行して通信する仕組みです。</p>
+
+<pre><code># 今まで
+[]--CCCBBBAAA--&gt;[]
+
+# HTTP/2
+[]--ACCBCABBA--&gt;[]
+</code></pre>
+
+<p>上の図でいえば例えばAのコンテンツがサーバの都合で遅くてもBやCのコンテンツが支える（Head of Line Blocking）ことなくクライアントに届きます。</p>
+
+<p>ところで、この通信はTCP上で行われています。TCPは到達順序を保障するので例えば1パケット欠損したらそれ以後のパケットは（実際にはクライアントに到着しているにも関らず）待たされます(TCP Head of Line Blocking)。</p>
+
+<pre><code>[]--ACCBCABB-X--&gt;[]
+</code></pre>
+
+<p>この図でいえばAのパケットが欠損してますが、HTTP/2的にはAは無視してBやCのコンテンツをユーザに届けることは可能な訳です。
+この辺を改善したいというのがQUICのモチベーション。</p>
+
+<p>もうちょっと言うとTCPの3way hand shakeだとかその上のTLS hand shakeだとかのオーバーヘッドの削減の目的もあります。
+TCPやTLSもRTTを減らそうと努力はしていますが、もっと抜本的な解決が必要とのことです。</p>
+
+<p>ということでHTTP/2に特化してTCP+TLSを置き換えるための通信プロトコルとしてUDPベースのQUICが産まれました。</p>
+
+<p>ここまではよくあるQUICの説明。でも、これだけだと情報が少なくてもやもやしますよね。</p>
+
+<ul>
+<li>HTTP/2に特化とはいうけどどこまで特化してるの？他のアプリケーションで使えないの？</li>
+<li>どうしてTLSも統合してしまったの？分離出来なかったの？</li>
+<li>UDPベースでどうやってコネクションの維持や輻輳制御してるの？</li>
+<li>上記以外でQUICに特徴はないの？</li>
+</ul>
+
+<p>などなど。これらの疑問を解決すべくQUICのドラフトを読んでいきます。</p>
+
+<hr />
+
+<h1 id="quic">QUIC</h1>
+
+<p><a href="https://tools.ietf.org/html/draft-tsvwg-quic-protocol-00">これ</a>を読んでいきます。Expires December 19, 2015と書いているのでかなり古いですが…。</p>
+
+<h2 id="イントロ">イントロ</h2>
+
+<p>QUICはHTTP/2のストリーム分割やフローコントロール、TLSのセキュリティ、TCPのコネクションセマンティクスや信頼性、輻輳制御を提供します。</p>
+
+<p>QUICはUDPベースの通信プロトコルなので、完全にユーザーランドで完結します。
+これは重要な話で、レガシーなネットーワーク中間機器の上でもちゃんと通信出来ることを意味します。
+仕様化する前に実証実験をする上でとても重要な性質です。</p>
+
+<h2 id="用語">用語</h2>
+
+<ul>
+<li>クライアント: QUICコネクションを開始する端</li>
+<li>サーバ: QUICコネクションを受け付ける端</li>
+<li>エンドポイント: サーバ、またはクライアント</li>
+<li>ストリーム: QUICコネクションの論理チャネル内を双方向に流れるバイト列の流れ</li>
+<li>コネクション: 単一の暗号コンテキスト下のQUICエンドポイント同士のやりとり。複数のストリームを持つ。</li>
+<li>コネクションID: QUICコネクションのID</li>
+<li>QUIC Packet: QUICでパース可能な有効なUDPペイロード。QUICのパケットサイズとはUDPのペイロードのサイズを指す。</li>
+</ul>
+
+<h2 id="概要">概要</h2>
+
+<p>QUIC(+HTTP/2)のTCP+TLS(+HTTP/2)に対する利点は以下を改善することです。</p>
+
+<ul>
+<li>コネクション確立のレイテンシ</li>
+<li>柔軟な輻輳制御</li>
+<li>Head of Line Blockingなしに多重化</li>
+<li>ヘッダやペイロードが認証/暗号化されている</li>
+<li>ストリーム及びコネクションフローコントーロール</li>
+<li>前方エラー訂正</li>
+<li>コネクション移行</li>
+</ul>
+
+<p>思ったより特徴ありますね。コネクション移行とか面白そう。
+さて、それぞれ見ていきます。忙しい人は概要まででもそれなりに役立つでしょう。</p>
+
+<h3 id="コネクション確立のレイテンシ">コネクション確立のレイテンシ</h3>
+
+<p>通常TCP+TLSだと1-3RTT必要なのに対してQUICは多くの場合0 RTTでコネクション確立出来ます。</p>
+
+<p>多くの場合、といったので0 RTTで確立出来ない場合もある訳ですが、それが初めてサーバと繋ぐ時です。
+最初は1RTTかけてハンドシェイクを行います。</p>
+
+<pre><code># はじめて
+[client]                        [server]
+   |    empty client hello(CHLO)   |
+   |------------------------------&gt;|
+   |        reject(REJ) +          |
+   |      source address token     |
+   |     server certificates       |
+   |&lt;------------------------------|
+
+# 2回目以降
+
+[client]                        [server]
+   |      client hello(CHLO) +     |
+   |      cached credencials       |
+   |------------------------------&gt;|
+</code></pre>
+
+<p>ここで送られてくるソースアドレストークンは以降のCHLOでIPを確認するために使います。</p>
+
+<h3 id="柔軟な輻輳制御">柔軟な輻輳制御</h3>
+
+<p>QUICはプラガブルな輻輳制御を持っており、TCPより豊富なシグナルがあるのでTCPの輻輳制御アルゴリズムより賢く振る舞うことが出来ます。
+とはいっても現状の（ドラフト時点の）GoogleではTCPのアルゴリズムを流用しており別のアプローチを実験中とのこと。</p>
+
+<p>詳細は<a href="https://tools.ietf.org/html/draft-quic-loss-recovery">ここ</a>にあるとのことでしたが、リンク切れなのか真っ白なページしかありません。</p>
+
+<p>さて、シグナルが豊富とのことでしたが、1例を出すとパケットの元のものと再送されたものでシーケンス番号が異ります(私はTCPの詳細を知らないのでよく分かりませんが輻輳制御のためにシーケンス番号を振っているのでしょう)。
+元と再送のものを区別出来るようになるのでTCPの曖昧性問題（というのがあるのでしょう）を解決出来るとのこと。</p>
+
+<p>また、パケットを受け取ってからackを送るまでの時差と単調増加するシーケンス番号も一緒に送るのでRTTを計算することが出来ます。</p>
+
+<p>最後に、ACKが256 NACKまでサポートする（らしい）のでTCPのSACKよりもリオーダリングに弾力性があり、パケロスやリオーダリングがある環境下でもパケット密度を高めることが出来るとのこと。これは後程記述があります。</p>
+
+<p>この辺はTCPの輻輳制御から勉強しないと利点が分からないですね。宿題。</p>
+
+<h3 id="ストリーム及びコネクションフローコントーロール">ストリーム及びコネクションフローコントーロール</h3>
+
+<p>順番が前後しますがストリームの話。そういえばHTTP/2にバックプレッシャーありましたね。</p>
+
+<p>ストリームレベル、コネクションレベルでのフロー制御が出来ます。
+ほぼHTTP/2と同等のストリーム制御が可能です。</p>
+
+<p>ストリームレベルの制御は、まず、受け取り側がストリーム内のデータのどのオフセットまでを受け取るかを広報します。
+ストリームにデータが届いたら、WINDOW_UPDATEのフレームを投げて、受け取り可能なオフセットを更新します。</p>
+
+<p>コネクションレベルの制御は、ストリーム合計でのバッファを制限するために使います。
+単純にストリームでやっている制御をコネクションレベルでやるだけです。</p>
+
+<p>また、TCPにあるようにreceive-windowのオートチューニングもやるそうです。</p>
+
+<p>この辺、HTTP/2に合わせた仕様なんですね。</p>
+
+<h3 id="多重化">多重化</h3>
+
+<p>TCP head of line blockingしない。因みにHTTP/2のヘッダはHPACKで圧縮して送るのでここはhead of line blockingします。</p>
+
+<h3 id="ヘッダやペイロードが認証-暗号化されている">ヘッダやペイロードが認証/暗号化されている</h3>
+
+<p>そもそもの話、TCPは平文で通信するのでreceive-windowの更新やらシーケンス番号を上書きしたりやらの攻撃が可能です（尤も、通信の最適化のために中間機器で行うこともありますが）。</p>
+
+<p>QUICは一部のヘッダを除き暗号化されています。暗号化されていない部分も受理側によって認証されるのでインジェクションを阻止出来ます。</p>
+
+<p>ここでTLSも統合している理由が分かりました。認証のためにTLSが必要なんですね。</p>
+
+<h3 id="前方エラー訂正">前方エラー訂正</h3>
+
+<p>Forward Error Correction (FEC)。シンプルなXORベースのFECをやるそうです。FECグループ内の1パケットがロスしてもFECパケットから復元出来るとのこと。すごい。</p>
+
+<h3 id="コネクション移行">コネクション移行</h3>
+
+<p>TCPは4-tuple(source address, port, destinacion address, port)でコネクションを判別しますが、それだと例えばスマホが電話通信（って呼称でいいのかな？）からWifiに切り替わった時にIPが変わりますし、NAT下でポート番号が変わることもあるので突発的にコネクションが切れてしまう訳です。</p>
+
+<p>QUICはクライアントがランダム生成した64bitのコネクションIDで識別します。
+じゃあ、コネクションIDを被せにいったらハイジャック出来るじゃんと思えますが、TLSを前提にしているのでクライアント認証も自動でついていて、その辺には耐性があります。</p>
+
+<h2 id="パケットタイプとフォーマット">パケットタイプとフォーマット</h2>
+
+<p>4種類あります。バージョンネゴシエーションパケット、フレームパケット、FECパケット、パブリックリセットパケットです。</p>
+
+<p>パケットはIPの断片化を防ぐためにパスのMTU（Message Transfer Unit）に収まる必要がありますが、MTUの発見はまだWIPだそうです。
+今とのころIPv6で1350byte、IPv4で1370byteを使っているとのこと。</p>
+
+<h3 id="共通ヘッダ">共通ヘッダ</h3>
+
+<p>全てのQUICパケットにつくヘッダです。
+長さは2-21byteの間になります。</p>
+
+<pre><code>     0        1        2        3        4            8
++--------+--------+--------+--------+--------+---    ---+
+| Public |    Connection ID (0, 8, 32, or 64)    ...    | -&gt;
+|Flags(8)|      (variable length)                       |
++--------+--------+--------+--------+--------+---    ---+
+
+     9       10       11        12
++--------+--------+--------+--------+
+|      Quic Version (32)            | -&gt;
+|         (optional)                |
++--------+--------+--------+--------+
+
+    13      14       15        16        17       18       19       20
++--------+--------+--------+--------+--------+--------+--------+--------+
+|         Sequence Number (8, 16, 32, or 48)          |Private | FEC (8)|
+|                         (variable length)           |Flags(8)|  (opt) |
++--------+--------+--------+--------+--------+--------+--------+--------+
+</code></pre>
+
+<p>private flags以下は暗号化されます。軽く説明しますね。それぞれの詳しい内容は仕様を読んで下さい。</p>
+
+<ul>
+<li>public flagsにパケットタイプなどが入っています。</li>
+<li>コネクションIDが64bitだと過剰な場合はネゴって短かくすることも可能です。</li>
+<li>シーケンス番号はフレームパケットに付与されます。1から始まり1づつ大きくなります。</li>
+<li>シーケンス番号の下位64bitはTLSのnonceに使うことも出来ます。合理的ですね。</li>
+<li>内部的には64bitでシーケンス番号を管理するけどパケットに載せるのは48bitまで。</li>
+<li>48bit(n bit)でオーバーフローした時の曖昧性排除のために2^46個(2^(n-2)個)までしか同時にパケットを送れない</li>
+<li>シーケンス番号が2^64-1に逹したらシーケンス番号のリミットでコネクションクローズが走る</li>
+</ul>
+
+<h3 id="バージョンネゴシエーションパケット">バージョンネゴシエーションパケット</h3>
+
+<p>WIP（って仕様に書いてある）</p>
+
+<h3 id="フレームパケット">フレームパケット</h3>
+
+<p>ヘッダに続いてこんな感じ</p>
+
+<pre><code>+--------+---...---+--------+---...---+
+| Type   | Payload | Type   | Payload |
++--------+---...---+--------+---...---+
+</code></pre>
+
+<h3 id="fecパケット">FECパケット</h3>
+
+<p>ヘッダに続いてこんなん</p>
+
+<pre><code>+-----...----+
+| Redundancy |
++-----...----+
+</code></pre>
+
+<h3 id="パブリックリセットパケット">パブリックリセットパケット</h3>
+
+<p>なんか面倒そうなので略</p>
+
+<h2 id="quicコネクションのライフサイクル">QUICコネクションのライフサイクル</h2>
+
+<h3 id="コネクションの確立">コネクションの確立</h3>
+
+<p>バージョンネゴシエーションと暗号化/通信ハンドシェイクを一遍にやります。
+なんかまだWIPのようです。</p>
+
+<h3 id="データ転送">データ転送</h3>
+
+<p>多くは概要で説明した通り。
+暗号化ハンドシェイクも含めてストリーム内でデータをやりとりするが、ACKはQUICパケット単位。</p>
+
+<h4 id="ストリームのライフサイクル">ストリームのライフサイクル</h4>
+
+<p>ストリームはデータをストリームフレームに分割してデータ転送します。
+ストリームフレームは互いに順序逆転可能です。
+ストリームの生成/クローズはサーバ、クライアント両方から出来ます。
+ほとんどHTTP/2のストリームと同じですね。</p>
+
+<p>ストリーム生成は特にネゴる必要なく簡単に可能です。ただ、ストリームIDが衝突しないようにサーバが作る時は偶数、クライアントが作る時は奇数を使います。
+0は無効、1は暗号化ハンドシェイクのために予約、3はHTTPヘッダの通信のために予約とされています。ヘッダだけは順序保障が必要なんですね。
+他の細かい規約は仕様を見て下さい。</p>
+
+<p>一旦ストリームが開いたらデータ転送に自由に使えます。</p>
+
+<p>ストリームの終了には3種類あります。</p>
+
+<ol>
+<li>普通の終了: 双方向通信なのでFIN bitを立てて送信した後のhalf-closeとかの概念があります。</li>
+<li>突然の終了: 何かしらのエラーがあった時などにRST_STREAMフレームを送ると強制終了出来ます。</li>
+<li>コネクションが終了した時: まあ、当然ですね。</li>
+</ol>
+
+<h3 id="コネクションの終了">コネクションの終了</h3>
+
+<p>コネクションの終了にも2種類あります。</p>
+
+<ol>
+<li>明示的な終了: CONNECTION_CLOSEを送ることでコネクションを終了出来ます。</li>
+<li>暗黙的な終了: タイムアウト（デフォルト30秒）したらクローズします。通常はCONNECTION_CLOSEを送りますが、モバイルで電波をonにしたくないなどの理由があればsilent closeも可能です。</li>
+</ol>
+
+<p>それ以外に、PUBLIC_RSTでコネクションをクローズ出来ます。TCPのRST相当（だそう）です。</p>
+
+<h2 id="フレームタイプとフォーマット">フレームタイプとフォーマット</h2>
+
+<p>前述の通りフレームパケットにはフレームが入っています。フレームタイプ毎にデータの解釈が変わります。
+1フレームは必ず1パケットに収まる必要があります。</p>
+
+<h3 id="フレームタイプ">フレームタイプ</h3>
+
+<p>スペシャルフレームと普通のフレームがあります。</p>
+
+<p>スペシャルフレームは以下。</p>
+
+<pre><code>+------------------+-----------------------------+
+| Type-field value |     Control Frame-type      |
++------------------+-----------------------------+
+|     1fdooossB    |  STREAM                     |
+|     01ntllmmB    |  ACK                        |
+|     001xxxxxB    |  CONGESTION_FEEDBACK        |
++------------------+-----------------------------+
+</code></pre>
+
+<p>通常のフレームは以下。</p>
+
+<pre><code>+------------------+-----------------------------+
+| Type-field value |     Control Frame-type      |
++------------------+-----------------------------+
+| 00000000B (0x00) |  PADDING                    |
+| 00000001B (0x01) |  RST_STREAM                 |
+| 00000010B (0x02) |  CONNECTION_CLOSE           |
+| 00000011B (0x03) |  GOAWAY                     |
+| 00000100B (0x04) |  WINDOW_UPDATE              |
+| 00000101B (0x05) |  BLOCKED                    |
+| 00000110B (0x06) |  STOP_WAITING               |
+| 00000110B (0x07) |  PING                       |
++------------------+-----------------------------+
+</code></pre>
+
+<p>これらのタイプについて仕様に載っている順に軽く説明します。詳しくは仕様を読んで下さい。</p>
+
+<ul>
+<li>STREAM: 暗黙的にstreamを作るのにもデータを送るのにも使います。</li>
+<li>ACK: ackです。受け取った最大シーケンス番号とそれまでで欠損している番号のリストを送ります。前述の通り受理からACKまでの時差を入れたりと複雑なので仕様を読んで下さい。</li>
+<li>STOP_WAITING: 特定以下のシーケンス番号のパケットを待たないように指示します。</li>
+<li>WINDOW_UPDATE: コネクション/ストリームいずれかのウィンドウ余白を通知します。Stream ID 0がコネクションレベルのアップデートです。</li>
+<li>BLOCKED: バックプレッシャーでこれ以上データを送信出来ない時に送ります。informational frameです(ほぼデバッグ用とのこと)。</li>
+<li>CONGESTION_FEEDBACK: experimentalで、not usedとのこと。</li>
+<li>PADDING: 0x00で埋められたデータを保持します。パケットをMTUまで埋めるのが目的なのかな？</li>
+<li>RST_STREAM: ストリームの異常終了用。</li>
+<li>PING: 生きてる？って訊くやつです。これを受けたらACKを返します。デフォルトで15秒毎に送ります。</li>
+<li>CONNECTION_CLOSE: closeを通知するやつです。</li>
+<li>GOAWAY: コネクションを止めるよ通知です。近くcloseするのでデータ送るのやめなよという通知です。新たなstreamが作れなくなります。</li>
+</ul>
+
+<p>この後、RST_STREAMで使うエラーコードの列挙がありますが、「Chromiumではこう定義されてるよ」程度でしたので省略します。</p>
+
+<h2 id="プライオリティ">プライオリティ</h2>
+
+<p>HTTP/2のものを使うそうですが、まだ実装してないとのこと。</p>
+
+<h2 id="quic上のhttp-2">QUIC上のHTTP/2</h2>
+
+<p>いくつかHTTP/2と同じ機能を提供していますが、HTTP/2がQUICを使う時にどう統合するかのお話です。</p>
+
+<h3 id="ストリームマネジメント">ストリームマネジメント</h3>
+
+<p>QUICが代替機能を提供するのでHTTP/2レイヤで扱う必要はありません。HTTP/2のストリームIDはそのままQUICのストリームIDになります。</p>
+
+<h3 id="ヘッダー圧縮">ヘッダー圧縮</h3>
+
+<p>Stream ID 3で送ることになっている（QUICの仕様でHTTP/2のヘッダを扱うことになっている）。のでそれを使います。</p>
+
+<h3 id="http-2ヘッダのパース">HTTP/2ヘッダのパース</h3>
+
+<p>HTTP/2にあるストリームのSYNやプライオリティがQUICにないので一旦HTTP/2のヘッダを解釈してからそれを使います。
+酷い仕様ですね。</p>
+
+<h3 id="永続コネクション">永続コネクション</h3>
+
+<p>コネクションという概念がないのでHTTPにある&rdquo;Connection&rdquo;ヘッダが意味をなさない。ので、HTTPレベルでのコネクションハンドリングはしません。</p>
+
+<p>これ、&rdquo;Connection: upgrade&rdquo;はどうするんですかねって思ったら次に書いてました。</p>
+
+<h3 id="httpでのquicネゴシエーション">HTTPでのQUICネゴシエーション</h3>
+
+<p>クライアントが普通のHTTPでアクセスした時にサーバはQUICを使いませんか、とネゴシエーションすることが出来ます。それが</p>
+
+<p>&ldquo;Alternate-Protocol: 123:quic&rdquo;</p>
+
+<p>です。同じホストの123ポートにQUICプロトコルでアクセスしにいきます。
+中間機器がUDPをブロックすることも考えてTCPにgraceful fallbackしろ、と書かれてます。</p>
+
+<p>以上が仕様の主だった記述です。</p>
+
+<hr />
+
+<h1 id="終わりに">終わりに</h1>
+
+<p><a href="https://docs.google.com/document/d/1g5nIXAIkN_Y-7XJW5K45IblHd_L2f5LTaDUDwvZ5L6g/edit">QUIC Crypto</a>なるものを発見して読んだらQUIC Crypto protocol is destinated to die（QUIC Cryptoプロトコルは終了予定）と書いてあったのでTLS認証回りはTLS1.3のものに置き換えられるっぽい？</p>
+
+<h1 id="まとめ">まとめ</h1>
+
+<ul>
+<li>HTTP/2に特化とはいうけどどこまで特化してるの？他のアプリケーションで使えないの？<br />
+→ ストリームやHTTP/2ヘッダなどが統合されているのでかなり扱いづらい。</li>
+<li>どうしてTLSも統合してしまったの？分離出来なかったの？<br />
+→ クライアント認証のために必要だった。TLS1.3からは分離出来る（？）</li>
+<li>UDPベースでどうやってコネクションの維持や輻輳制御してるの？<br />
+→ コネクションはコネクションIDで維持。輻輳制御は別の仕様（アクセス不可）に書いてある</li>
+<li>上記以外でQUICに特徴はないの？<br />
+→ 柔軟な輻輳制御、FEC、コネクション移行など</li>
+</ul>
+
+<p>宿題:</p>
+
+<ul>
+<li>TCPについても調べる。特に輻輳制御回り。</li>
+<li>QUICの輻輳制御について調べる。</li>
+<li>TLS1.3との統合について調べる</li>
+</ul>
+                    </section>
+                </article>
+            </div>
+        </div>
+
+        <div class="row li-author">
+    <div class="sixteen columns">
+        Written by <strong>κeen</strong>
+    </div>
+</div>
+
+
+        <div class="row li-pagination">
+            <div class="eight columns">
+                <div class="li-pagination-previous">
+                    
+                        &nbsp;
+                    
+                </div>
+            </div>
+            <div class="eight columns">
+                <div class="li-pagination-next">
+                    
+                        Older article<br />
+                        <a href="/blog/2017/01/01/2017nenchuumokushiteikitaigijutsu"> 2017年注目していきたい技術</a>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+<footer class="li-page-footer">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-page-footer-legal">
+                    &copy; 2017. All rights reserved. 
+                </div>
+                <div class="li-page-footer-theme">
+                    <span class=""><a href="https://github.com/eliasson/liquorice/">liquorice</a> is a theme for <a href="http://hugo.spf13.com">hugo</a></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+
+    <script type="text/javascript">
+    <!--
+    function toggle(id) {
+        var e = document.getElementById(id);
+        e.style.display == 'block' ? e.style.display = 'none' : e.style.display = 'block';
+    }
+    
+    </script>
+    <script type="text/javascript">
+    <!--
+        var _gaq = _gaq || [];
+        _gaq.push(['_setAccount', ""]);
+        _gaq.push(['_trackPageview']);
+
+        (function() {
+        var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+        ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+        var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+        })();
+    -->
+    </script>
+    </body>
+</html>
+
