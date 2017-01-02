@@ -16,7 +16,9 @@
       <guid>/blog/2017/01/02/quicnonakamigawakaranaikarashiyouyondemita</guid>
       <description>&lt;p&gt;κeenです。先日同期と話しててQUICの中身ってあまり知らないよねってことでQUICの仕様（ドラフト）を読んだのでまとめますね。あまりまとめきれてませんが。&lt;/p&gt;
 
-&lt;p&gt;&lt;strong&gt;※ドラフトは既に古くなっているのでこのブログの内容は現行では正しくない可能性があります。というか一部既に正しくないことが判明しています。ご注意下さい&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;del&gt;&lt;strong&gt;※ドラフトは既に古くなっているのでこのブログの内容は現行では正しくない可能性があります。というか一部既に正しくないことが判明しています。ご注意下さい&lt;/strong&gt;&lt;/del&gt;&lt;/p&gt;
+
+&lt;p&gt;後で新しいドラフトを発見したので内容を書き換えました。とりあえずリンクを貼ってあるドラフトの内容までは反映出来ています。&lt;/p&gt;
 
 &lt;p&gt;&lt;/p&gt;
 
@@ -63,7 +65,7 @@ TCPやTLSもRTTを減らそうと努力はしていますが、もっと抜本�
 
 &lt;h1 id=&#34;quic&#34;&gt;QUIC&lt;/h1&gt;
 
-&lt;p&gt;&lt;a href=&#34;https://tools.ietf.org/html/draft-tsvwg-quic-protocol-00&#34;&gt;これ&lt;/a&gt;を読んでいきます。Expires December 19, 2015と書いているのでかなり古いですが…。&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://tools.ietf.org/html/draft-tsvwg-quic-protocol-02&#34;&gt;これ&lt;/a&gt;を読んでいきます。Expires July 16, 2016とのこと。&lt;/p&gt;
 
 &lt;h2 id=&#34;イントロ&#34;&gt;イントロ&lt;/h2&gt;
 
@@ -104,29 +106,10 @@ TCPやTLSもRTTを減らそうと努力はしていますが、もっと抜本�
 
 &lt;h3 id=&#34;コネクション確立のレイテンシ&#34;&gt;コネクション確立のレイテンシ&lt;/h3&gt;
 
-&lt;p&gt;通常TCP+TLSだと1-3RTT必要なのに対してQUICは多くの場合0 RTTでコネクション確立出来ます。&lt;/p&gt;
+&lt;p&gt;通常TCP+TLSだと1-3RTT必要なのに対してQUICは多くの場合0 RTTでコネクション確立出来ます。つまり、いきなりデータを送れる。&lt;/p&gt;
 
-&lt;p&gt;多くの場合、といったので0 RTTで確立出来ない場合もある訳ですが、それが初めてサーバと繋ぐ時です。
-最初は1RTTかけてハンドシェイクを行います。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;# はじめて
-[client]                        [server]
-   |    empty client hello(CHLO)   |
-   |------------------------------&amp;gt;|
-   |        reject(REJ) +          |
-   |      source address token     |
-   |     server certificates       |
-   |&amp;lt;------------------------------|
-
-# 2回目以降
-
-[client]                        [server]
-   |      client hello(CHLO) +     |
-   |      cached credencials       |
-   |------------------------------&amp;gt;|
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ここで送られてくるソースアドレストークンは以降のCHLOでIPを確認するために使います。&lt;/p&gt;
+&lt;p&gt;0 RTTで接続出来ない場合、つまりハンドシェイクが必要な場合もある訳ですが、ハンドシェイクの詳細はQUIC Cryptoの方に投げられています。
+さらにQUIC CryptoはTLS 1.3に置き換えられる予定なのでほぼTLS 1.3のハンドシェイクだと思っておいて良いようです。&lt;/p&gt;
 
 &lt;h3 id=&#34;柔軟な輻輳制御&#34;&gt;柔軟な輻輳制御&lt;/h3&gt;
 
@@ -186,17 +169,18 @@ TCPやTLSもRTTを減らそうと努力はしていますが、もっと抜本�
 
 &lt;h2 id=&#34;パケットタイプとフォーマット&#34;&gt;パケットタイプとフォーマット&lt;/h2&gt;
 
-&lt;p&gt;4種類あります。バージョンネゴシエーションパケット、フレームパケット、FECパケット、パブリックリセットパケットです。&lt;/p&gt;
+&lt;p&gt;2種類の特殊パケットと2種類の通常パケットがあります。バージョンネゴシエーションパケットとパブリックリセットパケット、フレームパケットとFECパケットです。&lt;/p&gt;
 
 &lt;p&gt;パケットはIPの断片化を防ぐためにパスのMTU（Message Transfer Unit）に収まる必要がありますが、MTUの発見はまだWIPだそうです。
 今とのころIPv6で1350byte、IPv4で1370byteを使っているとのこと。&lt;/p&gt;
 
-&lt;h3 id=&#34;共通ヘッダ&#34;&gt;共通ヘッダ&lt;/h3&gt;
+&lt;h3 id=&#34;バブリックヘッダ&#34;&gt;バブリックヘッダ&lt;/h3&gt;
 
-&lt;p&gt;全てのQUICパケットにつくヘッダです。
-長さは2-21byteの間になります。&lt;/p&gt;
+&lt;p&gt;全てのQUICパケットにつくヘッダです。パブリックの名の通り暗号化されません。&lt;/p&gt;
 
-&lt;pre&gt;&lt;code&gt;     0        1        2        3        4            8
+&lt;p&gt;長さは2-19byteの間になります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;      0        1        2        3        4            8
 +--------+--------+--------+--------+--------+---    ---+
 | Public |    Connection ID (0, 8, 32, or 64)    ...    | -&amp;gt;
 |Flags(8)|      (variable length)                       |
@@ -204,36 +188,108 @@ TCPやTLSもRTTを減らそうと努力はしていますが、もっと抜本�
 
      9       10       11        12
 +--------+--------+--------+--------+
-|      Quic Version (32)            | -&amp;gt;
+|      QUIC Version (32)            | -&amp;gt;
 |         (optional)                |
 +--------+--------+--------+--------+
 
-    13      14       15        16        17       18       19       20
-+--------+--------+--------+--------+--------+--------+--------+--------+
-|         Sequence Number (8, 16, 32, or 48)          |Private | FEC (8)|
-|                         (variable length)           |Flags(8)|  (opt) |
-+--------+--------+--------+--------+--------+--------+--------+--------+
+    13      14       15        16        17       18
++--------+--------+--------+--------+--------+--------+
+|         Packet Number (8, 16, 32, or 48)            |
+|                         (variable length)           |
++--------+--------+--------+--------+--------+--------+
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;private flags以下は暗号化されます。軽く説明しますね。それぞれの詳しい内容は仕様を読んで下さい。&lt;/p&gt;
+&lt;p&gt;軽く説明しますね。それぞれの詳しい内容は仕様を読んで下さい。&lt;/p&gt;
 
 &lt;ul&gt;
 &lt;li&gt;public flagsにパケットタイプなどが入っています。&lt;/li&gt;
 &lt;li&gt;コネクションIDが64bitだと過剰な場合はネゴって短かくすることも可能です。&lt;/li&gt;
-&lt;li&gt;シーケンス番号はフレームパケットに付与されます。1から始まり1づつ大きくなります。&lt;/li&gt;
-&lt;li&gt;シーケンス番号の下位64bitはTLSのnonceに使うことも出来ます。合理的ですね。&lt;/li&gt;
+&lt;li&gt;パケット番号はフレームパケットに付与されます。1から始まり1づつ大きくなります。&lt;/li&gt;
+&lt;li&gt;パケット番号の下位64bitはTLSのnonceの一部に使われます。合理的ですね。&lt;/li&gt;
 &lt;li&gt;内部的には64bitでシーケンス番号を管理するけどパケットに載せるのは48bitまで。&lt;/li&gt;
 &lt;li&gt;48bit(n bit)でオーバーフローした時の曖昧性排除のために2^46個(2^(n-2)個)までしか同時にパケットを送れない&lt;/li&gt;
 &lt;li&gt;シーケンス番号が2^64-1に逹したらシーケンス番号のリミットでコネクションクローズが走る&lt;/li&gt;
 &lt;/ul&gt;
 
-&lt;h3 id=&#34;バージョンネゴシエーションパケット&#34;&gt;バージョンネゴシエーションパケット&lt;/h3&gt;
+&lt;p&gt;パケットタイプを判別するフローチャートが載っていたので引用しますね。&lt;/p&gt;
 
-&lt;p&gt;WIP（って仕様に書いてある）&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;Check the public flags in public header
+                 |
+                 |
+                 V
+           +--------------+
+           | Public Reset |    YES
+           | flag set?    |---------------&amp;gt; Public Reset Packet
+           +--------------+
+                 |
+                 | NO
+                 V
+           +------------+          +-------------+
+           | Version    |   YES    | Packet sent |  YES
+           | flag set?  |---------&amp;gt;| by server?  |--------&amp;gt; Version Negotiation
+           +------------+          +-------------+               Packet
+                 |                        |
+                 | NO                     | NO
+                 V                        V
+           Regular Packet         Regular Packet with
+                              QUIC Version present in header
+&lt;/code&gt;&lt;/pre&gt;
 
-&lt;h3 id=&#34;フレームパケット&#34;&gt;フレームパケット&lt;/h3&gt;
+&lt;h3 id=&#34;スペシャルパケット&#34;&gt;スペシャルパケット&lt;/h3&gt;
 
-&lt;p&gt;ヘッダに続いてこんな感じ&lt;/p&gt;
+&lt;h4 id=&#34;バージョンネゴシエーションパケット&#34;&gt;バージョンネゴシエーションパケット&lt;/h4&gt;
+
+&lt;p&gt;サーバからのみ送られます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;     0        1        2        3        4        5        6        7       8
++--------+--------+--------+--------+--------+--------+--------+--------+--------+
+| Public |    Connection ID (64)                                                 | -&amp;gt;
+|Flags(8)|                                                                       |
++--------+--------+--------+--------+--------+--------+--------+--------+--------+
+
+     9       10       11        12       13      14       15       16       17
++--------+--------+--------+--------+--------+--------+--------+--------+---...--+
+|      1st QUIC version supported   |     2nd QUIC version supported    |   ...
+|      by server (32)               |     by server (32)                |
++--------+--------+--------+--------+--------+--------+--------+--------+---...--+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;特に順序に言及がないのでクライアントは良い感じに新しいやつ選ぶんですかね。&lt;/p&gt;
+
+&lt;h4 id=&#34;パブリックリセットパケット&#34;&gt;パブリックリセットパケット&lt;/h4&gt;
+
+&lt;p&gt;コネクションをクローズしようとしているのが本当に正しいクライアントなのか証明するための情報が載せられます。詳細は仕様を読んで下さい。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;     0        1        2        3        4         8
++--------+--------+--------+--------+--------+--   --+
+| Public |    Connection ID (64)                ...  | -&amp;gt;
+|Flags(8)|                                           |
++--------+--------+--------+--------+--------+--   --+
+
+     9       10       11        12       13      14
++--------+--------+--------+--------+--------+--------+---
+|      Quic Tag (32)                |  Tag value map      ... -&amp;gt;
+|         (PRST)                    |  (variable length)
++--------+--------+--------+--------+--------+--------+---
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;通常パケット&#34;&gt;通常パケット&lt;/h3&gt;
+
+&lt;p&gt;通常パケットのペイロードは暗号化/認証されます。パブリックヘッダは暗号化されませんが認証されます。
+通常パケットはPrivate Flagsから始まるプライベートヘッダを持ちます（そこからが暗号化されます）。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;     0        1
++--------+--------+
+|Private | FEC (8)|
+|Flags(8)|  (opt) |
++--------+--------+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このあとにAEAD (authenticated encryption and associated data)、つまり認証/暗号化されたペイロードが続きます。&lt;/p&gt;
+
+&lt;h4 id=&#34;フレームパケット&#34;&gt;フレームパケット&lt;/h4&gt;
+
+&lt;p&gt;プライベートヘッダに続いてこんな感じのデータが続きます。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;+--------+---...---+--------+---...---+
 | Type   | Payload | Type   | Payload |
@@ -242,28 +298,30 @@ TCPやTLSもRTTを減らそうと努力はしていますが、もっと抜本�
 
 &lt;h3 id=&#34;fecパケット&#34;&gt;FECパケット&lt;/h3&gt;
 
-&lt;p&gt;ヘッダに続いてこんなん&lt;/p&gt;
+&lt;p&gt;プライベートヘッダに続いてこんな感じのデータが続きます。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;+-----...----+
 | Redundancy |
 +-----...----+
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;h3 id=&#34;パブリックリセットパケット&#34;&gt;パブリックリセットパケット&lt;/h3&gt;
-
-&lt;p&gt;なんか面倒そうなので略&lt;/p&gt;
-
 &lt;h2 id=&#34;quicコネクションのライフサイクル&#34;&gt;QUICコネクションのライフサイクル&lt;/h2&gt;
 
 &lt;h3 id=&#34;コネクションの確立&#34;&gt;コネクションの確立&lt;/h3&gt;
 
-&lt;p&gt;バージョンネゴシエーションと暗号化/通信ハンドシェイクを一遍にやります。
-なんかまだWIPのようです。&lt;/p&gt;
+&lt;p&gt;クライアントがバージョン付きでデータを送って、サーバが処理出来るならそのままレスポンスを返してコネクション成立です。
+もし処理出来ないなら、バージョンネゴシエーションパケットを送り返して、クライアントはそこから1つバージョンを選んで再送します。サーバから通常レスポンスが返ってきたらコネクション成立です（成立するまで繰り返します）。&lt;/p&gt;
+
+&lt;p&gt;ダウングレード攻撃を避けるためにハンドシェイクにバージョン情報を載せたり頑張るようですが、細かいので仕様を読んで下さい。&lt;/p&gt;
 
 &lt;h3 id=&#34;データ転送&#34;&gt;データ転送&lt;/h3&gt;
 
 &lt;p&gt;多くは概要で説明した通り。
-暗号化ハンドシェイクも含めてストリーム内でデータをやりとりするが、ACKはQUICパケット単位。&lt;/p&gt;
+暗号化ハンドシェイクも含めてストリーム内でデータをやりとりしますが、ACKはQUICパケット単位です。&lt;/p&gt;
+
+&lt;p&gt;シーケンス番号は輻輳制御を統合するためにコネクションを通して同じ番号空間を共有します。&lt;/p&gt;
+
+&lt;p&gt;詳しくは付設のドキュメントを読めと書いてますが、リンク先が真っ白です。&lt;/p&gt;
 
 &lt;h4 id=&#34;ストリームのライフサイクル&#34;&gt;ストリームのライフサイクル&lt;/h4&gt;
 
@@ -304,9 +362,9 @@ TCPやTLSもRTTを減らそうと努力はしていますが、もっと抜本�
 
 &lt;h3 id=&#34;フレームタイプ&#34;&gt;フレームタイプ&lt;/h3&gt;
 
-&lt;p&gt;スペシャルフレームと普通のフレームがあります。&lt;/p&gt;
+&lt;p&gt;特殊フレームと通常フレームがあります。&lt;/p&gt;
 
-&lt;p&gt;スペシャルフレームは以下。&lt;/p&gt;
+&lt;p&gt;特殊フレームは以下。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;+------------------+-----------------------------+
 | Type-field value |     Control Frame-type      |
@@ -317,7 +375,7 @@ TCPやTLSもRTTを減らそうと努力はしていますが、もっと抜本�
 +------------------+-----------------------------+
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;通常のフレームは以下。&lt;/p&gt;
+&lt;p&gt;通常フレームは以下。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;+------------------+-----------------------------+
 | Type-field value |     Control Frame-type      |
@@ -329,7 +387,7 @@ TCPやTLSもRTTを減らそうと努力はしていますが、もっと抜本�
 | 00000100B (0x04) |  WINDOW_UPDATE              |
 | 00000101B (0x05) |  BLOCKED                    |
 | 00000110B (0x06) |  STOP_WAITING               |
-| 00000110B (0x07) |  PING                       |
+| 00000111B (0x07) |  PING                       |
 +------------------+-----------------------------+
 &lt;/code&gt;&lt;/pre&gt;
 
@@ -349,7 +407,26 @@ TCPやTLSもRTTを減らそうと努力はしていますが、もっと抜本�
 &lt;li&gt;GOAWAY: コネクションを止めるよ通知です。近くcloseするのでデータ送るのやめなよという通知です。新たなstreamが作れなくなります。&lt;/li&gt;
 &lt;/ul&gt;
 
-&lt;p&gt;この後、RST_STREAMで使うエラーコードの列挙がありますが、「Chromiumではこう定義されてるよ」程度でしたので省略します。&lt;/p&gt;
+&lt;h2 id=&#34;quicの通信上のパラメータ&#34;&gt;QUICの通信上のパラメータ&lt;/h2&gt;
+
+&lt;p&gt;ハンドシェイクでネゴシエートすべきパラメータの列挙です。&lt;/p&gt;
+
+&lt;h3 id=&#34;required&#34;&gt;Required&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;SFCW - Stream Flow Control Window: ストリームレベルのコントロールフローウィンドウサイズ(バイト単位)です。&lt;/li&gt;
+&lt;li&gt;SFCW - Connection Flow Control Window: コネクションレベルのコントロールフローウィンドウサイズ(バイト単位)です。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;ほとんどルー語ですね。&lt;/p&gt;
+
+&lt;h3 id=&#34;optional&#34;&gt;Optional&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;SRBF - Socket receive buffer size in bytes: CWNDを受け取りバッファくらいに指定したい場合があるらしいのでそれ用。&lt;/li&gt;
+&lt;li&gt;TCID - Connection ID truncation: クライアントのエフェメラルポートが単一コネクションにしか使われないと分かっている場合に便利らしいです。&lt;/li&gt;
+&lt;li&gt;COPT - Connection Options are a repeated tag field: 実験的パラメータだそうです。&lt;/li&gt;
+&lt;/ul&gt;
 
 &lt;h2 id=&#34;プライオリティ&#34;&gt;プライオリティ&lt;/h2&gt;
 
@@ -369,8 +446,7 @@ TCPやTLSもRTTを減らそうと努力はしていますが、もっと抜本�
 
 &lt;h3 id=&#34;http-2ヘッダのパース&#34;&gt;HTTP/2ヘッダのパース&lt;/h3&gt;
 
-&lt;p&gt;HTTP/2にあるストリームのSYNやプライオリティがQUICにないので一旦HTTP/2のヘッダを解釈してからそれを使います。
-酷い仕様ですね。&lt;/p&gt;
+&lt;p&gt;ヘッダのパースはHTTP/2の仕様に従います。&lt;/p&gt;
 
 &lt;h3 id=&#34;永続コネクション&#34;&gt;永続コネクション&lt;/h3&gt;
 
@@ -387,13 +463,22 @@ TCPやTLSもRTTを減らそうと努力はしていますが、もっと抜本�
 &lt;p&gt;です。同じホストの123ポートにQUICプロトコルでアクセスしにいきます。
 中間機器がUDPをブロックすることも考えてTCPにgraceful fallbackしろ、と書かれてます。&lt;/p&gt;
 
+&lt;h2 id=&#34;ハンドシェイクプロトコルへの要求&#34;&gt;ハンドシェイクプロトコルへの要求&lt;/h2&gt;
+
+&lt;p&gt;ハンドシェイク自体はこのドキュメントでは扱ってませんが、ハンドシェイクが満たすべき性質を書いています。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;0-RTTでのコネクション確立&lt;/li&gt;
+&lt;li&gt;ソースアドレスのなりすまし対策&lt;/li&gt;
+&lt;li&gt;クライアントからソースアドレストークンが不透明なこと。トークンにいくつかのクライアント情報を埋め込むため。&lt;/li&gt;
+&lt;li&gt;通信パラメータのネゴシエーション&lt;/li&gt;
+&lt;li&gt;証明書の圧縮。REJも1350bytesに収めたい。&lt;/li&gt;
+&lt;li&gt;サーバコンフィグのアップデート&lt;/li&gt;
+&lt;/ul&gt;
+
 &lt;p&gt;以上が仕様の主だった記述です。&lt;/p&gt;
 
 &lt;hr /&gt;
-
-&lt;h1 id=&#34;終わりに&#34;&gt;終わりに&lt;/h1&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://docs.google.com/document/d/1g5nIXAIkN_Y-7XJW5K45IblHd_L2f5LTaDUDwvZ5L6g/edit&#34;&gt;QUIC Crypto&lt;/a&gt;なるものを発見して読んだらQUIC Crypto protocol is destinated to die（QUIC Cryptoプロトコルは終了予定）と書いてあったのでTLS認証回りはTLS1.3のものに置き換えられるっぽい？&lt;/p&gt;
 
 &lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
 
@@ -406,6 +491,14 @@ TCPやTLSもRTTを減らそうと努力はしていますが、もっと抜本�
 → コネクションはコネクションIDで維持。輻輳制御は別の仕様（アクセス不可）に書いてある&lt;/li&gt;
 &lt;li&gt;上記以外でQUICに特徴はないの？&lt;br /&gt;
 → 柔軟な輻輳制御、FEC、コネクション移行など&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;新たに湧いた疑問&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;ロードバランシングどうするんだろう。ミドルウェアレベルだとConnection ID見て振り分けるとして、アプリケーションレベルだとRubyとかでよくあるlistenしてforkしてacceptするようなやつは破綻しないかな。そもそもQUICを使わない？&lt;/li&gt;
+&lt;li&gt;Connection IDが衝突したらどうなるんだろう。REJするのかな。仕様に書いてない。&lt;/li&gt;
+&lt;li&gt;いくつかの仕様（HTTP/2ヘッダ）とかを無視して別のアプリケーションで使えないかな。あるいは想定してないのかな。&lt;/li&gt;
 &lt;/ul&gt;
 
 &lt;p&gt;宿題:&lt;/p&gt;
