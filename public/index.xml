@@ -6,8 +6,308 @@
     <description>Recent content on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Tue, 10 Jan 2017 22:07:31 +0900</lastBuildDate>
+    <lastBuildDate>Sun, 15 Jan 2017 20:52:14 +0900</lastBuildDate>
     <atom:link href="/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Rustのモジュールの使い方</title>
+      <link>/blog/2017/01/15/rustnomoju_runokirikata</link>
+      <pubDate>Sun, 15 Jan 2017 20:52:14 +0900</pubDate>
+      
+      <guid>/blog/2017/01/15/rustnomoju_runokirikata</guid>
+      <description>&lt;p&gt;κeenです。たまにRustのモジュールが分かりづらいとの声を聞くので解説しますね。&lt;/p&gt;
+
+&lt;p&gt;
+とりあえずサンプルプロジェクトを作ります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cargo new module
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;エラいのは-lib-rs-と-main-rs&#34;&gt;エラいのは &lt;code&gt;lib.rs&lt;/code&gt; と &lt;code&gt;main.rs&lt;/code&gt;&lt;/h1&gt;
+
+&lt;p&gt;モジュールの話をする前にクレートの話をしないといけません。
+クレートはRustのプログラムの一番大きな単位です。
+大きく分けてライブラリを作るlibクレートと実行可能ファイルを作るbinクレートがあります。&lt;/p&gt;
+
+&lt;p&gt;libクレートならば&lt;code&gt;lib.rs&lt;/code&gt;が、binクレートならば&lt;code&gt;main.rs&lt;/code&gt;がルートにあたるファイルです。ここから辿れるモジュールが全てです。プロジェクトにファイルが存在していてもこれらから辿れなかったらコンパイルされません。&lt;/p&gt;
+
+&lt;h1 id=&#34;モジュールの作り方は3種類&#34;&gt;モジュールの作り方は3種類&lt;/h1&gt;
+
+&lt;ol&gt;
+&lt;li&gt;ファイルの中にインラインで作る&lt;/li&gt;
+&lt;li&gt;1ファイルで作る&lt;/li&gt;
+&lt;li&gt;1ディレクトリで作る&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;のやり方があります。 1.はそんなに使われなくて、説明のために1ファイルにまとめたい時や、可視性でアレコレする時のテクニックなんかに使われます。&lt;/p&gt;
+
+&lt;p&gt;2.と3.の境界はサブモジュールを持つかどうかです。&lt;/p&gt;
+
+&lt;p&gt;2.のファイルで作る時は&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ find src
+src
+src/lib.rs
+src/new_module.rs
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;のように作っておいて、lib.rsの中を&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;mod new_module;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;のように&lt;code&gt;mod&lt;/code&gt;で参照してあげれば使えます。&lt;/p&gt;
+
+&lt;p&gt;3.のディレクトリの時もそんなに変わらなくて、&lt;code&gt;lib.rs&lt;/code&gt;は変わらず、ファイルを&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ find src
+src
+src/lib.rs
+src/new_module
+src/new_module/mod.rs
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;のようにしてあげます。&lt;code&gt;mod.rs&lt;/code&gt;の名前はこれでないといけません。丁度サブモジュールの&lt;code&gt;new_module&lt;/code&gt;にとっての&lt;code&gt;lib.rs&lt;/code&gt;のような存在が&lt;code&gt;mod.rs&lt;/code&gt;な訳です。&lt;/p&gt;
+
+&lt;h1 id=&#34;兄弟モジュール同士の可視性&#34;&gt;兄弟モジュール同士の可視性&lt;/h1&gt;
+
+&lt;h2 id=&#34;モジュールの身分&#34;&gt;モジュールの身分&lt;/h2&gt;
+
+&lt;p&gt;さて、次のように2つのモジュールを作ってみましょう。lib.rsには&lt;code&gt;module_a&lt;/code&gt;のみ&lt;code&gt;mod&lt;/code&gt;宣言しておきます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ find src
+src
+src/lib.rs
+src/module_a.rs
+src/module_b.rs
+$ cat src/lib.rs
+mod module_a;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これで&lt;code&gt;module_a.rs&lt;/code&gt;に&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;mod module_b;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と書くと&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cargo build
+   Compiling module v0.1.0 (file:///home/kim/Rust/module)
+error[E0432]: unresolved import `module_a`
+ --&amp;gt; src/lib.rs:1:5
+  |
+1 | use module_a;
+  |     ^^^^^^^^ no `module_a` in the root
+
+error: aborting due to previous error
+
+error: Could not compile `module`.
+
+To learn more, run the command again with --verbose.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と怒られます。一番エラいのは&lt;code&gt;lib.rs&lt;/code&gt;ですから、身分の低い &lt;code&gt;module_a&lt;/code&gt;では&lt;code&gt;mod&lt;/code&gt;宣言出来ません。&lt;/p&gt;
+
+&lt;h2 id=&#34;君の名は&#34;&gt;君の名は&lt;/h2&gt;
+
+&lt;p&gt;同じ設定で、&lt;code&gt;lib.rs&lt;/code&gt;に&lt;code&gt;module_a&lt;/code&gt;と&lt;code&gt;module_b&lt;/code&gt;両方を&lt;code&gt;mod&lt;/code&gt;宣言しておきます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ find src
+src
+src/lib.rs
+src/module_a.rs
+src/module_b.rs
+$ cat src/lib.rs
+mod module_a;
+mod module_b;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;この時、&lt;code&gt;module_b&lt;/code&gt;が&lt;code&gt;lib.rs&lt;/code&gt;から見た時と&lt;code&gt;module_a.rs&lt;/code&gt;から見た時で名前が変わります。&lt;/p&gt;
+
+&lt;p&gt;lib.rsから見た時は、以下の3つが使えます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;use ::module_a;     // 絶対パス
+use module_a;       // 省略絶対パス
+use self::module_a; // 相対パス
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;self&lt;/code&gt;というのは予約語で、ディレクトリでいうところの&lt;code&gt;.&lt;/code&gt;に相当します。&lt;/p&gt;
+
+&lt;p&gt;module_a.rsからは同じく3つが使えますが、相対パスが変わります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;use ::module_a;     // 絶対パス
+use module_a;       // 省略絶対パス
+use super::module_a; // 相対パス
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;super&lt;/code&gt;も予約語で、&lt;code&gt;..&lt;/code&gt;に相当します。
+ファイルが同じディレクトリにいるので分かりづらいですが、libが1つ上の階層で、その下にmodule_aとmodule_bがぶら下がってる感じですね。&lt;/p&gt;
+
+&lt;h1 id=&#34;おじさんと隠し子&#34;&gt;おじさんと隠し子&lt;/h1&gt;
+
+&lt;p&gt;次のように、サブモジュールを作ってみます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$src
+src/lib.rs
+src/module_a
+src/module_a/mod.rs
+src/module_a/submodule.rs
+src/module_b.rs
+$ cat src/lib.rs
+mod module_a;
+mod module_b;
+$ cat src/module_a/mod.rs
+mod submodule;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;さて、この時&lt;code&gt;sumbmodule&lt;/code&gt;から見た&lt;code&gt;module_b&lt;/code&gt;の名前はどうなるでしょうか。もうお分かりかと思いますが、以下の3つです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use ::module_a;     // 絶対パス
+use module_a;       // 省略絶対パス
+use super::super::module_a; // 相対パス
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;じゃ、逆に&lt;code&gt;module_b&lt;/code&gt;から見た&lt;code&gt;submodule&lt;/code&gt;はどうなるでしょうか。実は、&lt;code&gt;module_b&lt;/code&gt;から&lt;code&gt;submodule&lt;/code&gt;は見えません（lib.rsからも見えません）。&lt;code&gt;module_a&lt;/code&gt;1つで所帯を持っているので子である&lt;code&gt;submodule&lt;/code&gt;を外に出すかは&lt;code&gt;module_a&lt;/code&gt;の一存で決まります。今回は隠し子にしている訳ですね。いくら兄弟モジュールとはいえ家庭にまでは入り込めないのです。&lt;/p&gt;
+
+&lt;p&gt;子供をちゃんと公開するには&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat src/module_a/mod.rs
+mod submodule;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;となっていたモジュール宣言を&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat src/module_a/mod.rs
+pub mod submodule;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;としてあげればOKです。そうすると&lt;code&gt;module_b&lt;/code&gt;からも見えて、以下の3種類で参照出来ます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use ::module_a::submodule;
+use module_a::submodule;
+use super::module_a::submodule;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;木箱の外から&#34;&gt;木箱の外から&lt;/h1&gt;
+
+&lt;p&gt;さて、今までは1クレート内での話でした。クレートの外から見るとどうなるでしょうか。&lt;/p&gt;
+
+&lt;p&gt;新たに&lt;code&gt;main.rs&lt;/code&gt;を追加しましょう。先程 &lt;code&gt;lib.rs&lt;/code&gt;と&lt;code&gt;main.rs&lt;/code&gt;がエラいと話しましたが、どちらも別々のクレートを作るので&lt;code&gt;main.rs&lt;/code&gt;は完全にクレートの外です。&lt;/p&gt;
+
+&lt;p&gt;こんな感じですね。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ find src
+src
+src/lib.rs
+src/main.rs
+src/module_a
+src/module_a/mod.rs
+src/module_a/submodule.rs
+src/module_b.rs
+$ cat src/lib.rs
+mod module_a;
+mod module_b;
+$ cat src/module_a/mod.rs
+pub mod submodule;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;まず、外部のクレートを参照するには&lt;code&gt;extern crate&lt;/code&gt;を書く必要があります。あとまあ、binクレートなので&lt;code&gt;main&lt;/code&gt;関数も必要ですね。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat src/main.rs
+extern carte module;
+fn main() {}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;では、&lt;code&gt;module_b&lt;/code&gt;はどういう名前で見えるでしょうか。見えません。一番エラい&lt;code&gt;lib.rs&lt;/code&gt;が&lt;code&gt;module_b&lt;/code&gt;を&lt;code&gt;pub&lt;/code&gt;にしていないのでクレートの外からは見えなくなっています。見たければ、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat src/lib.rs
+mod module_a;
+pub mod module_b;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;のようにします。&lt;/p&gt;
+
+&lt;p&gt;さて、これでmain.rsからどのように見えるかというと。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;use ::module::module_b;
+use module::module_b;
+use self::module::module_b;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;のように気持的にルート直下にクレートがモジュールとして配置されたように見えます。&lt;/p&gt;
+
+&lt;h1 id=&#34;家出&#34;&gt;家出&lt;/h1&gt;
+
+&lt;p&gt;さて、同じように&lt;code&gt;lib.rs&lt;/code&gt;で&lt;code&gt;module_a&lt;/code&gt;を&lt;code&gt;pub mod&lt;/code&gt;すれば&lt;code&gt;module::module_a::submodule&lt;/code&gt;も参照出来るようになります。ところで、例えば&lt;code&gt;module_a&lt;/code&gt;は外に出さずに&lt;code&gt;submodule&lt;/code&gt;だけを公開したい時にはどうしたらいいでしょうか。そんなケースあるのかと疑問に思うかもしれませんが、あります。同じクレートであっても&lt;code&gt;pub&lt;/code&gt;にしないとサブモジュールにアクセス出来ないことを思い出して下さい。そうすると&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub mod submodule;
+pub mod internal_submodule_a;
+pub mod internal_submodule_b;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;みたいなケースが発生するのは想像出来ると思います。そういう時は、&lt;code&gt;lib.rs&lt;/code&gt;側でどうにかいじれます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat src/lib.rs
+mod module_a;
+pub mod module_b;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;となっていると思いますが、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;$ cat src/lib.rs
+mod module_a;
+pub mod module_b;
+
+pub use module_a::submodule;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と、&lt;code&gt;pub use&lt;/code&gt; を加えてあげることで&lt;code&gt;module_a&lt;/code&gt;の下から出すことが出来ます。&lt;/p&gt;
+
+&lt;p&gt;これを&lt;code&gt;main.rs&lt;/code&gt;から使う時は&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use module::submodule;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;のように名字の&lt;code&gt;module_a&lt;/code&gt;が取れます。&lt;/p&gt;
+
+&lt;p&gt;さらに踏み込めば、&lt;code&gt;use&lt;/code&gt;は&lt;code&gt;as&lt;/code&gt;を使ってリネーム出来るので&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;$ cat src/lib.rs
+mod module_a;
+pub mod module_b;
+
+pub use module_a::submodule as module_c;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;のようにリネーム&lt;code&gt;use&lt;/code&gt;してあげれば&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use module::module_c;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;のように参照することも出来ます。完全に籍を外れて名前の上では別人ですね。&lt;/p&gt;
+
+&lt;p&gt;実装する時の都合とAPIとして公開する時の都合が違うので公開用にいじれる作りになってるんですね。&lt;/p&gt;
+
+&lt;h1 id=&#34;lib-rsとmain-rs&#34;&gt;lib.rsとmain.rs&lt;/h1&gt;
+
+&lt;p&gt;上では&lt;code&gt;lib.rs&lt;/code&gt;を使って説明しましたが、&lt;code&gt;main.rs&lt;/code&gt;でも同じことが出来ます。&lt;/p&gt;
+
+&lt;p&gt;さて、ここからはスタイルの話ですが、私がRustを書く時は&lt;code&gt;main.rs&lt;/code&gt;の中に&lt;code&gt;mod&lt;/code&gt;を書くことはないです。必ず&lt;code&gt;lib.rs&lt;/code&gt;を作って、そこでライブラリとしてまとめてから&lt;code&gt;main.rs&lt;/code&gt;で使います。「アプリケーションはアプリケーションを記述するための巨大なDSLとそれを使った小さな実装からなる」という思想ですね。明示的に境界を作ることで自然とAPIを設計出来るのでコードが整理しやすくなります。&lt;/p&gt;
+
+&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;lib.rs&lt;/code&gt;と&lt;code&gt;main.rs&lt;/code&gt;が一番エラい。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;mod&lt;/code&gt; で「モジュールがある」宣言&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;pub mod&lt;/code&gt; で加えて上位のモジュールにも公開&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;self&lt;/code&gt;と&lt;code&gt;super&lt;/code&gt;の予約語&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;pub use&lt;/code&gt; で改名&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;力尽きてテストのためのモジュールの話が出来なかったので&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/testing.html#tests-%E3%83%A2%E3%82%B8%E3%83%A5%E3%83%BC%E3%83%AB&#34;&gt;ドキュメント&lt;/a&gt;を読んでみて下さい。&lt;/p&gt;
+
+&lt;p&gt;因みに&lt;a href=&#34;https://github.com/BurntSushi/fst/blob/master/src/lib.rs&#34;&gt;これ&lt;/a&gt;のようにテクニックが詰まった&lt;code&gt;lib.rs&lt;/code&gt;ファイルなんかも存在するので参考にどうぞ。&lt;/p&gt;</description>
+    </item>
     
     <item>
       <title>頑張らないLinuxデスクトップ環境</title>
@@ -3219,156 +3519,6 @@ lispmeetupでは開催報告やレポートをメーリスに投げていまし�
 &lt;p&gt;今の運営が引退した後を引き継いでくれる人も集まりそうなので何らかの形では続くと思いますが、lispmeetupという形をとるのかTech Talkだけになるのかは次の運営次第です。&lt;/p&gt;
 
 &lt;p&gt;お疲れ様でした。&lt;/p&gt;</description>
-    </item>
-    
-    <item>
-      <title>サイバーエージェントを退職しました</title>
-      <link>/blog/2016/11/30/saiba_e_jientowotaishokushimashita</link>
-      <pubDate>Wed, 30 Nov 2016 15:51:38 +0900</pubDate>
-      
-      <guid>/blog/2016/11/30/saiba_e_jientowotaishokushimashita</guid>
-      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://www.adventar.org/calendars/1638&#34;&gt;Ex CyberAgent Developers Advent Calendar 2016 - Adventar&lt;/a&gt;1日目の記事です。
-元サイバーエージェントの人がわいわいやります。&lt;/p&gt;
-
-&lt;p&gt;κeenです。二年弱勤めたサイバーエージェントを退職したのでその旨について。&lt;/p&gt;
-
-&lt;p&gt;&lt;/p&gt;
-
-&lt;h1 id=&#34;サイバーエージェントの思い出&#34;&gt;サイバーエージェントの思い出&lt;/h1&gt;
-
-&lt;p&gt;サイバーエージェントに興味をもつきっかけになったのも入社することになったのも学生の頃からずっと参加し続けていた&lt;a href=&#34;https://lisp.connpass.com&#34;&gt;LispMeetUp&lt;/a&gt;でした。
-LispMeetUpでは長らく会場としてCAのセミナールームを使わせてもらっていました。
-そこでエンジニアに対して気軽に施設を提供するCAや社員の&lt;a href=&#34;https://twitter.com/potix2&#34;&gt;@potix2&lt;/a&gt;さんを知って、そのまま@potix2さんの手引でCAに入社する運びとなりました。
-「面接でLispは口にしない方が良い。100%落ちる。」なんて言ってた割にはLisp繋りで入社しました。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;http://keens.github.io/blog/2015/04/10/cyberagentninyuushashimashita/&#34;&gt;CyberAgentに入社しました | κeenのHappy Hacκing Blog&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;新卒で入社してからは3ヶ月ほど研修でした。
-最初の2週間ほどあるビジネス職も含めた全体研修ではなるほど、ここがCAかと思いました。しかしエンジニア研修からは見慣れた光景に戻って静かに研修を受けてました。
-エンジニア研修は割と長めにあるので同期のエンジニア同士の顔を覚える余地はありました。勉強会なんかもやりました。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;https://keens.github.io/slide/seitekinamemorikanrinohanashi/&#34;&gt;静的なメモリ管理の話。リージョン推論とλ計算からRustまで | κeenのHappy Hacκing Blog&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://keens.github.io/slide/benkyoukaikudoubenkyoudetakeshibenkyou/&#34;&gt;勉強会駆動勉強で猛勉強 | κeenのHappy Hacκing Blog&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://keens.github.io/slide/21seikinoenjinianotamenoHTTP_2nyuumon/&#34;&gt;21世紀のエンジニアのためのHTTP/2入門 | κeenのHappy Hacκing Blog&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;などなど。Linux, C, Python, Go, Java, Web, iOS, フレームワーク, Android, チーム開発なんかをやりました。Python, Go, iOSあたりは自分じゃやらなかったので面白かったです。&lt;/p&gt;
-
-&lt;p&gt;研修中は割と時間があったので他にも色々なことをやってました。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;http://keens.github.io/blog/2015/05/06/tarballbe_sunokeiryoubakkuapputsu_rutsukutta/&#34;&gt;tarballベースの軽量バックアップツール&amp;rsquo;Sheltar&amp;rsquo;を作った | κeenのHappy Hacκing Blog&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;http://keens.github.io/blog/2015/05/26/onigmowosaidai49_kousokukashitahanashi/&#34;&gt;Onigmoを最大49%高速化した話 | κeenのHappy Hacκing Blog&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;http://keens.github.io/blog/2015/05/29/daiikkyuuraberuwomotanaigengoniokerudirect_threaded_vmnojissou/&#34;&gt;第一級ラベルを持たない言語におけるDirect Threaded VMの実装 | κeenのHappy Hacκing Blog&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;この他にも研修期間中にブログエントリ十数本書いていたようです。下の代からは研修の内容が変わって忙しそうでした。&lt;/p&gt;
-
-&lt;p&gt;研修のあとの配属は@potix2さんのいる&lt;a href=&#34;https://adtech.cyberagent.io/&#34;&gt;アドテクスタジオ&lt;/a&gt;のAMoAdでした。トレーナの清水さんを始めとしてチームの皆さんにお世話になりました。
-AMoAdはその昔、外注していたシステムを巻き取ったものなのでやることが一杯あって、JavaやScalaを書いたり自動化をやったりしました。&lt;/p&gt;
-
-&lt;p&gt;Scalaは全然いたことがなかったので練習がてら作ったのがこれでした。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;https://adtech.cyberagent.io/scalablog/2015/12/05/scala-lisp/&#34;&gt;Scala初心者の新卒が頑張ってLispを作ってみた | Scala Tech Blog&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;これのおかげで型クラスがただのimplpcit parameterに見えるようになったのでそれなりに収穫はあったな、と思ってます。&lt;/p&gt;
-
-&lt;p&gt;AMoAdに限らずアドテクスタジオのエンジニアのボリュームゾーンは30代半ばなのでだいたい一回り近く年の離れたエンジニアに暖かく囲まれながら仕事をしていました。
-どんな雰囲気なの？とたまに訊かれますがエンジニアが集う部署なのでだいたい工学部を想像して頂けたらと思います。&lt;/p&gt;
-
-&lt;p&gt;さて、年が明けて2016年の1月になると、@potix2さんが新しいグループを立ち上げることになって別のグループに移動してしまいました。長らくお世話になりました。
-と思いきや自分もそのグループに移動になったので相変わらずお世話になることになりました。基盤開発グループってところでした。仕事と仕事の境目は一瞬仕事がない期間が産まれたりしますが、その隙を使って始めたのがRustのドキュメントの翻訳です。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;http://qiita.com/blackenedgold/items/3b068769736e671805f0&#34;&gt;Rustのドキュメントの翻訳プロジェクトを開始します。 - Qiita&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;あたらしいチームでは社内向けマイクロサービスのようなものを作ることになりました。
-私ともう一人ベテランのエンジニア(&lt;a href=&#34;https://twitter.com/atty303&#34;&gt;@atty303&lt;/a&gt;)でやる筈でしたが私のような雑草と違ってベテランは中々元のチームを抜けられないので1ヶ月ほど私一人でコードを書いてました。
-Scalaにも馴れてない新卒一人で。1ヶ月後に&lt;a href=&#34;https://twitter.com/atty303&#34;&gt;@atty303&lt;/a&gt;さんがジョインすると、コードは書かずにインフラをやるとのことでした。なのでコードを書くのはやっぱり私一人。&lt;/p&gt;
-
-&lt;p&gt;私が苦戦しつつコードを書いている間にconsulやnomad、terraform、dockerなんかでインフラが構築されていき、たまに朝来たら自分のコードが消えていたり（「君のコード書き直しといたよ」）して確か5月頃リリースだったような。&lt;/p&gt;
-
-&lt;p&gt;因みにdockerを多く使うのにdocker-machineだと不便なのでUbuntuマシンが欲しいって言ったら却下されました。セキュリティ的に無理でした。結局VMでUbuntuを使ってました（使ってます）。&lt;/p&gt;
-
-&lt;p&gt;リリースしてからは要求性能も満たしそこまで大きな障害もなく平和に暮らしました。めでたしめでたし。Ubuntuは使えなかったけど。&lt;/p&gt;
-
-&lt;p&gt;まあ、あとは新卒研修を担当したり&lt;a href=&#34;https://www.cyberagent.co.jp/recruit/fresh/program_detail/id=11303&amp;amp;season=2016&#34;&gt;インターン&lt;/a&gt;を担当したり社内ハッカソンをやったりゼミでドローンを飛ばしたり新卒のトレーナーをやったりライブラリの選書をやってコンパイラの本を大量に入荷したりと本業以外も色々やってました。長くなるのでこの辺は省きますね。&lt;/p&gt;
-
-&lt;h1 id=&#34;退職に際して&#34;&gt;退職に際して&lt;/h1&gt;
-
-&lt;p&gt;よく、「合わなかったの？」と言われますがそんなことはないです。（少くとも）アドテクスタジオはエンジニアにとっては非常に働きやすい場所でしたし&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;https://www.cyberagent.co.jp/features/detail/id=12837&#34;&gt;adtech studio - Photo Tour｜FEATURES&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;CAの一般的イメージはそういう部分だけ切り取ってメディアに出してるんだと思います。
-エンジニアから見たら先述の通り工学部のような雰囲気です。Ubuntuは使えないけど。サーバもMacやWindowsで動いてるんですかね。&lt;/p&gt;
-
-&lt;p&gt;むしろCAに入って良かったなと思える部分は一杯あって、ベテランのエンジニアに色々教えて貰ったりだとかVMwareのライセンスを買ってくれたりだとか&lt;a href=&#34;https://adtech.cyberagent.io/techblog?s=icfp&#34;&gt;ICFPに行かせてもらったり&lt;/a&gt;だとか。&lt;/p&gt;
-
-&lt;p&gt;同期エンジニアの繋りというのもすごい良くて、得意分野も部署も（今となっては）会社も色々にある60人ほどいるエンジニアとの人脈が無条件に作れるというのは新卒で入らないと出来ないなと思います。
-困ったことがあったら同期Slackに投げると数分で解決します。&lt;/p&gt;
-
-&lt;p&gt;最後は雑草が枯れるように誰にも気付かれないように消えていくつもりでしたがそうもいかず、大勢の方々に送り出して頂きました。&lt;/p&gt;
-
-&lt;p&gt;&lt;img alt=&#34;集合写真&#34; src=&#34;/images/ca/mall.jpg&#34; style=&#34;width: 100%&#34;&gt;&lt;/p&gt;
-
-&lt;p&gt;私の周りにいるのがお世話になった開発責任者やトレーナー、トレーニーなどですね。&lt;/p&gt;
-
-&lt;p&gt;色紙とプレゼントも頂きました。ありがとうございます。&lt;/p&gt;
-
-&lt;p&gt;&lt;img alt=&#34;プレゼントの写真&#34; src=&#34;/images/ca/presents.jpg&#34; style=&#34;width: 100%&#34;&gt;&lt;/p&gt;
-
-&lt;p&gt;退職の旨は業務上必要な方以外には知らせてなかったのでまさか色紙が来るとは思ってませんでした。
-多分関係しそうな人にDMを送って集めたんだと思います。ありがとうございます。
-プレゼントは麻の模様の風呂敷です。
-私はカバン代わりにPCを入れるにも旅行に行くにも風呂敷を使う人です:)&lt;/p&gt;
-
-&lt;p&gt;そして女性エンジニアの方(&lt;a href=&#34;https://twitter.com/iyunoriue&#34;&gt;@iyunoriue&lt;/a&gt;)からFOUNDRYの詰め合わせも頂きました。&lt;/p&gt;
-
-&lt;p&gt;&lt;img alt=&#34;FOUNDRYの写真&#34; src=&#34;/images/ca/foundry.jpg&#34; style=&#34;width: 100%&#34;&gt;&lt;/p&gt;
-
-&lt;p&gt;スイーツが好きなので非常に嬉しいです。ありがとうございます。抹茶と合いそう。&lt;/p&gt;
-
-&lt;p&gt;また、退職に合わせて色々なものも引退することになりました。&lt;/p&gt;
-
-&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;Shibuya.lispの現運営が引退するので &lt;a href=&#34;https://twitter.com/hashtag/lispmeetup?src=hash&#34;&gt;#lispmeetup&lt;/a&gt; がなくなります。引き継いでくれる方を募集しています。残りはClojure回、CL回です。Schemeは今月が最後でした。&lt;a href=&#34;https://t.co/o4vv9DRFal&#34;&gt;https://t.co/o4vv9DRFal&lt;/a&gt;&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/803599706475507716&#34;&gt;2016年11月29日&lt;/a&gt;&lt;/blockquote&gt;
-
-&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;そろそろ私も野生のLisper引退した方がいい。&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/803601106693521408&#34;&gt;2016年11月29日&lt;/a&gt;&lt;/blockquote&gt;
-
-&lt;p&gt;お世話になった方々本当にありがとうございました。&lt;/p&gt;
-
-&lt;h1 id=&#34;次の話と退職理由&#34;&gt;次の話と退職理由&lt;/h1&gt;
-
-&lt;p&gt;とりあえず12月中は有給消化で、1月から働きます。給料はまあまあ上がります。どうやらコンパイラ関係の仕事をしそうです。
-世の中そんな仕事があるのか自分でも半信半疑ですがあるようです。&lt;/p&gt;
-
-&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;そういえばICFPのときにкeenさんと話して「えっコンパイラが書けるシゴトあると思ってんの!?」と冗談半分で言われたな．&lt;/p&gt;&amp;mdash; gfn (@bd_gfngfn) &lt;a href=&#34;https://twitter.com/bd_gfngfn/status/780057500485681153&#34;&gt;2016年9月25日&lt;/a&gt;&lt;/blockquote&gt;
-
-&lt;p&gt;私のことを知ってる方なら「コンパイラの仕事があるから」で十分退職理由として納得頂けると思います。
-技術的にも人生的にもチャレンジングですがまだ20代前半なので後先考えずに行動してもどうにかなるかな、とか思ってます。
-地味に社内でRustも使われているようなのでそこも狙っていこうと思います。
-あ、こういうのもやってます。興味のある方はお願いします。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;http://qiita.com/advent-calendar/2016/lang_dev&#34;&gt;言語実装 Advent Calendar 2016 - Qiita&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;http://qiita.com/advent-calendar/2016/rust-lang-2&#34;&gt;Rust その2 Advent Calendar 2016 - Qiita&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;次の仕事についてはまた入社してから書こうと思いますが、ひとまずの報告として渋谷からは離れます。本郷キャンパスに近いところに引っ越す予定です。付近の人はなんか誘って下さい。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://amzn.asia/0JcDzIf&#34;&gt;http://amzn.asia/0JcDzIf&lt;/a&gt;&lt;/p&gt;
-
-&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;
-
-&lt;p&gt;お疲れ様でした&lt;/p&gt;</description>
     </item>
     
   </channel>
