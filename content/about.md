@@ -1,7 +1,7 @@
 ---
 type: page
 title: "About"
-date: 2014-06-12T00:00:00Z
+date: 2017-01-22T00:00:00Z
 comments: true
 sharing: true
 footer: true
@@ -13,7 +13,7 @@ menu: "main"
 - 2011-04 - 2013-03 東京大学理科I類
 - 2013-04 - 2015-03 東京大学理学部数学科(中退)
 - 2015-04 - 2016-12 サイバーエージェント(エンジニア)
-
+- 2017-01 - 現在    Idein Inc. (エンジニア)
 
 ## Activities
 
@@ -37,7 +37,7 @@ menu: "main"
 - Emacs
 - Lisp
 - Rust
-- ML
+- ML (Meta Language)
 - 言語処理系(主にインタプリタ)
   - GC
   - 最適化
