@@ -6,8 +6,811 @@
     <description>Recent content in Slide-rsses on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Mon, 28 Nov 2016 15:41:36 +0900</lastBuildDate>
+    <lastBuildDate>Sun, 22 Jan 2017 13:35:46 +0900</lastBuildDate>
     <atom:link href="/slide/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>コンパイラの人からみたWebAssembly</title>
+      <link>/slide/konpairanoninkaramitaWebAssembly/</link>
+      <pubDate>Sun, 22 Jan 2017 13:35:46 +0900</pubDate>
+      
+      <guid>/slide/konpairanoninkaramitaWebAssembly/</guid>
+      <description>&lt;section data-markdown
+    data-separator=&#34;\n===\n&#34;
+    data-vertical=&#34;\n---\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+&lt;script type=&#34;text/template&#34;&gt;
+
+# コンパイラの人からみたWebAssembly
+----------------------
+[コンパイラ勉強会 - connpass](https://connpass.com/event/46850/)
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+===
+# About Me
+---------
+![κeenのアイコン](/images/kappa.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; width=&#34;20%&#34; --&gt;
+
+ * κeen
+ * [@blackenedgold](https://twitter.com/blackenedgold)
+ * Github: [KeenS](https://github.com/KeenS)
+ * [Idein Inc.](https://idein.jp/)のエンジニア
+ * Lisp, ML, Rust, Shell Scriptあたりを書きます
+
+===
+# アジェンダ
+------------
+
+* WebAssemblyの概要
+* 具体的な話
+* WebAssembly吐こうとした話
+
+===
+
+# WebAssemblyの概要
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+===
+
+# JavaScript
+-------------
+
+* ブラウザ上で動くスクリプト言語
+* 動的型付
+* 高級
+* GCとかある
+* 今までブラウザで動く唯一の言語だった
+* 遅い
+  + 各ブラウザJITなどで補強
+
+===
+
+# [asm.js](http://asmjs.org/)
+------------
+
+* プラウザ上で動く言語
+* 低級
+* GCなし
+* JSのサブセット
+  + asm.jsをサポートしないプラウザでも動かせる
+* コンパイラから生成されることを想定
+  + emscriptenなど
+
+===
+
+``` javascript
+function geometricMean(start, end) {
+  start = start|0; // start has type int
+  end = end|0;     // end has type int
+  return +exp(+logSum(start, end) / +((end - start)|0));
+}
+...
+```
+
+===
+# asm.jsの問題点
+---------------
+
+* JS互換文法なため嵩張る
+* パースも遅い
+* そもそもコンパイラが吐くならバイナリでも良いのでは？
+
+===
+
+# WebAssembly
+--------------
+
+* ブラウザ上で動く言語
+  + 仮想機械命令？
+* 低級
+* バイナリフォーマット
+  + ロード、パース時間が短かい
+  + パース20倍くらい速いらしい
+* wasm32とwasm64がある
+* セマンティクスは（今のところ）ams.jsをほぼ踏襲
+  + 実行エンジンは既存のものを使える
+* 将来SIMD、スレッドなどの拡張が入る
+
+===
+
+# WASMのゴール
+--------------------
+
+* ポータブルでコンパクトで速い
+* 仕様策定と実装をインクリメンタルにやっていく
+  + 今はとりあえずC/C++をターゲットに
+* 既存のJS環境と協調する
+  + JSとの相互呼び出しとか
+* ブラウザ以外への組込みもサポート
+  + Node.jsとか
+* プラットフォームになる
+  + ツール類のサポートとか
+
+===
+
+# なぜWebAssembly?
+------------------
+
+* 実行までのレイテンシが短かい
+* asm.jsより速度を出しやすい設計
+* クライアントヘビーにしやすい？
+* **JSを補完する存在**
+* non-determinismが少ない
+* LLVM IRと比べてデコードが速くてコンパクト
+* (**code generator IR** vs optimization IR)
+* 余計なことをしない
+  + fast mathとかはない
+  + 既に最適化されたコードが吐かれる前提
+
+===
+# WebAssemblyの現状
+-------------------
+
+* Minimum Viable Product(MVP)
+* 機能を削ってとりあえず動くものを作ってる
+* 今はC/C++からLLVMを通して吐けるのが目標
+* 今後SIMDとかスレッドとかDOM APIとか増えていく
+* ChromeとFirefoxでオプトインで使える
+  + そろそろFirefoxで普通に動く
+
+===
+
+# 具体的な話
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+===
+
+# セマンティクス
+---------------
+
+* https://github.com/WebAssembly/spec
+* 形式的定義されている
+* 実行以外にも静的バリデーションもある
+* 1ファイル1モジュール
+  + JSのモジュールと同じ概念
+
+===
+# 実行モデル
+--------------
+
+* i32,i64,f32,f64のみ
+  + bitエンコーディングは指定
+* スタックマシン
+  + 命令のオペランドや関数の引数はスタック経由で渡す
+  + バイナリがコンパクト+雑にコンパイルしても速い
+* 無限のローカル変数が使える
+  + 型がある
+* 関数の引数はローカル変数経由で渡される
+* コントロールフローはgotoじゃなくてstructured
+  + 静的検証がしやすい
+
+===
+
+# wasm、wast
+------------
+
+* バイナリフォーマットだけでは人間が読めない
+* テキストフォーマットも欲しい
+* バイナリ: wasm
+  + コンパクト
+  + intとかもパッキングする
+* テキスト: wast
+  + 人間可読+機械可読=S式
+  + 低級にもちょっと高級にも書ける
+
+===
+
+``` javascript
+function geometricMean(start, end) {
+  start = start|0; // start has type int
+  end = end|0;     // end has type int
+  return +exp(+logSum(start, end) / +((end - start)|0));
+}
+...
+```
+
+===
+
+```wasm
+(module
+  (type (;0;) (func (param i64 i64) (result f64)))
+  (type (;1;) (func (param i64 i64) (result f64)))
+  (type (;2;) (func (param f64) (result f64)))
+  (func (;0;) (type 0) (param i64 i64) (result f64)
+    (get_local 0)
+    (get_local 1)
+    (call 1)
+    (get_local 1)
+    (get_local 0)
+    (i64.sub)
+    (f64.convert_s/i64)
+    (f64.div)
+    (call 2))
+  ...)
+```
+
+===
+
+```wasm
+(module
+  (type (;0;) (func (param i64 i64) (result f64)))
+  (type (;1;) (func (param i64 i64) (result f64)))
+  (type (;2;) (func (param f64) (result f64)))
+  (func (;0;) (type 0) (param i64 i64) (result f64)
+    (call 2
+      (f64.div
+       (call 1 (get_local 0) (get_local 1))
+       (f64.convert_s/i64
+        (i64.sub
+         (get_local 1)
+         (get_local 0))))))
+  ...)
+```
+
+===
+
+```
+0000000: 0061 736d                                 ; WASM_BINARY_MAGIC
+0000004: 0d00 0000                                 ; WASM_BINARY_VERSION
+; section &#34;TYPE&#34; (1)
+0000008: 01                                        ; section code
+0000009: 00                                        ; section size (guess)
+000000a: 03                                        ; num types
+; type 0
+000000b: 60                                        ; func
+000000c: 02                                        ; num params
+000000d: 7e                                        ; i64
+000000e: 7e                                        ; i64
+000000f: 01                                        ; num results
+0000010: 7c                                        ; f64
+; type 1
+0000011: 60                                        ; func
+0000012: 02                                        ; num params
+0000013: 7e                                        ; i64
+0000014: 7e                                        ; i64
+0000015: 01                                        ; num results
+0000016: 7c                                        ; f64
+; type 2
+0000017: 60                                        ; func
+0000018: 01                                        ; num params
+0000019: 7c                                        ; f64
+000001a: 01                                        ; num results
+000001b: 7c                                        ; f64
+0000009: 12                                        ; FIXUP section size
+; section &#34;FUNCTION&#34; (3)
+000001c: 03                                        ; section code
+000001d: 00                                        ; section size (guess)
+000001e: 03                                        ; num functions
+000001f: 00                                        ; function 0 signature index
+0000020: 01                                        ; function 1 signature index
+0000021: 02                                        ; function 2 signature index
+000001d: 04                                        ; FIXUP section size
+; section &#34;CODE&#34; (10)
+000002e: 0a                                        ; section code
+000002f: 00                                        ; section size (guess)
+0000030: 03                                        ; num functions
+; function body 0
+0000031: 00                                        ; func body size (guess)
+0000032: 00                                        ; local decl count
+0000033: 20                                        ; get_local
+0000034: 00                                        ; local index
+0000035: 20                                        ; get_local
+0000036: 01                                        ; local index
+0000037: 10                                        ; call
+0000038: 01                                        ; func index
+0000039: 20                                        ; get_local
+000003a: 01                                        ; local index
+000003b: 20                                        ; get_local
+000003c: 00                                        ; local index
+000003d: 7d                                        ; i64.sub
+000003e: b9                                        ; f64.convert_s/i64
+000003f: a3                                        ; f64.div
+0000040: 10                                        ; call
+0000041: 02                                        ; func index
+0000042: 0b                                        ; end
+0000031: 11                                        ; FIXUP func body size
+...
+```
+
+===
+
+# JS API
+---------
+
+``` javascript
+var importObj = {js: {
+    import1: () =&gt; console.log(&#34;hello,&#34;),
+    import2: () =&gt; console.log(&#34;world!&#34;)
+}};
+fetch(&#39;demo.wasm&#39;).then(response =&gt;
+    response.arrayBuffer()
+).then(buffer =&gt;
+    WebAssembly.instantiate(buffer, importObj)
+).then(({module, instance}) =&gt;
+    instance.exports.f()
+```
+
+===
+
+# メモリ
+------------
+
+* メモリアドレスが0から始まって飛びのない **リニアメモリ**
+  + 命令で伸び縮み出来る
+  + 将来複数のリニアメモリとか出てくるかも
+* メモリサイズは32bit(wasm32)か64bit(wasm64)が選べる
+  + 現状はwasm32のみ
+  + 1つのモジュールでメモリ4GiBバイトも使わないから普通は32bitで十分
+* アドレッシングは `アドレス+オフセット`
+* アラインメントは必須ではない（した方が速い）
+* コード列のメモリは見えない
+* スタックスキャンも出来ない
+
+===
+
+# 例外とか
+----------
+
+* Trap -- WebAssemblyのインスタンスが異常終了する
+  + 例えばメモリの範囲外アクセスとか
+* スタックオーバーフロー
+  + オーバーフローするとインスタンスが異常終了する
+  + 処理系/環境毎にスタック長は違う
+    - non-determinism
+
+===
+
+# テーブル
+----------
+
+* 要素の配列的なもの
+  + 整数インデックスでアクセス出来る
+* 今のところ関数を入れてindrect callするため
+* 将来的にはOSのハンドラとかGCの参照とか
+
+===
+
+# ローカル変数
+--------------
+
+* 無限にある型付きストレージ
+* 0 初期化
+* 関数の引数もローカル変数に入る
+
+===
+
+# グローバル変数
+---------------
+
+* 型付きストレージ
+* 可変/不変がある
+* 不変Globにsetするとvalidationエラー
+* リニアメモリとは違うメモリ領域
+
+===
+# import / export
+-----------------
+
+* 他のモジュールから色々インポート出来る
+* 関数
+* テーブル
+* グローバル変数
+* リニアメモリ
+* 勿論exportも
+
+===
+# 一旦まとめ
+------------
+
+* WASMは1ファイル1モジュール
+* WASMには以下がある
+  + 関数
+    - 関数内ローカル変数
+  + リニアメモリ
+  + グローバル変数
+  + テーブル
+  + importテーブル
+  + exportテーブル
+
+===
+
+# 命令の話
+----------
+
+* コントロールフロー
+* Call
+* パラメトリック
+* 変数アクセス
+* メモリ関連
+* 定数
+* 比較
+* 数値
+* 変換
+* 再解釈
+
+===
+
+# コントロールフロー
+-------------------
+
+* `loop` + `br` (名前付き)
+* `block` + `br` (名前付き)
+* `br_if` or `br_table`
+* `if` + `else` + `end`
+* `return`
+* 等
+
+===
+
+# コントロールフロー
+-------------------
+
+* gotoがない
+  + `br` はブランチじゃなくてブレイク
+* gotoからstructuredに[変換出来る](https://github.com/kripken/emscripten/blob/master/docs/paper.pdf)
+    + loop, block, br, br_ifを使う
+* 高級言語から変換するなら `if` を使う
+  + ifが2系統あることになる
+
+===
+
+# Call
+------
+
+* `call`
+* `call_indirect`
+  + 関数テーブルを使った呼び出し
+  + ダイナミックな関数ディスパッチに
+
+===
+
+# パラメトリック
+------
+
+* `drop`
+* `select`
+  + 三項演算子相当
+
+
+===
+
+# 変数アクセス
+--------------
+
+* `get/set_local`
+* `get/set_global`
+* `tee_local`
+  + スタックに値を残しつつset
+
+===
+
+# メモリ関連
+------------
+
+* `{i,f}{32,64}.load{,8,16,32,64}{,_s,_u}`
+* `{i,f}{32,64}.store{,8,16,32}`
+* `current_memory`
+* `grow_memory`
+  + メモリを増やす命令もある
+
+===
+# 定数
+------
+
+* `{i,f}{32,64}.const`
+
+===
+# 比較
+-------
+
+* 各種 `eq`, `eqz`, `ne`,`lt`, `le`, `gt`, `ge`
+
+===
+
+# 数値
+-------
+
+* 四則(`i32.add`とか)
+* 論理(`i64.popcnt`とか)
+* 丸め,最{大,小}(`f32.ceil`とか)
+* ルート(`f64.sqrt`とか)
+
+===
+
+# 変換
+------
+
+* `f32.convert_s/i32`とか
+* `i32.wrap/i64`とか
+
+===
+
+# 再解釈
+--------
+
+* `i32.reinterpret/f32`とか
+* ビットキャスト
+* ビットエンコーディングが定まってるのでwell-defined
+
+===
+# WASM吐こうとした話
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+===
+# 作ったやつ
+-------------
+
+* なんかコンパイラ作ろうと思い立った
+* [KeenS/webml: An ML like toy language compiler](https://github.com/KeenS/webml)
+* とりあえずSMLのサブセット
+* Rust製
+* 未完成
+  + 正月気抜いてたら進捗ダメでした
+
+===
+# やりたかったこと
+------------------
+
+* ブラウザで動くコンパイラ作ってみたい
+  + Rustはemscripten通せる
+* WebAssembly面白そう
+* SML処理系作りたかった
+* 最適化書く練習
+
+===
+# 中身
+------------
+
+* パーサ、AST, HIR, MIR, LIR
+* LIRがレジスタマシンなのでそれをWASMに変換したい
+* オンメモリで生成するためにアセンブラ自作
+  + [KeenS/WebAssembler-rs: An in memory wasm assembler for Rust](https://github.com/KeenS/WebAssembler-rs)
+  + ブラウザで動かすのに必要
+* 最適化はまだ
+
+===
+# コード生成
+-----------
+
+* (ほぼ)SSAの1変数 = 1ローカル変数
+  + どうせエンジン側でレジスタ割り当てするでしょ
+* スタックはほぼ使わない
+* gotoを構造化制御フローにする
+  +  一応出来る
+  + [Reloop](https://github.com/kripken/emscripten/blob/master/docs/paper.pdf)
+  + 何言ってるのかよく分からない
+  + ステートマシンは勿論可能
+* →自分で考えた
+* なんかつらいので詳解します
+* みんな基本ブロックとCFGは分かるかな？
+
+===
+# blockと前方ジャンプ
+------------
+
+* `block` + `break` で前方ジャンプ
+* 閉じ括弧の位置にジャンプ
+* `block` の位置は自由
+
+===
+
+&lt;pre&gt;
+&lt;code&gt;
+(&lt;span class=&#39;hljs-keyword&#39;&gt;block&lt;/span&gt;
+  ...
+  (&lt;span class=&#39;hljs-keyword&#39;&gt;br&lt;/span&gt; 0)--+
+  ...     |
+  )&lt;------+
+&lt;/code&gt;
+&lt;/pre&gt;
+
+===
+
+&lt;pre&gt;
+&lt;code&gt;
+(&lt;span class=&#39;hljs-keyword&#39;&gt;block&lt;/span&gt;
+  ...
+  ...
+  ...
+  (&lt;span class=&#39;hljs-keyword&#39;&gt;br&lt;/span&gt; 0)--+
+  ...     |
+  )&lt;------+
+&lt;/code&gt;
+&lt;/pre&gt;
+
+===
+
+# loopと前方ジャンプ
+------------
+
+
+* `loop` + `break`で後方ジャンプ
+  + `loop` からの `break` はいわゆる `continue`
+* 開き括弧の位置にジャンプ
+* 閉じ括弧の位置は自由
+
+===
+
+&lt;pre&gt;
+&lt;code&gt;
+(&lt;span class=&#39;hljs-keyword&#39;&gt;loop&lt;/span&gt;&lt;----+
+  ...     |
+  (&lt;span class=&#39;hljs-keyword&#39;&gt;br&lt;/span&gt; 0)--+
+  ...
+  )
+&lt;/code&gt;
+&lt;/pre&gt;
+
+
+===
+
+&lt;pre&gt;
+&lt;code&gt;
+(&lt;span class=&#39;hljs-keyword&#39;&gt;loop&lt;/span&gt;&lt;----+
+  ...     |
+  (&lt;span class=&#39;hljs-keyword&#39;&gt;br&lt;/span&gt; 0)--+
+  ...
+  ...
+  ...
+  )
+&lt;/code&gt;
+&lt;/pre&gt;
+
+
+===
+# ジャンプのクロス
+------------------
+
+* 単一gotoは割り当て出来る
+* 複数のgotoが入り組んだら？
+
+===
+# 前前
+------
+
+```
+   [ ]--+
+    |   |
++--[ ]  |
+|   |   |
+|  [ ]&lt;-+
+|   |
++-&gt;[ ]
+```
+
+===
+# 前前
+------
+
+```
+(block
+  (block
+    ...
+    (br 0)-+
+    ...    |
+    (br 1)-+-+
+  )&lt;-------+ |
+)&lt;-----------+
+```
+
+===
+# 後後
+------
+
+
+```
+   [ ]&lt;-+
+    |   |
++-&gt;[ ]  |
+|   |   |
+|  [ ]--+
+|   |
++--[ ]
+```
+
+===
+# 後後
+------
+
+```
+(loop&lt;-----+
+  (loop&lt;---+-+
+    ...    | |
+    (br 1)-+ |
+    ...      |
+    (br 0)---+
+  )
+)
+```
+
+===
+# 後前
+------
+
+
+```
+   [ ]&lt;-+
+    |   |
++--[ ]  |
+|   |   |
+|  [ ]--+
+|   |
++-&gt;[ ]
+```
+
+===
+# 後前
+------
+
+```
+(block
+  (loop&lt;---+
+    ...    |
+    (br 1)-+-+
+    ...    | |
+    (br 0)-+ |
+  )          |
+)&lt;-----------+
+```
+
+===
+# 前後
+------
+
+```
+   [ ]--+
+    |   |
++-&gt;[ ]  |
+|   |   |
+|  [ ]&lt;-+
+|   |
++--[ ]
+```
+
+===
+# 前後
+------
+
+* 出来ない…？
+* 部分的にステートマーシン作る？
+* ブロック組み換えたら出来る…？
+* emscriptenはステートマシンっぽい？
+* どうすればいいか不明
+* もはやCPS変換して全部Callにする？
+  + Compiling With Continuations!!!
+
+===
+# ランタイム
+------------
+
+* スタック走査出来ない
+* GC書けないのでは？？？
+* 今のところターゲットはC/C++なので問題ない
+* 将来はGC Integration入るかも
+
+===
+# 現状の解
+----------
+
+1. メモリの自動管理を諦める
+2. リージョン推論や線形型で静的管理する
+3. スタックを使わないコードにする
+  + Compiling With Continuations!!!
+
+===
+# まとめ
+--------
+
+* ブラウザでアセンブリっぽいコードが動くよ
+* バイナリはコンパクトだよ
+* コントロールフロー難しいよ
+* ランタイム難しいよ
+* Compiling With Continuations
+
+&lt;/script&gt;
+&lt;/section&gt;
+</description>
+    </item>
     
     <item>
       <title>SchemeでClassとProtocol</title>
@@ -4179,235 +4982,6 @@ Master側で100ms毎にに200個だけZeroMQのキューに積む
 * [KeenS/b11d: A toy DSP](https://github.com/KeenS/b11d)
 * [アドテクコンペ | 株式会社サイバーエージェント](https://www.cyberagent.co.jp/recruit/fresh/program_detail/id=11303&amp;season=2016)
 * [ビジネスモデルもエンジニアリングも学べるアドテクスタジオの育成プログラムとは | 株式会社サイバーエージェント](https://www.cyberagent.co.jp/techinfo_detail/id=11380)
-
-&lt;/script&gt;
-&lt;/section&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>HAMT ~ イミュータブルで高速なハッシュマップ ~</title>
-      <link>/slide/HAMT/</link>
-      <pubDate>Sun, 31 Jan 2016 16:17:35 +0900</pubDate>
-      
-      <guid>/slide/HAMT/</guid>
-      <description>&lt;section data-markdown
-    data-separator=&#34;\n===\n&#34;
-    data-vertical=&#34;\n---\n&#34;
-    data-notes=&#34;^Note:&#34;&gt;
-&lt;script type=&#34;text/template&#34;&gt;
-# &lt;span style=&#34;font-size: 90%&#34;&gt;Hash-Array Mapped Trie&lt;/span&gt;
-----------------------
- ~ イミュータブルで高速なハッシュマップ ~  
-サイバーエージェント AdTech Scala Meetup LT大会
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-===
-# About Me
----------
-![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
-
- + κeen
- + [@blackenedgold](https://twitter.com/blackenedgold)
- + Github: [KeenS](https://github.com/KeenS)
- + 基盤開発グループの新卒
- + Lisp, ML, Rust, Shell Scriptあたりを書きます
-
-===
-# &lt;span style=&#34;font-size: 60%&#34;&gt;scala.collections.immutable.HashMap&lt;/span&gt;
--------------------------------------
-
-* 今日の話題。これの実装をみていく。
-* イミュータブル
-* キー-バリューペア
-* 値を追加する度に新たなハッシュマップを作る &lt;!-- .element: class=&#34;fragment grow&#34; data-fragment-index=&#34;1&#34; --&gt;
-
-===
-# HashMap
-----------------
-
-* `O(1)`のアクセス効率
-* 空間効率は悪い
-* ハッシュ関数が定義出来れば何でもキーに使える
-* 普通はミュータブルに使う
-  + 大量のメモリをアロケートするのでコピーはつらい
-
-===
-# メモリ効率悪そう？
--------------------------
-
-```scala
-val hash = HashMap.empty + (3 -&gt; 1)
-// +---+---+---+---+---+----
-// | / | 3 | / | / | / | ...
-// +---+---+---+---+---+----
-//       |
-//      +-+
-//      |1|
-//      +-+
-```
-
-===
-# メモリ効率悪そう？
--------------------------
-
-```scala
-val hash2 = hash + (2 -&gt; 2)
-// +---+---+---+---+---+----
-// | / | 3 | / | / | / | ...
-// +---+---+---+---+---+----
-//       |
-//      +-+
-//      |1|
-//      +-+
-//  &gt; Copy &lt;
-// +---+---+---+---+---+----
-// | / | 3 | / | 2 | / | ...
-// +---+---+---+---+---+----
-//       |       |
-//      +-+     +-+
-//      |1|     |2|
-//      +-+     +-+
-```
-
-===
-# メモリ効率的データ構造?
-----------------------------
-## TreeMap
-
-* O(log(n))のアクセス効率
-* 空間効率はほどほど
-  + イミュータブルに使えばかなり良い
-  + 部分構造を再利用出来る
-* 全順序関数が定義出来れば何でもキーに出来る
-* キーが複数回比較される問題がある
-
-===
-# キー同士の比較
----------------
-長いキー同士の比較がO(log(n))回走る可能性がある
-
-```scala
-treeMap.get(&#34;very long ... key1&#34;)
-
-        ....
-       /
-&#34;very long ... key3&#34; -&gt; &#34;value3&#34;
-       \
-   &#34;very long ... key2&#34; -&gt; &#34;value2&#34;
-         \
-      &#34;very long ...key1&#34; -&gt; &#34;value1&#34;
-```
-
-===
-# HashMap vs TreeMap
------------------
-
-&lt;table&gt;
-&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;th&gt;HashMap&lt;/th&gt;&lt;th&gt;TreeMap&lt;/th&gt;&lt;/tr&gt;
-&lt;tr&gt;&lt;th&gt;アクセス効率&lt;/th&gt;&lt;td class=&#34;fragment highlight-red&#34; data-fragment-index=&#34;1&#34;&gt;`O(1)`&lt;/td&gt;&lt;td&gt;`O(log(n))`&lt;/td&gt;&lt;/tr&gt;
-&lt;tr&gt;&lt;th&gt;イミュータブルな時の空間効率&lt;/th&gt;&lt;td&gt;悪い(毎回コピー)&lt;/td&gt;&lt;td class=&#34;fragment highlight-red&#34;  data-fragment-index=&#34;1&#34;&gt;良い(部分構造を共有)&lt;/td&gt;&lt;/tr&gt;
-&lt;tr&gt;&lt;th&gt;キーの比較&lt;/th&gt;&lt;td class=&#34;fragment highlight-red&#34;  data-fragment-index=&#34;1&#34;&gt;定数回&lt;/td&gt;&lt;td&gt;`O(log(n))`回&lt;/td&gt;&lt;/tr&gt;
-&lt;tr&gt;&lt;th&gt;キーの要件&lt;/th&gt;&lt;td class=&#34;fragment highlight-red&#34;  data-fragment-index=&#34;1&#34;&gt;Hash関数が定義されている&lt;/td&gt;&lt;td&gt;全順序関数が定義されている&lt;/td&gt;&lt;/tr&gt;
-&lt;/table&gt;
-===
-# &lt;span style=&#34;font-size: 90%&#34;&gt;Hash-Array Mapped Trie&lt;/span&gt;
-------------------------
-
-* `O(1)`のアクセス効率
-* 部分構造を共有してメモリ効率も良い
-* キーの比較は定数回
-* Hash関数が定義されていればキーに出来る
-
-===
-# 動作
-------
-
-* ざっくり言うと、「Hashして分割してトライ」
-
-===
-# 動作
-------
-## Hashする
-
-* 40bitくらいの値が生成される
-
-``` scala
-hash(&#34;key&#34;)
-// =&gt; 0b10101101010101001010110101010100
-```
-
-===
-# 動作
-------
-## 分割する
-
-* 下位から5bit毎に分割する
-  + 5bit = 0 ~ 31
-  + 32分木になる
-
-```
-11111 00010 10110 10101 01001 01011 01010 10100
-```
-
-===
-# 動作
-------
-## トライ
-
-* 32分のトライ木になる
-* トライ木の実装は32bitのbitmapを使ったArray Mapped Trieを使う
-
-===
-(図が分かりづらいというか不適切)
-
-```
-8     7     6     5     4     3     2     1
-11111 00010 10110 10101 01001 01011 01010 10100
-
-1    2    3  4
-   ...
-  /
-10100     ...
-  \        /
-   \    01011
-    \   /  \
-     \ /   01001....
-     01010
-       \
-        ...
-```
-
-===
-# 特徴
-------
-
-* ハッシュ値が固定長なので`O(1)`で動作
-* Treeなので部分構造の共有が簡単
-* 木を辿る時の比較はhash値（の一部）なので高速
-* キーに全順序がなくてもハッシュ関数さえ定義されていれば木を構築出来る
-
-===
-# まとめ
---------
-
-* Scalaのimmutable.HashMapはコピーしても高速だよ
-* 裏で動くアルゴリズムを紹介したよ
-  + ざっくりなので本物はもう少し工夫してる
-  + prefix treeになってる
-
-===
-# 参考
-------
-
-* PDF [Ideal Hash Trees](http://lampwww.epfl.ch/papers/idealhashtrees.pdf)
-  + HAMTの元論文
-* [HAMT(Hash Array Mapped Trie) - sileのブログ](http://sile.hatenablog.jp/entry/20100926/1285467529)
-  + HAMTの解説ブログ
-* PDF [Optimizing Hash-Array Mapped Tries for Fast and Lean Immutable JVM Collections](http://michael.steindorfer.name/publications/oopsla15.pdf)
-  + HAMTを改善したCHAMPというデータ構造の論文。Clojureにこれが入りそう。
-* [Optimizing Hash-Array Mapped Tries for Fast and Lean Immutable JVM Collections | the morning paper](http://blog.acolyer.org/2015/11/27/hamt/)
-  + CHAMPを解説したブログ
 
 &lt;/script&gt;
 &lt;/section&gt;
