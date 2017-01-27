@@ -19,7 +19,7 @@ title: コンパイラの人からみたWebAssembly
 ===
 # About Me
 ---------
-![κeenのアイコン](/images/kappa.png) <!-- .element: style="position:absolute;right:0;z-index:-1" -->
+![κeenのアイコン](/images/kappa.png) <!-- .element: style="position:absolute;right:0;z-index:-1" width="20%" -->
 
  * κeen
  * [@blackenedgold](https://twitter.com/blackenedgold)
@@ -28,6 +28,8 @@ title: コンパイラの人からみたWebAssembly
  * Lisp, ML, Rust, Shell Scriptあたりを書きます
 
 ===
+# アジェンダ
+------------
 
 * WebAssemblyの概要
 * 具体的な話
@@ -96,7 +98,7 @@ function geometricMean(start, end) {
   + パース20倍くらい速いらしい
 * wasm32とwasm64がある
 * セマンティクスは（今のところ）ams.jsをほぼ踏襲
-  + バックエンドは既存のものを使える
+  + 実行エンジンは既存のものを使える
 * 将来SIMD、スレッドなどの拡張が入る
 
 ===
@@ -180,7 +182,11 @@ function geometricMean(start, end) {
 * バイナリフォーマットだけでは人間が読めない
 * テキストフォーマットも欲しい
 * バイナリ: wasm
+  + コンパクト
+  + intとかもパッキングする
 * テキスト: wast
+  + 人間可読+機械可読=S式
+  + 低級にもちょっと高級にも書ける
 
 ===
 
@@ -517,7 +523,7 @@ fetch('demo.wasm').then(response =>
 * ビットエンコーディングが定まってるのでwell-defined
 
 ===
-# WebAssembly吐こうとした話
+# WASM吐こうとした話
 
 <!-- .slide: class="center" -->
 ===
@@ -547,19 +553,23 @@ fetch('demo.wasm').then(response =>
 
 * パーサ、AST, HIR, MIR, LIR
 * LIRがレジスタマシンなのでそれをWASMに変換したい
-  + gotoを構造化制御フローにする必要
 * オンメモリで生成するためにアセンブラ自作
   + [KeenS/WebAssembler-rs: An in memory wasm assembler for Rust](https://github.com/KeenS/WebAssembler-rs)
+  + ブラウザで動かすのに必要
 * 最適化はまだ
 
 ===
 # コード生成
 -----------
 
+* (ほぼ)SSAの1変数 = 1ローカル変数
+  + どうせエンジン側でレジスタ割り当てするでしょ
+* スタックはほぼ使わない
 * gotoを構造化制御フローにする
-* 一応出来る
+  +  一応出来る
   + [Reloop](https://github.com/kripken/emscripten/blob/master/docs/paper.pdf)
   + 何言ってるのかよく分からない
+  + ステートマシンは勿論可能
 * →自分で考えた
 * なんかつらいので詳解します
 * みんな基本ブロックとCFGは分かるかな？
@@ -597,6 +607,8 @@ fetch('demo.wasm').then(response =>
   )<------+
 </code>
 </pre>
+
+===
 
 # loopと前方ジャンプ
 ------------
@@ -636,6 +648,15 @@ fetch('demo.wasm').then(response =>
 
 
 ===
+# ジャンプのクロス
+------------------
+
+* 単一gotoは割り当て出来る
+* 複数のgotoが入り組んだら？
+
+===
+# 前前
+------
 
 ```
    [ ]--+
@@ -647,10 +668,134 @@ fetch('demo.wasm').then(response =>
 +->[ ]
 ```
 
-* bitエンコーディングがコンパクトだよって話
-  + varuintとか
-* GC無理だよねって話
-* jump -> breakの話
+===
+# 前前
+------
+
+```
+(block
+  (block
+    ...
+    (br 0)-+
+    ...    |
+    (br 1)-+-+
+  )<-------+ |
+)<-----------+
+```
+
+===
+# 後後
+------
+
+
+```
+   [ ]<-+
+    |   |
++->[ ]  |
+|   |   |
+|  [ ]--+
+|   |
++--[ ]
+```
+
+===
+# 後後
+------
+
+```
+(loop<-----+
+  (loop<---+-+
+    ...    | |
+    (br 1)-+ |
+    ...      |
+    (br 0)---+
+  )
+)
+```
+
+===
+# 後前
+------
+
+
+```
+   [ ]<-+
+    |   |
++--[ ]  |
+|   |   |
+|  [ ]--+
+|   |
++->[ ]
+```
+
+===
+# 後前
+------
+
+```
+(block
+  (loop<---+
+    ...    |
+    (br 1)-+-+
+    ...    | |
+    (br 0)-+ |
+  )          |
+)<-----------+
+```
+
+===
+# 前後
+------
+
+```
+   [ ]--+
+    |   |
++->[ ]  |
+|   |   |
+|  [ ]<-+
+|   |
++--[ ]
+```
+
+===
+# 前後
+------
+
+* 出来ない…？
+* 部分的にステートマーシン作る？
+* ブロック組み換えたら出来る…？
+* emscriptenはステートマシンっぽい？
+* どうすればいいか不明
+* もはやCPS変換して全部Callにする？
+  + Compiling With Continuations!!!
+
+===
+# ランタイム
+------------
+
+* スタック走査出来ない
+* GC書けないのでは？？？
+* 今のところターゲットはC/C++なので問題ない
+* 将来はGC Integration入るかも
+
+===
+# 現状の解
+----------
+
+1. メモリの自動管理を諦める
+2. リージョン推論や線形型で静的管理する
+3. スタックを使わないコードにする
+  + Compiling With Continuations!!!
+
+===
+# まとめ
+--------
+
+* ブラウザでアセンブリっぽいコードが動くよ
+* バイナリはコンパクトだよ
+* コントロールフロー難しいよ
+* ランタイム難しいよ
+* Compiling With Continuations
 
 </script>
 </section>
