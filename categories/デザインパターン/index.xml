@@ -1,0 +1,367 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>κeenのHappy Hacκing Blog</title>
+    <link>/categories/%E3%83%87%E3%82%B6%E3%82%A4%E3%83%B3%E3%83%91%E3%82%BF%E3%83%BC%E3%83%B3/index.xml</link>
+    <description>Recent content on κeenのHappy Hacκing Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>ja-jp</language>
+    <atom:link href="/categories/%E3%83%87%E3%82%B6%E3%82%A4%E3%83%B3%E3%83%91%E3%82%BF%E3%83%BC%E3%83%B3/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>RustのちょっとやりすぎなBuilderパターン</title>
+      <link>/blog/2017/02/09/rustnochottoyarisuginabuilderpata_n</link>
+      <pubDate>Thu, 09 Feb 2017 23:03:45 +0900</pubDate>
+      
+      <guid>/blog/2017/02/09/rustnochottoyarisuginabuilderpata_n</guid>
+      <description>&lt;p&gt;κeenです。Rustでちょっとやりすぎだけど使う側の自由度が高くて安全なBuilderパターンを思い付いたので紹介しますね。
+&lt;/p&gt;
+
+&lt;h1 id=&#34;目的コード&#34;&gt;目的コード&lt;/h1&gt;
+
+&lt;p&gt;以下のような構造体のビルダーを作りたいとします。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-struct&#34;&gt;#[derive(Debug)]
+struct Person {
+    id: u32,
+    name: String,
+    age: u32,
+    address: Option&amp;lt;String&amp;gt;,
+    zipcode: Option&amp;lt;String&amp;gt;,
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;雑にやると&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct PersonBuilder {
+    id: Option&amp;lt;u32&amp;gt;,
+    name: Option&amp;lt;String&amp;gt;,
+    age: Option&amp;lt;u32&amp;gt;,
+    address: Option&amp;lt;String&amp;gt;,
+    zipcode: Option&amp;lt;String&amp;gt;,
+}
+
+impl PersonBuilder {
+  pub fn new() -&amp;gt; Self { ... }
+  pub fn id(self, id: u32) -&amp;gt; Self { ... }
+  pub fn name(self, name: String) -&amp;gt; Self { ... }
+  pub fn age(self, id: u32) -&amp;gt; Self { ... }
+  pub fn address(self, address: String) -&amp;gt; Self { ... }
+  pub fn zipcode(self, zipcode: String) -&amp;gt; Self { ... }
+  // 返り値がOption型になってしまう
+  pub fn build(self) -&amp;gt; Option&amp;lt;Person&amp;gt; {
+    // try_opt!は標準ライブラリには存在しませんが各所で使われてるので動きは分かると思います
+    Person {
+       id: try_opt!(self.id),
+       name: try_opt!(self.name),
+       age: try_opt!(self.age),
+       address: self.address,
+       zipcode: self.zipcode,
+    }
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;とbuildの返り値が&lt;code&gt;Option&lt;/code&gt;型になってしまい、あまりうれしくありません。
+さらには例えば&lt;code&gt;id&lt;/code&gt;を2回呼んだらどうなるんだとかツッコミどころが数多くあります。&lt;/p&gt;
+
+&lt;p&gt;ということで色々な回避策を先人達は考えてきました。&lt;/p&gt;
+
+&lt;h1 id=&#34;不自由なコード&#34;&gt;不自由なコード&lt;/h1&gt;
+
+&lt;p&gt;普通にやるなら&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct PersonBuilder {
+    id: u32,
+    name: String,
+    age: u32,
+    address: Option&amp;lt;String&amp;gt;,
+    zipcode: Option&amp;lt;String&amp;gt;,
+}
+
+impl PersonBuilder {
+  fn new(id: u32, name: String, age: String) -&amp;gt; Self { ... }
+  fn address(self, address: String) -&amp;gt; Self { ... }
+  fn zipcode(self, zipcode: String) -&amp;gt; Self { ... }
+  // 返り値がOptionじゃない
+  fn build(self) -&amp;gt; Person { ... }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;のように&lt;code&gt;Option&lt;/code&gt;でないフィールドをコンストラクタで受け取れば安全に作れますが、コンストラクタを呼ぶ時点でいくつかフィールドが揃っている必要がある、そもそも元の構造体と何が違うんだ、など色々問題があります。&lt;/p&gt;
+
+&lt;h1 id=&#34;少しマシなコード&#34;&gt;少しマシなコード&lt;/h1&gt;
+
+&lt;p&gt;オートマトンのようにビルダーが状態遷移するコードを使うと、1つ1つの引数をビルドしつつ安全なコードが出来ます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct PersonBuilderId;
+struct PersonBuilderName{id: u32}
+struct PersonBuilderAge{id: u32, name: String}
+struct PersonBuilder {
+    id: u32,
+    name: String,
+    age: u32,
+    address: Option&amp;lt;String&amp;gt;,
+    zipcode: Option&amp;lt;String&amp;gt;,
+}
+
+impl PersonBuilderId {
+  pub fn new() -&amp;gt; Self { ... }
+  // idの次はname
+  pub fn id(self, id: u32) -&amp;gt; PersonBuilderName {
+    PersonBuilderName { id: id }
+  }
+}
+
+impl PersonBuilderName {
+  // nameの次はage
+  pub name(self, name: String) -&amp;gt; PersonBuilderAge {
+    PersonBuilderAge {
+      id: self.id,
+      name: name,
+    }
+  }
+}
+impl PersonBuilderAge {
+  // ageは最後
+  pub name(self, age: u32) -&amp;gt; PersonBuilder {
+    PersonBuilder {
+      id: self.id,
+      name: self.name,
+      age: age,
+      address: None,
+      zipcode: None,
+    }
+  }
+}
+
+impl PersonBuilder {
+  // 気持ち悪いけど PersonBuilderIdを返す
+  pub fn new -&amp;gt; PersonBuilderId { ... }
+  pub fn address(self, address: String) -&amp;gt; Self { ... }
+  pub fn zipcode(self, zipcode: String) -&amp;gt; Self { ... }
+  // これまたOptionじゃなくなってる
+  pub fn build(self) -&amp;gt; Person { ... }
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これは以下のように&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;fn main() {
+  let person = PersonBuilder::new()
+         .id(1)
+         .name(&amp;quot;κeen&amp;quot;.to_string())
+         .age(24)
+         .address(&amp;quot;Tokyo&amp;quot;.to_string())
+         .build();
+  println!(&amp;quot;{:?}&amp;quot;, person)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と使えます(即興で書いたので試してないけど)。&lt;/p&gt;
+
+&lt;p&gt;とりあえず使えそうな気がしますが、型レベルで状態遷移をハードコードしているのでメソッドを呼び出す順番が固定されてしまいます。
+なので以下はエラーです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;fn main() {
+  let person = PersonBuilder::new()
+         // nameとidを逆順に呼び出してみる
+         .name(&amp;quot;κeen&amp;quot;.to_string())
+         .id(1)
+         .age(24)
+         .address(&amp;quot;Tokyo&amp;quot;.to_string())
+         .build();
+  println!(&amp;quot;{:?}&amp;quot;, person)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;あとは単純に&lt;code&gt;struct PersonBuilderId&lt;/code&gt;、&lt;code&gt;struct PersonBuilderName{id: u32}&lt;/code&gt;、&lt;code&gt;struct PersonBuilderAge{id: u32, name: String}&lt;/code&gt;と作っていくのが面倒という話もあります。&lt;/p&gt;
+
+&lt;p&gt;今回はそれを改善したいという話&lt;/p&gt;
+
+&lt;h1 id=&#34;幽霊型を使ったフィールド状態&#34;&gt;幽霊型を使ったフィールド状態&lt;/h1&gt;
+
+&lt;p&gt;今回提案するビルダー型はこれです。提案するといってもどうせ既に誰かが考えてるでしょうが。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::marker::PhantomData;
+struct Empty;
+struct Filled;
+
+struct PersonBuilder&amp;lt;Id, Name, Age&amp;gt; {
+    id: Option&amp;lt;u32&amp;gt;,
+    id_state: PhantomData&amp;lt;Id&amp;gt;,
+    name: Option&amp;lt;String&amp;gt;,
+    name_state: PhantomData&amp;lt;Name&amp;gt;,
+    age: Option&amp;lt;u32&amp;gt;,
+    age_state: PhantomData&amp;lt;Age&amp;gt;,
+    address: Option&amp;lt;String&amp;gt;,
+    zipcode: Option&amp;lt;String&amp;gt;,
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://doc.rust-lang.org/std/marker/struct.PhantomData.html&#34;&gt;PhantomData&lt;/a&gt;という特殊な型を使ってビルダーに余計な型を付けています。&lt;/p&gt;
+
+&lt;p&gt;この型、最初は&lt;code&gt;Empty&lt;/code&gt;から出発します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;impl PersonBuilder&amp;lt;Empty, Empty, Empty&amp;gt; {
+    pub fn new() -&amp;gt; Self {
+        PersonBuilder {
+            id: None,
+            id_state: PhantomData,
+            name: None,
+            name_state: PhantomData,
+            age: None,
+            age_state: PhantomData,
+            address: None,
+            zipcode: None,
+        }
+
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そしてフィールドが埋められると対応する型がEmptyからFilledになります。&lt;/p&gt;
+
+&lt;p&gt;フィールドに&lt;code&gt;Some&lt;/code&gt;が埋められるのと同時に対応する&lt;code&gt;_state&lt;/code&gt;フィールドを&lt;code&gt;Empty&lt;/code&gt;から&lt;code&gt;Filled&lt;/code&gt;にすると整合性が崩れません。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;// Id以外、つまりNameとAgeはいじらないのでジェネリクスに
+impl&amp;lt;Name, Age&amp;gt; PersonBuilder&amp;lt;Empty, Name, Age&amp;gt; {
+    pub fn id(self, id: u32) -&amp;gt; PersonBuilder&amp;lt;Filled, Name, Age&amp;gt; {
+        PersonBuilder {
+            id: Some(id),
+            id_state: PhantomData,
+            name: self.name,
+            name_state: self.name_state,
+            age: self.age,
+            age_state: self.age_state,
+            address: self.address,
+            zipcode: self.zipcode,
+        }
+    }
+}
+impl&amp;lt;Id, Age&amp;gt; PersonBuilder&amp;lt;Id, Empty, Age&amp;gt; {
+    // 地味なテクニックとして、SringではなくてInto&amp;lt;String&amp;gt;で受けることでリテラルのStringとかも受け取れる。
+    pub fn name&amp;lt;S: Into&amp;lt;String&amp;gt;&amp;gt;(self, name: S) -&amp;gt; PersonBuilder&amp;lt;Id, Filled, Age&amp;gt; {
+        PersonBuilder {
+            id: self.id,
+            id_state: self.id_state,
+            name: Some(name.into()),
+            name_state: PhantomData,
+            age: self.age,
+            age_state: self.age_state,
+            address: self.address,
+            zipcode: self.zipcode,
+        }
+    }
+}
+
+impl&amp;lt;Id, Name&amp;gt; PersonBuilder&amp;lt;Id, Name, Empty&amp;gt; {
+    pub fn age(self, age: u32) -&amp;gt; PersonBuilder&amp;lt;Id, Name, Filled&amp;gt; {
+        PersonBuilder {
+            id: self.id,
+            id_state: self.id_state,
+            name: self.name,
+            name_state: self.name_state,
+            age: Some(age),
+            age_state: PhantomData,
+            address: self.address,
+            zipcode: self.zipcode,
+        }
+    }
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;Option&lt;/code&gt;のままで構わないフィールドについては雑で構いません。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;impl&amp;lt;Id, Name, Age&amp;gt; PersonBuilder&amp;lt;Id, Name, Age&amp;gt; {
+    pub fn address&amp;lt;S: Into&amp;lt;String&amp;gt;&amp;gt;(mut self, address: S) -&amp;gt; Self {
+        self.address = Some(address.into());
+        self
+    }
+
+    pub fn zipcode&amp;lt;S: Into&amp;lt;String&amp;gt;&amp;gt;(mut self, zipcode: S) -&amp;gt; Self {
+        self.zipcode = Some(zipcode.into());
+        self
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そして必須フィールド全てが満たされた時にだけ&lt;code&gt;build&lt;/code&gt;が呼べます。&lt;code&gt;unwrap&lt;/code&gt;を呼んでますが安全であることに注意して下さい。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;impl PersonBuilder&amp;lt;Filled, Filled, Filled&amp;gt; {
+    pub fn build(self) -&amp;gt; Person {
+        Person {
+            id: self.id.unwrap(),
+            name: self.name.unwrap(),
+            age: self.age.unwrap(),
+            address: self.address,
+            zipcode: self.zipcode,
+        }
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;こうすることで、呼び出しが非常に自由になります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
+    let person = PersonBuilder::new()
+        .age(24)
+        .id(1)
+        .address(&amp;quot;Tokyo&amp;quot;)
+        .name(&amp;quot;κeen&amp;quot;)
+        .build();
+    println!(&amp;quot;{:?}&amp;quot;, person);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;メソッドは自由に組み換えられますが、必須フィールドがなかったら&lt;code&gt;build&lt;/code&gt;が呼べません（コンパイルエラー）になります。&lt;/p&gt;
+
+&lt;p&gt;これは応用も出来て、それぞれの状態が独立しているので例えば「2つのVector合計3つ以上要素が入っていたら」、とか「R、G、BあるいはH、S、Vの3つが揃っていたら」とかオートマトンではエンコードしづらいものでも比較的楽に書けます。&lt;/p&gt;
+
+&lt;p&gt;ということで便利なbuilderが出来ました。めでたしめでたし。といいたいところですが、ちょっとコードが冗長ですよね。マクロで生成なんかも出来るのですがあまりやりたくありません。ということで「ちょっとやりすぎな」Builderパターンでした。&lt;/p&gt;
+
+&lt;h1 id=&#34;some-like-it-unsafe&#34;&gt;Some like it unsafe&lt;/h1&gt;
+
+&lt;p&gt;上のコード、実はもうちょっと短く書けます。ただし&lt;code&gt;unsafe&lt;/code&gt;な機能を使いますが。&lt;/p&gt;
+
+&lt;p&gt;こう書いていたものが&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;impl&amp;lt;Name, Age&amp;gt; PersonBuilder&amp;lt;Empty, Name, Age&amp;gt; {
+    pub fn id(self, id: u32) -&amp;gt; PersonBuilder&amp;lt;Filled, Name, Age&amp;gt; {
+        PersonBuilder {
+            id: Some(id),
+            id_state: PhantomData,
+            name: self.name,
+            name_state: self.name_state,
+            age: self.age,
+            age_state: self.age_state,
+            address: self.address,
+            zipcode: self.zipcode,
+        }
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://doc.rust-lang.org/std/mem/fn.transmute.html&#34;&gt;&lt;code&gt;std::mem::transmute&lt;/code&gt;&lt;/a&gt;を使うことで2行になります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::mem::transmute;
+
+impl&amp;lt;Name, Age&amp;gt; PersonBuilder&amp;lt;Empty, Name, Age&amp;gt; {
+    pub fn id(mut self, id: u32) -&amp;gt; PersonBuilder&amp;lt;Filled, Name, Age&amp;gt; {
+        self.id = Some(id);
+        unsafe { transmute(self) }
+    }
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;すごいですね。
+しかし、案外しょっちゅうtransmuteはミスなどで間違った変換をしてしまう（上記で言えばidフィールドを更新したのにname_stateの型を変更してしまう）上に型検査で弾けないので個人的にはあまりおすすめ出来ません。
+これも「ちょっとやりすぎ」なTipsでした。&lt;/p&gt;</description>
+    </item>
+    
+  </channel>
+</rss>
