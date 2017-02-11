@@ -5,6 +5,8 @@ title: RustのちょっとやりすぎなBuilderパターン
 ---
 
 κeenです。Rustでちょっとやりすぎだけど使う側の自由度が高くて安全なBuilderパターンを思い付いたので紹介しますね。
+
+※2017-02-11T13:18:58Z+09:00 最下部に追記しました
 <!--more-->
 
 # 目的コード
@@ -366,3 +368,17 @@ impl<Name, Age> PersonBuilder<Empty, Name, Age> {
 すごいですね。
 しかし、案外しょっちゅうtransmuteはミスなどで間違った変換をしてしまう（上記で言えばidフィールドを更新したのにname_stateの型を変更してしまう）上に型検査で弾けないので個人的にはあまりおすすめ出来ません。
 これも「ちょっとやりすぎ」なTipsでした。
+
+# 2017-02-11T13:18:58Z+09:00 追記
+qnighyさんからもっと便利な方法の提案がありました。
+
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">こう <a href="https://t.co/undNgEM2IQ">https://t.co/undNgEM2IQ</a> やったらunwrapしなくてすみそう？ / “RustのちょっとやりすぎなBuilderパターン | κeenのHappy Hacκing Blog” <a href="https://t.co/ogDOpYifjh">https://t.co/ogDOpYifjh</a></p>&mdash; Masaki⊣Hara (@qnighy) <a href="https://twitter.com/qnighy/status/830053476096843776">2017年2月10日</a></blockquote>
+<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+実際のコードはこちら。
+
+<script src="https://gist.github.com/qnighy/e7a833eebd57ef778eaff3a8ab3649d7.js"></script>
+
+transmuteを使ったサボった実装は出来なくなるけどそもそも余計なフィールドを使う必要がなくなるので手軽ですね。
+
+qnighyさんありがとうございました。
