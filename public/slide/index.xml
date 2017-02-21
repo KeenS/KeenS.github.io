@@ -6,8 +6,773 @@
     <description>Recent content in Slide-rsses on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Sun, 22 Jan 2017 13:35:46 +0900</lastBuildDate>
+    <lastBuildDate>Thu, 16 Feb 2017 15:46:21 +0900</lastBuildDate>
     <atom:link href="/slide/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>WebAssemblyとコンパイラとランタイム</title>
+      <link>/slide/WebAssemblytokonpairatorantaimu/</link>
+      <pubDate>Thu, 16 Feb 2017 15:46:21 +0900</pubDate>
+      
+      <guid>/slide/WebAssemblytokonpairatorantaimu/</guid>
+      <description>&lt;section data-markdown
+    data-separator=&#34;\n===\n&#34;
+    data-vertical=&#34;\n---\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+&lt;script type=&#34;text/template&#34;&gt;
+# WebAssemblyとコンパイラとランタイム
+----------------------
+[emscripten night !! #3 - connpass](https://emsn.connpass.com/event/48100/)
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+===
+# About Me
+---------
+![κeenのアイコン](/images/kappa.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; width=&#34;20%&#34; --&gt;
+
+ * κeen
+ * [@blackenedgold](https://twitter.com/blackenedgold)
+ * Github: [KeenS](https://github.com/KeenS)
+ * [Idein Inc.](https://idein.jp/)のエンジニア
+ * Lisp, ML, Rust, Shell Scriptあたりを書きます
+
+===
+# 何の話
+---------
+
+* WebAssemblyをバックエンドに使う言語を作りたい
+* [KeenS/webml: An ML like toy language compiler](https://github.com/KeenS/webml)
+* 既に発表したものの補足記事的な
+  + [コンパイラの人からみたWebAssembly | κeenのHappy Hacκing Blog](https://keens.github.io/slide/konpairanoninkaramitaWebAssembly/)
+  + ある程度再度説明します
+
+===
+# アジェンダ
+------------
+
+* なぜWebAssembly
+* コンパイラ
+* コード生成
+* ランタイム
+
+===
+
+# なぜWebAssembly
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+===
+# なぜWebAssembly
+----------------
+
+* なんかバイナリでテンション上がる
+* ポータブルでコンパクトで速い
+* 機能的にJSを越えるかもしれない…？
+* コンパイラがブラウザで動くと言語導入のハードル下がる
+  + 気軽に試せる
+  + コンパイラだけでなく吐いたコードもブラウザで動かしたい
+
+===
+# WASM over LLVM
+----------------
+
+* 既存のJS環境と協調する
+  + JSとの相互呼び出しとか
+* **non-determinismが少ない**
+* 細かいアラインメント考える必要がない
+* **API安定しそう**
+
+===
+
+# WASM over asm.js
+--------------------
+
+* ブラウザ以外への組込みもサポート
+  + Node.jsとか
+  + **JITエンジンに使えそう**
+* プラットフォーム
+* 実行までのレイテンシが短かい
+* asm.jsより速度を出しやすい設計
+* テキストフォーマットで生成コードの文法エラーが怖い
+* 将来機能が増えるかも
+
+===
+# WebAssemblyの現状
+-------------------
+
+* Minimum Viable Product(MVP)
+* 機能を削ってとりあえず動くものを作ってる
+* 今はC/C++からLLVMを通して吐けるのが目標
+  + C/C++には不要でも自分の言語に欲しい機能は……
+* 今後SIMDとかスレッドとかDOM APIとか増えていく
+
+===
+
+# コンパイラ
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+===
+# WASM概要
+----------
+
+* WASMには以下がある
+  + 関数
+    - 関数内ローカル変数
+  + リニアメモリ
+  + グローバル変数
+  + テーブル
+  + importテーブル
+  + exportテーブル
+
+===
+# WASM実行モデル
+--------------
+
+* i32,i64,f32,f64のみ
+* **スタックマシン**
+  + 命令のオペランドや関数の引数はスタック経由で渡す
+  + 1 passのコード生成が楽そう
+* 無限のローカル変数が使える
+  + 型がある
+* 関数の引数はローカル変数経由で渡される
+* コントロールフローはgotoじゃなくてstructured
+  + 静的検証がしやすいらしい
+  + 安全だけどコンパイラ的には…
+
+===
+
+# コントロールフロー
+-------------------
+
+* `loop` + `br` (名前付き)
+* `block` + `br` (名前付き)
+* `br_if` or `br_table`
+* `if` + `else` + `end`
+* `return`
+* 等
+
+===
+
+# コントロールフロー
+-------------------
+
+* gotoがない
+  + `br` はブランチじゃなくてブレイク
+* gotoからstructuredに[変換出来る](https://github.com/kripken/emscripten/blob/master/docs/paper.pdf)
+    + loop, block, br, br_ifを使う
+* 高級言語から変換するなら `if` を使う
+  + ifが2系統あることになる
+
+===
+# サンプル
+---------
+
+``` javascript
+function geometricMean(start, end) {
+  start = start|0; // start has type int
+  end = end|0;     // end has type int
+  return +exp(+logSum(start, end) / +((end - start)|0));
+}
+...
+```
+
+===
+# サンプル
+---------
+
+```wasm
+(module
+  (type (;0;) (func (param i64 i64) (result f64)))
+  (type (;1;) (func (param i64 i64) (result f64)))
+  (type (;2;) (func (param f64) (result f64)))
+  (func (;0;) (type 0) (param i64 i64) (result f64)
+    (get_local 0)
+    (get_local 1)
+    (call 1)
+    (get_local 1)
+    (get_local 0)
+    (i64.sub)
+    (f64.convert_s/i64)
+    (f64.div)
+    (call 2))
+  ...)
+```
+
+===
+# サンプル
+---------
+
+```wasm
+(module
+  (type (;0;) (func (param i64 i64) (result f64)))
+  (type (;1;) (func (param i64 i64) (result f64)))
+  (type (;2;) (func (param f64) (result f64)))
+  (func (;0;) (type 0) (param i64 i64) (result f64)
+    (call 2
+      (f64.div
+       (call 1 (get_local 0) (get_local 1))
+       (f64.convert_s/i64
+        (i64.sub
+         (get_local 1)
+         (get_local 0))))))
+  ...)
+```
+
+===
+
+# WebMLコンパイラ
+------------
+
+* パーサ、AST、HIR、MIR、LIR
+* LIRがRTLなのでそれをWASMに変換したい
+* gotoからstructured control flow…
+
+===
+
+```
+[コード]
+   | パーサ
+ [AST] 型推論とか
+   | AST2HIR
+ [HIR] 早期最適化、K正規化、A正規化など
+   | HIR2MIR
+ [MIR] 諸々の最適化
+   | MIL2LIR
+ [LIR] シリアライズ、レジスタ割り当てなど
+   | コード生成
+ [WASM]
+```
+
+===
+
+# 変数
+------
+
+* LIRはレジスタで計算する
+* LIRはCFG由来の大量の変数を使う
+  + レジスタ割り当ては一旦置いとく
+* WASMはスタックで計算する
+* どうコード生成すると最適か？
+
+===
+
+```
+fun main: () -&gt; i64 = {
+    entry@0:
+        r0: i64 &lt;- 1
+        r1: i32 &lt;- 0
+        r2: i64 &lt;- 1
+        r3: i64 &lt;- 2
+        r4: i64 &lt;- 3
+        r5: i64 &lt;- r3 * r4
+        r6: i64 &lt;- 4
+        r7: i64 &lt;- r5 + r6
+        r8: i64 &lt;- r2 + r7
+        r9: i64 &lt;- 1
+        r10: i64 &lt;- 2
+        r11: i64 &lt;- r9 + r10
+        r12: i64 &lt;- 3
+        r13: i64 &lt;- r11 * r12
+        r14: i64 &lt;- 4
+        r15: i64 &lt;- r13 + r14
+        r16: i32 &lt;- 1
+        jump_if_zero r16 then@1
+        jump else@2
+    then@1:
+        r17: i64 &lt;- r8
+        jump join@3
+    else@2:
+        r17: i64 &lt;- r15
+        jump join@3
+    join@3:
+        r18: i64 &lt;- 1
+        r19: i64 &lt;- r18 + r15
+        r20: i64 &lt;- 1
+        r21: i64 &lt;- call d@9(r20, )
+        r22: i64 &lt;- 2
+        r23: i64 &lt;- call #g37(r22, )
+        r24: i64 &lt;- 1
+        r25: i64 &lt;- heapalloc(16)
+        [r25+0] &lt;- &lt;anonfun&gt;@11
+        [r25+8] &lt;- r24
+        r26: i64 &lt;- 0
+        ret r26
+}
+```
+
+===
+
+# 変数割り当て
+--------------
+
+* SSAの1変数 = WASMの1ローカル変数
+* スタックの効率利用を完全に無視
+* 計算はLV→スタック→LVに書き戻し
+* どうせスタックもLVもレジスタ扱いにしてレジスタ割り当てされるでしょ
+* （測ってないけど）多分速度は変わらない
+
+===
+
+# CFG
+-----
+
+* コンパイラが一旦gotoを使うコントロールフローグラフを作る
+* WASMにはgotoがない
+* どうやったら生成出来るか？
+* そもそも生成出来るの？
+
+===
+
+# blockと前方ジャンプ
+------------
+
+* `block` + `break` で前方ジャンプ
+* 閉じ括弧の位置にジャンプ
+* `block` の位置は自由
+
+===
+
+&lt;pre&gt;
+&lt;code&gt;
+(&lt;span class=&#39;hljs-keyword&#39;&gt;block&lt;/span&gt;
+  ...
+  (&lt;span class=&#39;hljs-keyword&#39;&gt;br&lt;/span&gt; 0)--+
+  ...     |
+  )&lt;------+
+&lt;/code&gt;
+&lt;/pre&gt;
+
+===
+
+&lt;pre&gt;
+&lt;code&gt;
+(&lt;span class=&#39;hljs-keyword&#39;&gt;block&lt;/span&gt;
+  ...
+  ...
+  ...
+  (&lt;span class=&#39;hljs-keyword&#39;&gt;br&lt;/span&gt; 0)--+
+  ...     |
+  )&lt;------+
+&lt;/code&gt;
+&lt;/pre&gt;
+
+===
+
+# loopと前方ジャンプ
+------------
+
+
+* `loop` + `break`で後方ジャンプ
+  + `loop` からの `break` はいわゆる `continue`
+* 開き括弧の位置にジャンプ
+* 閉じ括弧の位置は自由
+
+===
+
+&lt;pre&gt;
+&lt;code&gt;
+(&lt;span class=&#39;hljs-keyword&#39;&gt;loop&lt;/span&gt;&lt;----+
+  ...     |
+  (&lt;span class=&#39;hljs-keyword&#39;&gt;br&lt;/span&gt; 0)--+
+  ...
+  )
+&lt;/code&gt;
+&lt;/pre&gt;
+
+
+===
+
+&lt;pre&gt;
+&lt;code&gt;
+(&lt;span class=&#39;hljs-keyword&#39;&gt;loop&lt;/span&gt;&lt;----+
+  ...     |
+  (&lt;span class=&#39;hljs-keyword&#39;&gt;br&lt;/span&gt; 0)--+
+  ...
+  ...
+  ...
+  )
+&lt;/code&gt;
+&lt;/pre&gt;
+
+
+===
+# ジャンプのクロス
+------------------
+
+* 単一gotoは割り当て出来る
+* 複数のgotoが入り組んだら？
+
+===
+
+# 絶対出来る
+------------
+
+* チューリング完全なら必ず書ける
+  + whileとswitchでステートマシン作ればいい
+* 効率的とは限らない
+* 効率的なコードを吐きたい
+
+===
+# ステートマシンはつらい
+-----------------------
+
+* これをナイーブに変換すると…
+
+```c
+#include &lt;stdio.h&gt;
+int main() {
+  int sum = 0;
+  for (int i = 1; i &lt;= 100; i++)
+    sum += i;
+  printf(&#34;1+...+100=%d\n&#34;, sum);
+  return 0;
+}
+```
+
+===
+
+```javascript
+function _main() {
+    var __stackBase__ = STACKTOP;
+    STACKTOP += 12;
+    var __label__ = -1;
+    while(1)
+        switch(__label__) {
+        case -1:
+            ...
+            __label__ = 0;
+            break;
+        case 0:
+            ...
+            if ($4) {
+              __label__ = 1;
+              break;
+            } else {
+              __label__ = 2;
+              break;
+            }
+        case 1:
+            ...
+            __label__ = 3;
+            break;
+        case 3:
+            ...
+            __label__ = 0;
+            break;
+        case 2:
+            ...
+            return 0;
+        }
+}
+```
+
+===
+# ステートマシンはつらい
+----------------------
+
+* どうにかする必要がある
+  + emscriptenは[ReLoop](https://github.com/kripken/emscripten/blob/master/docs/paper.pdf)で最適化
+* なんか気に食わなかった
+* そもそもステートマシンを使わずに生成したい
+* 複数のgotoが入り組んだパターンを自分で考えたの紹介します。
+* CFGと基本ブロックは知ってるかな？
+
+===
+# 前前
+------
+
+```
+[ ]--+
+ |   |
+[ ]--+-+
+ |   | |
+[ ]&lt;-+ |
+ |     |
+[ ]&lt;---+
+```
+
+===
+# 前前
+------
+
+```
+(block
+  (block
+    ...
+    (br 0)-+
+    ...    |
+    (br 1)-+-+
+  )&lt;-------+ |
+)&lt;-----------+
+```
+
+===
+# 後後
+------
+
+
+```
+[ ]&lt;-+
+ |   |
+[ ]&lt;-+-+
+ |   | |
+[ ]--+ |
+ |     |
+[ ]----+
+```
+
+===
+# 後後
+------
+
+```
+(loop&lt;-----+
+  (loop&lt;---+-+
+    ...    | |
+    (br 1)-+ |
+    ...      |
+    (br 0)---+
+  )
+)
+```
+
+===
+# 後前
+------
+
+
+```
+[ ]&lt;-+
+ |   |
+[ ]--+-+
+ |   | |
+[ ]--+ |
+ |     |
+[ ]&lt;---+
+```
+
+===
+# 後前
+------
+
+```
+(block
+  (loop&lt;---+
+    ...    |
+    (br 1)-+-+
+    ...    | |
+    (br 0)-+ |
+  )          |
+)&lt;-----------+
+```
+
+===
+# 前後
+------
+
+```
+[ ]--+
+ |   |
+[ ]&lt;-+-+
+ |   | |
+[ ]&lt;-+ |
+ |     |
+[ ]----+
+```
+
+===
+# 前後
+------
+
+* 素直には出来ない…？
+* 部分的にステートマーシン作る？
+
+===
+# 部分的ステートマーシン
+-------------------------
+
+```
+[1]--+
+ |   |
+[2]&lt;-+-+
+ |   | |
+[3]&lt;-+ |
+ |     |
+[4]----+
+```
+
+===
+# 部分的ステートマーシン
+-------------------------
+
+```
+   [1] label = 0
+    |
++-&gt;[br]-+ if label == 0
+|   |   | then goto 3
+|   |   | else goto 2
+|   |   |
+|  [2]  |
+|   |   |
+|  [3]&lt;-+ label = 1
+|   |
++--[4]
+```
+
+===
+# コード生成
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+===
+
+# フォーマット
+------------
+
+* バイナリフォーマットとテキストフォーマットがある
+* バイナリ: wasm
+  + コンパクト
+  + intとかもパッキングする
+* テキスト: wast
+  + 人間可読+機械可読=S式
+  + 低級にもちょっと高級にも書ける
+  + 一旦アセンブラ噛まさないと動かない
+
+===
+
+# アセンブラ
+------------
+
+* オンメモリで生成するためにアセンブラ自作
+  + [KeenS/WebAssembler-rs: An in memory wasm assembler for Rust](https://github.com/KeenS/WebAssembler-rs)
+  + ブラウザで動かすのに必要
+  + 既存のツールは使えない
+* アセンブラ自体ブラウザで動かすのでRust製
+* まだ動かしてない
+
+===
+
+```rust
+let mut mb = ModuleBuilder::new();
+let f = mb.new_function(FunctionBuilder::new(funtype!((i32, i32) -&gt; i32))
+    .code(|cb, args| {
+        cb.constant(2)
+            .get_local(args[0])
+            .i32_add()
+    })
+    .build());
+mb.export(&#34;addTwo&#34;, f);
+let module = mb.build();
+```
+
+===
+# スタック領域
+-------------
+
+* Cでいう`struct foo x;`みたいにエフェメラルな多ワード領域が欲しい
+* WebAssemblyのローカルストレージはLVだけ
+  + 最大1ワードしか保存出来ない
+* 可能性
+  1. 諦めてメモリに確保（場合によっては最適化で消えるかも）
+  2. ワード毎に分割してLVに保存（大変だけど速そう）
+
+===
+# ランタイム
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+===
+# 言語のランタイム
+-----------------
+
+* 主にはGC
+* その他データのメモリ表現
+  + アラインメントも
+* スタック領域
+* FFI
+* コンパイラなのでシンボルテーブルはなし
+
+===
+# メモリ
+--------
+
+* mallocとかはない
+* ページ単位のアロケーションだけ
+* 自前でGCを実装することになる
+
+===
+# GC
+-----
+
+* コールスタックを遡れない
+  + コールスタックをGCルートに出来ない
+* メモリonlyな走査なら可能
+  + ポインタを都度メモリ領域(arena)にコピーすれば良い。
+  + arenaもルートになる
+  + コールスタックと連動するのでスタックで管理出来る。
+  + CF [Matzにっき(2013-07-31)](http://www.rubyist.net/~matz/20130731.html)
+  + ただしコンパイラなので関数全部をsave/restoreで囲んだりはしない。
+
+===
+# アロケータ
+------------
+
+* どうにか書いてブラウザでリンクする必要がある
+  + ブラウザにもランタイムライブラリの時代…
+  + WASMはライブラリ間でメモリ共有出来る
+* とりあえずRustで書く方針
+  + WASMのページアロケートとかどうすればいいんだろう
+  + まだ色々未定
+
+===
+
+# メモリ表現
+------------
+
+* 出来れば楽して64bit統一したかった
+  + i32やf32を抹殺したかった
+* WASM32しかないのでポインタが32bit…
+* 仕方ないので64bitアラインメントでパディングする
+* 空いた32bitの使い道は未定
+  + 静的型付だし型タグが要らない
+  + 代数的データ型のタグ？
+
+===
+
+# 高階関数
+----------
+
+* WASMに関数ポインタがない
+* テーブルに関数を登録してインデックス参照
+  + C++のvtableのための機能
+  + 型も動的チェック
+* ちょっと遅そう
+* 気合でインライン化を頑張ろう
+
+===
+
+# FFI
+------
+
+* JSの関数を呼びたい
+* 細かいところどうなってるんだろう
+  + 例外は？JSオブジェクトは？GCは？
+* 型付…
+* ノープラン
+
+===
+# 雑にまとめ
+-------------
+
+* WASMはちょっと高級なので最適化コンパイラは困るよ
+  + 雑なコンパイラにはむしろ嬉しい
+* コード生成は努力で解決
+* GCは割とつらいよ
+  + 将来楽になるかも
+* JS連携や将来のスレッドとかはみんなで考えよう
+
+&lt;/script&gt;
+&lt;/section&gt;
+</description>
+    </item>
     
     <item>
       <title>コンパイラの人からみたWebAssembly</title>
@@ -4736,261 +5501,6 @@ fn main(){
 * Try it now!
 
 
-
-&lt;/script&gt;
-&lt;/section&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>ClojureでSSPを作った話</title>
-      <link>/slide/ClojuredeSSPwotsukuttahanashi/</link>
-      <pubDate>Mon, 22 Feb 2016 20:19:11 +0900</pubDate>
-      
-      <guid>/slide/ClojuredeSSPwotsukuttahanashi/</guid>
-      <description>&lt;section data-markdown
-    data-separator=&#34;\n===\n&#34;
-    data-vertical=&#34;\n---\n&#34;
-    data-notes=&#34;^Note:&#34;&gt;
-&lt;script type=&#34;text/template&#34;&gt;
-# ClojureでSSPを作った話
-----------------------
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-===
-# About Me
----------
-![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
-
- + κeen
- + [@blackenedgold](https://twitter.com/blackenedgold)
- + Github: [KeenS](https://github.com/KeenS)
- + サイバーエージェントのエンジニア
- + Lisp, ML, Rust, Shell Scriptあたりを書きます
-
-===
-# SSPとは
--------
-※今回作ったものの話なので実際は少し違う
-
-* Supplier Side Platform
-* メディアからの広告リクエストを受けて表示権をオークションに掛け、落札された広告を表示する
-  0. 広告リクエストを受け取って
-  1. 各DSPに競りの通知を投げて
-  2. 入札を受け取って
-  3. 落札者と落札価格を決めて
-  4. 落札通知を出す
-
-===
-# アドテクコンペ
----------------
-
-* [ビジネスモデルもエンジニアリングも学べるアドテクスタジオの育成プログラムとは | 株式会社サイバーエージェント](https://www.cyberagent.co.jp/techinfo_detail/id=11380)
-* サイバーエージェントの学生向けインターン
-* 3日間、3、4人のチームで **DSP** を作る
-* 学生は7チーム、1チームあたり2000q/sを捌くことになってる
-* 学生のDSPを繋ぐための **SSP** が必要になったので作ることに。
-
-===
-&lt;iframe src=&#34;//www.slideshare.net/slideshow/embed_code/key/92I5tQt6q6IjII&#34; width=&#34;425&#34; height=&#34;355&#34; frameborder=&#34;0&#34; marginwidth=&#34;0&#34; marginheight=&#34;0&#34; scrolling=&#34;no&#34; style=&#34;border:1px solid #CCC; border-width:1px; margin-bottom:5px; max-width: 100%;&#34; allowfullscreen&gt; &lt;/iframe&gt; &lt;div style=&#34;margin-bottom:5px&#34;&gt; &lt;strong&gt; &lt;a href=&#34;//www.slideshare.net/prir/ss-35918532&#34; title=&#34;日本におけるアドテク市場とサイバーエージェントのアドテク事業について&#34; target=&#34;_blank&#34;&gt;日本におけるアドテク市場とサイバーエージェントのアドテク事業について&lt;/a&gt; &lt;/strong&gt; from &lt;strong&gt;&lt;a href=&#34;//www.slideshare.net/prir&#34; target=&#34;_blank&#34;&gt;CyberAgent, Inc.&lt;/a&gt;&lt;/strong&gt; &lt;/div&gt;
-
-===
-# 作るもの
-----------
-
-* 各DSPに競りの通知(HTTPリクエスト)を投げる大規模HTTPクライアント
-  + 各DSPが2000q/s x 7チーム + 落札通知 = 16000q/s
-  + 丁度2000q/sになるような制御も必要
-* 入札を受けてのオークション、結果のロギングなど
-* 管理画面
-
-===
-# s7pについて
--------------
-
-* 今回作ったSSP
-* [KeenS/s7p](https://github.com/KeenS/s7p)
-* Clojure製
-* 3日くらいで作った
-* やや粗い部分も
-
-===
-# 今日話すこと
---------------
-
-* なぜClojureか
-* 16000q/s出すための工夫
-* 16000q/sに抑えるための制御
-* 運用して困った話とか
-
-===
-
-# なぜClojureか
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-===
-# なぜClojureか
----------------
-
-* リクエストの数が多いので非同期IOは必須
-* 100msでタイムアウトする仕様なのでタイムアウト処理も
-* もともとはScala(akka)で作ったs6pがあった
-* Actorの設計が良くなかったので遅かった
-* あと非同期HTTPクライアントにタイムアウトがなかった
-* プロダクションコードを流用したのでインターンが終わった後公開出来なかった
-* 別言語で書き直すにあたってGo, Clojure, Common Lisp, Rust, Erlangが検討された
-===
-# なぜClojureか
----------------
-
-* Common Lisp: 一番慣れてるが、非同期HTTPクライアント(とfutureライブラリ)が使いづらそうなのでやめた
-* Rust: とりあえずパフォーマンスは出そうだし使いたかったが非同期HTTPクライアントが見付からなかった
-* Clojure: そこそこ慣れてるし速そうな非同期HTTPクライアントがあった。core.asyncで非同期プログラミングもし易い
-* Erlang: 恐らく一番向いてるが、ほとんど経験がない
-* Go: 結構向いてそうだがあまり経験がないのでClojureを選んだ
-
-===
-# 16kq/s出すための工夫
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-===
-# 16kq/s出すための工夫
-------------------------
-非同期IO（一部同期しちゃったけど）
-
-``` clojure
-(defn work [test req result]
-  (-&gt;&gt; @dsps
-       (sequence (comp
-       ;; 全DSPにPOSTしてから(timeout 100ms)
-                  (map (fn [dsp] {:dsp dsp :response (http/post (:url dsp) (json-request-option req))}))
-       ;; 結果を待ち合わせる
-                  (map destruct)
-                  ...))
-       ...))
-    ....
-```
-
-===
-# 16kq/s出すための工夫2
-------------------------
-一部同期したのでとにかくスレッド。スレッドへのディスパッチはチャネルで一発解決。
-
-``` clojure
-(defn worker [c]
-  (thread
-   ...))
-```
-
-```clojure
-(defn make-workers [ch n]
-  (doall (map (fn [_] (core/worker ch)) (range n))))
-```
-
-``` clojure
- workers (manage/make-workers ch 1024)
-```
-
-===
-# 16kq/s出すための工夫3
-------------------------
-ZeroMQを使ったmaster-slave構成
-(最終的にSlave18台)
-
-![master-slave構成図](/images/s7p/s7p.svg)
-
-
-===
-# &lt;span style=&#34;font-size: 90%&#34;&gt;16kq/sに抑えるための制御&lt;/span&gt;
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-===
-# &lt;span style=&#34;font-size: 90%&#34;&gt;16kq/sに抑えるための制御&lt;/span&gt;
----------------------------
-
-* DSPの買い付け能力というビジネス的な問題ではなくサーバの負荷という技術的な問題による制御
-* 1秒で160kクエリ投げて9秒休むとかは出来ない。もう少し細かく制御する必要がある。
-* しかし制御をあまり細かくしすぎると今度はそこで遅くなりそう。
-* リクエストを実際に投げるSlaveは分散してるけど統一した制御が必要
-
-===
-# &lt;span style=&#34;font-size: 90%&#34;&gt;16kq/sに抑えるための制御&lt;/span&gt;
----------------------------
-Master側で100ms毎にに200個だけZeroMQのキューに積む
-
-![QPS制御の図](/images/s7p/qps_control.svg)
-
-===
-# &lt;span style=&#34;font-size: 90%&#34;&gt;16kq/sに抑えるための制御&lt;/span&gt;
----------------------------
-実装にはcore.asyncの `chan` と `timeout` を使用。(非同期プログラミング便利!)
-
-```Clojure
-(defn start-query [sender reqs]
-  (let [timer (timer 100)]
-    (go-loop []
-      (let [t (&lt;! timer)
-            took (take @qp100ms @reqs)]
-        (doall
-         (doseq [req took]
-           (zmq/send-str sender (json/generate-string req))))
-        (swap! reqs #(drop @qp100ms %))
-        (if (and t (not (empty? took)))
-          (recur)
-          (println &#34;request done&#34;))))
-    timer))
-```
-
-===
-# 運用して困った話とか
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-
-===
-# 運用して困った話とか
----------------------
-## &lt;span style=&#34;font-size: 50%&#34;&gt;レスポンスが遅いDSPにSSPのパフォーマンスが引き摺られる&lt;/span&gt;
-* DSPが速ければ余裕を見ても10台あれば十分だった
-* DSPのパフォーマンスに仮定をおけないので上限ギリギリの18台
-* 同期: 「DSP作ってる時はちょっとくらい待ってくれよ、って思ってたけどSSP運用したら遅いDSPガンガン切りたくなる気持分かった」
-===
-# 運用して困った話とか
----------------------
-## パフォーマンス検証が大変
-* リクエストを捌くサーバのパフォーマンスをどうするか悩む
-* サーバをチューニングすればSSPも速くなるが、検証にならない
-* かといって投げたクエリを捌けないサーバに対して検証する訳にもいかない
-* 結局安全側に倒したパフォーマンス見積りに。
-
-===
-# 運用して困った話とか
----------------------
-## &lt;span style=&#34;font-size: 80%&#34;&gt;Masterがログ吐きすぎてDisk Full&lt;/span&gt;
-* 最初の予定ではMasterはディスクをそんなに使わなかったのでディスクの小さいインスタンスだった
-* ディスクスペース空けてMaster再起動で復旧。焦った。
-===
-# 運用して困った話とか
----------------------
-## &lt;span style=&#34;font-size: 60%&#34;&gt;timeoutし続けるDSPがいてSlave完全沈黙&lt;/span&gt;
-* コネクションのクローズ待ちで固まってた
-* 該当DSPを切った上でSlaveの再起動で復旧
-  * カーネルのチューニングかtimeout頻度の検知が必要そう
-* timeoutを考慮に入れた構成にしてた筈なので想定外だった
-===
-# まとめ
----------
-
-* ClojureでSSP作ったよ
-* Clojure使えば非同期プログラミングが簡単に出来るよ
-* 運用って大変だよ
-
-===
-# 参考
--------
-
-* [KeenS/s7p: sexp version of s6p; a toy SSP.](https://github.com/KeenS/s7p)
-* [ClojureでDSPを作った話 | κeenのHappy Hacκing Blog](http://keens.github.io/slide/ClojuredeDSPwotsukuttahanashi/)
-* [KeenS/b11d: A toy DSP](https://github.com/KeenS/b11d)
-* [アドテクコンペ | 株式会社サイバーエージェント](https://www.cyberagent.co.jp/recruit/fresh/program_detail/id=11303&amp;season=2016)
-* [ビジネスモデルもエンジニアリングも学べるアドテクスタジオの育成プログラムとは | 株式会社サイバーエージェント](https://www.cyberagent.co.jp/techinfo_detail/id=11380)
 
 &lt;/script&gt;
 &lt;/section&gt;
