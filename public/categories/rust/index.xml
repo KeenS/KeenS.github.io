@@ -9,6 +9,394 @@
     <atom:link href="/categories/rust/index.xml" rel="self" type="application/rss+xml" />
     
     <item>
+      <title>仕事でdiesel使ってみた</title>
+      <link>/slide/shigotodedieseltsukattemita/</link>
+      <pubDate>Wed, 01 Mar 2017 10:57:38 +0900</pubDate>
+      
+      <guid>/slide/shigotodedieseltsukattemita/</guid>
+      <description>&lt;section data-markdown
+    data-separator=&#34;\n===\n&#34;
+    data-vertical=&#34;\n---\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+&lt;script type=&#34;text/template&#34;&gt;
+# 仕事でdiesel使ってみた
+----------------------
+[RustのLT会！ Rust入門者の集い #2 - connpass](https://rust.connpass.com/event/48826/)
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+===
+# About Me
+---------
+![κeenのアイコン](/images/kappa.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; width=&#34;20%&#34; --&gt;
+
+ * κeen
+ * [@blackenedgold](https://twitter.com/blackenedgold)
+ * Github: [KeenS](https://github.com/KeenS)
+ * [Idein Inc.](https://idein.jp/)のエンジニア
+ * Lisp, ML, Rust, Shell Scriptあたりを書きます
+
+===
+
+# [diesel.rs](diesel.rs)
+
+![dieselのwebページ](/images/diesel/diesel-web.png)
+
+===
+
+# diesel
+---------
+
+
+* RustのORM
+  * スキーマからコード自動生成
+  * diesel_codegen
+* クエリビルダ
+* マイグレーション管理
+* PostgreSQL, MySQL, SQLiteサポート
+
+===
+
+# 準備
+-------
+
+* [docker-composeでmysql &amp; postgreSQL をサクッと起動 - Qiita](http://qiita.com/astrsk_hori/items/1e683a7a2f2b7189cb6e)
+
+```
+cargo install diesel_cli
+echo DATABASE_URL=postgres://username:password@localhost/hoge &gt; .env
+diesel setup
+diesel migration generate create_posts
+```
+
+===
+
+# 準備
+-------
+
+``` toml
+[dependencies]
+chrono = &#34;0.3.0&#34;
+diesel = {version = &#34;0.11.4&#34;, features = [&#34;chrono&#34;, &#34;postgres&#34;, &#34;serde_json&#34;]}
+dotenv = &#34;0.8.0&#34;
+serde_json = &#34;0.9.6&#34;
+serde_derive = &#34;0.9.7&#34;
+serde = &#34;0.9.7&#34;
+
+[dependencies.diesel_codegen]
+features = [&#34;postgres&#34;]
+version = &#34;0.11.0&#34;
+```
+
+===
+# プロジェクト構成
+-----------------
+
+* モデルのコンパイルが遅いので分離したい
+* Cargoの[ワークスペース](http://doc.crates.io/manifest.html#the-workspace-section)機能を使う
+
+===
+# プロジェクト構成
+-----------------
+
+```
+$ ls
+Cargo.lock
+Cargo.toml
+hoge_model &lt;- diesel_derive使う
+hoge_XXX   &lt;- diesel使う
+hoge_YYY   &lt;- diesel使う
+docker-compose.yml
+migrations
+...
+```
+===
+
+# テーブル
+---------
+
+* up.sqlとdown.sqlを書く
+
+``` sql
+CREATE TABLE hoge_suites (
+  id SERIAL PRIMARY KEY,
+  hoge_entry_id INT NOT NULL,
+  hostname VARCHAR NOT NULL,
+  status INT NOT NULL DEFAULT 0,
+  CONSTRAINT unique_hoge_entry_id_hostname
+             UNIQUE (
+                      hoge_entry_id,
+                      hostname
+                      -- and other matrix
+                     ),
+  CONSTRAINT fkey_hoge_entry_id
+             FOREIGN KEY(hoge_entry_id)
+             REFERENCES hoge_entries(id) MATCH SIMPLE
+             ON UPDATE NO ACTION
+             ON DELETE CASCADE
+);
+
+```
+
+===
+# モデル
+--------
+
+``` rust
+// なんかいっぱいderive
+// QueryableとInsertableは分ける
+#[derive(Default, Queryable, Associations, Identifiable, Debug, Clone)]
+// belongs_to関係のstruct
+#[belongs_to(HogeEntry)]
+// has_many関係のテーブル
+#[has_many(hoge_results)]
+#[table_name=&#34;hoge_suites&#34;]
+pub struct HogeSuite {
+    pub id: i32,
+    pub bench_entry_id: i32,
+    // String
+    pub hostname: String,
+    pub status: HogeStatus,
+}
+
+```
+
+===
+
+# モデル
+--------
+
+```
+// Insertableの方
+#[derive(Default, Insertable, Debug, Clone)]
+#[table_name=&#34;hoge_suites&#34;]
+pub struct NewHogeSuite&lt;&#39;a&gt; {
+    pub hoge_entry_id: i32,
+    // Stringではなく&amp;str
+    pub hostname: &amp;&#39;a str,
+}
+```
+
+===
+
+# enumの扱い
+-----------
+
+* dieselはenumのcodegenをサポートしてない
+* 気合
+
+===
+
+# enumの扱い
+-----------
+
+```rust
+// Queryableとかはderive出来ない
+#[derive(Debug, Clone)]
+pub enum HogeStatus {
+    Waiting,
+    Running,
+    Finished,
+    Failed,
+    Canceled,
+}
+
+// 手で実装
+impl&lt;BE, QB, BC&gt; FromSql&lt;Integer, BE&gt; for HogeStatus
+    where QB: QueryBuilder&lt;BE&gt;,
+          BC: BindCollector&lt;BE&gt;,
+          BE: Backend&lt;RawValue = [u8], QueryBuilder = QB, BindCollector = BC&gt;
+{
+    fn from_sql(bytes: Option&lt;&amp;&lt;Pg as Backend&gt;::RawValue&gt;)
+                -&gt; Result&lt;Self, Box&lt;Error + Send + Sync&gt;&gt; {
+        use self::HogeStatus::*;
+        match &lt;i32 as FromSql&lt;Integer, Pg&gt;&gt;::from_sql(bytes)? {
+            0 =&gt; Ok(Waiting),
+            1 =&gt; Ok(Running),
+            2 =&gt; Ok(Finished),
+            3 =&gt; Ok(Failed),
+            4 =&gt; Ok(Canceled),
+            n =&gt; Err(format!(&#34;invalid status: {}&#34;, n).into()),
+        }
+    }
+}
+
+impl&lt;BE, QB, BC&gt; FromSqlRow&lt;Integer, BE&gt; for HogeStatus
+    where QB: QueryBuilder&lt;BE&gt;,
+          BC: BindCollector&lt;BE&gt;,
+          BE: Backend&lt;RawValue = [u8], QueryBuilder = QB, BindCollector = BC&gt;
+{
+    fn build_from_row&lt;T: Row&lt;BE&gt;&gt;(row: &amp;mut T) -&gt; Result&lt;Self, Box&lt;Error + Send + Sync&gt;&gt; {
+        use self::HogeStatus::*;
+        match &lt;i32 as FromSqlRow&lt;Integer, BE&gt;&gt;::build_from_row(row)? {
+            0 =&gt; Ok(Waiting),
+            1 =&gt; Ok(Running),
+            2 =&gt; Ok(Finished),
+            3 =&gt; Ok(Failed),
+            4 =&gt; Ok(Canceled),
+            n =&gt; Err(format!(&#34;invalid status: {}&#34;, n).into()),
+        }
+    }
+}
+```
+
+===
+# クエリ
+--------
+
+* モデルプロジェクトとは別
+* 各プロジェクトのdb.rsで関数を定義
+* SQLよりRsutのイテレータを意識した書き方
+
+===
+# クエリ
+--------
+
+```rust
+pub fn is_hoge_finished&lt;&#39;a, Cn&gt;(conn: &amp;Cn, entry_id: i32) -&gt; Result&lt;bool, Error&gt;
+    where Cn: Connection&lt;Backend = Pg&gt;
+{
+    use self::schema::hoge_suites::dsl::*;
+    // SELECT ... じゃなくてsourceからfileterして最後にselect
+    let ret = hoge_suites
+        .filter(hoge_entry_id.eq(entry_id))
+        .select(status)
+        // ここまでクエリビルダ
+        .load::&lt;i32&gt;(conn)?
+        // ここからイテレータ
+        .into_iter()
+        .all(|i| [HogeStatus::Finished as i32, HogeStatus::Failed as i32].contains(&amp;i));
+    Ok(ret)
+}
+
+```
+
+===
+# 複雑なクエリ
+-------------
+
+* トランザクション
+* join
+* order by
+
+===
+
+# 複雑なクエリ
+-------------
+
+``` rust
+pub fn pic_suite&lt;Cn&gt;(conn: &amp;Cn,
+                     query: &amp;api::worker_poll::Request)
+                     -&gt; Result&lt;Option&lt;(HogeEntry, HogeSuite)&gt;, Error&gt;
+    where Cn: Connection&lt;Backend = Pg&gt;
+{
+    use self::schema::hoge_entries::dsl::*;
+    use self::schema::hoge_suites::dsl::*;
+    use self::schema::hoge_suites::dsl::id;
+    // transaction
+    conn.transaction(|| {
+        let suite = hoge_suites
+             // join
+            .inner_join(hoge_entries)
+            .filter(status.eq(HogeStatus::Waiting as i32)
+                .and(hostname.eq(&amp;query.hostname)))
+            // order by
+            .order(created_at.asc())
+            .select((id, hoge_entry_id, hostname, status))
+            .first::&lt;HogeSuite&gt;(conn)
+            // NotFoundErrorをOptionにできる
+            .optional()?;
+        // transactionの中で普通にrustの式が書ける
+        if let Some(s) = suite {
+            let entry = hoge_entries.find(s.hoge_entry_id)
+                .first::&lt;HogeEntry&gt;(conn)?;
+            let suite =
+                diesel::update(hoge_suites.find(s.id)).set(status.eq(HogeStatus::Running as i32))
+                    .get_result::&lt;HogeSuite&gt;(conn)?;
+            Ok(Some((entry, suite)))
+
+        } else {
+            Ok(None)
+        }
+    })
+}
+```
+
+===
+
+# もっと複雑なクエリ
+-------------------
+
+* 2重join
+* dieselは2重joinを扱えない…
+
+===
+
+# もっと複雑なクエリ
+-------------------
+
+
+``` rust
+pub fn load_all_data&lt;&#39;a, Cn&gt;(conn: &amp;Cn)
+                             -&gt; Result&lt;Vec&lt;(HogeEntry, Vec&lt;((HogeSuite, HogeResult), Vec&lt;HogeProfile&gt;)&gt;)&gt;&gt;
+    where Cn: Connection&lt;Backend = Pg&gt;
+{
+    use diesel::types::{Integer, Timestamp, VarChar, Double};
+    use diesel::pg::types::sql_types::{Array, Jsonb};
+    use diesel::expression::dsl::*;
+    use diesel::select;
+
+    let status = sql::&lt;Integer&gt;(&#34;s.status&#34;);
+    let ret = select(sql::&lt;(
+        (Integer, VarChar, VarChar, Array&lt;VarChar&gt;,Timestamp, VarChar, Integer, Jsonb),
+        (Integer, Integer, VarChar, Integer),
+        (Integer, Integer, VarChar, Integer, Integer, VarChar),
+        (Integer, Integer, VarChar, Integer, Double))&gt;(
+        &#34;
+e.id, e.repo, e.committish, e.files, e.created_at, e.command, e.format, e.format_data,
+s.id, s.hoge_entry_id, s.hostname, s.status,
+r.id, r.hoge_suite_id, r.hoge_name, r.score, r.status, r.result,
+p.id, p.hoge_result_id, p.function_name, p.score, p.percent
+FROM hoge_profiles p
+INNER JOIN hoge_results r on r.id = p.hoge_result_id
+INNER JOIN hoge_suites s ON s.id = r.hoge_suite_id
+INNER JOIN hoge_entries e ON e.id = s.hoge_entry_id&#34;))
+    .filter(status.eq(HogeStatus::Finished as i32))
+    .load::&lt;(HogeEntry, HogeSuite, HogeResult, HogeProfile)&gt;(conn)?;
+    let mut hash = HashMap::new();
+    for (e, s, r, p) in ret {
+        let mut hash_entry1 = hash         .entry(e.id).or_insert((e, HashMap::new()));
+        let mut hash_entry2 = hash_entry1.1.entry(r.id).or_insert(((s, r), Vec::new()));
+        hash_entry2.1.push(p);
+    }
+    let ret = hash.into_iter().map(|(_, v)| (v.0,  v.1.into_iter().map(|(_, p)| p).collect())).collect();
+    Ok(ret)
+}
+
+```
+
+===
+
+# テスト
+-------
+
+* ￣\＿(ツ)＿/￣
+
+===
+
+# まとめ
+--------
+
+* 案外普通に使えるよ
+* モデルはちょっと面倒かもね
+* クエリは困ったらSQL生牡蠣
+* マイグレーションとかはまた今度
+
+&lt;/script&gt;
+&lt;/section&gt;
+</description>
+    </item>
+    
+    <item>
       <title>RustのちょっとやりすぎなBuilderパターン</title>
       <link>/blog/2017/02/09/rustnochottoyarisuginabuilderpata_n</link>
       <pubDate>Thu, 09 Feb 2017 23:03:45 +0900</pubDate>
@@ -4336,109 +4724,6 @@ assert_eq!(5, num);
 &lt;li&gt;&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/functions.html&#34;&gt;関数&lt;/a&gt;&lt;/li&gt;
 &lt;li&gt;&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/closures.html&#34;&gt;クロージャ&lt;/a&gt;&lt;/li&gt;
 &lt;/ul&gt;</description>
-    </item>
-    
-    <item>
-      <title>Rustでシェル作った</title>
-      <link>/blog/2016/09/04/rustdeshierutsukutta</link>
-      <pubDate>Sun, 04 Sep 2016 16:26:20 +0900</pubDate>
-      
-      <guid>/blog/2016/09/04/rustdeshierutsukutta</guid>
-      <description>&lt;p&gt;κeenです。
-先日、先輩社員と話してるとシェルを作る話になりました。
-だいたいのコンピュータサイエンスの学生なら学部生の頃に課題でシェルを作りますが数学科にいた私は作ったことありませんでした。
-でも、その時「今ならシェルなんて作ろうと思えばすぐに作れますよ」なんて言っちゃったのでなんか作りました。
-まあ、習作程度の雑なものです。&lt;/p&gt;
-
-&lt;p&gt;
-作ったのはこれ、&lt;a href=&#34;https://github.com/KeenS/igaguri&#34;&gt;KeenS/igaguri: my toy shell written in Rust&lt;/a&gt;。
-名前は、Shellは木の実を覆う殻のようにカーネルを覆う殻とのことなのでRustのロゴに似てる毬栗を選びました。&lt;/p&gt;
-
-&lt;h1 id=&#34;パーサ&#34;&gt;パーサ&lt;/h1&gt;
-
-&lt;p&gt;パーサコンビネータライブラリの&lt;a href=&#34;https://github.com/Geal/nom&#34;&gt;nom&lt;/a&gt;を使いました。&lt;/p&gt;
-
-&lt;p&gt;雰囲気こんな感じ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;named!(token&amp;lt;String&amp;gt;, map!(map_res!(is_a!(&amp;quot;abcdefghijklmnopqlrstuvwxyzABCDEFGHIJKLMNOPQLRSTUVWXYZ-!$%^&amp;amp;@/1234567890&amp;quot;), str::from_utf8), |i: &amp;amp;str| i.to_string()));
-named!(pipe, tag!(&amp;quot;|&amp;quot;));
-named!(redirect_out&amp;lt;String&amp;gt;, chain!(tag!(&amp;quot;&amp;gt;&amp;quot;) ~ opt!(multispace) ~ filename: token, || filename));
-
-named!(command&amp;lt;Ast&amp;gt;, chain!(
-    opt!(multispace)
-        ~ cmd: separated_list!(multispace, token)
-        ~ outfile: opt!(chain!(multispace ~ out: redirect_out, || out))
-        ~ opt!(multispace), || Ast::Command{cmd: cmd, out: outfile}));
-named!(parse&amp;lt;Ast&amp;gt;, map!(separated_list!(pipe, command), Ast::Pipe));
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;入力ハンドリング&#34;&gt;入力ハンドリング&lt;/h1&gt;
-
-&lt;p&gt;readlineのRust実装、&lt;a href=&#34;https://github.com/kkawakam/rustyline&#34;&gt;rustyline&lt;/a&gt;を使いました。&lt;/p&gt;
-
-&lt;p&gt;それっぽいからとりあえず、で選んだものの、複数行入力（履歴）とか考えるともうちょっとリッチなものを選んだ方が良かったかもしれません。&lt;/p&gt;
-
-&lt;h1 id=&#34;実行&#34;&gt;実行&lt;/h1&gt;
-
-&lt;p&gt;最初、&lt;a href=&#34;https://github.com/rust-lang/libc&#34;&gt;libcバインディング&lt;/a&gt;の &lt;code&gt;pipe&lt;/code&gt; や &lt;code&gt;fork&lt;/code&gt; 、 &lt;code&gt;execve&lt;/code&gt; なんかを考えてましたが、標準ライブラリの &lt;a href=&#34;https://doc.rust-lang.org/std/process/struct.Command.html&#34;&gt;&lt;code&gt;std::process::Command&lt;/code&gt;&lt;/a&gt;で実現出来そうだったのでそれを使いました。&lt;/p&gt;
-
-&lt;p&gt;こんな感じ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;Command::new(cmd)
-    .args(&amp;amp;terms)
-    .stdin(stdin)
-    .stdout(stdout)
-    .stderr(stderr)
-    .spawn()
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;パイプ-リダイレクト&#34;&gt;パイプ/リダイレクト&lt;/h2&gt;
-
-&lt;p&gt;一応、パイプも標準ライブラリでサポートされてるのでそれを使いました。&lt;/p&gt;
-
-&lt;p&gt;ただ、普通のCとは違って子プロセスと親プロセスの間に一旦パイプを作って、子プロセスの出力の生のfdを取り出して、次の子プロセスの入力に与えて、と案外面倒でした。 &lt;code&gt;unsafe&lt;/code&gt; も出てくれば &lt;code&gt;unreachable&lt;/code&gt; も出てくるのでもう少し書き直したい。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let mut si = stdin;
-let mut itr = commands.into_iter().peekable();
-unsafe {
-    while let Some(command) = itr.next() {
-        if itr.peek().is_some() {
-            let process =
-                try!(self.run(command, si, Stdio::piped(), Stdio::inherit()));
-            si = Stdio::from_raw_fd(process.stdout.unwrap().into_raw_fd());
-        } else {
-            return self.run(command, si, stdout, stderr);
-        }
-    }
-}
-unreachable!()
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;リダイレクトも似たようなもので、ファイルを作って生のfdを取り出して、とやります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let stdout = out.map(|f| {
-    unsafe {
-        let file = File::create(f)
-        // FIXME: do not panic
-            .unwrap();
-        Stdio::from_raw_fd(file.into_raw_fd())
-    }
-
-}).unwrap_or(stdout);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;おわりに&#34;&gt;おわりに&lt;/h1&gt;
-
-&lt;p&gt;昨日の夜からちょろっと作り始めてさっきそれっぽく動くようになった程度なのでまだ適当にしか動きません。
-パイプと標準出力のリダイレクトだけで、 &lt;code&gt;cd&lt;/code&gt; なんかのシェルコマンドもなければシェル変数もありません。
-が、そろそろ飽きたのでこの辺で。&lt;/p&gt;
-
-&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;そろそろ飽きてきた&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/772334565264232454&#34;&gt;2016年9月4日&lt;/a&gt;&amp;lt;/
-blockquote&amp;gt;
-&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
-
-&lt;p&gt;シェルコマンドとシェル変数くらいはいつか実装しようかな。&lt;/p&gt;</description>
     </item>
     
   </channel>
