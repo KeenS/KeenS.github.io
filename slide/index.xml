@@ -6,8 +6,396 @@
     <description>Recent content in Slide-rsses on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Thu, 16 Feb 2017 15:46:21 +0900</lastBuildDate>
+    <lastBuildDate>Wed, 01 Mar 2017 10:57:38 +0900</lastBuildDate>
     <atom:link href="/slide/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>仕事でdiesel使ってみた</title>
+      <link>/slide/shigotodedieseltsukattemita/</link>
+      <pubDate>Wed, 01 Mar 2017 10:57:38 +0900</pubDate>
+      
+      <guid>/slide/shigotodedieseltsukattemita/</guid>
+      <description>&lt;section data-markdown
+    data-separator=&#34;\n===\n&#34;
+    data-vertical=&#34;\n---\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+&lt;script type=&#34;text/template&#34;&gt;
+# 仕事でdiesel使ってみた
+----------------------
+[RustのLT会！ Rust入門者の集い #2 - connpass](https://rust.connpass.com/event/48826/)
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+===
+# About Me
+---------
+![κeenのアイコン](/images/kappa.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; width=&#34;20%&#34; --&gt;
+
+ * κeen
+ * [@blackenedgold](https://twitter.com/blackenedgold)
+ * Github: [KeenS](https://github.com/KeenS)
+ * [Idein Inc.](https://idein.jp/)のエンジニア
+ * Lisp, ML, Rust, Shell Scriptあたりを書きます
+
+===
+
+# [diesel.rs](diesel.rs)
+
+![dieselのwebページ](/images/diesel/diesel-web.png)
+
+===
+
+# diesel
+---------
+
+
+* RustのORM
+  * スキーマからコード自動生成
+  * diesel_codegen
+* クエリビルダ
+* マイグレーション管理
+* PostgreSQL, MySQL, SQLiteサポート
+
+===
+
+# 準備
+-------
+
+* [docker-composeでmysql &amp; postgreSQL をサクッと起動 - Qiita](http://qiita.com/astrsk_hori/items/1e683a7a2f2b7189cb6e)
+
+```
+cargo install diesel_cli
+echo DATABASE_URL=postgres://username:password@localhost/hoge &gt; .env
+diesel setup
+diesel migration generate create_posts
+```
+
+===
+
+# 準備
+-------
+
+``` toml
+[dependencies]
+chrono = &#34;0.3.0&#34;
+diesel = {version = &#34;0.11.4&#34;, features = [&#34;chrono&#34;, &#34;postgres&#34;, &#34;serde_json&#34;]}
+dotenv = &#34;0.8.0&#34;
+serde_json = &#34;0.9.6&#34;
+serde_derive = &#34;0.9.7&#34;
+serde = &#34;0.9.7&#34;
+
+[dependencies.diesel_codegen]
+features = [&#34;postgres&#34;]
+version = &#34;0.11.0&#34;
+```
+
+===
+# プロジェクト構成
+-----------------
+
+* モデルのコンパイルが遅いので分離したい
+* Cargoの[ワークスペース](http://doc.crates.io/manifest.html#the-workspace-section)機能を使う
+
+===
+# プロジェクト構成
+-----------------
+
+```
+$ ls
+Cargo.lock
+Cargo.toml
+hoge_model &lt;- diesel_derive使う
+hoge_XXX   &lt;- diesel使う
+hoge_YYY   &lt;- diesel使う
+docker-compose.yml
+migrations
+...
+```
+===
+
+# テーブル
+---------
+
+* up.sqlとdown.sqlを書く
+
+``` sql
+CREATE TABLE hoge_suites (
+  id SERIAL PRIMARY KEY,
+  hoge_entry_id INT NOT NULL,
+  hostname VARCHAR NOT NULL,
+  status INT NOT NULL DEFAULT 0,
+  CONSTRAINT unique_hoge_entry_id_hostname
+             UNIQUE (
+                      hoge_entry_id,
+                      hostname
+                      -- and other matrix
+                     ),
+  CONSTRAINT fkey_hoge_entry_id
+             FOREIGN KEY(hoge_entry_id)
+             REFERENCES hoge_entries(id) MATCH SIMPLE
+             ON UPDATE NO ACTION
+             ON DELETE CASCADE
+);
+
+```
+
+===
+# モデル
+--------
+
+``` rust
+// なんかいっぱいderive
+// QueryableとInsertableは分ける
+#[derive(Default, Queryable, Associations, Identifiable, Debug, Clone)]
+// belongs_to関係のstruct
+#[belongs_to(HogeEntry)]
+// has_many関係のテーブル
+#[has_many(hoge_results)]
+#[table_name=&#34;hoge_suites&#34;]
+pub struct HogeSuite {
+    pub id: i32,
+    pub bench_entry_id: i32,
+    // String
+    pub hostname: String,
+    pub status: HogeStatus,
+}
+
+```
+
+===
+
+# モデル
+--------
+
+```
+// Insertableの方
+#[derive(Default, Insertable, Debug, Clone)]
+#[table_name=&#34;hoge_suites&#34;]
+pub struct NewHogeSuite&lt;&#39;a&gt; {
+    pub hoge_entry_id: i32,
+    // Stringではなく&amp;str
+    pub hostname: &amp;&#39;a str,
+}
+```
+
+===
+
+# enumの扱い
+-----------
+
+* dieselはenumのcodegenをサポートしてない
+* 気合
+
+===
+
+# enumの扱い
+-----------
+
+```rust
+// Queryableとかはderive出来ない
+#[derive(Debug, Clone)]
+pub enum HogeStatus {
+    Waiting,
+    Running,
+    Finished,
+    Failed,
+    Canceled,
+}
+
+// 手で実装
+impl&lt;BE, QB, BC&gt; FromSql&lt;Integer, BE&gt; for HogeStatus
+    where QB: QueryBuilder&lt;BE&gt;,
+          BC: BindCollector&lt;BE&gt;,
+          BE: Backend&lt;RawValue = [u8], QueryBuilder = QB, BindCollector = BC&gt;
+{
+    fn from_sql(bytes: Option&lt;&amp;&lt;Pg as Backend&gt;::RawValue&gt;)
+                -&gt; Result&lt;Self, Box&lt;Error + Send + Sync&gt;&gt; {
+        use self::HogeStatus::*;
+        match &lt;i32 as FromSql&lt;Integer, Pg&gt;&gt;::from_sql(bytes)? {
+            0 =&gt; Ok(Waiting),
+            1 =&gt; Ok(Running),
+            2 =&gt; Ok(Finished),
+            3 =&gt; Ok(Failed),
+            4 =&gt; Ok(Canceled),
+            n =&gt; Err(format!(&#34;invalid status: {}&#34;, n).into()),
+        }
+    }
+}
+
+impl&lt;BE, QB, BC&gt; FromSqlRow&lt;Integer, BE&gt; for HogeStatus
+    where QB: QueryBuilder&lt;BE&gt;,
+          BC: BindCollector&lt;BE&gt;,
+          BE: Backend&lt;RawValue = [u8], QueryBuilder = QB, BindCollector = BC&gt;
+{
+    fn build_from_row&lt;T: Row&lt;BE&gt;&gt;(row: &amp;mut T) -&gt; Result&lt;Self, Box&lt;Error + Send + Sync&gt;&gt; {
+        use self::HogeStatus::*;
+        match &lt;i32 as FromSqlRow&lt;Integer, BE&gt;&gt;::build_from_row(row)? {
+            0 =&gt; Ok(Waiting),
+            1 =&gt; Ok(Running),
+            2 =&gt; Ok(Finished),
+            3 =&gt; Ok(Failed),
+            4 =&gt; Ok(Canceled),
+            n =&gt; Err(format!(&#34;invalid status: {}&#34;, n).into()),
+        }
+    }
+}
+```
+
+===
+# クエリ
+--------
+
+* モデルプロジェクトとは別
+* 各プロジェクトのdb.rsで関数を定義
+* SQLよりRsutのイテレータを意識した書き方
+
+===
+# クエリ
+--------
+
+```rust
+pub fn is_hoge_finished&lt;&#39;a, Cn&gt;(conn: &amp;Cn, entry_id: i32) -&gt; Result&lt;bool, Error&gt;
+    where Cn: Connection&lt;Backend = Pg&gt;
+{
+    use self::schema::hoge_suites::dsl::*;
+    // SELECT ... じゃなくてsourceからfileterして最後にselect
+    let ret = hoge_suites
+        .filter(hoge_entry_id.eq(entry_id))
+        .select(status)
+        // ここまでクエリビルダ
+        .load::&lt;i32&gt;(conn)?
+        // ここからイテレータ
+        .into_iter()
+        .all(|i| [HogeStatus::Finished as i32, HogeStatus::Failed as i32].contains(&amp;i));
+    Ok(ret)
+}
+
+```
+
+===
+# 複雑なクエリ
+-------------
+
+* トランザクション
+* join
+* order by
+
+===
+
+# 複雑なクエリ
+-------------
+
+``` rust
+pub fn pic_suite&lt;Cn&gt;(conn: &amp;Cn,
+                     query: &amp;api::worker_poll::Request)
+                     -&gt; Result&lt;Option&lt;(HogeEntry, HogeSuite)&gt;, Error&gt;
+    where Cn: Connection&lt;Backend = Pg&gt;
+{
+    use self::schema::hoge_entries::dsl::*;
+    use self::schema::hoge_suites::dsl::*;
+    use self::schema::hoge_suites::dsl::id;
+    // transaction
+    conn.transaction(|| {
+        let suite = hoge_suites
+             // join
+            .inner_join(hoge_entries)
+            .filter(status.eq(HogeStatus::Waiting as i32)
+                .and(hostname.eq(&amp;query.hostname)))
+            // order by
+            .order(created_at.asc())
+            .select((id, hoge_entry_id, hostname, status))
+            .first::&lt;HogeSuite&gt;(conn)
+            // NotFoundErrorをOptionにできる
+            .optional()?;
+        // transactionの中で普通にrustの式が書ける
+        if let Some(s) = suite {
+            let entry = hoge_entries.find(s.hoge_entry_id)
+                .first::&lt;HogeEntry&gt;(conn)?;
+            let suite =
+                diesel::update(hoge_suites.find(s.id)).set(status.eq(HogeStatus::Running as i32))
+                    .get_result::&lt;HogeSuite&gt;(conn)?;
+            Ok(Some((entry, suite)))
+
+        } else {
+            Ok(None)
+        }
+    })
+}
+```
+
+===
+
+# もっと複雑なクエリ
+-------------------
+
+* 2重join
+* dieselは2重joinを扱えない…
+
+===
+
+# もっと複雑なクエリ
+-------------------
+
+
+``` rust
+pub fn load_all_data&lt;&#39;a, Cn&gt;(conn: &amp;Cn)
+                             -&gt; Result&lt;Vec&lt;(HogeEntry, Vec&lt;((HogeSuite, HogeResult), Vec&lt;HogeProfile&gt;)&gt;)&gt;&gt;
+    where Cn: Connection&lt;Backend = Pg&gt;
+{
+    use diesel::types::{Integer, Timestamp, VarChar, Double};
+    use diesel::pg::types::sql_types::{Array, Jsonb};
+    use diesel::expression::dsl::*;
+    use diesel::select;
+
+    let status = sql::&lt;Integer&gt;(&#34;s.status&#34;);
+    let ret = select(sql::&lt;(
+        (Integer, VarChar, VarChar, Array&lt;VarChar&gt;,Timestamp, VarChar, Integer, Jsonb),
+        (Integer, Integer, VarChar, Integer),
+        (Integer, Integer, VarChar, Integer, Integer, VarChar),
+        (Integer, Integer, VarChar, Integer, Double))&gt;(
+        &#34;
+e.id, e.repo, e.committish, e.files, e.created_at, e.command, e.format, e.format_data,
+s.id, s.hoge_entry_id, s.hostname, s.status,
+r.id, r.hoge_suite_id, r.hoge_name, r.score, r.status, r.result,
+p.id, p.hoge_result_id, p.function_name, p.score, p.percent
+FROM hoge_profiles p
+INNER JOIN hoge_results r on r.id = p.hoge_result_id
+INNER JOIN hoge_suites s ON s.id = r.hoge_suite_id
+INNER JOIN hoge_entries e ON e.id = s.hoge_entry_id&#34;))
+    .filter(status.eq(HogeStatus::Finished as i32))
+    .load::&lt;(HogeEntry, HogeSuite, HogeResult, HogeProfile)&gt;(conn)?;
+    let mut hash = HashMap::new();
+    for (e, s, r, p) in ret {
+        let mut hash_entry1 = hash         .entry(e.id).or_insert((e, HashMap::new()));
+        let mut hash_entry2 = hash_entry1.1.entry(r.id).or_insert(((s, r), Vec::new()));
+        hash_entry2.1.push(p);
+    }
+    let ret = hash.into_iter().map(|(_, v)| (v.0,  v.1.into_iter().map(|(_, p)| p).collect())).collect();
+    Ok(ret)
+}
+
+```
+
+===
+
+# テスト
+-------
+
+* ￣\＿(ツ)＿/￣
+
+===
+
+# まとめ
+--------
+
+* 案外普通に使えるよ
+* モデルはちょっと面倒かもね
+* クエリは困ったらSQL生牡蠣
+* マイグレーションとかはまた今度
+
+&lt;/script&gt;
+&lt;/section&gt;
+</description>
+    </item>
     
     <item>
       <title>WebAssemblyとコンパイラとランタイム</title>
@@ -5258,249 +5646,6 @@ drill-web() {
 * ローカルでデータ分析したい時があるよ
 * その時にDrillは便利だよ
 * Emacs向けのDrillプラグイン作ったよ
-
-&lt;/script&gt;
-&lt;/section&gt;
-</description>
-    </item>
-    
-    <item>
-      <title>Rustとは何か。どんな言語か。</title>
-      <link>/slide/Rusttohananika_donnagengoka_/</link>
-      <pubDate>Sun, 06 Mar 2016 05:27:39 +0900</pubDate>
-      
-      <guid>/slide/Rusttohananika_donnagengoka_/</guid>
-      <description>&lt;section data-markdown
-    data-separator=&#34;\n===\n&#34;
-    data-vertical=&#34;\n---\n&#34;
-    data-notes=&#34;^Note:&#34;&gt;
-&lt;script type=&#34;text/template&#34;&gt;
-# Rustとは何か。どんな言語か。
-----------------------
-[異種プログラミング言語格闘勉強会](http://kbkz.connpass.com/event/26677/)  
-2016-03-20
-
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-===
-# About Me
----------
-![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
-
- + κeen
- + [@blackenedgold](https://twitter.com/blackenedgold)
- + Github: [KeenS](https://github.com/KeenS)
- + サイバーエージェントのエンジニア
- + Lisp, ML, Rust, Shell Scriptあたりを書きます
-
-===
-# Rustって?
-----------
-
-* システムプログラミング言語
-* だけど函数型言語から影響を受けた
-* 安全かつ高速
-* ゼロコスト抽象化
-
-===
-## システムプログラミング言語
----------------------------
-
-* スレッドはネイティブ、Cとの相互呼び出し、小さなバイナリサイズ
-* ゲームエンジンとか作れる([piston](https://github.com/PistonDevelopers/piston))
-* レンダリングエンジンとか作れる([Servo](https://github.com/servo/servo))
-* Lチカとか出来る
-* OSとか作れる([Redox](https://github.com/redox-os/redox))
-
-===
-## 函数型言語的からの影響
------------------------
-
-最近ではめずらしくなくなった
-
-
-* デフォルトイミュータブル
-* 代数的データ型
-* コンビネータ
-* トレイト (型クラス)
-
-===
-## 安全かつ高速
---------------
-
-* データ競合が起きない
-  + 所有権システム
-  + だいたいコンパイル時Read Writeロック
-  + Read only参照複数 or Write可能参照1つ
-* LLVMベースの強力な最適化
-* スレッド周辺のAPIが揃ってる
-
-===
-## ゼロコスト抽象化
-------------------
-省略
-
-* [Rustのゼロコスト抽象化 | κeenのHappy Hacκing Blog](http://keens.github.io/blog/2016/03/01/rustnozerokosutochuushouka/)
-
-===
-# Rustの誤解
------------
-
-* 安定してないって聞いたよ
-* 函数型言語ってホント?
-* GCがなくて大丈夫?
-* 継承がなくて大丈夫?
-
-===
-## 安定してないって聞いたよ
-
-* 1.0以前の話
-* 1.0(2015-05以降)はAPIの変更がルール化された
-* 新規APIのstablizeはあれどdeprecateはまれ
-
-===
-## 函数型言語ってホント?
-
-* 函数型言語の機能をつまみぐいしてるだけ
-* 標準ライブラリとかはバリバリ手続的
-* Lispよりも函数型言語っぽくない。
-* とはいえ抽象力は高いのでそこまで煩雑にはならない
-
-===
-## GCがなくて大丈夫?
-
-* GCはなくてもメモリ管理は自動でする
-* コンパイル時にメモリ管理
-  + コンパイラが必要なところにmalloc/freeを挟むイメージ
-* むしろメモリ以外(fd、ロックなど)も自動管理
-  + GCがある言語よりリソース管理の自動化が徹底してる
-* [リージョンについて | κeenのHappy Hacκing Blog](http://keens.github.io/blog/2015/12/09/ri_jonnitsuite/)
-
-===
-## 継承がなくて大丈夫?
-
-* むしろ継承必要？インターフェースだけでよくない？
-* Rustはデータ型とメソッドを分離するので継承のメリットそんなにない
-  + トレイトが強力ともいう
-* 逆にサブタイプ関係による複雑さの上昇のデメリットが多い
-  + 3回以上継承してるの全部把握出来るの？
-* ジェネリクスとかはあるよ
-
-===
-# Rustをとりまく環境
--------------------
-
-* racer/rustfmt
-* Cargo
-* crates.io
-* [Rust Playground](https://play.rust-lang.org/)
-* The Rust Programming Language
-
-
-===
-# racer/rustfmt
----------------
-
-* racerがコーディング支援ツール
-  + 補完
-  + 定義元ジャンプ
-  + 型情報
-  + 各種エディタプラグインあり
-* rustfmtがコードフォーマッタ
-  + エディタプラグインあり
-  + ビルドツール連携あり
-
-===
-# Cargo
--------
-
-* Rustのビルドツール兼パッケージマネージャ
-* これだけ覚えとけば困らない
-
-===
-# crates.io
------------
-
-* Rustパッケージのセントラルレポジトリ
-* 必ずビルドが通るような工夫
-  + cargo yank
-  + 同じライブラリの違うバージョンがいても大丈夫
-* Cargoとの連携
-* Cargoからpublishも可能
-
-===
-# [Rust Playground](https://play.rust-lang.org/)
----------------------------------------
-
-* webからRustを試せる
-* とりあえず試すと色々分かる
-  + 所有権難しいとか
-
-===
-# [The Rust Programming Language](https://doc.rust-lang.org/book/)
-------------------------------
-
-* Rustの入門用ドキュメント
-* とりあえずこれ読めば始められる
-* [和訳版](https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/)もある
-  + [GitHub](https://github.com/rust-lang-ja/the-rust-programming-language-ja)で作業中
-  + これの宣伝しに来ただけ
-* 1.6ほぼ終わり、1.7はまだ
-
-===
-# ライブラリ紹介
-----------------
-## MIO
-
-* [mio](https://github.com/carllerche/mio)
-* 低レベルな非同期IOライブラリ
-  + libuvやlibev2相当
-  + イベントスレッドではなくイベントループ
-* これを純Rustで実装
-* つまり(比較的)高水準なAPIで使える
-* 色んなライブラリの下地になっている
-
-===
-# ライブラリ紹介
-----------------
-## diesel
-
-* [diesel](https://github.com/sgrif/diesel)
-* ORM &amp; クエリビルダ
-  + mioとはうってかわって高水準なライブラリ
-* `infer_schema!(dotenv!(&#34;DATABASE_URL&#34;));` でコンパイル時に
-  + DBにアクセスしてスキーマ情報抜いて
-  + コード生成
-* モデルもCRUDでちゃんと使い分けている
-
-===
-# 所有権難しい
---------------
-下記のコードは動かない。
-
-``` rust
-fn main(){
-    let hello = &#34;Hello, &#34;.to_owned();
-    let world = &#34;World!&#34;;
-    let hello_world =  hello + world;
-    println!(&#34;{}&#34;, hello);
-    println!(&#34;{}&#34;, world);
-    println!(&#34;{}&#34;, hello_world);
-}
-
-```
-
-
-===
-# まとめ
---------
-
-* Rustはシステムプログラミング言語だよ
-* 面白い機能いっぱいあるよ
-* もう「安定待ち」じゃないよ
-* Try it now!
-
-
 
 &lt;/script&gt;
 &lt;/section&gt;
