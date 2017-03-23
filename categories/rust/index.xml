@@ -9,6 +9,412 @@
     <atom:link href="/categories/rust/index.xml" rel="self" type="application/rss+xml" />
     
     <item>
+      <title>Rust in Production</title>
+      <link>/slide/Rust_in_Production/</link>
+      <pubDate>Wed, 22 Mar 2017 19:57:28 +0900</pubDate>
+      
+      <guid>/slide/Rust_in_Production/</guid>
+      <description>&lt;section data-markdown
+    data-separator=&#34;\n===\n&#34;
+    data-vertical=&#34;\n---\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+&lt;script type=&#34;text/template&#34;&gt;
+# Rust in Production
+----------------------
+[Rust プログラマーミートアップ / Rust programmers&#39; meetup - connpass](https://rust.connpass.com/event/49304/)
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+===
+# About Me
+---------
+![κeenのアイコン](/images/kappa.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; width=&#34;20%&#34; --&gt;
+
+ * κeen
+ * 若者
+ * [@blackenedgold](https://twitter.com/blackenedgold)
+ * Github: [KeenS](https://github.com/KeenS)
+ * [Idein Inc.](https://idein.jp/)のエンジニア
+ * Lisp, ML, Rust, Shell Scriptあたりを書きます
+
+===
+
+# Rust採用までの流れ
+--------------------
+
+Ω＜「κeen君継続的ベンチマークサーバ作って」&lt;!-- .element: style=&#34;color:#a00;text-align:left;&#34; --&gt;  
+Ω＜「GitHubにpushする度ベンチマーク走る感じで」&lt;!-- .element: style=&#34;color&#34;:#a00;text-align:left;&#34; --&gt;  
+Ω＜「GPUとRaspberry Piでベンチマークするから」&lt;!-- .element: style=&#34;color:#a00;text-align:left;&#34; --&gt;  
+Ω＜「全部任せるね」&lt;!-- .element: style=&#34;color:#a00;text-align:left;&#34; --&gt;  
+
+⸜( ¯⌓¯ )⸝「Rustで書くか」&lt;!-- .element: style=&#34;color:#00a;text-align:left;&#34; --&gt;  
+
+
+やったこととか知見とかトピック毎にかいつまんで話します
+
+&lt;!-- .slide: class=&#34;left&#34; --&gt;
+
+===
+# Rustのメリット
+---------------
+
+* κeenが馴れてる
+* 社員の半分くらい書ける
+* Linux, Mac, Raspberry Piで動く
+* テスト書かなくてもそんなにバグらなそう
+* 将来のために小さいところでノウハウ溜めていきたい
+* シングルバイナリで楽に動きそう
+* **単純に使いたかった**
+* ※今回は速度や安全性は必要ない
+
+===
+# コンポーネント
+---------------
+
+* CLIクライアント
+  + 各自の手元やCIサーバから起動
+* アグリゲータ
+  + ワーカに仕事を投げ、結果を受け取る
+  + ジョブ管理
+* ワーカ
+  + GPUマシンやRSPiなどでベンチマーク
+  + 結果をアグリゲータに返す
+* ブラウザ
+  + ベンチマーク結果の閲覧
+
+===
+# プロジェクト構成
+-------------------
+
+* [ワークスペース](http://doc.crates.io/manifest.html#the-workspace--field-optional)を使ってサブプロジェクトに分割
+  + モノリシックだとビルドが重かった
+  + targetは全てのプロジェクトで共有する
+* CLI, aggregator, worker, browserの他にmodel, api
+* modelはaggregatorとbrowserで共有
+* apiはaggergatorとcliとworkerで共有
+* コード
+
+===
+
+# プロジェクト構成
+-------------------
+
+
+```
+Cargo.lock
+Cargo.toml
+README.md
+bench_aggregator/
+bench_api/
+bench_browser/
+bench_cli/
+bench_model/
+bench_worker/
+build.sh
+circle.yml
+docker-compose-deploy.yml
+docker-compose.yml
+migrations
+rustfmt.toml
+src/
+static/
+target/
+```
+
+===
+# プロジェクト構成
+-------------------
+
+![構成のイメージ](/images/rust-in-production/composition.png)&lt;!--  width=&#34;100%&#34; --&gt;
+
+
+===
+# パーサ
+--------
+
+* workerで使う
+* timeやgprofの結果を数値で欲しい
+* →パースするか…
+  + フォーマット
+* timeはbash固定
+  + シェルコマンドなのでシェル毎にフォーマットが違う
+* gprofは`-b`オプションでの結果をパース
+  + gmon.outではない
+
+===
+# パーサ
+--------
+
+* パーサコンビネータ [nom](https://github.com/Geal/nom)
+* サクっと作れた
+* デバッグつらい
+  + gprofが思ったより変なフォーマットしてた
+  + nomがバイト指向なのと位置を保存しない
+  + 自力でどうにかする？
+  + [combine](https://github.com/Marwes/combine)使うか手書きにするかで書き直したい
+* コード
+
+===
+
+# CLIオプション
+---------------
+
+* workerとcliで必要
+* 多機能な[clap](https://github.com/kbknapp/clap-rs)を採用
+* 特に困らない
+* 採用プロジェクトも多くてliving exampleに事欠かない
+* CLIツールに思考停止で採用していいと思う
+* コード
+
+===
+# HTTPクライアント
+------------------
+
+* CLIとworkerで使う
+* [hyper](https://github.com/hyperium/hyper) vs [reqwest](https://github.com/seanmonstar/reqwest)
+* 非同期な必要はないのでreqwest使いたかった
+* reqwestにmultipart対応がない→生hyper+[multipart](https://github.com/abonander/multipart)
+* コネクションの管理とかjsonの扱いとかそこそこ面倒だった…
+* reqwestにmultipart対応入ったら乗り換えるかも
+
+===
+# HTTPサーバ
+------------
+
+* aggregatorとbrowserで使う
+* 簡単なREST API
+* 生hyper vs [nickel](https://github.com/nickel-org/nickel.rs) vs [iron](https://github.com/iron/iron)
+* 生hyperはすぐつらくなる→やめた
+* **nickelとironはそんなに変わらなかった**
+* nickel(agregator)+iron(browser)
+  + aggregatorはなんとなくでnickel選んじゃった
+  + browserは結局[rustc-perf](https://github.com/rust-lang-nursery/rustc-perf)からフォークしたためironだった
+
+===
+
+# HTTPサーバ(Nickel)
+------------
+
+* サーバデータの扱いがちょっと特殊？
+  ```rust
+    let data = req.server_data();
+  ```
+* 400 BadRequestと500 InternalServerErrorのマクロ作った
+  + `validate!(res, serde_json::from_str(field));`
+  + `server_try_with!(res, serde_json::to_string(&amp;ret));`
+  + 「エラー出たら処理終了」が他の言語と比べて書きづらい？
+* 非同期IOしない…
+  + ポーリングでコネクション張りっぱなしなのでクライアント分スレッドが必要（ハマった）
+* マルチスレッド→DBコネクションにロックが必要
+* コード
+
+===
+# APIモデル
+-----------
+
+* apiクレートを分けた
+  + バイナリ毎に別クレートに分けるために必要だった
+* [serde](https://github.com/serde-rs/serde)と[serde_json](https://github.com/serde-rs/json)でjson化
+* proc-macroがstableになって格段に使いやすくなった
+* モジュール分けて`Request`と`Response`を作ってAPIが分かりやすく
+* コード
+
+===
+# DB
+-----
+
+* aggergatorとbrowserで必要
+* ほぼ[diesel](https://github.com/diesel-rs/diesel)一択
+  + コネクション、マイグレーション、ORMなど
+  + proc-macroで大分楽に
+* [仕事でdiesel使ってみた | κeenのHappy Hacκing Blog](https://keens.github.io/slide/shigotodedieseltsukattemita/)
+* DBはPostgreSQL
+  + 半分dieselのため、もう半分機能のため
+* 開発時はdocker-composeで立てる
+  + CF [docker-composeでmysql &amp; postgreSQL をサクッと起動 - Qiita](http://qiita.com/astrsk_hori/items/1e683a7a2f2b7189cb6e)
+
+===
+# diesel
+-----
+
+* Pros
+  + SQLでスキーマ書ける
+  + マイグレーションの面倒みてくれる
+  + proc-macroのおかげで楽
+  + クエリDSL案外普通に書けた
+  + 最悪SQL生牡蠣出来る
+  + CLI便利
+
+===
+# diesel
+--------
+
+* Cons
+  + deriveいっぱいあって難しい
+    - has_manyとbelongs_toあたりをどう書くか
+  + enum扱えない
+  + DSLで2重join書けない
+  + 偶に機能足りない
+    - ネットワークアドレス型サポートとか
+  + SQL生牡蠣の型付けつらい
+  + has_manyの扱いに難あり
+    - eager loadingしない設計判断
+    - `(User, Vec&lt;Tweets&gt;)` みたいなのを持ち回す羽目に
+    - モデル設計にも影響
+
+===
+# マイグレーション
+-----------------
+
+* 普通のマイグレーション運用かな
+* 最初のデプロイまでは`diesel database reset`で何度も初期化した
+* 最初デプロイ後は手元で`diesel migration run`と`diesel migration revert`を何度か
+* デプロイ時に雑に手元から本番サーバに `diesel migration run`
+  + 本当はデプロイプロセスに組込みたい
+  + diesel CLIの入ったdockerコンテナ…
+* まだほとんど使われてないので雑運用
+
+
+===
+# マイグレーション(コード)
+-----------------
+
+* スキーマ変更したらコードの変更も必要
+  + そもそも必要だからスキーマ変更するので割と自然に出来る
+* `infer_schema` があるので先に開発環境のマイグレーションをしないといけない
+* カラムの順番とフィールドの順番が一致する必要
+  + 地味に面倒
+  + 今後改善予定 CF [#747](https://github.com/diesel-rs/diesel/pull/747)
+* SQL生牡蠣の対応がつらい
+  + コンパイル時にカラム不足が分からない
+
+===
+# エラー管理
+------------
+
+* 全ての場所で必要
+* [error_chain](https://github.com/brson/error-chain)を採用
+* 公式ドキュメントの[エラーハンドリング](https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/error-handling.html)のボイラプレートをマクロで生成
+* `?`でのエラー処理が楽になる→ `unwrap`が消えた
+* 全てのプロジェクトに思考停止で採用していいんじゃないかな
+
+===
+
+# ログ
+------
+
+* 全ての場所で必要
+* nurseryの[log](https://github.com/rust-lang-nursery/log)と[env_logger](https://github.com/rust-lang-nursery/log)を採用
+* `println!`より高機能な（on/offが出来る）ので`println!`の代わりに`debug!`を入れる
+* あとたまにエラーハンドリングで`error!`使ったり
+* `main`で一行`env_logger::init().expect(&#34;failed to init env logger&#34;);`を忘れずに
+* 運用以前に開発に便利なので問答無用で入れていいと思う
+
+===
+# コンフィグ
+------------
+
+* [serde_yaml](https://github.com/dtolnay/serde-yaml) + [dotenv](https://github.com/slapresta/rust-dotenv)
+* コンフィグファイルといえばyamlだよね
+  + ちょこっといじって再起動がやりやすい
+* dotenvはdockerと相性がいい気がする
+* どっちがいいか判断出来なかったので両方実装
+* プロダクションで動いてるのはdotenv（というか普通の環境変数）の方
+
+===
+
+# テスト
+--------
+
+* 全ての場所で必要
+* 組込みの`#[test]`を使用
+* 正直あまり出来てない
+* 型強いし多少はなくてもバグらない…？
+* 一応レイヤ(DB/ビジネスロジック/インタフェース)を跨ぐときにはtraitで抽象化
+  + 出来てないところもいっぱい
+* 今後の課題とさせて頂きます
+
+===
+# デバッグ
+----------
+
+* 基本はlogの`debug!`でトレース
+* ちゃんと型つけときゃバグらない
+* GDB使う…？
+* デモ
+
+===
+
+# ビルド
+--------
+
+* cargoでサブプロジェクト全てをビルドするコマンドがなかった
+  + 最近 `cargo build --all` が入った
+* Raspberri Pi向けにクロスコンパイルが必要
+* シェルスクリプトでビルドスクリプト
+* クロスコンパイルはdockerを使う CF [dlecan/rust-crosscompiler-arm: Docker images for Rust dedicated to cross compilation for ARM v6 and more](https://github.com/dlecan/rust-crosscompiler-arm)
+* 正解なのか分からない
+
+===
+# CI
+----
+
+* 全てのクレートで必要
+* Circle CIを使ってる
+* 普通にrustupでRustのインストール
+  + travisならRustサポートあるけど…
+* 普通に `cargo test --all`
+
+===
+
+# デプロイ
+----------
+
+* シングルバイナリだけど…
+* シュっとdocker-swarmとかでデプロイしたい
+* dockerイメージ作ってdocker-composeで管理
+  + 開発も便利に
+* raspberry piはバイナリだけ配る
+* browserは`static/`もイメージに同梱
+
+===
+# Docker
+--------
+
+* ベースイメージはUbuntu
+  + libcの扱いが面倒そうなのでalpineはやめといた
+  + イメージサイズに困ってからどうにか考える
+* swarmなのでdocker-composeの設定そのままで動かせる
+* ログの管理もswarm任せ
+  + env_loggerが標準出力に吐くのもそんなに困ってない
+
+===
+# Docker
+--------
+
+* rustのビルドからのdockerのビルドが面倒
+* Dockerfileの管理も面倒
+* 便利なの作った
+* [KeenS/cargo-pack-docker: a cargo subcommand to package your application into a docker image](https://github.com/KeenS/cargo-pack-docker)
+* DockerfileなしでRustのビルドからイメージ作成までやってくれる
+* 今のところ使えてる
+  + 作りが甘いことは認識してる…
+
+===
+# まとめ
+---------
+
+* Rustを仕事で使ったときの知見を話した
+* 微妙に痒いところに手が届かないけど概ね揃ってる
+* 開発が速いので問題は放置しとくと勝手に直るかも
+* テストとかデプロイとかまだ知見が足りない
+
+
+&lt;/script&gt;
+&lt;/section&gt;
+</description>
+    </item>
+    
+    <item>
       <title>仕事でdiesel使ってみた</title>
       <link>/slide/shigotodedieseltsukattemita/</link>
       <pubDate>Wed, 01 Mar 2017 10:57:38 +0900</pubDate>
@@ -4280,450 +4686,6 @@ To learn more, run the command again with --verbose.
 &lt;p&gt;スタックを作ってどうこう、とかも考えたのですが上手くいきませんでした。悲しい。&lt;/p&gt;
 
 &lt;p&gt;ということで小ネタでした。&lt;/p&gt;</description>
-    </item>
-    
-    <item>
-      <title>Rustのクロージャ3種を作って理解する</title>
-      <link>/blog/2016/10/10/rustnokuro_ja3tanewotsukutterikaisuru</link>
-      <pubDate>Mon, 10 Oct 2016 16:48:43 +0900</pubDate>
-      
-      <guid>/blog/2016/10/10/rustnokuro_ja3tanewotsukutterikaisuru</guid>
-      <description>&lt;p&gt;κeenです。Rustのクロージャ、3種類もあって複雑ですよね。
-こういう複雑なものはRustの気持になって考えれば理解出来たりします。ということで手でクロージャを作って理解してみましょう。&lt;/p&gt;
-
-&lt;p&gt;尚、これはRustの1.12.0-stableと1.14.0-nightly (6e8f92f11 2016-10-07)で実験しています。
-&lt;/p&gt;
-
-&lt;h1 id=&#34;用語&#34;&gt;用語&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;関数 - 関数&lt;/li&gt;
-&lt;li&gt;無名関数 - 名前のついていない関数&lt;/li&gt;
-&lt;li&gt;自由変数 - そのスコープの中で束縛されていない変数&lt;/li&gt;
-&lt;li&gt;クロージャ - 関数に、自由変数の値(環境)もくっつけてそれだけで閉じるようにしたもの&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;クロージャについては関数が閉じ込める環境だけを指してクロージャとする人もいますが、ここでは関数本体と環境を合わせてクロージャとします。&lt;/p&gt;
-
-&lt;p&gt;よく、無名関数とクロージャ(関数閉包)を一緒くたにすることがありますが明確に区別しましょう。まあ、大抵の無名関数はクロージャになりますが、動的スコープの言語みたいにそうならないケースもあります。&lt;/p&gt;
-
-&lt;p&gt;余談ですが「ラムダ式」は言語がよく無名関数に付ける名前です。「関数」も言語によって「手続き」だったり「メソッド」だったりしますね。&lt;/p&gt;
-
-&lt;h1 id=&#34;fnonce-fnmut-fn&#34;&gt;&lt;code&gt;FnOnce&lt;/code&gt; &lt;code&gt;FnMut&lt;/code&gt; &lt;code&gt;Fn&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;さて、「作って理解する」なので例を出します。なんかよく分からないけど0から9の値に1を足して印字するプログラムです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
-    let x = 1;
-    for i in 0..10 {
-        // 無名関数を作る
-        let cls = |arg|{ i + arg };
-        println!(&amp;quot;{}&amp;quot;, cls(x));
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;無名関数を作って &lt;code&gt;cls&lt;/code&gt; という変数に束縛しています。 &lt;code&gt;cls&lt;/code&gt; は自由変数 &lt;code&gt;i&lt;/code&gt; を含みますので、 &lt;code&gt;cls&lt;/code&gt; のクロージャを取ると 「&lt;code&gt;cls&lt;/code&gt; の定義 + &lt;code&gt;i&lt;/code&gt; の定義」になります。&lt;/p&gt;
-
-&lt;p&gt;では &lt;code&gt;i&lt;/code&gt; という変数を保持したオブジェクトを作りましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct Closure {
-    i: isize,
-}
-
-
-fn main() {
-    let x = 1;
-    for i in 0..10 {
-        // クロージャを作る
-        let cls = Closure {i: i};
-        // もちろん、Closureは関数でないので呼び出せない
-        // println!(&amp;quot;{}&amp;quot;, cls(x));
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;さて、このままだと &lt;code&gt;cls&lt;/code&gt; は呼び出せません。しかし &lt;code&gt;+&lt;/code&gt; なんかのオーバーロードを許しているRustはなんと関数呼び出し構文 &lt;code&gt;name(arg, ...)&lt;/code&gt; もオーバーロード出来ます。実装すべきトレイトは &lt;code&gt;std::ops::{FnOnce, FnMut, Fn}&lt;/code&gt; です。これがクロージャ3種です。&lt;/p&gt;
-
-&lt;p&gt;これらは継承関係にあって、上から順に &lt;code&gt;FnOnce&lt;/code&gt;  &lt;code&gt;FnMut&lt;/code&gt; &lt;code&gt;Fn&lt;/code&gt; です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub trait FnOnce&amp;lt;Args&amp;gt; {
-    type Output;
-    extern &amp;quot;rust-call&amp;quot; fn call_once(self, args: Args) -&amp;gt; Self::Output;
-}
-
-pub trait FnMut&amp;lt;Args&amp;gt;: FnOnce&amp;lt;Args&amp;gt; {
-    extern &amp;quot;rust-call&amp;quot; fn call_mut(&amp;amp;mut self, args: Args) -&amp;gt; Self::Output;
-}
-
-pub trait Fn&amp;lt;Args&amp;gt;: FnMut&amp;lt;Args&amp;gt; {
-    extern &amp;quot;rust-call&amp;quot; fn call(&amp;amp;self, args: Args) -&amp;gt; Self::Output;
-}
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これらの違いは &lt;code&gt;self&lt;/code&gt; をムーブして受け取るか &lt;code&gt;&amp;amp;mut&lt;/code&gt; で受けるか &lt;code&gt;&amp;amp;&lt;/code&gt; で受けるかです。&lt;/p&gt;
-
-&lt;h2 id=&#34;fnonce&#34;&gt;&lt;code&gt;FnOnce&lt;/code&gt;&lt;/h2&gt;
-
-&lt;p&gt;とりあえず先程の &lt;code&gt;Closure&lt;/code&gt; にこれを実装してみましょう。ちょいとunstableな機能なようなので &lt;code&gt;feature&lt;/code&gt; を使って、nightlyでコンパイルするようにしてみます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;#![feature(unboxed_closures)]
-#![feature(fn_traits)]
-
-use std::ops::{FnOnce, FnMut, Fn};
-
-// 再掲
-struct Closure {
-    i: isize,
-}
-
-impl FnOnce&amp;lt;(isize,)&amp;gt; for Closure {
-    type Output = isize;
-
-    extern &amp;quot;rust-call&amp;quot; fn call_once(self, (arg, ): (isize,)) -&amp;gt; Self::Output {
-        self.i + arg
-    }
-}
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これで呼び出しが出来る筈です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
-    let x = 1;
-    for i in 0..10 {
-        // 無名関数を作る
-        let cls = Closure {i: i};
-        // 呼出せるようになる
-        println!(&amp;quot;{}&amp;quot;, cls(x));
-    }
-}
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;勿論、これは以下のように明示的にメソッドを呼んでも同じです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
-    let x = 1;
-    for i in 0..10 {
-        // クロージャを作る
-        let cls = Closure {i: i};
-        // メソッドで呼ぶ
-        println!(&amp;quot;{}&amp;quot;, cls.call_once((x, )));
-    }
-}
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;fnmut-fnmut&#34;&gt;&lt;code&gt;FnMut&lt;/code&gt; &lt;code&gt;FnMut&lt;/code&gt;&lt;/h2&gt;
-
-&lt;p&gt;&lt;code&gt;FnOnce&lt;/code&gt; で出来るんならなんで &lt;code&gt;FnMut&lt;/code&gt; と &lt;code&gt;FnMut&lt;/code&gt; が存在するかというと、クロージャが閉じ込めた環境の所有権の問題ですね。&lt;/p&gt;
-
-&lt;p&gt;例えば以下のコードを手で実装してみます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
-    let x = 1;
-    // ループの外でクロージャを作る
-    let cls = |arg| { x + arg};
-    for i in 0..10 {
-        // 複数回クロージャを呼ぶ
-        println!(&amp;quot;{}&amp;quot;, cls(i));
-    }
-}
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;先程と同じ &lt;code&gt;Closure&lt;/code&gt; ではコンパイル出来ません（統一感のために &lt;code&gt;Closure&lt;/code&gt; のメンバ名を変えました）。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;#![feature(unboxed_closures)]
-#![feature(fn_traits)]
-
-use std::ops::{FnOnce, FnMut, Fn};
-
-struct Closure {
-    x: isize,
-}
-
-impl FnOnce&amp;lt;(isize,)&amp;gt; for Closure {
-  // ...略
-}
-
-
-fn main() {
-    let x = 1;
-    // ループの外でクロージャを作る
-    let cls = Closure {x: x};
-    for i in 0..10 {
-        // 複数回クロージャを呼ぶ
-        println!(&amp;quot;{}&amp;quot;, cls(i));
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;error[E0382]: use of moved value: `cls`
-  --&amp;gt; closure.rs:45:28
-   |
-45 |             println!(&amp;quot;{}&amp;quot;, cls(i));
-   |                            ^^^ value moved here in previous iteration of loop
-   |
-   = note: move occurs because `cls` has type `Closure`, which does not implement the `Copy` trait
-
-error: aborting due to previous error
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;1回目のループでは問題ないのですが &lt;code&gt;call_once(self, (arg, ): (isize,))&lt;/code&gt; の呼び出しでムーブしてしまうので2回目以降は呼べません。ということで1つ下のトレイト、 &lt;code&gt;FnMut&lt;/code&gt; も実装してみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;// ...略
-
-impl FnMut&amp;lt;(isize,)&amp;gt; for Closure {
-
-    extern &amp;quot;rust-call&amp;quot; fn call_mut(&amp;amp;mut self, (arg, ): (isize,)) -&amp;gt; Self::Output {
-        self.x + arg
-    }
-}
-
-fn main() {
-    let x = 1;
-    let cls = Closure {x: x};
-    for i in 0..10 {
-        println!(&amp;quot;{}&amp;quot;, cls(i));
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;実はこれでも怒られます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;error: cannot borrow immutable local variable `cls` as mutable
-  --&amp;gt; closure.rs:45:28
-   |
-43 |         let cls = Closure {x: x};
-   |             --- use `mut cls` here to make mutable
-44 |         for i in 0..10 {
-45 |             println!(&amp;quot;{}&amp;quot;, cls(i));
-   |                            ^^^ cannot borrow mutably
-
-error: aborting due to previous error
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;何故なら &lt;code&gt;mut&lt;/code&gt; を要求しているから。正確にはこうです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;// ...略
-
-
-fn main() {
-    let x = 1;
-    // `mut` を付ける
-    let mut cls = Closure {x: x};
-    for i in 0..10 {
-        println!(&amp;quot;{}&amp;quot;, cls(i));
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これで通ります。しかしまあ、何か書き換えてる訳でもないのに &lt;code&gt;mut&lt;/code&gt; が付いているのは嫌ですね。&lt;code&gt;mut&lt;/code&gt; を要求しないように定義してあげようと思ったら &lt;code&gt;Fn&lt;/code&gt; が必要になります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;// ...略
-
-impl Fn&amp;lt;(isize,)&amp;gt; for Closure {
-    extern &amp;quot;rust-call&amp;quot; fn call(&amp;amp;self, (arg,): (isize, )) -&amp;gt; Self::Output {
-        self.x + arg
-    }
-}
-
-fn main() {
-    let x = 1;
-    let cls = Closure {x: x};
-    for i in 0..10 {
-        println!(&amp;quot;{}&amp;quot;, cls(i));
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これで通ります。&lt;/p&gt;
-
-&lt;h2 id=&#34;整理&#34;&gt;整理&lt;/h2&gt;
-
-&lt;ul&gt;
-&lt;li&gt;クロージャとは関数とその環境のセットだよ&lt;/li&gt;
-&lt;li&gt;環境にも所有権はあるよ&lt;/li&gt;
-&lt;li&gt;Rustは所有権でクロージャの呼び出しを使い分けるよ&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h1 id=&#34;構文&#34;&gt;構文&lt;/h1&gt;
-
-&lt;p&gt;じゃあ、 &lt;code&gt;FnOnce&lt;/code&gt; &lt;code&gt;FnMut&lt;/code&gt; &lt;code&gt;Fn&lt;/code&gt; に対応するRustの構文を探っていきます。&lt;/p&gt;
-
-&lt;h2 id=&#34;fn&#34;&gt;&lt;code&gt;Fn&lt;/code&gt;&lt;/h2&gt;
-
-&lt;p&gt;先程 &lt;code&gt;Fn&lt;/code&gt; まで実装しないとコンパイルが通らなかった&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
-    let x = 1;
-    let cls = |arg| { x + arg};
-    for i in 0..10 {
-        println!(&amp;quot;{}&amp;quot;, cls(i));
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;は &lt;code&gt;||{}&lt;/code&gt; でコンパイルが通っているので &lt;code&gt;||{}&lt;/code&gt; は &lt;code&gt;Fn&lt;/code&gt; を作るようです。&lt;/p&gt;
-
-&lt;h2 id=&#34;fnmut&#34;&gt;&lt;code&gt;FnMut&lt;/code&gt;&lt;/h2&gt;
-
-&lt;p&gt;じゃあ、 &lt;code&gt;call_mut&lt;/code&gt; を要求しそうにちょっと変えてみます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
-    let mut x = 1;
-    let cls = |arg|{ x += arg };
-    for i in 0..10 {
-        cls(i);
-    }
-    println!(&amp;quot;{}&amp;quot;, x);
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;はい、予想通りエラーが出ます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;error: cannot borrow immutable local variable `cls` as mutable
-  --&amp;gt; closure.rs:37:13
-   |
-35 |         let cls = |arg|{ x += arg };
-   |             --- use `mut cls` here to make mutable
-36 |         for i in 0..10 {
-37 |             cls(i);
-   |             ^^^ cannot borrow mutably
-
-error[E0502]: cannot borrow `x` as immutable because it is also borrowed as mutable
-  --&amp;gt; closure.rs:39:24
-   |
-35 |         let cls = |arg|{ x += arg };
-   |                   -----  - previous borrow occurs due to use of `x` in closure
-   |                   |
-   |                   mutable borrow occurs here
-...
-39 |         println!(&amp;quot;{}&amp;quot;, x);
-   |                        ^ immutable borrow occurs here
-40 |     }
-   |     - mutable borrow ends here
-
-error: aborting due to 2 previous errors
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;先程の &lt;code&gt;FnMut&lt;/code&gt; の例のように &lt;code&gt;cls&lt;/code&gt; に &lt;code&gt;mut&lt;/code&gt; を付けてみます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
-    let mut x = 1;
-    let mut cls = |arg|{ x += arg };
-    for i in 0..10 {
-        cls(i);
-    }
-    println!(&amp;quot;{}&amp;quot;, x);
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;実は、これでもエラーです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;error[E0502]: cannot borrow `x` as immutable because it is also borrowed as mutable
-  --&amp;gt; closure.rs:39:24
-   |
-35 |         let mut cls = |arg|{ x += arg };
-   |                       -----  - previous borrow occurs due to use of `x` in closure
-   |                       |
-   |                       mutable borrow occurs here
-...
-39 |         println!(&amp;quot;{}&amp;quot;, x);
-   |                        ^ immutable borrow occurs here
-40 |     }
-   |     - mutable borrow ends here
-
-error: aborting due to previous error
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;何故なら &lt;code&gt;cls&lt;/code&gt; が &lt;code&gt;x&lt;/code&gt; を捕捉し続けているから。これは &lt;code&gt;cls&lt;/code&gt; のライフタイムを &lt;code&gt;println!&lt;/code&gt; の前で終わらせてあげると解決します。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
-    let mut x = 1;
-    {
-        // `{}` でスコープを作ることでライフタイムをコントロールする
-        let mut cls = |arg|{ x += arg };
-        for i in 0..10 {
-            cls(i);
-        }
-    }
-    println!(&amp;quot;{}&amp;quot;, x);
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;FnMut&lt;/code&gt; は変数を &lt;code&gt;mut&lt;/code&gt; にする無名関数と同じなようです。&lt;/p&gt;
-
-&lt;h2 id=&#34;fnonce-1&#34;&gt;&lt;code&gt;FnOnce&lt;/code&gt;&lt;/h2&gt;
-
-&lt;p&gt;じゃあ、 &lt;code&gt;FnOnce&lt;/code&gt; は？ &lt;code&gt;std::mem::drop&lt;/code&gt; を使って所有権を無理矢理奪うクロージャを作ってみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::mem::drop;
-
-fn main() {
-    let x = String::new();
-    let cls = || {drop(x)};
-    cls();
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;はい、実はこれでOKです。冷静に考えたら &lt;code&gt;FnOnce&lt;/code&gt; を継承している &lt;code&gt;Fn&lt;/code&gt; を &lt;code&gt;||{}&lt;/code&gt; で作れた時点で問題ありませんでしたね。&lt;/p&gt;
-
-&lt;h1 id=&#34;落穂拾い&#34;&gt;落穂拾い&lt;/h1&gt;
-
-&lt;h2 id=&#34;move-クロージャ&#34;&gt;&lt;code&gt;move&lt;/code&gt; クロージャ&lt;/h2&gt;
-
-&lt;p&gt;じゃあ、Rustが良い感じに使い分けてくれるなら &lt;code&gt;move&lt;/code&gt; クロージャって何のためにあるの？と思いますが、これは環境を捕捉する際に &lt;code&gt;Copy&lt;/code&gt; なんかが起こらないようにするためのものです。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;code&gt;move&lt;/code&gt; しない例&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;
-let mut num = 5;
-
-{
-    let mut add_num = |x: i32| num += x;
-
-    add_num(5);
-}
-
-assert_eq!(10, num);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;code&gt;move&lt;/code&gt; する例&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let mut num = 5;
-
-{
-    let mut add_num = move |x: i32| num += x;
-
-    add_num(5);
-}
-
-assert_eq!(5, num);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;move&lt;/code&gt; は環境 &lt;strong&gt;へ&lt;/strong&gt; 所有権を移すかどうか、 &lt;code&gt;FnOnce&lt;/code&gt; などは環境 &lt;strong&gt;から&lt;/strong&gt; 所有権を移すかどうかです。&lt;/p&gt;
-
-&lt;h2 id=&#34;関数ポインタ&#34;&gt;関数ポインタ&lt;/h2&gt;
-
-&lt;p&gt;クロージャを持たない関数は、 &lt;code&gt;fn(i32) -&amp;gt; i32&lt;/code&gt; のような型を持ちます。これは空の環境を持つクロージャと同じですね。空の環境に所有権も何もないのでプリミティブの &lt;code&gt;fn&lt;/code&gt; は &lt;code&gt;FnOnce&lt;/code&gt; &lt;code&gt;FnMut&lt;/code&gt; &lt;code&gt;Fn&lt;/code&gt; のいずれとしても振舞います。&lt;/p&gt;
-
-&lt;h1 id=&#34;参考&#34;&gt;参考&lt;/h1&gt;
-
-&lt;p&gt;ここまで書いて普通にドキュメントに詳しく載っているのに気付きました（汗&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/functions.html&#34;&gt;関数&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/closures.html&#34;&gt;クロージャ&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;</description>
     </item>
     
   </channel>
