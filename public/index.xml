@@ -6,8 +6,485 @@
     <description>Recent content on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Wed, 22 Mar 2017 19:57:28 +0900</lastBuildDate>
+    <lastBuildDate>Tue, 28 Mar 2017 09:21:33 +0900</lastBuildDate>
     <atom:link href="/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>ソフトウェアエンジニアがFPGAやってみる</title>
+      <link>/slide/sofutoueaenjiniagaFPGAyattemiru/</link>
+      <pubDate>Tue, 28 Mar 2017 09:21:33 +0900</pubDate>
+      
+      <guid>/slide/sofutoueaenjiniagaFPGAyattemiru/</guid>
+      <description>&lt;section data-markdown
+    data-separator=&#34;\n===\n&#34;
+    data-vertical=&#34;\n---\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+&lt;script type=&#34;text/template&#34;&gt;
+# ソフトウェアエンジニアがPYNQでFPGAやってみる
+----------------------
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+===
+# About Me
+---------
+![κeenのアイコン](/images/kappa.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; width=&#34;20%&#34; --&gt;
+
+ * κeen
+ * [@blackenedgold](https://twitter.com/blackenedgold)
+ * Github: [KeenS](https://github.com/KeenS)
+ * [Idein Inc.](https://idein.jp/)のエンジニア
+ * Lisp, ML, Rust, Shell Scriptあたりを書きます
+
+===
+# よくある話
+------------
+
+「Lisperって自分のLispを作るらしいよ」 &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;1&#34; --&gt;  
+「Lispって昔は専用ハードウェアで動いてたらしいよ」 &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;2&#34; --&gt;  
+「じゃあハードウェア作んなきゃ」 &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;3&#34; --&gt;  
+「FPGAやるかー」 &lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;4&#34; --&gt;  
+
+===
+
+# FPGAって？
+------------
+
+* Field-Programmable Gate Array
+* プログラマブルな集積回路
+  + オレオレ設計のCPU作ったり
+  + HDMI入力を直でmpg4にエンコードするデバイスとかも
+* クロックはASIC(ふつうのCPU)より大分遅い
+* でも上手く嵌れば100倍高速化とか
+
+===
+
+# PYNQって？
+------------
+
+* [PYNQ-Z1 Python Productivity for Zynq - Digilent](http://store.digilentinc.com/pynq-z1-python-productivity-for-zynq/)
+* xilinxのFPGAとARMのチップが載ったSoC
+* ARMで動いてるPython(Jupyter)からFPGAにロジック焼ける
+  + 手軽にロジックを試せる
+* FPGAとの通信はMMIO
+  + 特定のアドレスのメモリにデータを書くとFPGAに送られる
+  + メモリのデータを読むとFPGAからデータが送られる
+
+===
+
+&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;会社にPYNQがきたよ！！azure倒したら遊ぶ！！！！ &lt;a href=&#34;https://t.co/ohJg7z4lxd&#34;&gt;pic.twitter.com/ohJg7z4lxd&lt;/a&gt;&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/828834126572589056&#34;&gt;2017年2月7日&lt;/a&gt;&lt;/blockquote&gt;
+
+===
+
+# ハードウェアロジック
+---------------------
+
+* ハードウェア記述言語(HDL)を使う
+  + メジャーなのはVHDLとVerilog
+  + 今回はVerilogの話
+* クロックとかレジスタとかワイヤーとか駆使する
+* 電気信号なのでロジックが並列で走る
+* vivadoというツールでコンパイル
+  + Tclで制御も出来る
+* 回路設計とかも
+* コンパイルは結構遅い…
+* CPUと通信するときの規格とかも書かなきゃいけない
+  * AXI LiteとかAXI Fullとか…
+  * 一応自動で生成はしてくれる
+
+===
+
+![vivadoのスクショ](/images/fpga/vivado.png) &lt;!-- .element: width=&#34;100%&#34; --&gt;
+
+===
+
+# なんか作ってみる1
+------------------
+
+* Lチカ
+* [Vivado and zybo linux勉強会資料3](https://www.slideshare.net/marsee101/vivado-and-zybo-linux3)
+* ↑ロジック焼くとこ以外ほぼこれのまま
+* ロジックで作ったワイヤーと実際のLEDのワイヤー結んだりして楽しい
+* AXI LiteでCPUと繋がって間隔変えたり出来る
+
+===
+
+``` verilog
+reg [3:0] LED_Display_Counter;
+reg [31:0] LED_Interval_Counter;
+reg slv_reg_wren_1d;
+
+// slv_reg_wren_1d generate
+always @(posedge S_AXI_ACLK) begin
+   if (~S_AXI_ARESETN)
+       slv_reg_wren_1d &lt;= 1&#39;b0;
+   else
+       slv_reg_wren_1d &lt;= slv_reg_wren;
+end
+
+// LED_Interval_Counter
+always @(posedge S_AXI_ACLK) begin: proc_LED_Interval_Counter
+   if (~S_AXI_ARESETN) begin
+       LED_Interval_Counter &lt;= 32&#39;d0;
+   end else begin
+       if (slv_reg0[0]) begin // Enable
+           if (LED_Interval_Counter == 32&#39;d0)
+               LED_Interval_Counter &lt;= slv_reg3;
+           else
+               LED_Interval_Counter &lt;= LED_Interval_Counter - 32&#39;d1;
+       end else
+           LED_Interval_Counter &lt;= slv_reg3;
+   end
+end
+
+/// Counters
+// LED_Display_Counter
+always @(posedge S_AXI_ACLK) begin: proc_LED_Display_Counter
+   if (~S_AXI_ARESETN) begin
+       LED_Display_Counter &lt;= 4&#39;d0;
+   end else begin
+       if (slv_reg_wren_1d &amp;&amp; axi_awaddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB] == 2&#39;h1) // Counter Load
+           LED_Display_Counter &lt;= slv_reg1[3:0];
+       else if (slv_reg0[0]) begin  // Enable
+           if (LED_Interval_Counter == 32&#39;d0)
+               LED_Display_Counter &lt;= LED_Display_Counter + 4&#39;d1;
+       end
+   end
+end
+
+assign LED4bit = LED_Display_Counter;
+```
+
+===
+
+![jupyterのスクショ](/images/fpga/led4bit.png)&lt;!-- .element: width=&#34;100%&#34; --&gt;
+
+===
+
+# なんか作ってみる2
+------------------
+
+* 簡易計算機
+* 渡された2値で演算
+  + 四則演算とか論理演算とか
+* AXI Liteで通信
+  + AXI Liteはレジスタのみ通信可能
+
+===
+
+```verilog
+reg [C_S_AXI_DATA_WIDTH-1:0] res;
+
+always @(posedge S_AXI_ACLK) begin
+   if (S_AXI_ARESETN == 1&#39;b0) begin
+      res &lt;= 32&#39;h0;
+   end else if (~ slv_reg_wren)
+     begin
+        if (slv_reg0[0]) begin
+           case (slv_reg1)
+             32&#39;h0: res &lt;= slv_reg2 + slv_reg3;
+             32&#39;h1: res &lt;= slv_reg2 - slv_reg3;
+             32&#39;h2: res &lt;= slv_reg2 * slv_reg3;
+             default: res &lt;= res;
+           endcase // case (slv_reg1)
+        end
+     end
+end // always @ (posedge S_AXI_ACLK)
+
+always @(posedge S_AXI_ACLK) begin
+   slv_reg4 &lt;= res;
+   slv_reg0 &lt;= 32&#39;b0;
+end
+
+```
+
+===
+
+![jupyterのスクショ](/images/fpga/alu.png) &lt;!-- .element: width=&#34;100%&#34; --&gt;
+
+
+===
+
+# なんか作ってみる3
+------------------
+
+* 命令列を受け取って計算
+* 内部で16のレジスタ、プログラムカウンタなど
+* CPUっぽい動き
+* CPUとの通信はAXI Full
+  + メモリに触れる
+
+===
+
+``` verilog
+generate
+   if (USER_NUM_MEM &gt;= 1)
+ begin
+    assign mem_select  = 1;
+    assign mem_address = (axi_arv_arr_flag? axi_araddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB]:(axi_awv_awr_flag? axi_awaddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB]:0));
+ end
+endgenerate
+
+function [3:0] fop;
+   input reg[C_S_AXI_DATA_WIDTH-1:0] opcode;
+   fop = opcode[C_S_AXI_DATA_WIDTH-1 -: 4];
+endfunction
+
+function [3:0] fret;
+   input reg[C_S_AXI_DATA_WIDTH-1:0] opcode;
+   fret = opcode[C_S_AXI_DATA_WIDTH-5 -: 4];
+endfunction
+
+function [3:0] freg1;
+   input reg[C_S_AXI_DATA_WIDTH-1:0] opcode;
+   freg1 = opcode[C_S_AXI_DATA_WIDTH-9 -: 4];
+endfunction
+
+function [3:0] freg2;
+   input reg[C_S_AXI_DATA_WIDTH-1:0] opcode;
+   freg2 = opcode[C_S_AXI_DATA_WIDTH-13 -: 4];
+endfunction
+
+function [15:0] fconst1;
+   input reg [C_S_AXI_DATA_WIDTH-1:0] opcode;
+   fconst1 = opcode[C_S_AXI_DATA_WIDTH-13 -: 16];
+endfunction
+
+// implement Block RAM(s)
+wire                                 mem_rden;
+wire                                 mem_wren;
+wire [C_S_AXI_DATA_WIDTH-1:0]        data_out;
+wire [C_S_AXI_DATA_WIDTH-1:0]        start;
+reg [C_S_AXI_DATA_WIDTH-1:0]         result;
+reg [C_S_AXI_DATA_WIDTH-1:0]         r[0:15];
+reg [C_S_AXI_ADDR_WIDTH-1:0]         pc;
+reg [1:0]                            finish;
+reg [C_S_AXI_DATA_WIDTH-1:0]         byte_ram [0 : 31];
+reg [3:0]                            state;
+reg [C_S_AXI_DATA_WIDTH-1:0]         opword;
+reg [3:0]                            op;
+reg [3:0]                            ret;
+reg                                  reten;
+reg [C_S_AXI_DATA_WIDTH-1:0]         retreg;
+reg [C_S_AXI_DATA_WIDTH-1:0]         reg1;
+reg [C_S_AXI_DATA_WIDTH-1:0]         reg2;
+reg [15:0]                           const1;
+
+assign mem_wren = axi_wready &amp;&amp; S_AXI_WVALID ;
+
+assign mem_rden = axi_arv_arr_flag ; //&amp; ~axi_rvalid
+
+assign data_out = byte_ram[mem_address];
+
+assign start = byte_ram[1];
+
+localparam integer PC_START = 2;
+
+always @(posedge S_AXI_ACLK)
+  begin
+     if (S_AXI_ARESETN == 0 || start == 32&#39;b0)
+       begin
+          finish &lt;= 0;
+          pc &lt;= PC_START;
+          result &lt;= 0;
+          state &lt;= 0;
+          reten &lt;= 0;
+          retreg &lt;= 0;
+          ret &lt;= 0;
+          reg1 &lt;= 0;
+          reg2 &lt;= 0;
+          const1 &lt;= 0;
+          r[0] &lt;= 0; r[1] &lt;= 0;
+          r[2] &lt;= 0; r[3] &lt;= 0;
+          r[4] &lt;= 0; r[5] &lt;= 0;
+          r[6] &lt;= 0; r[7] &lt;= 0;
+          r[8] &lt;= 0; r[9] &lt;= 0;
+          r[10] &lt;= 0; r[11] &lt;= 0;
+          r[12] &lt;= 0; r[13] &lt;= 0;
+          r[14] &lt;= 0; r[15] &lt;= 0;
+       end
+     else if (finish != 2&#39;d2)
+       begin
+          case (state)
+            // fetch
+            4&#39;d0: begin
+               opword &lt;= byte_ram[pc];
+               state &lt;= 4&#39;d1;
+            end
+            // decode
+            4&#39;d1: begin
+               op &lt;= fop(opword);
+               ret &lt;= fret(opword);
+               reg1 &lt;= r[freg1(opword)];
+               reg2 &lt;= r[freg2(opword)];
+               const1 &lt;= fconst1(opword);
+               state &lt;= 4&#39;d2;
+            end
+            //execute
+            4&#39;d2: begin
+               case (op)
+                 // add
+                 4&#39;b0000: begin
+                    retreg &lt;= reg1 + reg2;
+                    reten &lt;= 1;
+                 end
+                 // sub
+                 4&#39;b0001: begin
+                    retreg &lt;= reg1 - reg2;
+                    reten &lt;= 1;
+                 end
+                 // mul
+                 4&#39;b0010: begin
+                    retreg &lt;= reg1 * reg2;
+                    reten &lt;= 1;
+                 end
+                 // or
+                 4&#39;b0011: begin
+                    retreg &lt;= reg1 | reg2;
+                    reten &lt;= 1;
+                 end
+                 // and
+                 4&#39;b0100: begin
+                    retreg &lt;= reg1 &amp; reg2;
+                    reten &lt;= 1;
+                 end
+                 // xor
+                 4&#39;b0101: begin
+                    retreg &lt;= reg1 ^ reg2;
+                    reten &lt;= 1;
+                 end
+                 // add imm
+                 4&#39;b1000: begin
+                    retreg &lt;= reg1 + const1;
+                    reten &lt;= 1;
+                 end
+                 // sub imm
+                 4&#39;b1001: begin
+                    retreg &lt;= reg1 - const1;
+                    reten &lt;= 1;
+                 end
+                 // mul imm
+                 4&#39;b1010: begin
+                    retreg &lt;= reg1 * const1;
+                    reten &lt;= 1;
+                 end
+                 // or imm
+                 4&#39;b1011: begin
+                    retreg &lt;= reg1 | const1;
+                    reten &lt;= 1;
+                 end
+                 // and imm
+                 4&#39;b1100: begin
+                    retreg &lt;= reg1 &amp; const1;
+                    reten &lt;= 1;
+                 end
+                 // jz
+                 4&#39;b1101: begin
+                    if (reg1 == 32&#39;b0)
+                      pc &lt;= const1 - 1 + PC_START;
+                    reten &lt;= 0;
+                 end
+                 // j
+                 4&#39;b1110: begin
+                    pc &lt;= const1 - 1 + PC_START;
+                    reten &lt;=0;
+                 end
+                 // exit
+                 4&#39;b1111: begin
+                    pc &lt;= PC_START - 1;
+                    result &lt;= reg1;
+                    finish &lt;= 1;
+                    reten &lt;= 0;
+                 end
+                 // error
+                 default: begin
+                    pc &lt;= PC_START - 1;
+                    result &lt;= op;
+                    finish &lt;= 1;
+                    reten &lt;= 0;
+                 end
+               endcase
+               state &lt;= 3;
+            end
+            // write back
+            4&#39;d3: begin
+               pc &lt;= pc + 1;
+               if (reten)
+                 r[ret] &lt;= retreg;
+               if (finish == 1)
+                 finish &lt;= 2;
+               state &lt;= 0;
+            end
+
+          endcase
+       end
+  end
+
+always @( posedge S_AXI_ACLK )
+  begin
+ if (mem_rden)
+   begin
+          if (mem_address == 0)
+        mem_data_out[0] &lt;= result;
+          else
+            mem_data_out[0] &lt;= data_out;
+   end
+  end
+
+
+generate
+   for(mem_byte_index=0; mem_byte_index&lt;= (C_S_AXI_DATA_WIDTH/8-1); mem_byte_index=mem_byte_index+1)
+ begin:BYTE_BRAM_GEN
+    wire [8-1:0] data_in ;
+    integer      j;
+
+    //assigning 8 bit data
+    assign data_in  = S_AXI_WDATA[(mem_byte_index*8+7) -: 8];
+
+    always @( posedge S_AXI_ACLK )
+      begin
+         if (mem_wren &amp;&amp; S_AXI_WSTRB[mem_byte_index])
+           begin
+              byte_ram[mem_address][(mem_byte_index*8+7) -: 8] &lt;= data_in;
+           end
+      end
+ end
+endgenerate
+//Output register or memory read data
+
+always @( mem_data_out, axi_rvalid)
+  begin
+ if (axi_rvalid)
+   begin
+      // Read address mux
+      axi_rdata &lt;= mem_data_out[0];
+   end
+ else
+   begin
+      axi_rdata &lt;= 32&#39;h00000000;
+   end
+  end
+```
+
+===
+
+
+![jupyterのスクショ](/images/fpga/alu2.png) &lt;!-- .element: width=&#34;100%&#34; --&gt;
+
+
+===
+
+# まとめ
+--------
+
+* FPGA楽しいよ
+* CPUっぽいの作れるよ
+* PYNQ便利だよ
+
+
+&lt;/script&gt;
+&lt;/section&gt;
+</description>
+    </item>
     
     <item>
       <title>Rust in Production</title>
@@ -4262,149 +4739,6 @@ HTTP/2は1コネクションを複数のstreamに分割するが、stream内で�
 来年は専門性の高い仕事になるので今年以上に勉強が必要になりそう。多分本より論文に比重が傾く。&lt;/p&gt;
 
 &lt;p&gt;年明けにまた注目していきたい技術書く。毎年書いていったら面白いかもしれない。&lt;/p&gt;</description>
-    </item>
-    
-    <item>
-      <title>気付いたらRustの環境構築がかなり楽になってた</title>
-      <link>/blog/2016/12/29/kizuitararustnokankyoukouchikugakanarirakuninatteta</link>
-      <pubDate>Thu, 29 Dec 2016 11:52:55 +0900</pubDate>
-      
-      <guid>/blog/2016/12/29/kizuitararustnokankyoukouchikugakanarirakuninatteta</guid>
-      <description>&lt;p&gt;κeenです。ここのところRustの開発ツール回りでリリースが続いてセットアップが楽になってるようだったので最新の情報をお届けします。&lt;/p&gt;
-
-&lt;p&gt;&lt;/p&gt;
-
-&lt;p&gt;とりあえず私は既存の環境があるので一旦全て破棄してから再度セットアップしてみます。&lt;/p&gt;
-
-&lt;h1 id=&#34;rustのインストール&#34;&gt;Rustのインストール&lt;/h1&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://rustup.rs/&#34;&gt;rustup.rs - The Rust toolchain installer&lt;/a&gt;がリリースされたので以下で一発です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ curl https://sh.rustup.rs -sSf | sh
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;そして&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;source $HOME/.cargo/env
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;をシェルのrcファイルに書き加えたらOKです。
-今のシェルにも反映するには同じく上記のコマンドを打ちます。&lt;/p&gt;
-
-&lt;h1 id=&#34;周辺ツールのインストール&#34;&gt;周辺ツールのインストール&lt;/h1&gt;
-
-&lt;p&gt;cargoがあるので楽ですね&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;# コードフォーマッタ
-$ cargo install rustfmt
-# 補完、定義ジャンプなど
-$ cargo install racer
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;まあまあ時間がかかります。&lt;/p&gt;
-
-&lt;h1 id=&#34;エディタ-emacs-の設定&#34;&gt;エディタ(Emacs)の設定&lt;/h1&gt;
-
-&lt;p&gt;私がEmacsを使ってるのでEmacsの設定を。&lt;/p&gt;
-
-&lt;p&gt;まず、必要パッケージをインストールします。&lt;/p&gt;
-
-&lt;p&gt;&lt;del&gt;&lt;code&gt;racer&lt;/code&gt; &lt;code&gt;rustfmt&lt;/code&gt; &lt;code&gt;flycheck-rust&lt;/code&gt; をインストールします。&lt;/del&gt;&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;racer&lt;/code&gt; &lt;code&gt;flycheck-rust&lt;/code&gt; をインストールします。rust-modeにrustfmtの機能が含まれているようでした。&lt;/p&gt;
-
-&lt;blockquote class=&#34;twitter-tweet&#34; data-conversation=&#34;none&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;&lt;a href=&#34;https://twitter.com/blackenedgold&#34;&gt;@blackenedgold&lt;/a&gt; rustfmtを emacsから使うの rust-modeが現在サポートしているので, rustfmt.elパッケージは不要ですね. rust-format-on-saveが non-nilなら保存時に rustfmtが実行されます.&lt;/p&gt;&amp;mdash; Syohei YOSHIDA (@syohex) &lt;a href=&#34;https://twitter.com/syohex/status/814354653672415232&#34;&gt;2016年12月29日&lt;/a&gt;&lt;/blockquote&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-emacs-lisp&#34;&gt;;;; racerやrustfmt、コンパイラにパスを通す
-(add-to-list &#39;exec-path (expand-file-name &amp;quot;~/.cargo/bin/&amp;quot;))
-;;; rust-modeでrust-format-on-saveをtにすると自動でrustfmtが走る
-(eval-after-load &amp;quot;rust-mode&amp;quot;
-  &#39;(setq-default rust-format-on-save t))
-;;; rustのファイルを編集するときにracerとflycheckを起動する
-(add-hook &#39;rust-mode-hook (lambda ()
-                            (racer-mode)
-                            (flycheck-rust-setup)))
-;;; racerのeldocサポートを使う
-(add-hook &#39;racer-mode-hook #&#39;eldoc-mode)
-;;; racerの補完サポートを使う
-(add-hook &#39;racer-mode-hook (lambda ()
-                             (company-mode)
-                             ;;; この辺の設定はお好みで
-                             (set (make-variable-buffer-local &#39;company-idle-delay) 0.1)
-                             (set (make-variable-buffer-local &#39;company-minimum-prefix-length) 0)))
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;とりあえずこれでセットアップ完了です。racerの最新版でrustのソースコードの位置を設定しなくてよくなったので簡潔になりましたね。&lt;/p&gt;
-
-&lt;p&gt;racer-modeは補完をしてくれる他、&lt;code&gt;M-.&lt;/code&gt;で定義元ジャンプ、&lt;code&gt;M-,&lt;/code&gt;でジャンプ元に戻れます。
-あとは&lt;code&gt;M-x racer-describe&lt;/code&gt;でポイント位置にあるシンボルのrustdocを(Emacs内で)表示してくれます。&lt;/p&gt;
-
-&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;おお! racerでEmacs内でrustdocレンダ出来るようになってる！便利！！&lt;br&gt;&lt;br&gt;Rustdoc Meets The Self-Documenting Editor&lt;a href=&#34;https://t.co/gDEHl2fSfx&#34;&gt;https://t.co/gDEHl2fSfx&lt;/a&gt; &lt;a href=&#34;https://t.co/sdrX9OoEnr&#34;&gt;pic.twitter.com/sdrX9OoEnr&lt;/a&gt;&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/770796719185408000&#34;&gt;2016年8月31日&lt;/a&gt;&lt;/blockquote&gt;
-&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
-
-&lt;p&gt;その他は放っておくと勝手に機能してくれるので考えることが少なくていいですね。&lt;/p&gt;
-
-&lt;h1 id=&#34;その他便利ツール&#34;&gt;その他便利ツール&lt;/h1&gt;
-
-&lt;p&gt;セットアップがあっけなかったのでついでに入れておくと便利なツールをいくつか紹介します。&lt;/p&gt;
-
-&lt;h2 id=&#34;cargo-edit&#34;&gt;cargo-edit&lt;/h2&gt;
-
-&lt;p&gt;インストールは&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo install cargo-edit
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;「libcクレートの最新版に依存したい」なんて時に一々libcの最新版を確認するのは面倒ですよね。そんなときにcargo-editがあれば&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo add libc
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;で &lt;code&gt;Cargo.toml&lt;/code&gt; に追記してくれます。&lt;/p&gt;
-
-&lt;h2 id=&#34;cargo-script&#34;&gt;cargo-script&lt;/h2&gt;
-
-&lt;p&gt;インストールは&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo install cargo-script
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ちょっとした実験スクリプトとかをコンパイル→実行のステップを踏まずにいきなり実行出来ます。
-&lt;code&gt;cargo script FILE&lt;/code&gt;でファイルを実行出来ます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cat &amp;lt;&amp;lt;&#39;EOF&#39; &amp;gt; hello.rs
-fn main() {
-    println!(&amp;quot;hello, script&amp;quot;)
-}
-EOF
-$ cargo script hello.rs
-   Compiling hello v0.1.0 (file:///home/kim/.cargo/.cargo/script-cache/file-hello-f6b1735a519bb659)
-    Finished release [optimized] target(s) in 0.15 secs
-hello, script
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;というふうに使います。&lt;/p&gt;
-
-&lt;p&gt;シェルのrcファイルで&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;alias rust=&#39;cargo-script&#39;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;としておくと吉。&lt;/p&gt;
-
-&lt;h2 id=&#34;cargo-update&#34;&gt;cargo-update&lt;/h2&gt;
-
-&lt;p&gt;インストールは&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo install cargo-update
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;今までインストールしたバイナリのアップデートを出来ます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo install-update -a
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;以上&lt;/p&gt;</description>
     </item>
     
   </channel>
