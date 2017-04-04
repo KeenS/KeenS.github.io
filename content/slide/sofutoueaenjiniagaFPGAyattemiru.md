@@ -29,10 +29,10 @@ title: ソフトウェアエンジニアがFPGAやってみる
 # よくある話
 ------------
 
-「Lisperって自分のLispを作るらしいよ」 <!-- .element: class="fragment" data-fragment-index="1" -->  
-「Lispって昔は専用ハードウェアで動いてたらしいよ」 <!-- .element: class="fragment" data-fragment-index="2" -->  
-「じゃあハードウェア作んなきゃ」 <!-- .element: class="fragment" data-fragment-index="3" -->  
-「FPGAやるかー」 <!-- .element: class="fragment" data-fragment-index="4" -->  
+<div class="fragment" data-fragment-index="1">「Lisperって自分のLispを作るらしいよ」 </div>
+<div class="fragment" data-fragment-index="2">「Lispって昔は専用ハードウェアで動いてたらしいよ」 </div>
+<div class="fragment" data-fragment-index="3">「じゃあハードウェア作んなきゃ」 </div>
+<div class="fragment" data-fragment-index="4">「FPGAやるかー」 </div>
 
 ===
 
