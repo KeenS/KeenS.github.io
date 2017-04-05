@@ -6,8 +6,91 @@
     <description>Recent content in Posts on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Tue, 04 Apr 2017 21:38:57 +0900</lastBuildDate>
+    <lastBuildDate>Wed, 05 Apr 2017 20:46:26 +0900</lastBuildDate>
     <atom:link href="/post/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Cargoのサブプロジェクトとreplace</title>
+      <link>/blog/2017/04/05/cargonosabupurojiekutotoreplace</link>
+      <pubDate>Wed, 05 Apr 2017 20:46:26 +0900</pubDate>
+      
+      <guid>/blog/2017/04/05/cargonosabupurojiekutotoreplace</guid>
+      <description>&lt;p&gt;κeenです。最近Cargoのreplace機能を使おうとしてハマったのでメモを残しておきます。&lt;/p&gt;
+
+&lt;p&gt;
+最近何箇所かで喋ったのでご存知の方もいらっしゃるかと思いますが、Cargoにはワークスペース機能があります。
+fat repositoryスタイルに便利な機能で、1つのディレクトリ下に複数のサブプロジェクトを配置しつつ&lt;code&gt;target/&lt;/code&gt;は共有するのでマイクロプロジェクトのモジュール性とモノリシックプロジェクトのコンパイルの速さを実現することが出来ます。&lt;/p&gt;
+
+&lt;p&gt;さて、問題になるのはクレートを公開するときの依存関係の記述です。
+サブプロジェクト同士で依存し合っているので&lt;code&gt;Cargo.toml&lt;/code&gt;には&lt;code&gt;my-project-lib = {path = &amp;quot;../my-project-lib&amp;quot;}&lt;/code&gt; のような依存の記述がある筈です。
+しかしながらローカルのクレートに依存していると&lt;code&gt;crates.io&lt;/code&gt;に公開は出来ません。
+そこで今回はそれをどうにかするお話。&lt;/p&gt;
+
+&lt;h1 id=&#34;replace&#34;&gt;replace&lt;/h1&gt;
+
+&lt;p&gt;Cargoには&lt;a href=&#34;http://doc.crates.io/manifest.html#the-replace-section&#34;&gt;replace&lt;/a&gt;という機能があります。
+特定のライブラリの特定のバージョンを、crates.ioにあるものではなくてユーザが指定した場所にあるものを使うように指示します。
+&lt;a href=&#34;http://doc.crates.io/specifying-dependencies.html#overriding-dependencies&#34;&gt;Specifying Dependencies&lt;/a&gt;のドキュメントによると、以下のように使えます。&lt;/p&gt;
+
+&lt;p&gt;例えば&lt;code&gt;uuid&lt;/code&gt;クレートを使っているときにそれが依存している&lt;code&gt;rand&lt;/code&gt;クレートにバグを見付けて修正し、修正した結果を試したいとします。
+その時にreplaceは以下のように使えます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-toml&#34;&gt;# ワークスペースの親プロジェクト
+...
+
+[replace]
+&amp;quot;rand:0.3.14&amp;quot; = { path = &amp;quot;./rand&amp;quot; }
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-toml&#34;&gt;# ワークスペースの子プロジェクト
+
+[package]
+name = &amp;quot;my-awesome-crate&amp;quot;
+version = &amp;quot;0.2.0&amp;quot;
+authors = [&amp;quot;The Rust Project Developers&amp;quot;]
+
+[dependencies]
+uuid = &amp;quot;0.2&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;間接的に依存してる&lt;code&gt;rand:0.3.14&lt;/code&gt;を、crates.ioにあるものではなく指定したパスにあるものを使うように指示しています。&lt;/p&gt;
+
+&lt;p&gt;この仕組みを使って先のローカルパス問題を解決出来ないでしょうか。すなわち、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-toml&#34;&gt;# 子プロジェクト
+[dependencies]
+my-project-lib = &amp;quot;0.1.0&amp;quot;
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;のように、見た目上はcrates.ioにあるものに依存しておきつつ実際は&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-toml&#34;&gt;# 親プロジェクト
+[replace]
+&amp;quot;my-project-lib:0.1.0&amp;quot; = { path = &amp;quot;./my-project-lib&amp;quot; }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;のように実際の依存先をローカルのパスに向ければ問題を解決できないでしょうか。&lt;/p&gt;
+
+&lt;p&gt;この答えは、半分no、半分yesになります。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;replace&lt;/code&gt;はあくまでcrates.ioにあるものを置き換えるのでまだ公開していないプロジェクトに対しては使えません。
+一方、一度crates.ioに公開してしまえば上記のテクニックは可能になります。&lt;/p&gt;
+
+&lt;p&gt;なので一番最初にcrates.ioに公開する時の手順はやや煩雑になります。&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;(ローカルサブプロジェクトへの依存の記述は&lt;code&gt;path = &amp;quot;...&amp;quot;&lt;/code&gt;のまま)&lt;/li&gt;
+&lt;li&gt;どのプロジェクトにも依存しないローカルサブプロジェクトを公開する&lt;/li&gt;
+&lt;li&gt;既に公開されたローカルサブプロジェクトへの依存は順次&lt;code&gt;replace&lt;/code&gt;に書き換える&lt;/li&gt;
+&lt;li&gt;ローカルパスへの依存のなくなったローカルプロジェクトから順に公開していく&lt;/li&gt;
+&lt;li&gt;全てのサブプロジェクトのローカルサブプロジェクトへの依存が&lt;code&gt;replace&lt;/code&gt;に置き換わったら以後はそのまま使える。&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;このようなテクニックは例えばdieselなどで&lt;a href=&#34;https://github.com/diesel-rs/diesel/blob/master/Cargo.toml#L21&#34;&gt;使われています&lt;/a&gt;。
+この辺、改善あるといいですね。&lt;/p&gt;</description>
+    </item>
     
     <item>
       <title>関数型プログラマからみたRust</title>
@@ -3079,229 +3162,6 @@ impl Into&amp;lt;i8&amp;gt; for Dummy {}
 &lt;p&gt;また、両者の使い分けも名前で参照したいかor手軽に使いたいかで使い分けます。&lt;/p&gt;
 
 &lt;p&gt;以上小ネタでした。&lt;/p&gt;</description>
-    </item>
-    
-    <item>
-      <title>Rustのプロセス</title>
-      <link>/blog/2016/12/02/rustnopurosesu</link>
-      <pubDate>Fri, 02 Dec 2016 17:52:30 +0900</pubDate>
-      
-      <guid>/blog/2016/12/02/rustnopurosesu</guid>
-      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2016/rust-lang-2&#34;&gt;Rust その2 Advent Calendar 2016 - Qiita&lt;/a&gt;3日目の記事です。&lt;/p&gt;
-
-&lt;p&gt;κeenです。Rustの&lt;a href=&#34;https://doc.rust-lang.org/std/process/index.html&#34;&gt;&lt;code&gt;std::process&lt;/code&gt;&lt;/a&gt;の扱い方を紹介します。&lt;/p&gt;
-
-&lt;p&gt;&lt;/p&gt;
-
-&lt;h1 id=&#34;ビルダー&#34;&gt;ビルダー&lt;/h1&gt;
-
-&lt;p&gt;これはビルダーになっていて、以下のように使えます。公式ドキュメントの例です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let output = Command::new(&amp;quot;sh&amp;quot;)
-    .arg(&amp;quot;-c&amp;quot;)
-    .arg(&amp;quot;echo hello&amp;quot;)
-    .output()
-    .expect(&amp;quot;failed to execute process&amp;quot;);
-
-let hello = output.stdout;
-println!(&amp;quot;{}&amp;quot;, std::str::from_utf8(&amp;amp;hello).unwrap());
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;hello
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;環境変数も渡せます&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let output = Command::new(&amp;quot;sh&amp;quot;)
-    .arg(&amp;quot;-c&amp;quot;)
-    // 環境変数を参照するコマンド
-    .arg(&amp;quot;echo $HELLO&amp;quot;)
-    // 環境変数を設定する
-    .env(&amp;quot;HELLO&amp;quot;, &amp;quot;hello, world&amp;quot;)
-    .output()
-    .expect(&amp;quot;failed to execute process&amp;quot;);
-
-let hello = output.stdout;
-println!(&amp;quot;{}&amp;quot;, std::str::from_utf8(&amp;amp;hello).unwrap());
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;hello, world
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;あるいは実行するディレクトリも指定出来ます&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let output = Command::new(&amp;quot;ls&amp;quot;)
-    // プロセスを実行するディレクトリを指定する
-    .current_dir(&amp;quot;/&amp;quot;)
-    .output()
-    .expect(&amp;quot;failed to execute process&amp;quot;);
-
-let hello = output.stdout;
-println!(&amp;quot;{}&amp;quot;, std::str::from_utf8(&amp;amp;hello).unwrap());
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;bin
-boot
-cdrom
-core
-...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;出力&#34;&gt;出力&lt;/h1&gt;
-
-&lt;p&gt;上の例では &lt;code&gt;output&lt;/code&gt; でstdio,stderr, exitstatus取り出していますが、子プロセスとして実行することも出来ます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let mut child = Command::new(&amp;quot;ls&amp;quot;)
-    .current_dir(&amp;quot;/&amp;quot;)
-    // outputではなくspawnを使う
-    .spawn()
-    .expect(&amp;quot;failed to execute process&amp;quot;);
-let status = child.wait().unwrap();
-println!(&amp;quot;{}&amp;quot;, status);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;bin  boot  cdrom  core  dev  etc  home  initrd.img  initrd.img.old  lib  lib32  lib64  libx32  lost+found  media  mnt  opt  proc  root  run  sbin  snap  srv  sys  tmp  usr  var  vmlinuz  vmlinuz.old
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;この場合、子プロセスはRustへではなく直接stdoutへ出力するのでSIGPIPEが送られません。&lt;/p&gt;
-
-&lt;p&gt;あるいは出力先を手で指定することも出来ます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let child = Command::new(&amp;quot;ls&amp;quot;)
-    .current_dir(&amp;quot;/&amp;quot;)
-    // stdoutをnullにする
-    .stdout(Stdio::null())
-    .spawn()
-    .expect(&amp;quot;failed to execute process&amp;quot;);
-let status = child.wait().unwrap();
-println!(&amp;quot;{}&amp;quot;, status);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ここではstdoutをnull ioに指定しています。他には&lt;code&gt;inherit&lt;/code&gt;で親プロセスのものを引き継ぐか、&lt;code&gt;piped&lt;/code&gt;で次のプロセスに渡すことも出来ます&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;// 1つめのプロセスを作る
-let mut child1 = Command::new(&amp;quot;ls&amp;quot;)
-    .current_dir(&amp;quot;/&amp;quot;)
-    // 出力は親プロセスへパイプする
-    .stdout(Stdio::piped())
-    .spawn()
-    .expect(&amp;quot;failed to execute process&amp;quot;);
-
-// 2つめのプロセスを作る
-let mut child2 = Command::new(&amp;quot;grep&amp;quot;)
-    .arg(&amp;quot;bin&amp;quot;)
-    // 入力は親プロセスへパイプする
-    .stdin(Stdio::piped())
-    .spawn()
-    .expect(&amp;quot;failed to execute process&amp;quot;);
-
-{
-    // Someと分かっているのでunwrapする。
-    // この辺はrustの型システテムの限界。
-    let out = child1.stdout.as_mut().unwrap();
-    let in_ = child2.stdin.as_mut().unwrap();
-    // 1つめのプロセスの出力から2つめのプロセスの入力へデータをコピーする
-    io::copy(out, in_).unwrap();
-}
-
-
-let status1 = child1.wait().unwrap();
-let status2 = child2.wait().unwrap();
-println!(&amp;quot;{}, {}&amp;quot;, status1, status2);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;bin
-sbin
-exit code: 0, exit code: 0
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ちょっと繋ぎ込みが面倒ですし&lt;code&gt;io::copy&lt;/code&gt;を使って手でコピーしてるのが頂けませんね。&lt;/p&gt;
-
-&lt;h1 id=&#34;unix&#34;&gt;Unix&lt;/h1&gt;
-
-&lt;p&gt;Unixに依存することを認めてしまえばもうちょっと色々なことが出来ます。&lt;/p&gt;
-
-&lt;p&gt;1つには&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::os::unix::process::CommandExt;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;するといくつか追加のメソドが生えてくる仕組みになってます。&lt;/p&gt;
-
-&lt;p&gt;例えば、&lt;code&gt;exec&lt;/code&gt; が使えます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let error = Command::new(&amp;quot;ls&amp;quot;)
-    .current_dir(&amp;quot;/&amp;quot;)
-    // execを呼ぶ
-    .exec();
-
-println!(&amp;quot;after exec!!&amp;quot;);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;exec&lt;/code&gt;した後はRustのプロセスを別のものに置き換えてしまうので&lt;code&gt;println!(&amp;quot;after exec!!&amp;quot;);&lt;/code&gt;の行が実行されません。
-されるとしたら何らかの理由で&lt;code&gt;exec&lt;/code&gt;に失敗した場合だけです。なので面白いことに&lt;code&gt;exec&lt;/code&gt;の返り値はエラーのみです。&lt;/p&gt;
-
-&lt;p&gt;あるいは、&lt;code&gt;unsafe&lt;/code&gt;なコードを認めるなら先のプロセスの繋ぎ込みはもうちょっとスマートに書けます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::os::unix::io::{AsRawFd, FromRawFd};
-let mut child1 = Command::new(&amp;quot;ls&amp;quot;)
-    .current_dir(&amp;quot;/&amp;quot;)
-    // 標準出力をパイプする
-    .stdout(Stdio::piped())
-    .spawn()
-    .expect(&amp;quot;failed to spawn a process&amp;quot;);
-
-let mut child2 = Command::new(&amp;quot;grep&amp;quot;)
-    .arg(&amp;quot;bin&amp;quot;)
-    // 標準入力は手で作ったStdioオブジェクトにする。
-    // ここでは1つめのプロセスの標準出力を直接繋ぐ。
-    .stdin(unsafe{Stdio::from_raw_fd(child1.stdout.as_ref().unwrap().as_raw_fd())})
-    .spawn()
-    .expect(&amp;quot;failed to spawn a process&amp;quot;);
-
-// 直接繋いでしまったのでコピーの必要はない
-
-let status1 = child1.wait().unwrap();
-let status2 = child2.wait().unwrap();
-println!(&amp;quot;{}, {}&amp;quot;, status1, status2);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;bin
-sbin
-exit code: 0, exit code: 0
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;Stdio&lt;/code&gt;がfdと行き来出来るのでそれを経由することでパイプを作れます。&lt;/p&gt;
-
-&lt;p&gt;もちろん、ファイルに書き出すことも出来ます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::os::unix::io::{AsRawFd, FromRawFd};
-
-let file = File::create(&amp;quot;test.txt&amp;quot;).unwrap();
-// ファイルからFDを経由してStdioを作る
-let out = unsafe{Stdio::from_raw_fd(file.as_raw_fd())};
-let mut child1 = Command::new(&amp;quot;ls&amp;quot;)
-    .current_dir(&amp;quot;/&amp;quot;)
-    .stdout(out)
-    .spawn()
-    .expect(&amp;quot;failed to spawn a process&amp;quot;);
-
-let status1 = child1.wait().unwrap();
-println!(&amp;quot;{}&amp;quot;, status1);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cat test.txt
-bin
-boot
-cdrom
-core
-dev
-...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;おわりに&#34;&gt;おわりに&lt;/h1&gt;
-
-&lt;p&gt;最初は思ったよりCのプロセス回りのAPIと違って戸惑いますが馴れてしまえば使いやすいAPIでしょう。&lt;/p&gt;</description>
     </item>
     
   </channel>
