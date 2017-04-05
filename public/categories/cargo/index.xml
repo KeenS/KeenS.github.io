@@ -9,6 +9,89 @@
     <atom:link href="/categories/cargo/index.xml" rel="self" type="application/rss+xml" />
     
     <item>
+      <title>Cargoのサブプロジェクトとreplace</title>
+      <link>/blog/2017/04/05/cargonosabupurojiekutotoreplace</link>
+      <pubDate>Wed, 05 Apr 2017 20:46:26 +0900</pubDate>
+      
+      <guid>/blog/2017/04/05/cargonosabupurojiekutotoreplace</guid>
+      <description>&lt;p&gt;κeenです。最近Cargoのreplace機能を使おうとしてハマったのでメモを残しておきます。&lt;/p&gt;
+
+&lt;p&gt;
+最近何箇所かで喋ったのでご存知の方もいらっしゃるかと思いますが、Cargoにはワークスペース機能があります。
+fat repositoryスタイルに便利な機能で、1つのディレクトリ下に複数のサブプロジェクトを配置しつつ&lt;code&gt;target/&lt;/code&gt;は共有するのでマイクロプロジェクトのモジュール性とモノリシックプロジェクトのコンパイルの速さを実現することが出来ます。&lt;/p&gt;
+
+&lt;p&gt;さて、問題になるのはクレートを公開するときの依存関係の記述です。
+サブプロジェクト同士で依存し合っているので&lt;code&gt;Cargo.toml&lt;/code&gt;には&lt;code&gt;my-project-lib = {path = &amp;quot;../my-project-lib&amp;quot;}&lt;/code&gt; のような依存の記述がある筈です。
+しかしながらローカルのクレートに依存していると&lt;code&gt;crates.io&lt;/code&gt;に公開は出来ません。
+そこで今回はそれをどうにかするお話。&lt;/p&gt;
+
+&lt;h1 id=&#34;replace&#34;&gt;replace&lt;/h1&gt;
+
+&lt;p&gt;Cargoには&lt;a href=&#34;http://doc.crates.io/manifest.html#the-replace-section&#34;&gt;replace&lt;/a&gt;という機能があります。
+特定のライブラリの特定のバージョンを、crates.ioにあるものではなくてユーザが指定した場所にあるものを使うように指示します。
+&lt;a href=&#34;http://doc.crates.io/specifying-dependencies.html#overriding-dependencies&#34;&gt;Specifying Dependencies&lt;/a&gt;のドキュメントによると、以下のように使えます。&lt;/p&gt;
+
+&lt;p&gt;例えば&lt;code&gt;uuid&lt;/code&gt;クレートを使っているときにそれが依存している&lt;code&gt;rand&lt;/code&gt;クレートにバグを見付けて修正し、修正した結果を試したいとします。
+その時にreplaceは以下のように使えます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-toml&#34;&gt;# ワークスペースの親プロジェクト
+...
+
+[replace]
+&amp;quot;rand:0.3.14&amp;quot; = { path = &amp;quot;./rand&amp;quot; }
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-toml&#34;&gt;# ワークスペースの子プロジェクト
+
+[package]
+name = &amp;quot;my-awesome-crate&amp;quot;
+version = &amp;quot;0.2.0&amp;quot;
+authors = [&amp;quot;The Rust Project Developers&amp;quot;]
+
+[dependencies]
+uuid = &amp;quot;0.2&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;間接的に依存してる&lt;code&gt;rand:0.3.14&lt;/code&gt;を、crates.ioにあるものではなく指定したパスにあるものを使うように指示しています。&lt;/p&gt;
+
+&lt;p&gt;この仕組みを使って先のローカルパス問題を解決出来ないでしょうか。すなわち、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-toml&#34;&gt;# 子プロジェクト
+[dependencies]
+my-project-lib = &amp;quot;0.1.0&amp;quot;
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;のように、見た目上はcrates.ioにあるものに依存しておきつつ実際は&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-toml&#34;&gt;# 親プロジェクト
+[replace]
+&amp;quot;my-project-lib:0.1.0&amp;quot; = { path = &amp;quot;./my-project-lib&amp;quot; }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;のように実際の依存先をローカルのパスに向ければ問題を解決できないでしょうか。&lt;/p&gt;
+
+&lt;p&gt;この答えは、半分no、半分yesになります。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;replace&lt;/code&gt;はあくまでcrates.ioにあるものを置き換えるのでまだ公開していないプロジェクトに対しては使えません。
+一方、一度crates.ioに公開してしまえば上記のテクニックは可能になります。&lt;/p&gt;
+
+&lt;p&gt;なので一番最初にcrates.ioに公開する時の手順はやや煩雑になります。&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;(ローカルサブプロジェクトへの依存の記述は&lt;code&gt;path = &amp;quot;...&amp;quot;&lt;/code&gt;のまま)&lt;/li&gt;
+&lt;li&gt;どのプロジェクトにも依存しないローカルサブプロジェクトを公開する&lt;/li&gt;
+&lt;li&gt;既に公開されたローカルサブプロジェクトへの依存は順次&lt;code&gt;replace&lt;/code&gt;に書き換える&lt;/li&gt;
+&lt;li&gt;ローカルパスへの依存のなくなったローカルプロジェクトから順に公開していく&lt;/li&gt;
+&lt;li&gt;全てのサブプロジェクトのローカルサブプロジェクトへの依存が&lt;code&gt;replace&lt;/code&gt;に置き換わったら以後はそのまま使える。&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;このようなテクニックは例えばdieselなどで&lt;a href=&#34;https://github.com/diesel-rs/diesel/blob/master/Cargo.toml#L21&#34;&gt;使われています&lt;/a&gt;。
+この辺、改善あるといいですね。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
       <title>cargo-profilerを試す</title>
       <link>/blog/2016/05/14/cargo_profilerwotamesu</link>
       <pubDate>Sat, 14 May 2016 20:59:13 +0900</pubDate>
