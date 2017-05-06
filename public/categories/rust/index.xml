@@ -9,6 +9,436 @@
     <atom:link href="/categories/rust/index.xml" rel="self" type="application/rss+xml" />
     
     <item>
+      <title>Rust風にデザインパターン23種</title>
+      <link>/blog/2017/05/06/rustkazenidezainpata_n23tane</link>
+      <pubDate>Sat, 06 May 2017 21:59:30 +0900</pubDate>
+      
+      <guid>/blog/2017/05/06/rustkazenidezainpata_n23tane</guid>
+      <description>&lt;p&gt;κeenです。
+GoFのデザインパターンは有名ですが、言語機能によっては単純化できたりあるいは不要だったりするのでRust風に書き換えたらどうなるか試してみます。
+
+発端はこのツイート。&lt;/p&gt;
+
+&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;デザインパターン、古いJavaの機能の足りなさのワークアラウンド的なテクニックも含まれてるからあまり宜しくないんだよね。enumやクロージャで十分なのもいくつかある。&lt;br&gt;&lt;br&gt;Rustで写経、デザインパターン23種 - Qiita&lt;a href=&#34;https://t.co/MhpS3Z2OlF&#34;&gt;https://t.co/MhpS3Z2OlF&lt;/a&gt;&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/860635079600513024&#34;&gt;2017年5月5日&lt;/a&gt;&lt;/blockquote&gt;
+&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
+
+&lt;p&gt;一応誤解のないように説明しておくと、該当のQiitaの記事に不満がある訳ではなくてGoFのデザインパターンついての言及です。&lt;/p&gt;
+
+&lt;p&gt;リンク先のコードで十分な時にはここでは流すのでリンク先も同時に参照下さい。
+また、比較しやすいようにサンプルコードはリンク先のものに則って書きます。&lt;/p&gt;
+
+&lt;p&gt;一応デザインパターンの教科書として結城先生の本を参照しつつ書いていきます。&lt;/p&gt;
+
+&lt;h1 id=&#34;command-パターン&#34;&gt;Command パターン&lt;/h1&gt;
+
+&lt;p&gt;列挙型を使うところです。
+Javaにまともなenumがないのでクラスが使われていますが、列挙型があるならそちらの方がデータとコードの分離ができて見通しがいいです。また、コマンドが1つの型に収まるのでトレイトオブジェクトを作る必要がなくなります。&lt;/p&gt;
+
+&lt;p&gt;比較的マイナーな変更です。&lt;/p&gt;
+
+&lt;p&gt;Lispだとクロージャで解決したりしますが、Rustだと列挙型の方がしっくりくるかなと思います。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Command&amp;lt;T&amp;gt; {
+    fn execute(&amp;amp;self, &amp;amp;mut T);
+    fn undo(&amp;amp;self, &amp;amp;mut T);
+}
+
+
+
+struct Invoker&amp;lt;&#39;a, Cmd, T: &#39;a&amp;gt; {
+    commands: Vec&amp;lt;Cmd&amp;gt;,
+    target: &amp;amp;&#39;a mut T,
+    current_index: usize,
+}
+
+
+impl&amp;lt;&#39;a, Cmd, T&amp;gt; Invoker&amp;lt;&#39;a, Cmd, T&amp;gt; {
+    fn new(t: &amp;amp;&#39;a mut T) -&amp;gt; Self {
+        Invoker {
+            commands: Vec::new(),
+            target: t,
+            current_index: 0,
+        }
+    }
+
+
+    fn target(&amp;amp;self) -&amp;gt; &amp;amp;T {
+        self.target
+    }
+
+    fn append_command(&amp;amp;mut self, c: Cmd) {
+        self.commands.push(c);
+    }
+}
+
+impl&amp;lt;&#39;a, Cmd, T&amp;gt; Invoker&amp;lt;&#39;a, Cmd, T&amp;gt;
+    where Cmd: Command&amp;lt;T&amp;gt;
+{
+    fn execute_command(&amp;amp;mut self) {
+        if self.commands.len() &amp;lt;= self.current_index {
+            // Nothing to do.
+            return;
+        }
+
+        let c = &amp;amp;self.commands[self.current_index];
+        let t = &amp;amp;mut *self.target;
+        c.execute(t);
+
+        self.current_index += 1;
+    }
+
+    fn execute_all_commands(&amp;amp;mut self) {
+        for _ in self.current_index..self.commands.len() {
+            self.execute_command();
+        }
+    }
+
+    fn undo(&amp;amp;mut self) {
+        if 0 == self.current_index {
+            return;
+        }
+
+        self.current_index -= 1;
+
+        let c = &amp;amp;self.commands[self.current_index];
+        let t = &amp;amp;mut *self.target;
+        c.undo(t);
+    }
+}
+
+
+#[derive(Debug, Eq, PartialEq)]
+struct Robot {
+    x: i32,
+    y: i32,
+    dx: i32,
+    dy: i32,
+}
+
+
+impl Robot {
+    fn new() -&amp;gt; Robot {
+        Robot {
+            x: 0,
+            y: 0,
+            dx: 0,
+            dy: 1,
+        }
+    }
+
+    fn move_forward(&amp;amp;mut self) {
+        self.x += self.dx;
+        self.y += self.dy;
+    }
+
+    fn set_direction(&amp;amp;mut self, d: (i32, i32)) {
+        self.dx = d.0;
+        self.dy = d.1;
+    }
+
+    fn get_direction(&amp;amp;self) -&amp;gt; (i32, i32) {
+        (self.dx, self.dy)
+    }
+}
+
+enum RoboCommand {
+    MoveForward,
+    TurnRight,
+    TurnLeft,
+}
+
+impl Command&amp;lt;Robot&amp;gt; for RoboCommand {
+    fn execute(&amp;amp;self, r: &amp;amp;mut Robot) {
+        use RoboCommand::*;
+        match *self {
+            MoveForward =&amp;gt; r.move_forward(),
+            TurnRight =&amp;gt; {
+                let (dx, dy) = r.get_direction();
+                r.set_direction((dy, -dx))
+            }
+            TurnLeft =&amp;gt; {
+                let (dx, dy) = r.get_direction();
+                r.set_direction((-dy, dx));
+            }
+
+        }
+    }
+    fn undo(&amp;amp;self, r: &amp;amp;mut Robot) {
+        use RoboCommand::*;
+        match *self {
+            MoveForward =&amp;gt; {
+                let c1 = TurnRight;
+                c1.execute(r);
+                c1.execute(r);
+                self.execute(r);
+                c1.execute(r);
+                c1.execute(r);
+            }
+            TurnRight =&amp;gt; {
+                let c = TurnLeft;
+                c.execute(r);
+            }
+            TurnLeft =&amp;gt; {
+                let c = TurnRight;
+                c.execute(r);
+
+            }
+
+        }
+    }
+}
+
+
+
+fn main() {
+    let mut r = Robot::new();
+
+    let mut invoker = Invoker::new(&amp;amp;mut r);
+    assert_eq!(*invoker.target(),
+               Robot {
+                   x: 0,
+                   y: 0,
+                   dx: 0,
+                   dy: 1,
+               });
+
+    {
+        use RoboCommand::*;
+        invoker.append_command(TurnRight);
+        invoker.append_command(TurnLeft);
+        invoker.append_command(MoveForward);
+    }
+
+    invoker.execute_all_commands();
+    assert_eq!(*invoker.target(),
+               Robot {
+                   x: 0,
+                   y: 1,
+                   dx: 0,
+                   dy: 1,
+               });
+
+    invoker.undo();
+    assert_eq!(*invoker.target(),
+               Robot {
+                   x: 0,
+                   y: 0,
+                   dx: 0,
+                   dy: 1,
+               });
+
+    invoker.undo();
+    assert_eq!(*invoker.target(),
+               Robot {
+                   x: 0,
+                   y: 0,
+                   dx: 1,
+                   dy: 0,
+               });
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;stateパターン&#34;&gt;Stateパターン&lt;/h1&gt;
+
+&lt;p&gt;参照先のままです。トレイトオブジェクトを使う代表的なケースだと思います。。
+あるいは列挙型を使う可能性もあります。&lt;/p&gt;
+
+&lt;h1 id=&#34;strategyパターン&#34;&gt;Strategyパターン&lt;/h1&gt;
+
+&lt;p&gt;参照先でも説明されていますが、Rustにはクロージャがあるので不要です。&lt;/p&gt;
+
+&lt;h1 id=&#34;template-methodパターン&#34;&gt;Template Methodパターン&lt;/h1&gt;
+
+&lt;p&gt;そもそもトレイトを使った普通のプログラミングなのでRustでわざわざ名前をつけるほどかな？と個人的には思いますがあえて書くなら参照先のままです。
+あるいはものによっては高階関数でも。&lt;/p&gt;
+
+&lt;p&gt;個人的にはトレイトオブジェクトを作るより関連型を使った方が好みです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait AbstractFactory&amp;lt;&#39;a&amp;gt; {
+    type ProdX: ProductX;
+    type ProdY: ProductY;
+    fn create_product_x(&amp;amp;self) -&amp;gt; Box&amp;lt;ProdX + &#39;a&amp;gt;;
+    fn create_product_y(&amp;amp;self) -&amp;gt; Box&amp;lt;ProdY + &#39;a&amp;gt;;
+}
+
+// ...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;mementoパターン&#34;&gt;Mementoパターン&lt;/h1&gt;
+
+&lt;p&gt;参照先のままです&lt;/p&gt;
+
+&lt;h1 id=&#34;observerパターン&#34;&gt;Observerパターン&lt;/h1&gt;
+
+&lt;p&gt;参照先のままです&lt;/p&gt;
+
+&lt;h1 id=&#34;visitorパターン&#34;&gt;Visitorパターン&lt;/h1&gt;
+
+&lt;p&gt;参照先では簡単な例なので分かりづらいのですが、列挙型を使うところです。
+まともな列挙型がない+シングルディスパッチしかなく引数はオーバーロードという二重苦によって生まれたパターンであり、まともな列挙型か多重ディスパッチがあれば複雑怪奇なプログラムは書かなくて済みます。&lt;/p&gt;
+
+&lt;p&gt;ここでは参照先とは違ってもう少し複雑な例を出します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Visitor&amp;lt;T&amp;gt; {
+    fn visit(&amp;amp;mut self, &amp;amp;T);
+}
+
+enum Entity {
+    File(String),
+    Dir(String, Vec&amp;lt;Entity&amp;gt;),
+}
+
+struct ConcreteFileVisitor;
+
+impl Visitor&amp;lt;Entity&amp;gt; for ConcreteFileVisitor {
+    fn visit(&amp;amp;mut self, e: &amp;amp;Entity) {
+        use Entity::*;
+        match *e {
+            File(ref name) =&amp;gt; println!(&amp;quot;file: {}&amp;quot;, name),
+            Dir(ref name, ref files) =&amp;gt; {
+                println!(&amp;quot;dir: {}&amp;quot;, name);
+                for file in files {
+                    self.visit(file)
+                }
+            }
+        }
+    }
+}
+
+fn main() {
+    use Entity::*;
+    let e = Dir(&amp;quot;/&amp;quot;.to_string(),
+                vec![File(&amp;quot;etc&amp;quot;.to_string()), File(&amp;quot;usr&amp;quot;.to_string())]);
+    let mut visitor = ConcreteFileVisitor;
+    visitor.visit(&amp;amp;e);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;特段パターンというほどの処理をしている感じがしませんね。&lt;/p&gt;
+
+&lt;h1 id=&#34;iteratorパターン&#34;&gt;Iteratorパターン&lt;/h1&gt;
+
+&lt;p&gt;参照先のままです。&lt;/p&gt;
+
+&lt;h1 id=&#34;mediatorパターン&#34;&gt;Mediatorパターン&lt;/h1&gt;
+
+&lt;p&gt;だいたい参照先のままです。複雑なことをしようと思うと&lt;code&gt;Colleague&lt;/code&gt;が複数種類出てきて列挙型かトレイトオブジェクトが必要になりそうな気がします。&lt;/p&gt;
+
+&lt;h1 id=&#34;interpreterパターン&#34;&gt;Interpreterパターン&lt;/h1&gt;
+
+&lt;p&gt;略&lt;/p&gt;
+
+&lt;h1 id=&#34;builderパターン&#34;&gt;Builderパターン&lt;/h1&gt;
+
+&lt;p&gt;あまりここまで抽象化してるのは見たことありませんがやるとしたら参照先のままです。
+そもそもRustには継承がないので抽象化する意義があまりなく、型固有のBuilderパターンで十分です。&lt;/p&gt;
+
+&lt;h1 id=&#34;prototypeパターン&#34;&gt;Prototypeパターン&lt;/h1&gt;
+
+&lt;p&gt;参照先のままです。&lt;/p&gt;
+
+&lt;h1 id=&#34;factoryパターン&#34;&gt;Factoryパターン&lt;/h1&gt;
+
+&lt;p&gt;クロージャで十分です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Product {
+    fn convert(&amp;amp;self, String) -&amp;gt; String;
+}
+
+
+struct Factory;
+
+impl Factory {
+    fn convert&amp;lt;P, F&amp;gt;(&amp;amp;self, s: String, create_product: F) -&amp;gt; String
+        where P: Product,
+              F: FnOnce() -&amp;gt; P
+    {
+        create_product().convert(s)
+    }
+}
+
+
+struct ConcreteProductX;
+impl Product for ConcreteProductX {
+    fn convert(&amp;amp;self, s: String) -&amp;gt; String {
+        s.to_uppercase()
+    }
+}
+
+
+fn main() {
+    let f = Factory;
+    println!(&amp;quot;{}&amp;quot;,
+             f.convert(&amp;quot;hogehoge piyopiyo&amp;quot;.to_string(), || ConcreteProductX))
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;abstractfactoryパターン&#34;&gt;AbstractFactoryパターン&lt;/h1&gt;
+
+&lt;p&gt;そもそもここまでやる？というのは置いといてやるとしたら参照先のままかなぁと思います。&lt;/p&gt;
+
+&lt;p&gt;TemplateMethodパターンでも述べた通り個人的には関連型を使う方が好みです。&lt;/p&gt;
+
+&lt;h1 id=&#34;chain-of-responsibility-cor-パターン&#34;&gt;Chain of Responsibility/CoR パターン&lt;/h1&gt;
+
+&lt;p&gt;参照先のままです。&lt;/p&gt;
+
+&lt;h1 id=&#34;singletonパターン&#34;&gt;Singletonパターン&lt;/h1&gt;
+
+&lt;p&gt;そもそもアンチパターンです。分かりづらいグローバル変数なだけです。あえてRustでやるとしたら&lt;a href=&#34;https://github.com/rust-lang-nursery/lazy-static.rs&#34;&gt;lazy_static&lt;/a&gt;かなと思います。&lt;/p&gt;
+
+&lt;h1 id=&#34;adapterパターン&#34;&gt;Adapterパターン&lt;/h1&gt;
+
+&lt;p&gt;これは捉え方が2種類あるかなーと思います。。&lt;/p&gt;
+
+&lt;p&gt;1つにはクラスの定義時にしかインターフェースを実装できない窮屈な言語仕様へのワークアラウンドとして。
+この捉え方では参照先のコードようにただトレイトを実装してしまえば終わりです。&lt;/p&gt;
+
+&lt;p&gt;もう1つにはラッパーオブジェクトとして。&lt;code&gt;std::fs::File&lt;/code&gt;の実装とかがそれっぽいと思います。。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub struct File {
+    inner: fs_imp::File,
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;bridgeパターン&#34;&gt;Bridgeパターン&lt;/h1&gt;
+
+&lt;p&gt;そもそも機能の追加とAPIの抽象化をどちらも継承に押し込める言語仕様が悪い。
+それにRustでは継承しないので関係ないです。&lt;/p&gt;
+
+&lt;h1 id=&#34;proxyパターン&#34;&gt;Proxyパターン&lt;/h1&gt;
+
+&lt;p&gt;参照先のままです。&lt;/p&gt;
+
+&lt;h1 id=&#34;facadeパターン&#34;&gt;Facadeパターン&lt;/h1&gt;
+
+&lt;p&gt;参照先のままです。Rustにはモジュールや可視性の制御があって特別意識することなく普段からやっていることなのであまり名前をつけるほどのことではないと思ってます。&lt;/p&gt;
+
+&lt;h1 id=&#34;flyweightパターン&#34;&gt;Flyweightパターン&lt;/h1&gt;
+
+&lt;p&gt;所有権があるのでRustだとちょっと難しいパターンです。
+参照だけなら参照先のように&lt;code&gt;HashMap&lt;/code&gt;にいれるか、オブジェクトを区別しないなら&lt;code&gt;Vec&lt;/code&gt;にいれるかなと思います。&lt;/p&gt;
+
+&lt;p&gt;因みにLispとかでは&lt;code&gt;intern&lt;/code&gt;という名前で呼ばれてると思います。&lt;/p&gt;
+
+&lt;h1 id=&#34;compositeパターン&#34;&gt;Compositeパターン&lt;/h1&gt;
+
+&lt;p&gt;ただの列挙型の再実装です。&lt;/p&gt;
+
+&lt;h1 id=&#34;decoratorパターン&#34;&gt;Decoratorパターン&lt;/h1&gt;
+
+&lt;p&gt;よくあるやつです。参照先のコードの他、&lt;code&gt;std::io::WriteBuf&lt;/code&gt;のようなものが代表的です。&lt;/p&gt;
+
+&lt;h1 id=&#34;おわりに&#34;&gt;おわりに&lt;/h1&gt;
+
+&lt;p&gt;デザインパターンをdisろうと思って書いたのですが案外多くのケースで便利でした。Rustで不要なものは10本指で数えられる程度でしたね。すごい。&lt;/p&gt;
+
+&lt;p&gt;因みにLisperでAIの研究者（確か今GoogleのAI研究所の所長）のPeter Norvigは&lt;a href=&#34;http://www.norvig.com/design-patterns/design-patterns.pdf&#34;&gt;Design Patterns in Dynamic Languages&lt;/a&gt;で16個はLispの機能を使えばパターンという程のものではなくなると言ってます。
+それぞれどの機能でどれが不要になるかを解説しているのですが、Rustは高階関数とモジュールの分に加えて列挙型の分で不要になってるかなと思います。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
       <title>Cargoのサブプロジェクトとreplace</title>
       <link>/blog/2017/04/05/cargonosabupurojiekutotoreplace</link>
       <pubDate>Wed, 05 Apr 2017 20:46:26 +0900</pubDate>
@@ -4131,123 +4561,6 @@ resultにデータの所有権を渡してしまう
 &lt;/script&gt;
 &lt;/section&gt;
 </description>
-    </item>
-    
-    <item>
-      <title>Rustの関連型の使いどころ</title>
-      <link>/blog/2016/11/22/rustnokanrenkatanotsukaidokoro</link>
-      <pubDate>Tue, 22 Nov 2016 18:26:47 +0900</pubDate>
-      
-      <guid>/blog/2016/11/22/rustnokanrenkatanotsukaidokoro</guid>
-      <description>&lt;p&gt;κeenです。昨日は&lt;a href=&#34;https://rust.connpass.com/event/41467/&#34;&gt;RustのLT会！ Rust入門者の集い - connpass&lt;/a&gt;に参加してきました。
-そこで&lt;a href=&#34;http://qiita.com/tacke_jp/items/9c7617971dc341146c0f&#34;&gt;関連型に関する発表&lt;/a&gt;があったので感化されて私も一筆。&lt;/p&gt;
-
-&lt;p&gt;
-馴れないと関連型はジェネリクスでいいじゃんと思えますが、両者は別の機能を提供するものです。
-設計による使い分けではなくて実現したいことに応じた機能による使い分けをするので馴れてしまえば迷うことなくどちらを使うか判断出来ます。&lt;/p&gt;
-
-&lt;p&gt;ということで関連型のパターンをいくつか。
-もちろん、根底にある関連型という機能は共通なのでほとんど同じようなことを言ってますが気持としてパターンを知っておくと便利です。&lt;/p&gt;
-
-&lt;h1 id=&#34;型レベルの関数として&#34;&gt;型レベルの関数として&lt;/h1&gt;
-
-&lt;p&gt;「関連」型なのである型に関連する型を表現します。ちょっと見方を変えると型から型への写像、つまり関数になります。
-例えばこういうのです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait ToUnsigned {
-    type Counterpart;
-    fn to_unsigned(self) -&amp;gt; Self::Counterpart;
-}
-
-impl ToUnsigned for i32 {
-    type Counterpart = u32;
-    fn to_unsigned(self) -&amp;gt; Self::Counterpart {
-        self as u32
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;i32&lt;/code&gt; から &lt;code&gt;u32&lt;/code&gt; への関数になってそうなのが見えますかね？もちろん、 &lt;code&gt;i64&lt;/code&gt; から &lt;code&gt;u64&lt;/code&gt; などへの対応も作れます。
-こういうのは例えば符号無し数にのみ演算が定義されている場合とかに便利ですね。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn write_bigendian_signed&amp;lt;I, U&amp;gt;(i: I) -&amp;gt; ()
-    where I: ToUnsigned&amp;lt;Counterpart = U&amp;gt;,
-          U: ...,  {
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;トレイト内で使う型を固定するため&#34;&gt;トレイト内で使う型を固定するため&lt;/h1&gt;
-
-&lt;p&gt;これが一番目にするやつじゃないでしょうか。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Handler {
-    type Request;
-    type Response;
-    fn handle(req: Self::Request, res: Self::Response) -&amp;gt; io::Result&amp;lt;()&amp;gt;;
-}
-
-struct HTTPHandler;
-
-impl Handler for HTTPHandler {
-    type Request = HTTPRequest;
-    type Response = HTTPResponse;
-    fn handle(req: Self::Request, res: Self::Response) -&amp;gt; io::Result&amp;lt;()&amp;gt;;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;固定というか特殊化というか、トレイト自体は汎用的に作られていて、それを実装する型が特定の処理に特化するパターンです。
-ジェネリクスで受け取る訳にはいかなくて、実装すべき型をトレイトの中で定義してあげる必要があるのは分かると思います。&lt;/p&gt;
-
-&lt;h1 id=&#34;関数の返り値を一般化するため&#34;&gt;関数の返り値を一般化するため&lt;/h1&gt;
-
-&lt;p&gt;これは現在のRust(rust-1.13.0)が &lt;a href=&#34;https://github.com/rust-lang/rfcs/pull/1522&#34;&gt;&lt;code&gt;impl Trait&lt;/code&gt;&lt;/a&gt;をサポートしていないために必要になるテクニックです。
-関連型とトレイト境界を組み合わせて使います。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait ReverseIter {
-    type Item;
-    type Iter: Iterator&amp;lt;Item = Self::Item&amp;gt;;
-    fn rev_iter(&amp;amp;self) -&amp;gt; Iter;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これの &lt;code&gt;type Iter: Iterator&amp;lt;Item = Self::Item&amp;gt;;&lt;/code&gt; の方です。
-返り値のIteratorを抽象化したいのですが、現在のRustでは&lt;code&gt;fn rev_iter(&amp;amp;self) -&amp;gt; Iterator&amp;lt;Item = Self::Item&amp;gt;;&lt;/code&gt;のような書き方が出来ないので仕方なく関連型を使ってあげる必要があります。&lt;/p&gt;
-
-&lt;p&gt;ちょっと踏み込んだ話をすると、関数の引数の多相性は∀の量化、返り値の多相は∃の量化です。そしてトレイトのジェネリクスも∀の量化で関連型が∃の量化なのでそういう対応がある訳です。&lt;/p&gt;
-
-&lt;h1 id=&#34;最後に&#34;&gt;最後に&lt;/h1&gt;
-
-&lt;p&gt;結構理論的にも色々あるようなので調べてみると様々なブログポストが見付かると思います。&lt;/p&gt;
-
-&lt;p&gt;ぱぱっと思いついたパターンを3つ挙げました。もしかしたら他にもパターンがあるかもしれません。&lt;/p&gt;
-
-&lt;p&gt;これを知っておけば&lt;a href=&#34;https://github.com/tokio-rs/tokio-service&#34;&gt;tokio-service&lt;/a&gt;の&lt;a href=&#34;https://tokio-rs.github.io/tokio-service/tokio_service/trait.Service.html&#34;&gt;Service&lt;/a&gt;みたいな関連型を多用するパターンでもひるまなくなります。&lt;/p&gt;
-
-&lt;h1 id=&#34;参考&#34;&gt;参考&lt;/h1&gt;
-
-&lt;h2 id=&#34;関連型とimpl-traitに関して&#34;&gt;関連型とimpl Traitに関して&lt;/h2&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/associated-types.html&#34;&gt;関連型&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;http://rust-lang-ja.org/rust-by-example/generics/assoc_items/the_problem.html&#34;&gt;関連型が必要になる状況 | Rust by Example&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;http://www.ncameron.org/blog/abstract-return-types-aka-%60impl-trait%60/&#34;&gt;Abstract return types, aka &lt;code&gt;impl Trait&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h2 id=&#34;応用&#34;&gt;応用&lt;/h2&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;http://keens.github.io/blog/2016/02/28/rustnohigherkinded_type_trait/&#34;&gt;RustのHigher-Kinded type Trait | κeenのHappy Hacκing Blog&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h2 id=&#34;発展的な話題&#34;&gt;発展的な話題&lt;/h2&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;http://smallcultfollowing.com/babysteps/blog/2016/11/02/associated-type-constructors-part-1-basic-concepts-and-introduction/&#34;&gt;Associated type constructors, part 1: basic concepts and introduction&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;http://smallcultfollowing.com/babysteps/blog/2016/11/03/associated-type-constructors-part-2-family-traits/&#34;&gt;Associated type constructors, part 2: family traits&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;http://smallcultfollowing.com/babysteps/blog/2016/11/04/associated-type-constructors-part-3-what-higher-kinded-types-might-look-like/&#34;&gt;Associated type constructors, part 3: What higher-kinded types might look like&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;http://smallcultfollowing.com/babysteps/blog/2016/11/09/associated-type-constructors-part-4-unifying-atc-and-hkt/&#34;&gt;Associated type constructors, part 4: Unifying ATC and HKT&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://github.com/rust-lang/rfcs/pull/1598&#34;&gt;Associated type constructors (a form of higher-kinded polymorphism). by withoutboats · Pull Request #1598 · rust-lang/rfcs&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;</description>
     </item>
     
   </channel>
