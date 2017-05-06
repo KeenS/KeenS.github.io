@@ -6,8 +6,438 @@
     <description>Recent content on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Sun, 30 Apr 2017 09:09:50 +0900</lastBuildDate>
+    <lastBuildDate>Sat, 06 May 2017 21:59:30 +0900</lastBuildDate>
     <atom:link href="/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Rust風にデザインパターン23種</title>
+      <link>/blog/2017/05/06/rustkazenidezainpata_n23tane</link>
+      <pubDate>Sat, 06 May 2017 21:59:30 +0900</pubDate>
+      
+      <guid>/blog/2017/05/06/rustkazenidezainpata_n23tane</guid>
+      <description>&lt;p&gt;κeenです。
+GoFのデザインパターンは有名ですが、言語機能によっては単純化できたりあるいは不要だったりするのでRust風に書き換えたらどうなるか試してみます。
+
+発端はこのツイート。&lt;/p&gt;
+
+&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;デザインパターン、古いJavaの機能の足りなさのワークアラウンド的なテクニックも含まれてるからあまり宜しくないんだよね。enumやクロージャで十分なのもいくつかある。&lt;br&gt;&lt;br&gt;Rustで写経、デザインパターン23種 - Qiita&lt;a href=&#34;https://t.co/MhpS3Z2OlF&#34;&gt;https://t.co/MhpS3Z2OlF&lt;/a&gt;&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/860635079600513024&#34;&gt;2017年5月5日&lt;/a&gt;&lt;/blockquote&gt;
+&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
+
+&lt;p&gt;一応誤解のないように説明しておくと、該当のQiitaの記事に不満がある訳ではなくてGoFのデザインパターンついての言及です。&lt;/p&gt;
+
+&lt;p&gt;リンク先のコードで十分な時にはここでは流すのでリンク先も同時に参照下さい。
+また、比較しやすいようにサンプルコードはリンク先のものに則って書きます。&lt;/p&gt;
+
+&lt;p&gt;一応デザインパターンの教科書として結城先生の本を参照しつつ書いていきます。&lt;/p&gt;
+
+&lt;h1 id=&#34;command-パターン&#34;&gt;Command パターン&lt;/h1&gt;
+
+&lt;p&gt;列挙型を使うところです。
+Javaにまともなenumがないのでクラスが使われていますが、列挙型があるならそちらの方がデータとコードの分離ができて見通しがいいです。また、コマンドが1つの型に収まるのでトレイトオブジェクトを作る必要がなくなります。&lt;/p&gt;
+
+&lt;p&gt;比較的マイナーな変更です。&lt;/p&gt;
+
+&lt;p&gt;Lispだとクロージャで解決したりしますが、Rustだと列挙型の方がしっくりくるかなと思います。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Command&amp;lt;T&amp;gt; {
+    fn execute(&amp;amp;self, &amp;amp;mut T);
+    fn undo(&amp;amp;self, &amp;amp;mut T);
+}
+
+
+
+struct Invoker&amp;lt;&#39;a, Cmd, T: &#39;a&amp;gt; {
+    commands: Vec&amp;lt;Cmd&amp;gt;,
+    target: &amp;amp;&#39;a mut T,
+    current_index: usize,
+}
+
+
+impl&amp;lt;&#39;a, Cmd, T&amp;gt; Invoker&amp;lt;&#39;a, Cmd, T&amp;gt; {
+    fn new(t: &amp;amp;&#39;a mut T) -&amp;gt; Self {
+        Invoker {
+            commands: Vec::new(),
+            target: t,
+            current_index: 0,
+        }
+    }
+
+
+    fn target(&amp;amp;self) -&amp;gt; &amp;amp;T {
+        self.target
+    }
+
+    fn append_command(&amp;amp;mut self, c: Cmd) {
+        self.commands.push(c);
+    }
+}
+
+impl&amp;lt;&#39;a, Cmd, T&amp;gt; Invoker&amp;lt;&#39;a, Cmd, T&amp;gt;
+    where Cmd: Command&amp;lt;T&amp;gt;
+{
+    fn execute_command(&amp;amp;mut self) {
+        if self.commands.len() &amp;lt;= self.current_index {
+            // Nothing to do.
+            return;
+        }
+
+        let c = &amp;amp;self.commands[self.current_index];
+        let t = &amp;amp;mut *self.target;
+        c.execute(t);
+
+        self.current_index += 1;
+    }
+
+    fn execute_all_commands(&amp;amp;mut self) {
+        for _ in self.current_index..self.commands.len() {
+            self.execute_command();
+        }
+    }
+
+    fn undo(&amp;amp;mut self) {
+        if 0 == self.current_index {
+            return;
+        }
+
+        self.current_index -= 1;
+
+        let c = &amp;amp;self.commands[self.current_index];
+        let t = &amp;amp;mut *self.target;
+        c.undo(t);
+    }
+}
+
+
+#[derive(Debug, Eq, PartialEq)]
+struct Robot {
+    x: i32,
+    y: i32,
+    dx: i32,
+    dy: i32,
+}
+
+
+impl Robot {
+    fn new() -&amp;gt; Robot {
+        Robot {
+            x: 0,
+            y: 0,
+            dx: 0,
+            dy: 1,
+        }
+    }
+
+    fn move_forward(&amp;amp;mut self) {
+        self.x += self.dx;
+        self.y += self.dy;
+    }
+
+    fn set_direction(&amp;amp;mut self, d: (i32, i32)) {
+        self.dx = d.0;
+        self.dy = d.1;
+    }
+
+    fn get_direction(&amp;amp;self) -&amp;gt; (i32, i32) {
+        (self.dx, self.dy)
+    }
+}
+
+enum RoboCommand {
+    MoveForward,
+    TurnRight,
+    TurnLeft,
+}
+
+impl Command&amp;lt;Robot&amp;gt; for RoboCommand {
+    fn execute(&amp;amp;self, r: &amp;amp;mut Robot) {
+        use RoboCommand::*;
+        match *self {
+            MoveForward =&amp;gt; r.move_forward(),
+            TurnRight =&amp;gt; {
+                let (dx, dy) = r.get_direction();
+                r.set_direction((dy, -dx))
+            }
+            TurnLeft =&amp;gt; {
+                let (dx, dy) = r.get_direction();
+                r.set_direction((-dy, dx));
+            }
+
+        }
+    }
+    fn undo(&amp;amp;self, r: &amp;amp;mut Robot) {
+        use RoboCommand::*;
+        match *self {
+            MoveForward =&amp;gt; {
+                let c1 = TurnRight;
+                c1.execute(r);
+                c1.execute(r);
+                self.execute(r);
+                c1.execute(r);
+                c1.execute(r);
+            }
+            TurnRight =&amp;gt; {
+                let c = TurnLeft;
+                c.execute(r);
+            }
+            TurnLeft =&amp;gt; {
+                let c = TurnRight;
+                c.execute(r);
+
+            }
+
+        }
+    }
+}
+
+
+
+fn main() {
+    let mut r = Robot::new();
+
+    let mut invoker = Invoker::new(&amp;amp;mut r);
+    assert_eq!(*invoker.target(),
+               Robot {
+                   x: 0,
+                   y: 0,
+                   dx: 0,
+                   dy: 1,
+               });
+
+    {
+        use RoboCommand::*;
+        invoker.append_command(TurnRight);
+        invoker.append_command(TurnLeft);
+        invoker.append_command(MoveForward);
+    }
+
+    invoker.execute_all_commands();
+    assert_eq!(*invoker.target(),
+               Robot {
+                   x: 0,
+                   y: 1,
+                   dx: 0,
+                   dy: 1,
+               });
+
+    invoker.undo();
+    assert_eq!(*invoker.target(),
+               Robot {
+                   x: 0,
+                   y: 0,
+                   dx: 0,
+                   dy: 1,
+               });
+
+    invoker.undo();
+    assert_eq!(*invoker.target(),
+               Robot {
+                   x: 0,
+                   y: 0,
+                   dx: 1,
+                   dy: 0,
+               });
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;stateパターン&#34;&gt;Stateパターン&lt;/h1&gt;
+
+&lt;p&gt;参照先のままです。トレイトオブジェクトを使う代表的なケースだと思います。。
+あるいは列挙型を使う可能性もあります。&lt;/p&gt;
+
+&lt;h1 id=&#34;strategyパターン&#34;&gt;Strategyパターン&lt;/h1&gt;
+
+&lt;p&gt;参照先でも説明されていますが、Rustにはクロージャがあるので不要です。&lt;/p&gt;
+
+&lt;h1 id=&#34;template-methodパターン&#34;&gt;Template Methodパターン&lt;/h1&gt;
+
+&lt;p&gt;そもそもトレイトを使った普通のプログラミングなのでRustでわざわざ名前をつけるほどかな？と個人的には思いますがあえて書くなら参照先のままです。
+あるいはものによっては高階関数でも。&lt;/p&gt;
+
+&lt;p&gt;個人的にはトレイトオブジェクトを作るより関連型を使った方が好みです。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait AbstractFactory&amp;lt;&#39;a&amp;gt; {
+    type ProdX: ProductX;
+    type ProdY: ProductY;
+    fn create_product_x(&amp;amp;self) -&amp;gt; Box&amp;lt;ProdX + &#39;a&amp;gt;;
+    fn create_product_y(&amp;amp;self) -&amp;gt; Box&amp;lt;ProdY + &#39;a&amp;gt;;
+}
+
+// ...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;mementoパターン&#34;&gt;Mementoパターン&lt;/h1&gt;
+
+&lt;p&gt;参照先のままです&lt;/p&gt;
+
+&lt;h1 id=&#34;observerパターン&#34;&gt;Observerパターン&lt;/h1&gt;
+
+&lt;p&gt;参照先のままです&lt;/p&gt;
+
+&lt;h1 id=&#34;visitorパターン&#34;&gt;Visitorパターン&lt;/h1&gt;
+
+&lt;p&gt;参照先では簡単な例なので分かりづらいのですが、列挙型を使うところです。
+まともな列挙型がない+シングルディスパッチしかなく引数はオーバーロードという二重苦によって生まれたパターンであり、まともな列挙型か多重ディスパッチがあれば複雑怪奇なプログラムは書かなくて済みます。&lt;/p&gt;
+
+&lt;p&gt;ここでは参照先とは違ってもう少し複雑な例を出します。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Visitor&amp;lt;T&amp;gt; {
+    fn visit(&amp;amp;mut self, &amp;amp;T);
+}
+
+enum Entity {
+    File(String),
+    Dir(String, Vec&amp;lt;Entity&amp;gt;),
+}
+
+struct ConcreteFileVisitor;
+
+impl Visitor&amp;lt;Entity&amp;gt; for ConcreteFileVisitor {
+    fn visit(&amp;amp;mut self, e: &amp;amp;Entity) {
+        use Entity::*;
+        match *e {
+            File(ref name) =&amp;gt; println!(&amp;quot;file: {}&amp;quot;, name),
+            Dir(ref name, ref files) =&amp;gt; {
+                println!(&amp;quot;dir: {}&amp;quot;, name);
+                for file in files {
+                    self.visit(file)
+                }
+            }
+        }
+    }
+}
+
+fn main() {
+    use Entity::*;
+    let e = Dir(&amp;quot;/&amp;quot;.to_string(),
+                vec![File(&amp;quot;etc&amp;quot;.to_string()), File(&amp;quot;usr&amp;quot;.to_string())]);
+    let mut visitor = ConcreteFileVisitor;
+    visitor.visit(&amp;amp;e);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;特段パターンというほどの処理をしている感じがしませんね。&lt;/p&gt;
+
+&lt;h1 id=&#34;iteratorパターン&#34;&gt;Iteratorパターン&lt;/h1&gt;
+
+&lt;p&gt;参照先のままです。&lt;/p&gt;
+
+&lt;h1 id=&#34;mediatorパターン&#34;&gt;Mediatorパターン&lt;/h1&gt;
+
+&lt;p&gt;だいたい参照先のままです。複雑なことをしようと思うと&lt;code&gt;Colleague&lt;/code&gt;が複数種類出てきて列挙型かトレイトオブジェクトが必要になりそうな気がします。&lt;/p&gt;
+
+&lt;h1 id=&#34;interpreterパターン&#34;&gt;Interpreterパターン&lt;/h1&gt;
+
+&lt;p&gt;略&lt;/p&gt;
+
+&lt;h1 id=&#34;builderパターン&#34;&gt;Builderパターン&lt;/h1&gt;
+
+&lt;p&gt;あまりここまで抽象化してるのは見たことありませんがやるとしたら参照先のままです。
+そもそもRustには継承がないので抽象化する意義があまりなく、型固有のBuilderパターンで十分です。&lt;/p&gt;
+
+&lt;h1 id=&#34;prototypeパターン&#34;&gt;Prototypeパターン&lt;/h1&gt;
+
+&lt;p&gt;参照先のままです。&lt;/p&gt;
+
+&lt;h1 id=&#34;factoryパターン&#34;&gt;Factoryパターン&lt;/h1&gt;
+
+&lt;p&gt;クロージャで十分です。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Product {
+    fn convert(&amp;amp;self, String) -&amp;gt; String;
+}
+
+
+struct Factory;
+
+impl Factory {
+    fn convert&amp;lt;P, F&amp;gt;(&amp;amp;self, s: String, create_product: F) -&amp;gt; String
+        where P: Product,
+              F: FnOnce() -&amp;gt; P
+    {
+        create_product().convert(s)
+    }
+}
+
+
+struct ConcreteProductX;
+impl Product for ConcreteProductX {
+    fn convert(&amp;amp;self, s: String) -&amp;gt; String {
+        s.to_uppercase()
+    }
+}
+
+
+fn main() {
+    let f = Factory;
+    println!(&amp;quot;{}&amp;quot;,
+             f.convert(&amp;quot;hogehoge piyopiyo&amp;quot;.to_string(), || ConcreteProductX))
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;abstractfactoryパターン&#34;&gt;AbstractFactoryパターン&lt;/h1&gt;
+
+&lt;p&gt;そもそもここまでやる？というのは置いといてやるとしたら参照先のままかなぁと思います。&lt;/p&gt;
+
+&lt;p&gt;TemplateMethodパターンでも述べた通り個人的には関連型を使う方が好みです。&lt;/p&gt;
+
+&lt;h1 id=&#34;chain-of-responsibility-cor-パターン&#34;&gt;Chain of Responsibility/CoR パターン&lt;/h1&gt;
+
+&lt;p&gt;参照先のままです。&lt;/p&gt;
+
+&lt;h1 id=&#34;singletonパターン&#34;&gt;Singletonパターン&lt;/h1&gt;
+
+&lt;p&gt;そもそもアンチパターンです。分かりづらいグローバル変数なだけです。あえてRustでやるとしたら&lt;a href=&#34;https://github.com/rust-lang-nursery/lazy-static.rs&#34;&gt;lazy_static&lt;/a&gt;かなと思います。&lt;/p&gt;
+
+&lt;h1 id=&#34;adapterパターン&#34;&gt;Adapterパターン&lt;/h1&gt;
+
+&lt;p&gt;これは捉え方が2種類あるかなーと思います。。&lt;/p&gt;
+
+&lt;p&gt;1つにはクラスの定義時にしかインターフェースを実装できない窮屈な言語仕様へのワークアラウンドとして。
+この捉え方では参照先のコードようにただトレイトを実装してしまえば終わりです。&lt;/p&gt;
+
+&lt;p&gt;もう1つにはラッパーオブジェクトとして。&lt;code&gt;std::fs::File&lt;/code&gt;の実装とかがそれっぽいと思います。。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub struct File {
+    inner: fs_imp::File,
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;bridgeパターン&#34;&gt;Bridgeパターン&lt;/h1&gt;
+
+&lt;p&gt;そもそも機能の追加とAPIの抽象化をどちらも継承に押し込める言語仕様が悪い。
+それにRustでは継承しないので関係ないです。&lt;/p&gt;
+
+&lt;h1 id=&#34;proxyパターン&#34;&gt;Proxyパターン&lt;/h1&gt;
+
+&lt;p&gt;参照先のままです。&lt;/p&gt;
+
+&lt;h1 id=&#34;facadeパターン&#34;&gt;Facadeパターン&lt;/h1&gt;
+
+&lt;p&gt;参照先のままです。Rustにはモジュールや可視性の制御があって特別意識することなく普段からやっていることなのであまり名前をつけるほどのことではないと思ってます。&lt;/p&gt;
+
+&lt;h1 id=&#34;flyweightパターン&#34;&gt;Flyweightパターン&lt;/h1&gt;
+
+&lt;p&gt;所有権があるのでRustだとちょっと難しいパターンです。
+参照だけなら参照先のように&lt;code&gt;HashMap&lt;/code&gt;にいれるか、オブジェクトを区別しないなら&lt;code&gt;Vec&lt;/code&gt;にいれるかなと思います。&lt;/p&gt;
+
+&lt;p&gt;因みにLispとかでは&lt;code&gt;intern&lt;/code&gt;という名前で呼ばれてると思います。&lt;/p&gt;
+
+&lt;h1 id=&#34;compositeパターン&#34;&gt;Compositeパターン&lt;/h1&gt;
+
+&lt;p&gt;ただの列挙型の再実装です。&lt;/p&gt;
+
+&lt;h1 id=&#34;decoratorパターン&#34;&gt;Decoratorパターン&lt;/h1&gt;
+
+&lt;p&gt;よくあるやつです。参照先のコードの他、&lt;code&gt;std::io::WriteBuf&lt;/code&gt;のようなものが代表的です。&lt;/p&gt;
+
+&lt;h1 id=&#34;おわりに&#34;&gt;おわりに&lt;/h1&gt;
+
+&lt;p&gt;デザインパターンをdisろうと思って書いたのですが案外多くのケースで便利でした。Rustで不要なものは10本指で数えられる程度でしたね。すごい。&lt;/p&gt;
+
+&lt;p&gt;因みにLisperでAIの研究者（確か今GoogleのAI研究所の所長）のPeter Norvigは&lt;a href=&#34;http://www.norvig.com/design-patterns/design-patterns.pdf&#34;&gt;Design Patterns in Dynamic Languages&lt;/a&gt;で16個はLispの機能を使えばパターンという程のものではなくなると言ってます。
+それぞれどの機能でどれが不要になるかを解説しているのですが、Rustは高階関数とモジュールの分に加えて列挙型の分で不要になってるかなと思います。&lt;/p&gt;</description>
+    </item>
     
     <item>
       <title>メモリとスタックとヒープとプログラミング言語</title>
@@ -4225,126 +4655,6 @@ CapsLockとctrlのスワップにxmodmapを、Emacs風バインドを作るた�
 &lt;p&gt;このくらいかな？フォントもデフォルト。あとはSlackに公式クライアントだとか偶に音楽再生にrythmbox（デフォルト）だとか画像表示にeog（デフォルト）だとかPDF表示にevice（デフォルト）だとかファイラにnautilus（デフォルト）スクリーンショットにgnome-screenshot（デフォルト）だとかを使うけどこの辺は当たり前なので書かなくていいかな。&lt;/p&gt;
 
 &lt;p&gt;ということでそんなにカスタマイズしなくてもLinuxは便利なのでみなさん使いましょう。&lt;/p&gt;</description>
-    </item>
-    
-    <item>
-      <title>Idein Incに入社しました</title>
-      <link>/blog/2017/01/06/idein_incninyuushashimashita</link>
-      <pubDate>Fri, 06 Jan 2017 20:53:12 +0900</pubDate>
-      
-      <guid>/blog/2017/01/06/idein_incninyuushashimashita</guid>
-      <description>&lt;p&gt;κeenです。本日を以ちまして&lt;a href=&#34;http://idein.jp/&#34;&gt;Idein Inc.&lt;/a&gt;に入社したので報告します。&lt;/p&gt;
-
-&lt;p&gt;退職エントリは&lt;a href=&#34;http://keens.github.io/blog/2016/11/30/saiba_e_jientowotaishokushimashita/&#34;&gt;こちら&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;&lt;/p&gt;
-
-&lt;h1 id=&#34;経緯&#34;&gt;経緯&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;Lisp Meet Upで社長の&lt;a href=&#34;https://twitter.com/9_ties&#34;&gt;@9_ties&lt;/a&gt;さんと知り合う&lt;/li&gt;
-&lt;li&gt;その他勉強会で何度か一緒になってよく喋るようになる&lt;/li&gt;
-&lt;li&gt;オフィス訪問に誘われて行ったら入社を誘われる（7月末）&lt;/li&gt;
-&lt;li&gt;入社することにする（9月半ば）&lt;/li&gt;
-&lt;li&gt;入社（現在）&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;わさびずとideinに遊びに来たよ。噂のpi zero&lt;br&gt;クラスタとかPEZYとかあった。熱い。 &lt;a href=&#34;https://t.co/MEc7qdosrk&#34;&gt;pic.twitter.com/MEc7qdosrk&lt;/a&gt;&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/759655196628615168&#34;&gt;2016年7月31日&lt;/a&gt;&lt;/blockquote&gt;
-&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
-
-&lt;p&gt;結構前から水面下で話は進んでました。&lt;/p&gt;
-
-&lt;p&gt;割と「PEZYに行くの？」という質問が多かったのですが中らずとも遠からずといったところでしょうか。PEZY Computingとも取引があったりする会社です。&lt;/p&gt;
-
-&lt;h1 id=&#34;どんな会社&#34;&gt;どんな会社？&lt;/h1&gt;
-
-&lt;p&gt;私が7人目（バイトを抜いたら6人目）の社員になる、少数精鋭なスタートアップです。全社員に1つのチャットで連絡が取れます。
-この規模ながらフルタイムのリサーチャがいるなど、かなり技術寄りな会社です。創業者も全員技術者です。社員の中ではクソザコクラスになるので明日から人権があるか心配ですがどうにか上手くやっていきます。&lt;/p&gt;
-
-&lt;p&gt;今3期目とのことです。&lt;/p&gt;
-
-&lt;p&gt;社長に「なんて紹介したらいいですか」って言ったら「うーん、困るなぁ」と言われました（苦笑。
-Big Pictureとしてはコンピュテーショナルセンサーを使って世の中に起きているあらゆる事象をソフトウェアで扱えるようにしたい、というもの。ざっくり言ってしまえばIoTの会社になるんですかね。
-でもじゃあ電子工作ばっかやってるのかというとそういう訳でもなくて、例えばカメラから得られた画像から色々な情報を抜き出すために機械学習やらディープラーニングやらをやっていたり、さらにそれをセンサーデバイス（Rasp Piとか）上で走らせるために効率化したりとソフトウェア技術のウェイトがかなり大きいです。&lt;/p&gt;
-
-&lt;p&gt;例えばニューラルネットワークの学習済みデータを最適化（軽量化）してさらにコンパイル（！！）して組込みデバイス上でも満足な速度で動かすための技術開発なんかをやっています。&lt;/p&gt;
-
-&lt;p&gt;あるいはセンサーから取得したデータを使えるプラットフォームなんかも。&lt;/p&gt;
-
-&lt;h1 id=&#34;どんな仕事するの&#34;&gt;どんな仕事するの？&lt;/h1&gt;
-
-&lt;p&gt;私の仕事もそういう文脈からきていて、例えばニューラルネットをコンパイルしてRasp PiのGPUで動かすだとか、あるいはもうちょっと特化したデバイス（ぼかしてる）のためのコンパイラを作るだとかの仕事になります。
-自分で書いておきながらやっぱり「ニューラルネットをコンパイルする」っていう字面がパワーある。
-今、（学習ではなくて予測に）使われているのはほとんどがモデルと実行器が分けらています。要はインタプリタなのでそれをコンパイルしてあげて高速に実行するというのが可能なんですね。
-ニューラルネットの圧縮のために数学が必要そうな雰囲気で、数学出来ない私は震え上がってます。&lt;/p&gt;
-
-&lt;p&gt;会社全体としてはデバイスの開発も一応やりつつ、データを処理するための技術開発、共同研究、技術開発も含めた受託案件、あるいは開発した技術を使った受託案件なんかもやっています。
-かなり技術開発への投資が強いイメージですが、今期は黒字予定と案外バランスの取れた運営をしているようです（結構色々な会社が興味を持ってくれているようです。
-センサーだとかの文脈になるのでお客さんはハードウェアの会社が多いようです。&lt;/p&gt;
-
-&lt;h1 id=&#34;初日の感想は&#34;&gt;初日の感想は？&lt;/h1&gt;
-
-&lt;p&gt;会社が移転した（前のオフィスだと私のスペースがなかった）のでほとんど環境構築でした。&lt;/p&gt;
-
-&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;環境構築してる &lt;a href=&#34;https://t.co/6HLHbnOmi6&#34;&gt;pic.twitter.com/6HLHbnOmi6&lt;/a&gt;&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/817252587703414789&#34;&gt;2017年1月6日&lt;/a&gt;&lt;/blockquote&gt;
-&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
-
-&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;オフィス引っ越し中 &lt;a href=&#34;https://t.co/MnrNUxxUP7&#34;&gt;pic.twitter.com/MnrNUxxUP7&lt;/a&gt;&lt;/p&gt;&amp;mdash; y͛amaday͛ (@yamaday) &lt;a href=&#34;https://twitter.com/yamaday/status/817203674036305921&#34;&gt;2017年1月6日&lt;/a&gt;&lt;/blockquote&gt;
-&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
-
-&lt;p&gt;落ち着いたあとはQiita::Teamを全部読んでました。社長も技術者なので事業プランや資金計画（売り上げ）なんかもQiita::Teamに上がってるのが新鮮でした。&lt;/p&gt;
-
-&lt;p&gt;社員に2名ほどRustをやってる人がいて「κeen君来たし仕事でRust使っていくかー」みたいな感じになりました。使えそうな案件があったら積極的に使っていきたいですね。&lt;/p&gt;
-
-&lt;h1 id=&#34;結びに&#34;&gt;結びに&lt;/h1&gt;
-
-&lt;p&gt;前回転職祝いを沢山頂いたので今回は例のURLは控えさせて頂きます。
-前回送りそびれたのでどうしてもという方は&lt;a href=&#34;http://keens.github.io/blog/2016/11/30/saiba_e_jientowotaishokushimashita/&#34;&gt;退職エントリ&lt;/a&gt;の方から辿って頂けると幸いです。&lt;/p&gt;
-
-&lt;p&gt;また、Ideinではエンジニアを募集しています&lt;/p&gt;
-
-&lt;blockquote&gt;
-&lt;h1 id=&#34;募集職種&#34;&gt;募集職種&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;ソフトウェアエンジニア（画像処理）
-画像処理に関する基本的な知識を持っている方（画像処理の実装経験がある方歓迎）&lt;/li&gt;
-&lt;li&gt;ソフトウェアエンジニア（バックエンド）
-分散システムの構築やDevOpsに興味があり、最新の技術の動向を追っている方。場合によっては自ら実装が出来る方&lt;/li&gt;
-&lt;li&gt;ソフトウェアエンジニア（フロントエンド）
-最新の技術動向に明るく、移り変わりの激しい技術のコンテキストを理解して吸収でき、UXを考慮した実装が出来る方&lt;/li&gt;
-&lt;li&gt;ソフトウェアエンジニア（組み込み）
-計算機を低いレイヤーまで理解し、ハードウェアの仕様を読み解いて必要機能の実装が出来る方&lt;/li&gt;
-&lt;li&gt;ソフトウェアエンジニア（言語処理系）
-計算機アーキテクチャや数値計算アルゴリズムに精通しており、最適化コンパイラやプログラミング環境をフルスクラッチで実装出来る方&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;以下のスキルセットを持っている方を歓迎します。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;C++, Python, Haskell,Rust, etc&amp;hellip;&lt;/li&gt;
-&lt;li&gt;Git（分散VCS）&lt;/li&gt;
-&lt;li&gt;DevOps関連技術(Docker,Ansible,etc&amp;hellip;)&lt;/li&gt;
-&lt;li&gt;GPU&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;すべての職種に一貫して、現在のスキルセットよりは以下に挙げるような事柄への知識や興味を優先します。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;アルゴリズムとデータ構造&lt;/li&gt;
-&lt;li&gt;計算機&lt;/li&gt;
-&lt;li&gt;プログラミング言語&lt;/li&gt;
-&lt;li&gt;ソフトウェア工学&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h1 id=&#34;待遇-給与&#34;&gt;待遇・給与&lt;/h1&gt;
-
-&lt;p&gt;社保完備 月収60万円〜（正社員）&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;p&gt;因みに私はポテンシャル採用されたタイプで「壁に当たっても自分で調べて乗り越えていけそう」だとか「コンパイラを書いてると心が折れそうになる瞬間があるけどそこで折れないような人が大事だ」とか言われました。頑張ります。&lt;/p&gt;
-
-&lt;p&gt;ということで皆様の応募お待ちしております！！&lt;/p&gt;</description>
     </item>
     
   </channel>
