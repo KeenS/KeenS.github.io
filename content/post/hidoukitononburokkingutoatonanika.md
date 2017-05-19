@@ -99,3 +99,16 @@ Goはコンパイラが頑張ってgoroutineをコンテキストスイッチ可
 なので言うとしたら「Goはコンパイラとスケジューラのお陰で見掛け上ブロックしても全体への影響が小さい」ですかね。
 
 Goに詳しい人、コメントや誤り訂正お願いします。[GitHubのイシュー](https://github.com/KeenS/KeenS.github.io/issues)とか使えば良い気がします。
+
+
+# 参考
+
+* [multithreading - Golang blocking and non blocking - Stack Overflow](http://stackoverflow.com/questions/36112445/golang-blocking-and-non-blocking)
+* [src/os/file_unix.go - The Go Programming Language](https://golang.org/src/os/file_unix.go?s=#L224)
+* [src/runtime/proc.go - The Go Programming Language](https://golang.org/src/runtime/proc.go?s=#L1795)
+* [Frequently Asked Questions (FAQ) - The Go Programming Language](https://golang.org/doc/faq#goroutines)
+* [channel - go routine blocking the others one - Stack Overflow](http://stackoverflow.com/questions/17953269/go-routine-blocking-the-others-one)
+* [src/runtime/cgocall.go - The Go Programming Language](https://golang.org/src/runtime/cgocall.go)
+* [select - How does channel blocking work in Go? - Stack Overflow](http://stackoverflow.com/questions/32538438/how-does-channel-blocking-work-in-go)
+* [The Go Programming Language Specification - The Go Programming Language](https://golang.org/ref/spec#Select_statements)
+* [How does the Go runtime work? - Quora](https://www.quora.com/How-does-the-Go-runtime-work)
