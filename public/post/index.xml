@@ -6,8 +6,149 @@
     <description>Recent content in Posts on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Sat, 06 May 2017 21:59:30 +0900</lastBuildDate>
+    <lastBuildDate>Fri, 19 May 2017 20:51:46 +0900</lastBuildDate>
     <atom:link href="/post/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>非同期とノンブロッキングとあと何か</title>
+      <link>/blog/2017/05/19/hidoukitononburokkingutoatonanika</link>
+      <pubDate>Fri, 19 May 2017 20:51:46 +0900</pubDate>
+      
+      <guid>/blog/2017/05/19/hidoukitononburokkingutoatonanika</guid>
+      <description>&lt;p&gt;κeenです。最近同期/非同期、ブロッキング/ノンブロッキング、直接形式/継続渡し形式あたりが混乱してきたので個人的に整理します。
+あくまで私個人の理解を纏めただけなので誤謬などに注意して下さい。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;
+
+&lt;p&gt;非同期とノンブロッキングはよく混同されます。また、非同期処理の記述形式として直接形式や継続渡し形式などがあります。
+私自身違う言葉だなとは思いつつも混同したり違いを忘れたりしています。
+非同期もノンブロッキングもナイーブなIOに比べると速い方式だな程度の理解でいてそんなに困らないと思ってますし混同や誤用に目くじらを立てるつもりもありません。
+しかしながら3者を区別しないと意味を成さない文脈で3者を混同している技術を何度か見掛けたので（自分の中で）整理しようと思ったのがこの記事を書こうと思ったきっかけです。&lt;/p&gt;
+
+&lt;h1 id=&#34;用語&#34;&gt;用語&lt;/h1&gt;
+
+&lt;p&gt;色々と調べましたが、以下のブログ記事が一番信頼できそうなのでこの記事の用語に従います。ここでは同期/非同期とブロッキング/ノンブロッキングとIOの多重化を区別しています。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://blog.matsumoto-r.jp/?p=2030&#34;&gt;人間とウェブの未来 - 非同期I/OやノンブロッキングI/O及びI/Oの多重化について&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;一部抜粋します&lt;/p&gt;
+
+&lt;blockquote&gt;
+&lt;ul&gt;
+&lt;li&gt;ブロッキングI/O:
+データ処理が完了するまで待つ&lt;/li&gt;
+&lt;li&gt;ノンブロッキングI/O:
+データ処理の完了を待たずに他の処理を行う&lt;/li&gt;
+&lt;li&gt;synchronous I/O Operation:
+データ処理の入出力が可能になった時点で通知
+その後に同期的にデータの転送が必要。その処理をブロックあるいはノンブロック（別の処理をしつつ定期的に転送完了をチェックする）に行うかは自由であり、データの整合性は含まない&lt;/li&gt;
+&lt;li&gt;Asynchronous I/O Operation:
+データ処理の入出力が完了した時点で通知
+非同期なので読込の場合は通知のあった段階で既にデータの転送は完了（I/O Completion）しバッファ内にデータがある。シグナルやコールバックによる通知があるまではユーザスペースでその他の処理が可能であるため、基本的にはノンブロック。別にやりたければ通知があるまでブロックしても良い、その辺りは自由&lt;/li&gt;
+&lt;li&gt;I/Oの多重化:
+I/O可能になったfdを通知（I/OはブロッキングI/O）&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;これらはどのようにIOを行うかの問題で、 &lt;strong&gt;実行時&lt;/strong&gt; に関係する話題です。&lt;/p&gt;
+
+&lt;p&gt;次に、直接形式と継続渡し形式について。非同期やノンブロッキングなIOをしようと思うと後続の処理、すなわち（限定）継続が必要になる。この（限定）継続をプログラマがどのように渡すかの問題。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://en.wikipedia.org/wiki/Direct_style&#34;&gt;直接形式&lt;/a&gt;は（限定）継続がプログラムには陽には現れず、コンパイラが頑張るかコルーチンなどの言語機能、&lt;code&gt;async&lt;/code&gt;/&lt;code&gt;await&lt;/code&gt;、&lt;code&gt;do&lt;/code&gt;、&lt;code&gt;for&lt;/code&gt;などの構文を用いて実現されます。
+&lt;a href=&#34;https://en.wikipedia.org/wiki/Continuation-passing_style&#34;&gt;継続渡し形式&lt;/a&gt;(CPS)はプログラマが陽に（限定）継続を渡すスタイルで、コールバック形式などとも呼ばれます。&lt;/p&gt;
+
+&lt;p&gt;これらは主に言語の問題で、 &lt;strong&gt;コンパイル時&lt;/strong&gt; に関係する話題です。
+よく直接形式と同期処理が混同されて「同期プログラミングをすることで非同期プログラミングができます」などの矛盾した一文が書かれがちですが区別しましょう。&lt;/p&gt;
+
+&lt;h2 id=&#34;誰が何を&#34;&gt;誰が何を&lt;/h2&gt;
+
+&lt;p&gt;IO処理の話題はスレッドとカーネルとのやりとりに関することが多い気がしますが、Goのようにユーザランドで実行単位を持つと「ブロックする」といったときにスレッドがブロックするのかgoroutineがブロックするのか分かりづらいですね。
+なのでこれ以後は誰が何をブロックするのかを出来る限り明示しながら書きたいと思います。例えば「カーネルがgoroutine Aを実行しているスレッドをブロックする」など。&lt;/p&gt;
+
+&lt;h1 id=&#34;scala&#34;&gt;Scala&lt;/h1&gt;
+
+&lt;p&gt;前職でScalaを書いていました。
+Scalaの&lt;code&gt;Future&lt;/code&gt;そのものは&lt;code&gt;flatMap&lt;/code&gt;が関数をとるので継続渡し形式ですが、そのシンタックスシュガーの&lt;code&gt;for&lt;/code&gt;式は直接形式でプログラミングができます。
+IOの実体についてはFutureで抽象化されているのでexecutorによります。&lt;/p&gt;
+
+&lt;h1 id=&#34;go&#34;&gt;Go&lt;/h1&gt;
+
+&lt;p&gt;前職の新卒研修で5日ほどGoを書いたことがあります。
+多くの言語は比較的シンプルなIOモデルを持つので用語を意識しなくても問題ありませんが、Goは実行時に色々工夫しているので用語をちゃんと区別しないと齟齬が出るようです。
+なのでGoを例に理解を深めようと思います。&lt;/p&gt;
+
+&lt;p&gt;まず、Goは実行時に動作するコンポーネントが多いので整理します。
+&lt;a href=&#34;https://www.quora.com/How-does-the-Go-runtime-work&#34;&gt;ここの質問&lt;/a&gt;への回答によるとgoroutine実行用のスレッド、スケジューラ、GCに大別してよさそうです。
+このうち、IOに関連するのはgoroutine実行用のスレッドとスケジューラなのでGCについては触れません。
+あまりよく分かってないのですがスケジューラはgoroutine実行用のスレッド上で呼ばれるための関数（群）なんですかね。&lt;/p&gt;
+
+&lt;p&gt;普段は1スレッドが複数のgoroutineの実行を受け持ち、goroutineが何かしらの理由でブロックしそうなタイミングで別のgoroutineにコンテキストスイッチするようです。
+ブロックしそうなタイミングというのはやや古いですが&lt;a href=&#34;http://stackoverflow.com/questions/17953269/go-routine-blocking-the-others-one&#34;&gt;ここ&lt;/a&gt;に書かれてます。
+直接形式で書きつつコンテキストスイッチをするということはどうにかして(限定)継続を取り出す必要がありますが、それこそgoroutineですね。goroutine自身でスタックを持つようですし。
+C関数を呼ぶときなどはコンパイラが裏で呼び出す前と後に分割しているようです。&lt;/p&gt;
+
+&lt;p&gt;さて、IOについてはファイルIOとネットワークIOで操作が異なるようです。&lt;/p&gt;
+
+&lt;p&gt;ファイルIOでは普通に同期/ブロッキングなシステムコールを発効し、OSがスレッドをブロックする時間が長いようなら別スレッドで元スレッドの持っていたgoroutineを実行するようです。
+信頼できる情報が出てこなかったのですが自身で長くなりそうと思っているシステムコールの場合はgoroutineの実行権限（プロセス）を手放してあとは他のプロセスがstealするに任せてる？
+ファイルIOは、スレッドがシステムコールでブロックし同期的で、goroutineもシステムコールでブロックし同期的です。ただスケジューラのお陰で他のgoroutineに迷惑がかからないだけです。&lt;/p&gt;
+
+&lt;p&gt;ネットワークIOはpollingを行なうようです。
+スケジューラがfinbrunnableする中でブロックしない方のpoll(Linuxだとepollにノンブロッキングオプションつけたやつかな？)を呼んで、操作可能なfdがあればそれを待っているgoroutineを起こしている模様。
+であれば上の分類に従うとネットワークIOはスレッドはブロックせず同期的でIOを多重化し、goroutineはスケジューラからブロックされ同期的で（特別に関数を呼ばなければ）IOの多重化もしません。&lt;/p&gt;
+
+&lt;p&gt;この他にもgoroutine同士のコミュニケーションにチャネルがあります。そこまで重要じゃないかなと思って詳しく調べてないので間違いがあるかもしれないです。
+チャネルへの操作は同期的ですね。チャネルへのread/writeはバッファがempty/fullだったらブロックするようなのでgoroutineはチャネルへの操作でブロックします。調べてないですが普通スレッドはブロックしないでしょう。&lt;/p&gt;
+
+&lt;p&gt;チャネルへのselectはあまり情報が出てこなかったのですが恐らくスケジューラがIO可能なチャネルを調べて1つでもあればそれからランダムに選ぶ、1つもなくdefaultもなければスケジューラがgoroutineをブロックするんだと思います。
+goのselectはチャネルからデータが取り出された状態でくるので上の定義に従えば非同期…？そしてIOの多重化ですね。&lt;/p&gt;
+
+&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;p&gt;Goの件について図にするとこうですかね。&lt;/p&gt;
+
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;&lt;/th&gt;
+&lt;th&gt;スレッド&lt;/th&gt;
+&lt;th&gt;goroutine&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;ファイル&lt;/td&gt;
+&lt;td&gt;ブロック/同期/&lt;/td&gt;
+&lt;td&gt;ブロック/同期/&lt;/td&gt;
+&lt;/tr&gt;
+
+&lt;tr&gt;
+&lt;td&gt;ネットワーク&lt;/td&gt;
+&lt;td&gt;ノンブロック/同期/多重化&lt;/td&gt;
+&lt;td&gt;ブロック/同期/&lt;/td&gt;
+&lt;/tr&gt;
+
+&lt;tr&gt;
+&lt;td&gt;チャネルRW&lt;/td&gt;
+&lt;td&gt;-&lt;/td&gt;
+&lt;td&gt;ブロック/同期/&lt;/td&gt;
+&lt;/tr&gt;
+
+&lt;tr&gt;
+&lt;td&gt;チャネルselect&lt;/td&gt;
+&lt;td&gt;-&lt;/td&gt;
+&lt;td&gt;ブロック/非同期/多重化&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+
+&lt;p&gt;Goで非同期プログラミングが楽になると言っているのをよくみかけますが、今回の私の理解では非同期操作はほとんどないようです。
+Goはコンパイラが頑張ってgoroutineをコンテキストスイッチ可能にしているのと、スケジューラが頑張ってプロセス全体がブロックしないようにしているもののgoroutine自体はほとんどの操作でブロック/同期ですし、下のスレッドも同期かつネットワーク操作以外ではブロックするようです。
+なので言うとしたら「Goはコンパイラとスケジューラのお陰で見掛け上ブロックしても全体への影響が小さい」ですかね。&lt;/p&gt;
+
+&lt;p&gt;Goに詳しい人、コメントや誤り訂正お願いします。&lt;a href=&#34;https://github.com/KeenS/KeenS.github.io/issues&#34;&gt;GitHubのイシュー&lt;/a&gt;とか使えば良い気がします。&lt;/p&gt;</description>
+    </item>
     
     <item>
       <title>Rust風にデザインパターン23種</title>
@@ -2839,611 +2980,6 @@ hello, script
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;以上&lt;/p&gt;</description>
-    </item>
-    
-    <item>
-      <title>Rustのライフタイムを使ったスコープ解析</title>
-      <link>/blog/2016/12/24/rustnoraifutaimuwotsukattasuko_pukaiseki</link>
-      <pubDate>Sat, 24 Dec 2016 22:51:46 +0900</pubDate>
-      
-      <guid>/blog/2016/12/24/rustnoraifutaimuwotsukattasuko_pukaiseki</guid>
-      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2016/rust-lang-2&#34;&gt;Rust その2 Advent Calendar 2016 - Qiita&lt;/a&gt;の25日目の記事です。&lt;/p&gt;
-
-&lt;p&gt;κeenです。大トリに小ネタで申し訳ないのですが最近書いたコードでちょっと便利だなと思ったテクニックを紹介します。&lt;/p&gt;
-
-&lt;p&gt;&lt;/p&gt;
-
-&lt;p&gt;次のような言語のインタプリタを作ることを考えます。意味論はエスパーして下さい。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;x = 1
-y = 2
-println(&amp;quot;x = &amp;quot;, x)
-println(&amp;quot;y = &amp;quot;, y)
-
-println(&amp;quot;--&amp;quot;)
-
-{
-    x = 3
-    println(&amp;quot;x = &amp;quot;, x)
-    println(&amp;quot;y = &amp;quot;, y)
-}
-
-println(&amp;quot;--&amp;quot;)
-
-println(&amp;quot;x = &amp;quot;, x)
-println(&amp;quot;y = &amp;quot;, y)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;この実行結果は&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;x = 1
-y = 2
---
-x = 3
-y = 2
---
-x = 1
-y = 2
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;になりますね。このインタプリタをRustで作りましょう。&lt;/p&gt;
-
-&lt;h1 id=&#34;初期実装&#34;&gt;初期実装&lt;/h1&gt;
-
-&lt;p&gt;雛形はこんなもんでしょうか。後でリファレンスが出てきてややこしくなるので値は全て所有権を貰っています。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;#[derive(Debug, Clone)]
-struct AST(Vec&amp;lt;Stmt&amp;gt;);
-
-#[derive(Debug, Clone)]
-enum Stmt {
-    Subst(String, Expr),
-    Print(Vec&amp;lt;Expr&amp;gt;),
-    Block(Vec&amp;lt;Stmt&amp;gt;),
-}
-
-
-#[derive(Debug, Clone)]
-enum Expr {
-    Str(String),
-    Num(isize),
-    Var(String),
-}
-
-
-struct Interpreter {
-    // これを実装する
-}
-
-impl Interpreter {
-    pub fn new() -&amp;gt; Self {
-        Interpreter{}
-    }
-
-    fn run(&amp;amp;mut self, ast: AST) {
-        for stmt in ast.0 {
-            self.run_stmt(stmt);
-        }
-    }
-
-    fn run_stmt(&amp;amp;mut self, stmt: Stmt) {
-        // これを実装する
-    }
-}
-
-fn main() {
-    let ast = {
-        use Stmt::*;
-        use Expr::*;
-        AST(
-            vec![
-                Subst(&amp;quot;x&amp;quot;.to_string(), Num(1)),
-                Subst(&amp;quot;y&amp;quot;.to_string(), Num(2)),
-                Print(vec![Str(&amp;quot;x = &amp;quot;.to_string()), Var(&amp;quot;x&amp;quot;.to_string())]),
-                Print(vec![Str(&amp;quot;y = &amp;quot;.to_string()), Var(&amp;quot;y&amp;quot;.to_string())]),
-                Print(vec![Str(&amp;quot;--&amp;quot;.to_string())]),
-                Block(vec![
-                    Subst(&amp;quot;x&amp;quot;.to_string(), Num(3)),
-                    Print(vec![Str(&amp;quot;x = &amp;quot;.to_string()), Var(&amp;quot;x&amp;quot;.to_string())]),
-                    Print(vec![Str(&amp;quot;y = &amp;quot;.to_string()), Var(&amp;quot;y&amp;quot;.to_string())]),
-                ]),
-                Print(vec![Str(&amp;quot;--&amp;quot;.to_string())]),
-                Print(vec![Str(&amp;quot;x = &amp;quot;.to_string()), Var(&amp;quot;x&amp;quot;.to_string())]),
-                Print(vec![Str(&amp;quot;y = &amp;quot;.to_string()), Var(&amp;quot;y&amp;quot;.to_string())]),
-            ]
-        )
-    };
-    let mut interpreter = Interpreter::new();
-
-    interpreter.run(ast);
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;(コンストラクタ関数作っときゃよかったかも)&lt;/p&gt;
-
-&lt;p&gt;今回の本質ではないのでパーサは用意してません。&lt;/p&gt;
-
-&lt;p&gt;さて、とりあえずのところ変数の管理のためにシンボルテーブルが必要です。実装しましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;//...
-
-use std::collections::HashMap;
-struct Interpreter {
-    symbol_table: HashMap&amp;lt;String, Expr&amp;gt;,
-}
-
-impl Interpreter {
-    pub fn new() -&amp;gt; Self {
-        Interpreter{
-            symbol_table: HashMap::new(),
-        }
-    }
-
-    fn add_to_scope(&amp;amp;mut self, name: String, expr: Expr) {
-        self.symbol_table.insert(name, expr);
-    }
-
-    fn find_scope(&amp;amp;self, name: &amp;amp;str) -&amp;gt; Expr {
-        self.symbol_table
-            .get(name)
-            .expect(&amp;quot;reference to unknown variable&amp;quot;)
-            .clone()
-    }
-
-  //...
-}
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;簡略化のためにcloneやpanicしてますがご愛嬌。&lt;/p&gt;
-
-&lt;p&gt;これがあれば&lt;code&gt;run_stmt&lt;/code&gt;のそれっぽい実装は出来ます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    fn run_stmt(&amp;amp;mut self, stmt: Stmt) {
-        use Stmt::*;
-
-        match stmt {
-            Subst(name, expr) =&amp;gt; {
-                let expr = self.eval(expr);
-                self.add_to_scope(name, expr);
-            },
-            Print(exprs) =&amp;gt; {
-                for expr in exprs {
-                    self.print_expr(expr);
-                }
-                println!(&amp;quot;&amp;quot;);
-            },
-            Block(stmts) =&amp;gt; {
-                for stmt in stmts {
-                    self.run_stmt(stmt);
-                }
-            },
-        }
-
-    }
-
-    fn eval(&amp;amp;self, expr: Expr) -&amp;gt; Expr {
-        use Expr::*;
-        match expr {
-            Var(v) =&amp;gt; self.find_scope(&amp;amp;v),
-            e @ Str(_) |
-            e @ Num(_) =&amp;gt; e
-        }
-    }
-
-    fn print_expr(&amp;amp;self, expr: Expr) {
-        use Expr::*;
-        match self.eval(expr) {
-            Str(ref s) =&amp;gt; print!(&amp;quot;{}&amp;quot;, s),
-            Num(ref n) =&amp;gt; print!(&amp;quot;{}&amp;quot;, n),
-            Var(_) =&amp;gt; panic!(&amp;quot;reference to unknown variable&amp;quot;) ,
-        }
-    }
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;さて、これを走らせてみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo run
-x = 1
-y = 2
---
-x = 3
-y = 2
---
-x = 3
-y = 2
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;スコープを実装していないので最後の&lt;code&gt;x&lt;/code&gt;が3になっていますね。スコープを実装しましょう。&lt;/p&gt;
-
-&lt;p&gt;スコープを実装するには簡単にはハッシュテーブルを複数持てば良さそうです。
-3段にネストしたスコープなら3つのハッシュテーブルを持ちます。
-そしてスコープを抜けた時にそのスコープに対応するハッシュテーブルを消せば（忘れれば）良さそうです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct Interpreter {
-   // スコープに対応したテーブル達。
-   symbol_tables: Vec&amp;lt;HashMap&amp;lt;String, Expr&amp;gt;&amp;gt;,
-   // 今どのスコープを指しているか。
-   // スコープを抜けてもベクトルは縮まないのでこれが必要。
-   pos: usize,
-}
-
-impl Interpreter {
-    pub fn new() -&amp;gt; Self {
-        // 新しいフィールドの初期化
-        Interpreter{
-            symbol_tables: Vec::new(),
-            // ややこしくなるが、0で初期化しているのでpos-1番目のハッシュマップが現スコープのテーブルになる
-            pos: 0,
-        }
-    }
-
-    // スコープに入る処理。
-    fn in_scope(&amp;amp;mut self) {
-        let pos = self.pos;
-        // スコープから抜けてもハッシュマップは消えないので
-        // 入る → 出る → 入るをしたときに既にテーブルがある場合が出てくる。
-        // 必要なテーブルが既にある場合とない場合で条件分岐
-        if self.symbol_tables.len() &amp;lt;= pos {
-            self.symbol_tables.push(HashMap::new())
-        } else {
-            // 既にテーブルがある場合は古い情報を消す
-            self.symbol_tables[pos - 1].clear()
-        }
-        // ポジションは忘れずインクリメント
-        self.pos += 1;
-    }
-
-    // スコープから抜ける処理
-    fn out_scope(&amp;amp;mut self) {
-        // スコープから抜けるのはデクリメントのみでOK
-        self.pos -= 1;
-    }
-
-    pub fn run(&amp;amp;mut self, ast: AST) {
-        // in_scope が増えた
-        self.in_scope();
-        for stmt in ast.0 {
-            self.run_stmt(stmt);
-        }
-        // out_scope が増えた
-        self.out_scope();
-    }
-
-    fn add_to_scope(&amp;amp;mut self, name: String, expr: Expr) {
-        // 現在のスコープに変数を入れる
-        let pos = self.pos - 1;
-        self.symbol_tables[pos].insert(name, expr);
-    }
-
-    fn find_scope(&amp;amp;self, name: &amp;amp;str) -&amp;gt; Expr {
-        let pos = self.pos;
-        // 一番内側(現在)のスコープから外側のスコープの順に調べていく。
-        // `[0..pos]` や `rev()` に注意。
-        for table in self.symbol_tables[0..pos].iter().rev() {
-            if let Some(e) = table.get(name) {
-                return e.clone()
-            }
-        }
-        // どこにもなければ未定義変数
-        panic!(&amp;quot;reference to unknown variable&amp;quot;)
-    }
-
-    fn run_stmt(&amp;amp;mut self, stmt: Stmt) {
-        use Stmt::*;
-
-        match stmt {
-            // ..
-            Block(stmts) =&amp;gt; {
-                // in_scope が増えた
-                self.in_scope();
-                for stmt in stmts {
-                    self.run_stmt(stmt);
-                }
-                // out_scope が増えた
-                self.out_scope();
-            },
-        }
-
-    }
-
-    // ..
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これで走らせてみます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo run
-x = 1
-y = 2
---
-x = 3
-y = 2
---
-x = 1
-y = 2
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;はい。動きました。&lt;/p&gt;
-
-&lt;h1 id=&#34;scope-の導入&#34;&gt;&lt;code&gt;Scope&lt;/code&gt; の導入&lt;/h1&gt;
-
-&lt;p&gt;さて、上のコードでは&lt;code&gt;in_scope&lt;/code&gt;と&lt;code&gt;out_scope&lt;/code&gt;が対で現れました。というか現れないといけません。
-でもプログラミングエラーで&lt;code&gt;out_scope&lt;/code&gt;を忘れるなんてことはよくある話です（現に私はこのサンプルを書いてて間違えかけました）。これをRustのライフタイムの仕組みに乗っけて自動で解決しようというのが今回のお話。&lt;/p&gt;
-
-&lt;p&gt;手法は簡単で、とりあえず&lt;code&gt;Scope&lt;/code&gt;という型を用意します。そして&lt;code&gt;new&lt;/code&gt;する時に&lt;code&gt;in_scope&lt;/code&gt;を呼んであげて、&lt;code&gt;drop&lt;/code&gt;する時に&lt;code&gt;out_scope&lt;/code&gt;を呼んであげます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::ops::Drop;
-struct Scope&amp;lt;&#39;a&amp;gt;(&amp;amp;&#39;a mut Interpreter);
-
-impl &amp;lt;&#39;a&amp;gt;Scope&amp;lt;&#39;a&amp;gt; {
-    fn new(inpr: &amp;amp;&#39;a mut Interpreter) -&amp;gt; Self {
-        inpr.in_scope();
-        Scope(inpr)
-    }
-}
-
-impl &amp;lt;&#39;a&amp;gt;Drop for Scope&amp;lt;&#39;a&amp;gt; {
-    fn drop(&amp;amp;mut self) {
-        self.0.out_scope()
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;さて、この&lt;code&gt;&amp;amp;mut Interpreter&lt;/code&gt;で参照しているというのが丁度良くて、Scopeの分岐というのを防ぐことが出来ます。こういうやつですね。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;let scope1 = Scope::new(&amp;amp;mut intr);
-let scope2 = Scope::new(&amp;amp;mut intr); // error: 既に&amp;amp;mut されている変数は&amp;amp;mut出来ない
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;では、これを使ってみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    pub fn run(&amp;amp;mut self, ast: AST) {
-        // in_scopeをScope::new()に置き換えた
-        let scope = Scope::new(self);
-        for stmt in ast.0 {
-            // scopeに渡してしまったのでselfはsope.0で参照する必要がある
-            scope.0.run_stmt(stmt);
-        }
-        // out_scopeは自動で呼ばれる
-    }
-
-    // run_stmtのBlockも同様に書き換える
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo run
-x = 1
-y = 2
---
-x = 3
-y = 2
---
-x = 1
-y = 2
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;動きました。でも、あまり&lt;code&gt;scope.0&lt;/code&gt;なんて使いたくないですよね。出来れば透過的に扱いたい。
-そんなときのために&lt;code&gt;Deref&lt;/code&gt; と &lt;code&gt;DerefMut&lt;/code&gt; です。Rustは型が合わなければ自動で&lt;code&gt;deref&lt;/code&gt;を呼んでくれます。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;Deref&lt;/code&gt; と &lt;code&gt;DerefMut&lt;/code&gt; を実装しましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::ops::{Deref, DerefMut};
-impl &amp;lt;&#39;a&amp;gt; Deref for Scope&amp;lt;&#39;a&amp;gt; {
-    type Target = Interpreter;
-    fn deref(&amp;amp;self) -&amp;gt; &amp;amp;Interpreter {
-        self.0
-    }
-}
-
-impl &amp;lt;&#39;a&amp;gt; DerefMut for Scope&amp;lt;&#39;a&amp;gt; {
-    fn deref_mut(&amp;amp;mut self) -&amp;gt; &amp;amp;mut Interpreter {
-        self.0
-    }
-}
-
-impl Interpreter {
-    // ..
-
-    pub fn run(&amp;amp;mut self, ast: AST) {
-        // deref_mutするために mutをつける
-        let mut scope = Scope::new(self);
-        for stmt in ast.0 {
-            // scope.0しなくてもInterpreterのメソッドが呼べる
-            scope.run_stmt(stmt);
-        }
-    }
-
-   // ..
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;生成と消滅が対になるものはRustのオブジェクトで管理出来るよ&lt;/li&gt;
-&lt;li&gt;シンプルなラッパー型は&lt;code&gt;Deref&lt;/code&gt;や&lt;code&gt;DerefMut&lt;/code&gt;を実装しておくと便利だよ&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h1 id=&#34;参考&#34;&gt;参考&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/drop.html&#34;&gt;Drop&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/deref-coercions.html&#34;&gt;&lt;code&gt;Deref&lt;/code&gt; による型強制&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h1 id=&#34;付録a&#34;&gt;付録A&lt;/h1&gt;
-
-&lt;p&gt;最終的なソースコード全文を掲載します。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;#[derive(Debug, Clone)]
-struct AST(Vec&amp;lt;Stmt&amp;gt;);
-
-#[derive(Debug, Clone)]
-enum Stmt {
-    Subst(String, Expr),
-    Print(Vec&amp;lt;Expr&amp;gt;),
-    Block(Vec&amp;lt;Stmt&amp;gt;),
-}
-
-
-#[derive(Debug, Clone)]
-enum Expr {
-    Str(String),
-    Num(isize),
-    Var(String),
-}
-
-
-use std::collections::HashMap;
-struct Interpreter {
-   symbol_tables: Vec&amp;lt;HashMap&amp;lt;String, Expr&amp;gt;&amp;gt;,
-   pos: usize,
-}
-
-use std::ops::{Drop, Deref, DerefMut};
-struct Scope&amp;lt;&#39;a&amp;gt;(&amp;amp;&#39;a mut Interpreter);
-
-impl &amp;lt;&#39;a&amp;gt;Scope&amp;lt;&#39;a&amp;gt; {
-    fn new(inpr: &amp;amp;&#39;a mut Interpreter) -&amp;gt; Self {
-        inpr.in_scope();
-        Scope(inpr)
-    }
-}
-
-impl &amp;lt;&#39;a&amp;gt;Drop for Scope&amp;lt;&#39;a&amp;gt; {
-    fn drop(&amp;amp;mut self) {
-        self.0.out_scope()
-    }
-}
-
-impl &amp;lt;&#39;a&amp;gt; Deref for Scope&amp;lt;&#39;a&amp;gt; {
-    type Target = Interpreter;
-    fn deref(&amp;amp;self) -&amp;gt; &amp;amp;Interpreter {
-        self.0
-    }
-}
-
-impl &amp;lt;&#39;a&amp;gt; DerefMut for Scope&amp;lt;&#39;a&amp;gt; {
-    fn deref_mut(&amp;amp;mut self) -&amp;gt; &amp;amp;mut Interpreter {
-        self.0
-    }
-}
-
-impl Interpreter {
-    pub fn new() -&amp;gt; Self {
-        Interpreter{
-            symbol_tables: Vec::new(),
-            pos: 0,
-        }
-    }
-
-    fn in_scope(&amp;amp;mut self) {
-        let pos = self.pos;
-        if self.symbol_tables.len() &amp;lt;= pos {
-            self.symbol_tables.push(HashMap::new())
-        } else {
-            self.symbol_tables[pos - 1].clear()
-        }
-        self.pos += 1;
-    }
-
-    fn out_scope(&amp;amp;mut self) {
-        self.pos -= 1;
-    }
-
-    pub fn run(&amp;amp;mut self, ast: AST) {
-        let mut scope = Scope::new(self);
-        for stmt in ast.0 {
-            scope.run_stmt(stmt);
-        }
-    }
-
-    fn add_to_scope(&amp;amp;mut self, name: String, expr: Expr) {
-        let pos = self.pos - 1;
-        self.symbol_tables[pos].insert(name, expr);
-    }
-
-    fn find_scope(&amp;amp;self, name: &amp;amp;str) -&amp;gt; Expr {
-        let pos = self.pos;
-        for table in self.symbol_tables[0..pos].iter().rev() {
-            if let Some(e) = table.get(name) {
-                return e.clone()
-            }
-        }
-        panic!(&amp;quot;reference to unknown variable&amp;quot;)
-    }
-
-    fn run_stmt(&amp;amp;mut self, stmt: Stmt) {
-        use Stmt::*;
-
-        match stmt {
-            Subst(name, expr) =&amp;gt; {
-                let expr = self.eval(expr);
-                self.add_to_scope(name, expr);
-            },
-            Print(exprs) =&amp;gt; {
-                for expr in exprs {
-                    self.print_expr(expr);
-                }
-                println!(&amp;quot;&amp;quot;);
-            },
-            Block(stmts) =&amp;gt; {
-                let scope = Scope::new(self);
-
-                for stmt in stmts {
-                    scope.0.run_stmt(stmt);
-                }
-            },
-        }
-
-    }
-
-    fn eval(&amp;amp;self, expr: Expr) -&amp;gt; Expr {
-        use Expr::*;
-        match expr {
-            Var(v) =&amp;gt; self.find_scope(&amp;amp;v),
-            e @ Str(_) |
-            e @ Num(_) =&amp;gt; e
-        }
-    }
-
-    fn print_expr(&amp;amp;self, expr: Expr) {
-        use Expr::*;
-        match self.eval(expr) {
-            Str(ref s) =&amp;gt; print!(&amp;quot;{}&amp;quot;, s),
-            Num(ref n) =&amp;gt; print!(&amp;quot;{}&amp;quot;, n),
-            Var(_) =&amp;gt; panic!(&amp;quot;reference to unknown variable&amp;quot;) ,
-        }
-    }
-}
-
-fn main() {
-    let ast = {
-        use Stmt::*;
-        use Expr::*;
-        AST(
-            vec![
-                Subst(&amp;quot;x&amp;quot;.to_string(), Num(1)),
-                Subst(&amp;quot;y&amp;quot;.to_string(), Num(2)),
-                Print(vec![Str(&amp;quot;x = &amp;quot;.to_string()), Var(&amp;quot;x&amp;quot;.to_string())]),
-                Print(vec![Str(&amp;quot;y = &amp;quot;.to_string()), Var(&amp;quot;y&amp;quot;.to_string())]),
-                Print(vec![Str(&amp;quot;--&amp;quot;.to_string())]),
-                Block(vec![
-                    Subst(&amp;quot;x&amp;quot;.to_string(), Num(3)),
-                    Print(vec![Str(&amp;quot;x = &amp;quot;.to_string()), Var(&amp;quot;x&amp;quot;.to_string())]),
-                    Print(vec![Str(&amp;quot;y = &amp;quot;.to_string()), Var(&amp;quot;y&amp;quot;.to_string())]),
-                ]),
-                Print(vec![Str(&amp;quot;--&amp;quot;.to_string())]),
-                Print(vec![Str(&amp;quot;x = &amp;quot;.to_string()), Var(&amp;quot;x&amp;quot;.to_string())]),
-                Print(vec![Str(&amp;quot;y = &amp;quot;.to_string()), Var(&amp;quot;y&amp;quot;.to_string())]),
-            ]
-        )
-    };
-    let mut interpreter = Interpreter::new();
-
-    interpreter.run(ast);
-}
-&lt;/code&gt;&lt;/pre&gt;</description>
     </item>
     
   </channel>
