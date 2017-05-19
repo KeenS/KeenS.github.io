@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Go on κeenのHappy Hacκing Blog</title>
+    <link>/categories/go/index.xml</link>
+    <description>Recent content in Go on κeenのHappy Hacκing Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>ja-jp</language>
+    <atom:link href="/categories/go/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>非同期とノンブロッキングとあと何か</title>
+      <link>/blog/2017/05/19/hidoukitononburokkingutoatonanika</link>
+      <pubDate>Fri, 19 May 2017 20:51:46 +0900</pubDate>
+      
+      <guid>/blog/2017/05/19/hidoukitononburokkingutoatonanika</guid>
+      <description>&lt;p&gt;κeenです。最近同期/非同期、ブロッキング/ノンブロッキング、直接形式/継続渡し形式あたりが混乱してきたので個人的に整理します。
+あくまで私個人の理解を纏めただけなので誤謬などに注意して下さい。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;
+
+&lt;p&gt;非同期とノンブロッキングはよく混同されます。また、非同期処理の記述形式として直接形式や継続渡し形式などがあります。
+私自身違う言葉だなとは思いつつも混同したり違いを忘れたりしています。
+非同期もノンブロッキングもナイーブなIOに比べると速い方式だな程度の理解でいてそんなに困らないと思ってますし混同や誤用に目くじらを立てるつもりもありません。
+しかしながら3者を区別しないと意味を成さない文脈で3者を混同している技術を何度か見掛けたので（自分の中で）整理しようと思ったのがこの記事を書こうと思ったきっかけです。&lt;/p&gt;
+
+&lt;h1 id=&#34;用語&#34;&gt;用語&lt;/h1&gt;
+
+&lt;p&gt;色々と調べましたが、以下のブログ記事が一番信頼できそうなのでこの記事の用語に従います。ここでは同期/非同期とブロッキング/ノンブロッキングとIOの多重化を区別しています。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://blog.matsumoto-r.jp/?p=2030&#34;&gt;人間とウェブの未来 - 非同期I/OやノンブロッキングI/O及びI/Oの多重化について&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;一部抜粋します&lt;/p&gt;
+
+&lt;blockquote&gt;
+&lt;ul&gt;
+&lt;li&gt;ブロッキングI/O:
+データ処理が完了するまで待つ&lt;/li&gt;
+&lt;li&gt;ノンブロッキングI/O:
+データ処理の完了を待たずに他の処理を行う&lt;/li&gt;
+&lt;li&gt;synchronous I/O Operation:
+データ処理の入出力が可能になった時点で通知
+その後に同期的にデータの転送が必要。その処理をブロックあるいはノンブロック（別の処理をしつつ定期的に転送完了をチェックする）に行うかは自由であり、データの整合性は含まない&lt;/li&gt;
+&lt;li&gt;Asynchronous I/O Operation:
+データ処理の入出力が完了した時点で通知
+非同期なので読込の場合は通知のあった段階で既にデータの転送は完了（I/O Completion）しバッファ内にデータがある。シグナルやコールバックによる通知があるまではユーザスペースでその他の処理が可能であるため、基本的にはノンブロック。別にやりたければ通知があるまでブロックしても良い、その辺りは自由&lt;/li&gt;
+&lt;li&gt;I/Oの多重化:
+I/O可能になったfdを通知（I/OはブロッキングI/O）&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;これらはどのようにIOを行うかの問題で、 &lt;strong&gt;実行時&lt;/strong&gt; に関係する話題です。&lt;/p&gt;
+
+&lt;p&gt;次に、直接形式と継続渡し形式について。非同期やノンブロッキングなIOをしようと思うと後続の処理、すなわち（限定）継続が必要になる。この（限定）継続をプログラマがどのように渡すかの問題。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://en.wikipedia.org/wiki/Direct_style&#34;&gt;直接形式&lt;/a&gt;は（限定）継続がプログラムには陽には現れず、コンパイラが頑張るかコルーチンなどの言語機能、&lt;code&gt;async&lt;/code&gt;/&lt;code&gt;await&lt;/code&gt;、&lt;code&gt;do&lt;/code&gt;、&lt;code&gt;for&lt;/code&gt;などの構文を用いて実現されます。
+&lt;a href=&#34;https://en.wikipedia.org/wiki/Continuation-passing_style&#34;&gt;継続渡し形式&lt;/a&gt;(CPS)はプログラマが陽に（限定）継続を渡すスタイルで、コールバック形式などとも呼ばれます。&lt;/p&gt;
+
+&lt;p&gt;これらは主に言語の問題で、 &lt;strong&gt;コンパイル時&lt;/strong&gt; に関係する話題です。
+よく直接形式と同期処理が混同されて「同期プログラミングをすることで非同期プログラミングができます」などの矛盾した一文が書かれがちですが区別しましょう。&lt;/p&gt;
+
+&lt;h2 id=&#34;誰が何を&#34;&gt;誰が何を&lt;/h2&gt;
+
+&lt;p&gt;IO処理の話題はスレッドとカーネルとのやりとりに関することが多い気がしますが、Goのようにユーザランドで実行単位を持つと「ブロックする」といったときにスレッドがブロックするのかgoroutineがブロックするのか分かりづらいですね。
+なのでこれ以後は誰が何をブロックするのかを出来る限り明示しながら書きたいと思います。例えば「カーネルがgoroutine Aを実行しているスレッドをブロックする」など。&lt;/p&gt;
+
+&lt;h1 id=&#34;scala&#34;&gt;Scala&lt;/h1&gt;
+
+&lt;p&gt;前職でScalaを書いていました。
+Scalaの&lt;code&gt;Future&lt;/code&gt;そのものは&lt;code&gt;flatMap&lt;/code&gt;が関数をとるので継続渡し形式ですが、そのシンタックスシュガーの&lt;code&gt;for&lt;/code&gt;式は直接形式でプログラミングができます。
+IOの実体についてはFutureで抽象化されているのでexecutorによります。&lt;/p&gt;
+
+&lt;h1 id=&#34;go&#34;&gt;Go&lt;/h1&gt;
+
+&lt;p&gt;前職の新卒研修で5日ほどGoを書いたことがあります。
+多くの言語は比較的シンプルなIOモデルを持つので用語を意識しなくても問題ありませんが、Goは実行時に色々工夫しているので用語をちゃんと区別しないと齟齬が出るようです。
+なのでGoを例に理解を深めようと思います。&lt;/p&gt;
+
+&lt;p&gt;まず、Goは実行時に動作するコンポーネントが多いので整理します。
+&lt;a href=&#34;https://www.quora.com/How-does-the-Go-runtime-work&#34;&gt;ここの質問&lt;/a&gt;への回答によるとgoroutine実行用のスレッド、スケジューラ、GCに大別してよさそうです。
+このうち、IOに関連するのはgoroutine実行用のスレッドとスケジューラなのでGCについては触れません。
+あまりよく分かってないのですがスケジューラはgoroutine実行用のスレッド上で呼ばれるための関数（群）なんですかね。&lt;/p&gt;
+
+&lt;p&gt;普段は1スレッドが複数のgoroutineの実行を受け持ち、goroutineが何かしらの理由でブロックしそうなタイミングで別のgoroutineにコンテキストスイッチするようです。
+ブロックしそうなタイミングというのはやや古いですが&lt;a href=&#34;http://stackoverflow.com/questions/17953269/go-routine-blocking-the-others-one&#34;&gt;ここ&lt;/a&gt;に書かれてます。
+直接形式で書きつつコンテキストスイッチをするということはどうにかして(限定)継続を取り出す必要がありますが、それこそgoroutineですね。goroutine自身でスタックを持つようですし。
+C関数を呼ぶときなどはコンパイラが裏で呼び出す前と後に分割しているようです。&lt;/p&gt;
+
+&lt;p&gt;さて、IOについてはファイルIOとネットワークIOで操作が異なるようです。&lt;/p&gt;
+
+&lt;p&gt;ファイルIOでは普通に同期/ブロッキングなシステムコールを発効し、OSがスレッドをブロックする時間が長いようなら別スレッドで元スレッドの持っていたgoroutineを実行するようです。
+信頼できる情報が出てこなかったのですが自身で長くなりそうと思っているシステムコールの場合はgoroutineの実行権限（プロセス）を手放してあとは他のプロセスがstealするに任せてる？
+ファイルIOは、スレッドがシステムコールでブロックし同期的で、goroutineもシステムコールでブロックし同期的です。ただスケジューラのお陰で他のgoroutineに迷惑がかからないだけです。&lt;/p&gt;
+
+&lt;p&gt;ネットワークIOはpollingを行なうようです。
+スケジューラがfinbrunnableする中でブロックしない方のpoll(Linuxだとepollにノンブロッキングオプションつけたやつかな？)を呼んで、操作可能なfdがあればそれを待っているgoroutineを起こしている模様。
+であれば上の分類に従うとネットワークIOはスレッドはブロックせず同期的でIOを多重化し、goroutineはスケジューラからブロックされ同期的で（特別に関数を呼ばなければ）IOの多重化もしません。&lt;/p&gt;
+
+&lt;p&gt;この他にもgoroutine同士のコミュニケーションにチャネルがあります。そこまで重要じゃないかなと思って詳しく調べてないので間違いがあるかもしれないです。
+チャネルへの操作は同期的ですね。チャネルへのread/writeはバッファがempty/fullだったらブロックするようなのでgoroutineはチャネルへの操作でブロックします。調べてないですが普通スレッドはブロックしないでしょう。&lt;/p&gt;
+
+&lt;p&gt;チャネルへのselectはあまり情報が出てこなかったのですが恐らくスケジューラがIO可能なチャネルを調べて1つでもあればそれからランダムに選ぶ、1つもなくdefaultもなければスケジューラがgoroutineをブロックするんだと思います。
+goのselectはチャネルからデータが取り出された状態でくるので上の定義に従えば非同期…？そしてIOの多重化ですね。&lt;/p&gt;
+
+&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;p&gt;Goの件について図にするとこうですかね。&lt;/p&gt;
+
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;&lt;/th&gt;
+&lt;th&gt;スレッド&lt;/th&gt;
+&lt;th&gt;goroutine&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;ファイル&lt;/td&gt;
+&lt;td&gt;ブロック/同期/&lt;/td&gt;
+&lt;td&gt;ブロック/同期/&lt;/td&gt;
+&lt;/tr&gt;
+
+&lt;tr&gt;
+&lt;td&gt;ネットワーク&lt;/td&gt;
+&lt;td&gt;ノンブロック/同期/多重化&lt;/td&gt;
+&lt;td&gt;ブロック/同期/&lt;/td&gt;
+&lt;/tr&gt;
+
+&lt;tr&gt;
+&lt;td&gt;チャネルRW&lt;/td&gt;
+&lt;td&gt;-&lt;/td&gt;
+&lt;td&gt;ブロック/同期/&lt;/td&gt;
+&lt;/tr&gt;
+
+&lt;tr&gt;
+&lt;td&gt;チャネルselect&lt;/td&gt;
+&lt;td&gt;-&lt;/td&gt;
+&lt;td&gt;ブロック/非同期/多重化&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+
+&lt;p&gt;Goで非同期プログラミングが楽になると言っているのをよくみかけますが、今回の私の理解では非同期操作はほとんどないようです。
+Goはコンパイラが頑張ってgoroutineをコンテキストスイッチ可能にしているのと、スケジューラが頑張ってプロセス全体がブロックしないようにしているもののgoroutine自体はほとんどの操作でブロック/同期ですし、下のスレッドも同期かつネットワーク操作以外ではブロックするようです。
+なので言うとしたら「Goはコンパイラとスケジューラのお陰で見掛け上ブロックしても全体への影響が小さい」ですかね。&lt;/p&gt;
+
+&lt;p&gt;Goに詳しい人、コメントや誤り訂正お願いします。&lt;a href=&#34;https://github.com/KeenS/KeenS.github.io/issues&#34;&gt;GitHubのイシュー&lt;/a&gt;とか使えば良い気がします。&lt;/p&gt;</description>
+    </item>
+    
+  </channel>
+</rss>
