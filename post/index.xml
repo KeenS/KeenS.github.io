@@ -18,6 +18,9 @@
       <description>&lt;p&gt;κeenです。最近同期/非同期、ブロッキング/ノンブロッキング、直接形式/継続渡し形式あたりが混乱してきたので個人的に整理します。
 あくまで私個人の理解を纏めただけなので誤謬などに注意して下さい。&lt;/p&gt;
 
+&lt;p&gt;追記: &lt;a href=&#34;https://twitter.com/tanaka_akr&#34;&gt;@tanaka_akr&lt;/a&gt;さんから&lt;a href=&#34;https://twitter.com/tanaka_akr/status/865722507281580032&#34;&gt;指摘&lt;/a&gt;されたのですが、用語の説明が間違っていそうだったので書き直しました。
+diffは&lt;a href=&#34;https://github.com/KeenS/KeenS.github.io/commit/d46dad5282436eeaa615f31c160f892e6c724403&#34;&gt;こちら&lt;/a&gt;&lt;/p&gt;
+
 &lt;p&gt;&lt;/p&gt;
 
 &lt;p&gt;非同期とノンブロッキングはよく混同されます。また、非同期処理の記述形式として直接形式や継続渡し形式などがあります。
@@ -27,28 +30,20 @@
 
 &lt;h1 id=&#34;用語&#34;&gt;用語&lt;/h1&gt;
 
-&lt;p&gt;色々と調べましたが、以下のブログ記事が一番信頼できそうなのでこの記事の用語に従います。ここでは同期/非同期とブロッキング/ノンブロッキングとIOの多重化を区別しています。&lt;/p&gt;
+&lt;p&gt;色々と調べましたが、&lt;a href=&#34;http://pubs.opengroup.org/onlinepubs/009695399/basedefs/xbd_chap03.html&#34;&gt;The Open Group Base Specifications Issue 6 IEEE Std 1003.1, 2004 Edition&lt;/a&gt;の定義を使います。&lt;/p&gt;
 
-&lt;p&gt;&lt;a href=&#34;http://blog.matsumoto-r.jp/?p=2030&#34;&gt;人間とウェブの未来 - 非同期I/OやノンブロッキングI/O及びI/Oの多重化について&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;一部抜粋します&lt;/p&gt;
-
-&lt;blockquote&gt;
 &lt;ul&gt;
-&lt;li&gt;ブロッキングI/O:
-データ処理が完了するまで待つ&lt;/li&gt;
-&lt;li&gt;ノンブロッキングI/O:
-データ処理の完了を待たずに他の処理を行う&lt;/li&gt;
-&lt;li&gt;synchronous I/O Operation:
-データ処理の入出力が可能になった時点で通知
-その後に同期的にデータの転送が必要。その処理をブロックあるいはノンブロック（別の処理をしつつ定期的に転送完了をチェックする）に行うかは自由であり、データの整合性は含まない&lt;/li&gt;
-&lt;li&gt;Asynchronous I/O Operation:
-データ処理の入出力が完了した時点で通知
-非同期なので読込の場合は通知のあった段階で既にデータの転送は完了（I/O Completion）しバッファ内にデータがある。シグナルやコールバックによる通知があるまではユーザスペースでその他の処理が可能であるため、基本的にはノンブロック。別にやりたければ通知があるまでブロックしても良い、その辺りは自由&lt;/li&gt;
-&lt;li&gt;I/Oの多重化:
-I/O可能になったfdを通知（I/OはブロッキングI/O）&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://pubs.opengroup.org/onlinepubs/009695399/basedefs/xbd_chap03.html#tag_03_77&#34;&gt;ブロッキング&lt;/a&gt;:
+IO操作で、操作する前に待ちが発生するという性質&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://pubs.opengroup.org/onlinepubs/009695399/basedefs/xbd_chap03.html#tag_03_240&#34;&gt;ノンブロッキング&lt;/a&gt;:
+IO操作で、操作する前に待ちが発生しそうなら即座に関数から返るという性質&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://pubs.opengroup.org/onlinepubs/009695399/basedefs/xbd_chap03.html#tag_03_378&#34;&gt;同期&lt;/a&gt;:
+IO操作で、操作が終わるまでブロックするという性質&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://pubs.opengroup.org/onlinepubs/009695399/basedefs/xbd_chap03.html#tag_03_29&#34;&gt;非同期&lt;/a&gt;:
+IO操作で、IO操作を発効したスレッド自体がブロックせずに別のCPU処理を行えるという性質&lt;/li&gt;
+&lt;li&gt;IOの多重化: 複数のfdに対して監視を行ない、ブロックせずに操作可能なfdを通知する仕組み。
+調べると「複数のfdに対してブロックできる」という記述があるのですがノンブロッキングなオプションもありますよね&lt;/li&gt;
 &lt;/ul&gt;
-&lt;/blockquote&gt;
 
 &lt;p&gt;これらはどのようにIOを行うかの問題で、 &lt;strong&gt;実行時&lt;/strong&gt; に関係する話題です。&lt;/p&gt;
 
@@ -93,19 +88,21 @@ C関数を呼ぶときなどはコンパイラが裏で呼び出す前と後に�
 信頼できる情報が出てこなかったのですが自身で長くなりそうと思っているシステムコールの場合はgoroutineの実行権限（プロセス）を手放してあとは他のプロセスがstealするに任せてる？
 ファイルIOは、スレッドがシステムコールでブロックし同期的で、goroutineもシステムコールでブロックし同期的です。ただスケジューラのお陰で他のgoroutineに迷惑がかからないだけです。&lt;/p&gt;
 
-&lt;p&gt;ネットワークIOはpollingを行なうようです。
+&lt;p&gt;ネットワークIOはポーリングを行なうようです。
 スケジューラがfinbrunnableする中でブロックしない方のpoll(Linuxだとepollにノンブロッキングオプションつけたやつかな？)を呼んで、操作可能なfdがあればそれを待っているgoroutineを起こしている模様。
-であれば上の分類に従うとネットワークIOはスレッドはブロックせず同期的でIOを多重化し、goroutineはスケジューラからブロックされ同期的で（特別に関数を呼ばなければ）IOの多重化もしません。&lt;/p&gt;
+であれば上の分類に従うとネットワークIOはスレッドはブロックせず同期的でIOを多重化し、goroutineはスケジューラからブロックされ同期的で（特別に関数を呼ばなければ）IOの多重化もしません。ただ、操作可能なfdに操作しているのでgoroutineはカーネルからはブロックされません。&lt;/p&gt;
 
 &lt;p&gt;この他にもgoroutine同士のコミュニケーションにチャネルがあります。そこまで重要じゃないかなと思って詳しく調べてないので間違いがあるかもしれないです。
 チャネルへの操作は同期的ですね。チャネルへのread/writeはバッファがempty/fullだったらブロックするようなのでgoroutineはチャネルへの操作でブロックします。調べてないですが普通スレッドはブロックしないでしょう。&lt;/p&gt;
 
 &lt;p&gt;チャネルへのselectはあまり情報が出てこなかったのですが恐らくスケジューラがIO可能なチャネルを調べて1つでもあればそれからランダムに選ぶ、1つもなくdefaultもなければスケジューラがgoroutineをブロックするんだと思います。
-goのselectはチャネルからデータが取り出された状態でくるので上の定義に従えば非同期…？そしてIOの多重化ですね。&lt;/p&gt;
+同期的でIOの多重化をしていますね。&lt;/p&gt;
+
+&lt;p&gt;Goroutineやスレッドレベルでは同期的ですが、Goのプロセス全体でみるとGOMAXPROC分のスレッドは常にCPUを使っているので非同期なんですかね。&lt;/p&gt;
 
 &lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
 
-&lt;p&gt;Goの件について図にするとこうですかね。&lt;/p&gt;
+&lt;p&gt;Goの件について表にするとこうですかね。非同期処理をやろうと思ったら大抵処理単位を分ける必要がありますが、Goの最小処理単位がgoroutineなのでよく考えたらgoroutineが全て同期するのはあたりまえですね。&lt;/p&gt;
 
 &lt;table&gt;
 &lt;thead&gt;
@@ -113,6 +110,7 @@ goのselectはチャネルからデータが取り出された状態でくるの
 &lt;th&gt;&lt;/th&gt;
 &lt;th&gt;スレッド&lt;/th&gt;
 &lt;th&gt;goroutine&lt;/th&gt;
+&lt;th&gt;Goプロセス&lt;/th&gt;
 &lt;/tr&gt;
 &lt;/thead&gt;
 
@@ -121,31 +119,33 @@ goのselectはチャネルからデータが取り出された状態でくるの
 &lt;td&gt;ファイル&lt;/td&gt;
 &lt;td&gt;ブロック/同期/&lt;/td&gt;
 &lt;td&gt;ブロック/同期/&lt;/td&gt;
+&lt;td&gt;非同期&lt;/td&gt;
 &lt;/tr&gt;
 
 &lt;tr&gt;
 &lt;td&gt;ネットワーク&lt;/td&gt;
 &lt;td&gt;ノンブロック/同期/多重化&lt;/td&gt;
-&lt;td&gt;ブロック/同期/&lt;/td&gt;
+&lt;td&gt;ノンブロック/同期/&lt;/td&gt;
+&lt;td&gt;非同期&lt;/td&gt;
 &lt;/tr&gt;
 
 &lt;tr&gt;
 &lt;td&gt;チャネルRW&lt;/td&gt;
 &lt;td&gt;-&lt;/td&gt;
 &lt;td&gt;ブロック/同期/&lt;/td&gt;
+&lt;td&gt;-&lt;/td&gt;
 &lt;/tr&gt;
 
 &lt;tr&gt;
 &lt;td&gt;チャネルselect&lt;/td&gt;
 &lt;td&gt;-&lt;/td&gt;
-&lt;td&gt;ブロック/非同期/多重化&lt;/td&gt;
+&lt;td&gt;ブロック/同期/多重化&lt;/td&gt;
+&lt;td&gt;-&lt;/td&gt;
 &lt;/tr&gt;
 &lt;/tbody&gt;
 &lt;/table&gt;
 
-&lt;p&gt;Goで非同期プログラミングが楽になると言っているのをよくみかけますが、今回の私の理解では非同期操作はほとんどないようです。
-Goはコンパイラが頑張ってgoroutineをコンテキストスイッチ可能にしているのと、スケジューラが頑張ってプロセス全体がブロックしないようにしているもののgoroutine自体はほとんどの操作でブロック/同期ですし、下のスレッドも同期かつネットワーク操作以外ではブロックするようです。
-なので言うとしたら「Goはコンパイラとスケジューラのお陰で見掛け上ブロックしても全体への影響が小さい」ですかね。&lt;/p&gt;
+&lt;p&gt;ということでGoのIOについては「goroutineを直接形式で同期的な書き方をしても裏でスケジューラが動いているからCPUを効率的に使えてGoプロセス全体でみれば非同期」になるんですかね。&lt;/p&gt;
 
 &lt;p&gt;Goに詳しい人、コメントや誤り訂正お願いします。&lt;a href=&#34;https://github.com/KeenS/KeenS.github.io/issues&#34;&gt;GitHubのイシュー&lt;/a&gt;とか使えば良い気がします。&lt;/p&gt;
 
