@@ -7,6 +7,7 @@ title: 非同期とノンブロッキングとあと何か
 あくまで私個人の理解を纏めただけなので誤謬などに注意して下さい。
 
 追記: [@tanaka_akr](https://twitter.com/tanaka_akr)さんから[指摘](https://twitter.com/tanaka_akr/status/865722507281580032)されたのですが、用語の説明が間違っていそうだったので書き直しました。
+diffは[こちら](https://github.com/KeenS/KeenS.github.io/commit/d46dad5282436eeaa615f31c160f892e6c724403)
 
 <!--more-->
 
