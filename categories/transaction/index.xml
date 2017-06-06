@@ -1,0 +1,299 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Transaction on κeenのHappy Hacκing Blog</title>
+    <link>/categories/transaction/index.xml</link>
+    <description>Recent content in Transaction on κeenのHappy Hacκing Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>ja-jp</language>
+    <atom:link href="/categories/transaction/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Rustのトランザクション抽象化ライブラリ作った</title>
+      <link>/blog/2017/06/06/rustnotoranzakushonchuushoukaraiburaritsukutta</link>
+      <pubDate>Tue, 06 Jun 2017 18:20:52 +0900</pubDate>
+      
+      <guid>/blog/2017/06/06/rustnotoranzakushonchuushoukaraiburaritsukutta</guid>
+      <description>&lt;p&gt;κeenです。最近&lt;a href=&#34;https://github.com/KeenS/transaction-rs&#34;&gt;KeenS/transaction-rs: The transaction abstraction library and its executors for rust&lt;/a&gt;というライブラリをリリースしたのでそれについて。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;
+
+&lt;h1 id=&#34;モチベーション&#34;&gt;モチベーション&lt;/h1&gt;
+
+&lt;p&gt;Rustでドメインロジックを書いていると以下のようなコードが出てきました。
+(実際はもうちょっと複雑ですが本質ではないので簡略化します)&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct GroupPgDao(r2d2::Pool&amp;lt;ConnectionManager&amp;lt;PgConnection&amp;gt;&amp;gt;);
+impl GroupPgDao {
+  fn get_conn(&amp;amp;self) -&amp;gt; &amp;amp;PgConnection { /*... */ }
+  fn delete_user(&amp;amp;self, user: &amp;amp;User, group: &amp;amp;Group) -&amp;gt; Result&amp;lt;()&amp;gt; {
+      let cn = self.get_conn();
+      //...
+  }
+  fn add_user(&amp;amp;self, user: &amp;amp;User, group: &amp;amp;Group) -&amp;gt; Result&amp;lt;()&amp;gt; {
+      let cn = self.get_conn();
+      //...
+  }
+}
+
+trait GroupService: HaveGroupDao {
+  fn change_group(&amp;amp;self, user: &amp;amp;User, from: &amp;amp;Group, to: &amp;amp;Group) -&amp;gt; Result&amp;lt;()&amp;gt; {
+     let service = self.group_dao();
+     dao.delete_user(user, from)?;
+     dao.add_user(user, to)
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;この&lt;code&gt;change_group&lt;/code&gt;はDBのトランザクション内で実行しないと困ります。&lt;code&gt;delete_user&lt;/code&gt;が成功して&lt;code&gt;add_user&lt;/code&gt;が失敗するとuserがどちらにも所属しなくなるからです。じゃあ&lt;code&gt;change_group&lt;/code&gt;の中でトランザクションを作って実行すればいいかというとそうでもなく、いくつか問題があります。&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;もっと外側でトランザクションが必要な操作が発生するかもしれない&lt;/li&gt;
+&lt;li&gt;同一トランザクション内で実行するにはコネクションを共有しないといけないが、関数個々でプールからコネクションを取得している&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;1に関しては誰がトランザクションを実行するのかという責任問題と、どの操作がトランザクションを必要とするのかという契約問題の2つが複合しています。
+dieselのトランザクションはネストをサポートしているので必要そうな部分至るところトランザクションを作るというのも考えられますが、プログラマが目で責任と契約を追うことになりバグりかねません&lt;/p&gt;
+
+&lt;p&gt;2つ目はインジェクションの問題ですね。これについてはシンプルに引数にコネクションを渡すというのも考えられますが持ち回るのは非常に大変です。&lt;/p&gt;
+
+&lt;p&gt;これらを解決するために作ったのが冒頭に挙げたtransaction-rsです。&lt;/p&gt;
+
+&lt;h1 id=&#34;transaction-rs&#34;&gt;transaction-rs&lt;/h1&gt;
+
+&lt;p&gt;transaction-rsは非常に&lt;a href=&#34;https://github.com/alexcrichton/futures-rs&#34;&gt;future-rs&lt;/a&gt;に似ています。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub trait Transaction&amp;lt;Ctx&amp;gt; {
+    type Item;
+    type Err;
+    fn run(&amp;amp;self, ctx: &amp;amp;mut Ctx) -&amp;gt; Result&amp;lt;Self::Item, Self::Err&amp;gt;;
+
+    fn map&amp;lt;F, B&amp;gt;(self, f: F) -&amp;gt; Map&amp;lt;Self, F&amp;gt;
+    where
+        F: Fn(Self::Item) -&amp;gt; B,
+        Self: Sized,
+    { ... }
+    fn and_then&amp;lt;F, B&amp;gt;(self, f: F) -&amp;gt; AndThen&amp;lt;Self, F, B&amp;gt;
+    where
+        B: Transaction&amp;lt;Ctx, Err = Self::Err&amp;gt;,
+        F: Fn(Self::Item) -&amp;gt; B,
+        Self: Sized,
+    { ... }
+    fn map_err&amp;lt;F, B&amp;gt;(self, f: F) -&amp;gt; MapErr&amp;lt;Self, F&amp;gt;
+    where
+        F: Fn(Self::Err) -&amp;gt; B,
+        Self: Sized,
+    { ... }
+    fn or_else&amp;lt;F, B&amp;gt;(self, f: F) -&amp;gt; OrElse&amp;lt;Self, F, B&amp;gt;
+    where
+        B: Transaction&amp;lt;Ctx, Item = Self::Item&amp;gt;,
+        F: Fn(Self::Err) -&amp;gt; B,
+        Self: Sized,
+    { ... }
+
+    // ...
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;map&lt;/code&gt;や&lt;code&gt;and_then&lt;/code&gt;のある「よくあるパターン」です。&lt;code&gt;futures&lt;/code&gt;の他&lt;code&gt;Result&lt;/code&gt;や&lt;code&gt;Option&lt;/code&gt;にもありますね。
+&lt;code&gt;Transaction&lt;/code&gt;を作った時点ではまだ計算は実行されません。DBへのクエリも実行されてません。&lt;code&gt;run&lt;/code&gt;が呼ばれた時点でようやく計算が実行され、結果を取り出すことができます。&lt;code&gt;future-rs&lt;/code&gt;と同じくこれは &lt;em&gt;ゼロコスト抽象化&lt;/em&gt; をしていて、トランザクションの関数を積んでいくと実行時にはオートマトンにまで落ちます。 詳しくはこちらをどうぞ&lt;a href=&#34;https://aturon.github.io/blog/2016/08/11/futures/&#34;&gt;Zero-cost futures in Rust · Aaron Turon&lt;/a&gt;。&lt;/p&gt;
+
+&lt;h1 id=&#34;トランザクションの合成と要求&#34;&gt;トランザクションの合成と要求&lt;/h1&gt;
+
+&lt;p&gt;話を冒頭のコードに戻しすと、transaction-rsを使うとDAOはこう書けるでしょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct GroupPgDao;
+impl GroupPgDao {
+  fn delete_user(&amp;amp;self, user: &amp;amp;User, group: &amp;amp;Group) -&amp;gt; Box&amp;lt;Transaction&amp;lt;... ()&amp;gt; {
+      with_conn(|cn| {
+          //...
+      })
+      .boxed()
+  }
+  fn add_user(&amp;amp;self, user: &amp;amp;User, group: &amp;amp;Group) -&amp;gt; Box&amp;lt;Transaction&amp;lt;... ()&amp;gt; {
+      with_conn(|cn| {
+          //...
+      })
+      .boxed()
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;返り値の型がやや残念になるものの、中身はそれほど変わらないです。
+&lt;code&gt;Transaction&lt;/code&gt;を返しているのでこのコードはトランザクション下で実行されることを要求しているのが分かりますね。&lt;/p&gt;
+
+&lt;p&gt;そして自分で持っていたコネクションプールと&lt;code&gt;self.get_conn()&lt;/code&gt;が消え、変わりに&lt;code&gt;with_conn&lt;/code&gt;関数でコネクションを取得しています。この関数は付属の&lt;code&gt;transaction-diesel&lt;/code&gt;にて定義されています。何やら虚空からコネクションが沸いてるようにも見えますがちゃんと正規のルートで渡ってきています。これについては後で説明します。&lt;/p&gt;
+
+&lt;p&gt;さらにサービスの方も書き換えてみます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait GroupService&amp;lt;Ctx&amp;gt;: HaveGroupDao&amp;lt;Ctx {
+  fn change_group(&amp;amp;self, user: &amp;amp;User, from: &amp;amp;Group, to: &amp;amp;Group) -&amp;gt; Box&amp;lt;Transaction&amp;lt;Ctx, ... ()&amp;gt;&amp;gt;&amp;gt; {
+     let service = self.group_dao();
+     dao.delete_user(user, from)
+         .and_then(move|()| dao.add_user(user, to))
+         .boxed()
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;疑似コードなのでコンパイルが通るか分かりませんがまあ、こんなところになるでしょう。
+このコードで分かるように、トランザクション同士の合成も可能なのです。
+そして、&lt;code&gt;Transaction&lt;/code&gt;を返しているのでこのコード自身もまたトランザクションを要求していることが分かります。&lt;/p&gt;
+
+&lt;p&gt;さて、気付いたでしょうか。これで上記の契約問題、責任問題、インジェクション問題が解決しています。&lt;/p&gt;
+
+&lt;p&gt;契約問題については&lt;code&gt;Transaction&lt;/code&gt;を返す関数はトランザクションを要求するというシグナルですね。非常に分かりやすいです。
+責任問題についても&lt;code&gt;Transaction&lt;/code&gt;を&lt;code&gt;run&lt;/code&gt;する関数にトランザクションの責任があります。&lt;code&gt;run&lt;/code&gt;しないと結果を取り出せないので結果が欲しい人がそのまま責任を持つ形になります。&lt;/p&gt;
+
+&lt;p&gt;なんとなく、&lt;code&gt;unsafe&lt;/code&gt;に似ているのが分かりますか？&lt;code&gt;unsafe fn&lt;/code&gt;は内部でアンセーフなことをやるし、呼び出す関数に契約を満たすことを要求します。&lt;code&gt;unsafe&lt;/code&gt;ブロックはアンセーフな処理の契約に責任を持ちます。同じく&lt;code&gt;Transaction&lt;/code&gt;を返す関数は内部でトランザクションを要求する処理をするし、呼び出し側に契約を満たすことを要求します。&lt;code&gt;run&lt;/code&gt;がトランザクションという契約に責任を持ちます。&lt;/p&gt;
+
+&lt;h1 id=&#34;インジェクションの仕組み&#34;&gt;インジェクションの仕組み&lt;/h1&gt;
+
+&lt;p&gt;先のコードでマジカルにコネクションが外からやってきていました。この仕組みについて説明します。とはいっても複雑ではないです。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;Transaction&lt;/code&gt;のコードを思い出してみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub trait Transaction&amp;lt;Ctx&amp;gt; {
+    fn run(&amp;amp;self, ctx: &amp;amp;mut Ctx) -&amp;gt; Result&amp;lt;Self::Item, Self::Err&amp;gt;;
+    // ...
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;run&lt;/code&gt;すると結果が取り出せるのでした。そして&lt;code&gt;run&lt;/code&gt;は引数&lt;code&gt;Ctx&lt;/code&gt;をとります。
+これは抽象的なトランザクションなので抽象的な「コンテキスト」ですが、&lt;a href=&#34;https://github.com/Marthog/rust-stm&#34;&gt;STM&lt;/a&gt;ならSTM、データベースならコネクションがコンテキストです。
+コンテキストを受け取って計算を実行するということは、&lt;code&gt;Transaction&lt;/code&gt;は見方を変えると&lt;code&gt;Ctx&lt;/code&gt;を引数にとる関数になっています。&lt;/p&gt;
+
+&lt;p&gt;なので&lt;code&gt;with_conn&lt;/code&gt;関数は&lt;code&gt;run&lt;/code&gt;で受け取った引数を取り出しているだけです。&lt;/p&gt;
+
+&lt;h1 id=&#34;小まとめ&#34;&gt;小まとめ&lt;/h1&gt;
+
+&lt;p&gt;このtransaction-rsは&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;トランザクションの契約と責任を型で表現している&lt;/li&gt;
+&lt;li&gt;コネクションをインジェクトしている&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;さらに、&lt;code&gt;run&lt;/code&gt;するまでは実際にはトランザクションは実行されていないので&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;「トランザクションを必要とする計算とその合成」と「トランザクションの実行」を分離している&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;というのが特徴です。大筋はこれがメインなのですが、実用の話をいくつか。&lt;/p&gt;
+
+&lt;h1 id=&#34;つらい話と救いの話&#34;&gt;つらい話と救いの話&lt;/h1&gt;
+
+&lt;p&gt;&lt;code&gt;Transaction&lt;/code&gt;で契約と責任は明確になりました。
+では、便利になったかというとそうでもありません。例えばUserをCRUDしてみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn crud_user(dao: UserDao, ctx: Ctx) -&amp;gt; Result&amp;lt;()&amp;gt; {
+    let tx = dao.create(&amp;quot;name&amp;quot;, 24)
+      .and_then(move |id|
+          dao.find(id)
+              .and_then(move |user|
+                  dao.update(None, user.age + 1)
+                      .and_then(move |()|
+                          dao.delete(user))));
+    tx.run(ctx)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このように、&lt;code&gt;and_then&lt;/code&gt;がネストしてしまいます。コードが不要に複雑になっただけですね。つらい。&lt;/p&gt;
+
+&lt;p&gt;しかしながら救いはあって、&lt;a href=&#34;https://github.com/TeXitoi/rust-mdo&#34;&gt;&lt;code&gt;mdo&lt;/code&gt;&lt;/a&gt;というライブラリがあります。
+mがなんなのかやdoがどこからきたのかは気にしてはいけません。
+&lt;code&gt;transaction-rs&lt;/code&gt;もこれをサポートしていて、マクロを使うことで以下のように書き換えられます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn crud_user(dao: UserDao, ctx: Ctx) -&amp;gt; Result&amp;lt;()&amp;gt; {
+    let tx = mdo! {
+        id =&amp;lt;&amp;lt; dao.create(&amp;quot;name&amp;quot;, 24);
+        user =&amp;lt;&amp;lt; dao.find(id);
+        () =&amp;lt;&amp;lt; dao.update(None, user.age + 1);
+        ret dao.delete(user)
+    };
+
+    tx.run(ctx)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;本質的にはネストを代入っぽく書き換えただけですが、絶大な可読性の向上があります。
+なので実際に&lt;code&gt;transaction&lt;/code&gt;を使うときは&lt;code&gt;mdo&lt;/code&gt;を併用することになるでしょう。&lt;/p&gt;
+
+&lt;h1 id=&#34;futures-との違い&#34;&gt;&lt;code&gt;futures&lt;/code&gt;との違い&lt;/h1&gt;
+
+&lt;p&gt;&lt;code&gt;futures&lt;/code&gt;に非常によく似ていると言いましたが、逆に何が違うのかという話です。大きな違いは2つあります。&lt;/p&gt;
+
+&lt;p&gt;1つには結果を取り出すメソッドの違いです。&lt;code&gt;Future&lt;/code&gt;の&lt;code&gt;poll&lt;/code&gt;は引数を取りませんが、&lt;code&gt;Transaction&lt;/code&gt;の&lt;code&gt;run&lt;/code&gt;は取ります。また、それに合わせてトレイトがジェネリクスになっています。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub trait Future {
+    fn poll(&amp;amp;mut self) -&amp;gt; Poll&amp;lt;Self::Item, Self::Error&amp;gt;;
+}
+
+pub trait Transaction&amp;lt;Ctx&amp;gt; {
+    fn run(&amp;amp;self, ctx: &amp;amp;mut Ctx) -&amp;gt; Result&amp;lt;Self::Item, Self::Err&amp;gt;;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;もう1つはクロージャを取るメソッドの違いで、&lt;code&gt;Future&lt;/code&gt;は&lt;code&gt;FnOnce&lt;/code&gt;を取るのに対して&lt;code&gt;Transaction&lt;/code&gt;は&lt;code&gt;Fn&lt;/code&gt;を取ります。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub trait Future {
+    fn map&amp;lt;F, U&amp;gt;(self, f: F) -&amp;gt; Map&amp;lt;Self, F&amp;gt;
+        where
+            F: FnOnce(Self::Item) -&amp;gt; U,
+            Self: Sized,
+}
+
+pub trait Transaction&amp;lt;Ctx&amp;gt; {
+    fn map&amp;lt;F, B&amp;gt;(self, f: F) -&amp;gt; Map&amp;lt;Self, F&amp;gt;
+    where
+        F: Fn(Self::Item) -&amp;gt; B,
+        Self: Sized,
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;Future&lt;/code&gt;は単純に計算の合成と実行を分離しているのに対して&lt;code&gt;Transaction&lt;/code&gt;はSTMのように失敗した計算のリトライにまで責任を持つことがあるので再実行可能でないといけません。さらに、再実行するということは羃等性の確保も必要です。羃等性を保つためコンテキスト以外への副作用も禁止する必要があって、&lt;code&gt;FnOnce&lt;/code&gt;でも&lt;code&gt;FnMut&lt;/code&gt;でもなく&lt;code&gt;FnOnce&lt;/code&gt;を要求します。&lt;/p&gt;
+
+&lt;p&gt;実はこのことが若干問題になるケースもあります。データベースのトランザクションなら別に再実行せずにロールバックするだけなので&lt;code&gt;FnOnce&lt;/code&gt;で十分なケースもあります。&lt;code&gt;FnOnce&lt;/code&gt;の方が所有権に寛容なので&lt;code&gt;FnOnce&lt;/code&gt;なら書けるのに&lt;code&gt;Fn&lt;/code&gt;が要求されて、実際には&lt;code&gt;FnOnce&lt;/code&gt;しか必要ない、というケースに何度か直面しました。いくつかのハックで乗り越えられましたが本質的ではない問題なので今後何か変更があるかもしれません。&lt;/p&gt;
+
+&lt;h1 id=&#34;他の問題点&#34;&gt;他の問題点&lt;/h1&gt;
+
+&lt;p&gt;ちょっと説明するのが面倒なのでコードを出さないのですが、計算の合成と実行を分離すると合成の時点では生きているけど実行するときに生きてるか分からないオブジェクトが出てきたりします。
+概ねライフタイム境界を明示的に書いてあげると解決するのですが、一部&lt;code&gt;join&lt;/code&gt;などを駆使してハックしないとコンパイルが通らないことがあり面倒です。&lt;/p&gt;
+
+&lt;p&gt;返り値型が複雑なのも問題で、ひとまず&lt;a href=&#34;https://github.com/rust-lang/rust/issues/34511&#34;&gt;&lt;code&gt;impl Trait&lt;/code&gt;&lt;/a&gt;がstableに降ってくるまではそもそも型を書けません（クロージャが匿名なせい）。
+&lt;code&gt;Box&lt;/code&gt;に包むにしても少なくとも&lt;code&gt;Ctx&lt;/code&gt;が型引数に増えますし、&lt;code&gt;diesel&lt;/code&gt;と一緒に使うならコネクションのライフタイムも型に入れる必要があったりと&lt;code&gt;Result&lt;/code&gt;や&lt;code&gt;BoxFuture&lt;/code&gt;に比べてやや重くなっています。&lt;/p&gt;
+
+&lt;p&gt;記法についても問題があります。&lt;code&gt;mdo&lt;/code&gt;を使うとある程度は解決しますが、早期リターンがしづらく、頑張って分岐のネストを書かないといけません。これは&lt;code&gt;futures&lt;/code&gt;も抱える問題です。
+&lt;code&gt;futures&lt;/code&gt;についてはのジェネレータのパッチを当てることで&lt;a href=&#34;https://github.com/alexcrichton/futures-await&#34;&gt;&lt;code&gt;Result&lt;/code&gt;のように書けるデモ&lt;/a&gt;があるのですが、先述の通り&lt;code&gt;transaction&lt;/code&gt;では&lt;code&gt;FnOnce&lt;/code&gt;ではなく&lt;code&gt;Fn&lt;/code&gt;を取っているのでジェネレータにはエンコードできないのではないかと思っています（あまり調査してないです）。&lt;/p&gt;
+
+&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;transaction-rs&lt;/code&gt;を作ったよ&lt;/li&gt;
+&lt;li&gt;トランザクションの契約と責任を型で明示するよ&lt;/li&gt;
+&lt;li&gt;コネクションをインジェクトするよ&lt;/li&gt;
+&lt;li&gt;コードは複雑になるかもね&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;mdo&lt;/code&gt;を使うと複雑さを抑えられるよ&lt;/li&gt;
+&lt;li&gt;でもライフタイムとかの問題もあるよ&lt;/li&gt;
+&lt;li&gt;将来どうにかするかもね&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h1 id=&#34;零れ話&#34;&gt;零れ話&lt;/h1&gt;
+
+&lt;p&gt;これを作ったあとに&lt;a href=&#34;http://qiita.com/pab_tech/items/86e4c31d052c678f6fa6&#34;&gt;【ScalaMatsuriセッション当選御礼】ドワンゴ秘伝のトランザクションモナドを解説！ - Qiita&lt;/a&gt;を思い出して読んでみたらほぼ同じものを作ってましたね。
+Scalaのpoor-man&amp;rsquo;s type classだと読み辛いですがほぼ同じです。&lt;/p&gt;
+
+&lt;p&gt;相違点は1つには返り値が&lt;code&gt;Result&lt;/code&gt;か&lt;code&gt;Future&lt;/code&gt;か。実際、トランザクションモナドは成功と失敗両方に対してモナドになっている型であれば（こういうの名前ついてないのかな、重モナドとかそんなの）何にでも定義できます。要はトランスフォーマーとして定義可能です。
+しかしながらRustには高階多相がなくてトランスフォーマーは書けないのでどちらかを選ぶ必要があり、&lt;code&gt;transaction-rs&lt;/code&gt;では&lt;code&gt;Result&lt;/code&gt;を選びました。外部ライブラリへの依存を減らしたいだとかウェブアプリケーションフレームワークにFutureを受け付けてくれるものがなくてあまり意味がないとかその辺です。
+需要が発生したらトランスフォーマーマクロとか作るかもしれません。&lt;/p&gt;
+
+&lt;p&gt;もう1つ相違点があって、fujitaskの方はRead/Writeを型で判別するようになっていますが&lt;code&gt;transaction-rs&lt;/code&gt;にはそういう機能はありません。
+fujitaskを読み返すまではそれには思い至りませんでした。
+で、存在を知った後に実装したかというと別にしてません。
+Rustでも&lt;code&gt;Ctx&lt;/code&gt;に幽霊型を付ければ実装自体は可能なのですがデータベースライブラリがトランザクションの分離レベルの変更をサポートしていないのであまり意味がないからです。
+データベース側でサポートされたらやるかもしれません。&lt;/p&gt;</description>
+    </item>
+    
+  </channel>
+</rss>
