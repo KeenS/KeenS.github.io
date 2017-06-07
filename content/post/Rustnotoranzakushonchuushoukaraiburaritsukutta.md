@@ -245,7 +245,7 @@ pub trait Transaction<Ctx> {
 }
 ```
 
-`Future`は単純に計算の合成と実行を分離しているのに対して`Transaction`はSTMのように失敗した計算のリトライにまで責任を持つことがあるので再実行可能でないといけません。さらに、再実行するということは羃等性の確保も必要です。羃等性を保つためコンテキスト以外への副作用も禁止する必要があって、`FnOnce`でも`FnMut`でもなく`FnOnce`を要求します。
+`Future`は単純に計算の合成と実行を分離しているのに対して`Transaction`はSTMのように失敗した計算のリトライにまで責任を持つことがあるので再実行可能でないといけません。さらに、再実行するということは羃等性の確保も必要です。羃等性を保つためコンテキスト以外への副作用も禁止する必要があって、`FnOnce`でも`FnMut`でもなく ~~`FnOnce`を~~ `Fn` を要求します。（間違いを[指摘された](https://twitter.com/so_zaneli/status/872271289636986880)ので修正しました。）
 
 実はこのことが若干問題になるケースもあります。データベースのトランザクションなら別に再実行せずにロールバックするだけなので`FnOnce`で十分なケースもあります。`FnOnce`の方が所有権に寛容なので`FnOnce`なら書けるのに`Fn`が要求されて、実際には`FnOnce`しか必要ない、というケースに何度か直面しました。いくつかのハックで乗り越えられましたが本質的ではない問題なので今後何か変更があるかもしれません。
 
@@ -285,3 +285,9 @@ Rustでも`Ctx`に幽霊型を付ければ実装自体は可能なのですが�
 データベース側でサポートされたらやるかもしれません。
 
 Scalaのfujitaskは便利そうで、概ねこちらもそのようなものなのですが、Rust特有の所有権/ライフタイムによる問題とScalaの`for`式相当のものがないという理由でちょっとつらい感じになってます。つらい。
+
+# 追記
+<blockquote class="twitter-tweet" data-conversation="none" data-lang="ja"><p lang="ja" dir="ltr">ノリでジェネリクスにしたけど関連型の方が良かったのでは？</p>&mdash; κeen (@blackenedgold) <a href="https://twitter.com/blackenedgold/status/872093400417189888">2017年6月6日</a></blockquote>
+<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+ひとまずmasterはそう書き直しました。
