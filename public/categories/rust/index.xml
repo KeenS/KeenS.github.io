@@ -9,6 +9,74 @@
     <atom:link href="/categories/rust/index.xml" rel="self" type="application/rss+xml" />
     
     <item>
+      <title>Rustでエラーが出てないのにファイルに書き出せないときは</title>
+      <link>/blog/2017/06/13/rustdeera_gadetenainonifairunikakidasenaitokiha</link>
+      <pubDate>Tue, 13 Jun 2017 22:53:46 +0900</pubDate>
+      
+      <guid>/blog/2017/06/13/rustdeera_gadetenainonifairunikakidasenaitokiha</guid>
+      <description>&lt;p&gt;κeenです。随分前から書こうと思いつつ先送りになっていた小ネタです。
+&lt;/p&gt;
+
+&lt;p&gt;例えばカレントディレクトリにある&lt;code&gt;some_file.txt&lt;/code&gt;に適当なデータを書き込もうとして、以下のようなコードを書いたとします。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::fs::File;
+use std::io::prelude::*;
+use std::io::BufWriter;
+
+fn main() {
+    let file = File::open(&amp;quot;some_file.txt&amp;quot;).unwrap();
+    let mut w = BufWriter::new(file);
+    // unwrapを呼んで書き込みエラーを検知
+    write!(w, &amp;quot;hello&amp;quot;).unwrap();
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これを実行してみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;$ rustc write_file.rs
+$ ./write_file
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;特段エラーは出ません。しかしながら&lt;code&gt;some_file.txt&lt;/code&gt;の中身は特に書き変わっていません。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;$ cat some_file.txt
+$
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これ、パッと原因分かりますか？&lt;/p&gt;
+
+&lt;p&gt;直接の原因は&lt;a href=&#34;https://doc.rust-lang.org/std/fs/struct.File.html#method.open&#34;&gt;&lt;code&gt;File::open&lt;/code&gt;&lt;/a&gt;です。&lt;code&gt;File::open&lt;/code&gt;はリードオンリーでファイルを開くので&lt;code&gt;File::open&lt;/code&gt;で開いたファイルに書き込もうとしても書き込めません（書き込みたいなら&lt;a href=&#34;https://doc.rust-lang.org/std/fs/struct.File.html#method.create&#34;&gt;&lt;code&gt;File::create&lt;/code&gt;&lt;/a&gt;を使います）。
+じゃあなぜエラーが出ないかというと&lt;code&gt;BufWriter&lt;/code&gt;のせいです。
+書き込んだ文字列&lt;code&gt;&amp;quot;hello&amp;quot;&lt;/code&gt;は短いので&lt;code&gt;write!&lt;/code&gt;を発効した時点ではまだデータはバッファに書き込まれるだけです。
+このときにはまだエラーは出ません。
+そして&lt;code&gt;main&lt;/code&gt;の末尾で&lt;code&gt;w&lt;/code&gt;のライフタイムが終わるときに&lt;code&gt;BufWrite&lt;/code&gt;の&lt;a href=&#34;https://doc.rust-lang.org/src/std/io/buffered.rs.html#511-518&#34;&gt;&lt;code&gt;drop&lt;/code&gt;&lt;/a&gt;が呼ばれますが、ここではエラーが無視されるのでユーザにはエラーが起きてないように見える訳です。&lt;/p&gt;
+
+&lt;p&gt;このような事故を防ぐために以下のように&lt;code&gt;flush&lt;/code&gt;を呼びましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::fs::File;
+use std::io::prelude::*;
+use std::io::BufWriter;
+
+fn main() {
+    let file = File::open(&amp;quot;some_file.txt&amp;quot;).unwrap();
+    let mut w = BufWriter::new(file);
+    // unwrapを呼んで書き込みエラーを検知
+    write!(w, &amp;quot;hello&amp;quot;).unwrap();
+    // flushを呼ぶことで書き込みエラーを全て拾える
+    w.flush().unwrap();
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;$ rustc write_file.rs
+$ ./write_file
+thread &#39;main&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: Error { repr: Os { code: 9, message: &amp;quot;Bad file descriptor&amp;quot; } }&#39;, /checkout/src/libcore/result.rs:859
+note: Run with `RUST_BACKTRACE=1` for a backtrace.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;参考: &lt;a href=&#34;http://keens.github.io/blog/2016/01/08/rusttoiedoriso_sunokaihouhachuui/&#34;&gt;Rustといえどリソースの解放は注意 | κeenのHappy Hacκing Blog&lt;/a&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
       <title>Rustのトランザクション抽象化ライブラリ作った</title>
       <link>/blog/2017/06/06/rustnotoranzakushonchuushoukaraiburaritsukutta</link>
       <pubDate>Tue, 06 Jun 2017 18:20:52 +0900</pubDate>
@@ -4113,211 +4181,6 @@ ebb0(vx0: i32, vx1: i32):
 &lt;ul&gt;
 &lt;li&gt;コンパイラバックエンドcretonneについて紹介しました&lt;/li&gt;
 &lt;li&gt;cretonneのRust APIを触ってみましたがダメでした。&lt;/li&gt;
-&lt;/ul&gt;</description>
-    </item>
-    
-    <item>
-      <title>Rustでバイト列を扱う時のtips</title>
-      <link>/blog/2016/12/01/rustdebaitoretsuwoatsukautokinotips</link>
-      <pubDate>Thu, 01 Dec 2016 14:29:33 +0900</pubDate>
-      
-      <guid>/blog/2016/12/01/rustdebaitoretsuwoatsukautokinotips</guid>
-      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2016/rust-lang-2&#34;&gt;Rust その2 Advent Calendar 2016 - Qiita&lt;/a&gt;2日目の記事です。&lt;/p&gt;
-
-&lt;p&gt;Rustはシステムプログラミング言語なのでバイト列をあれこれしたいことがあると思います。その時にイテレータでバイト列を舐める以外にも色々方法があるなと気付いたので。&lt;/p&gt;
-
-&lt;p&gt;&lt;/p&gt;
-
-&lt;h1 id=&#34;read-と-write&#34;&gt;&lt;code&gt;Read&lt;/code&gt; と &lt;code&gt;Write&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;私には割と衝撃だったのですが&lt;code&gt;&amp;amp;[u8]&lt;/code&gt;や&lt;code&gt;&amp;amp;mut [u8]&lt;/code&gt;、&lt;code&gt;Vec&amp;lt;u8&amp;gt;&lt;/code&gt;は直接&lt;code&gt;Read&lt;/code&gt;や&lt;code&gt;Write&lt;/code&gt;のインスタンスになってます。
-例えば&lt;code&gt;Read&lt;/code&gt;ならこういう風に使えます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let mut bytes: &amp;amp;[u8] = &amp;amp;[1, 2, 3, 4, 5, 6];
-let mut buf = [0;3];
-bytes.read_exact(&amp;amp;mut buf).unwrap();
-println!(&amp;quot;read: {:?}, rest: {:?}&amp;quot;, buf, bytes);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;read: [1, 2, 3], rest: [4, 5, 6]
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;あるいは &lt;code&gt;.bytes()&lt;/code&gt;でbyteのイテレータを取り出してもいいですし、如何様にも扱えます。&lt;/p&gt;
-
-&lt;p&gt;少し注意が必要なのは&lt;code&gt;Vec&lt;/code&gt;は &lt;code&gt;Read&lt;/code&gt; を実装してないので一旦スライスに変換してあげる必要がありますが、やり方を工夫する必要があります。&lt;/p&gt;
-
-&lt;p&gt;以下は少しびっくりする例。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let bytes: Vec&amp;lt;u8&amp;gt; = vec![1, 2, 3, 4, 5, 6];
-let mut buf = [0;3];
-(&amp;amp;bytes[..]).read_exact(&amp;amp;mut buf).unwrap();
-println!(&amp;quot;read: {:?}, rest: {:?}&amp;quot;, buf, bytes);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;read: [1, 2, 3], rest: [1, 2, 3, 4, 5, 6]
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;一旦スライスを取り出してその場で捨てているので&lt;code&gt;bytes&lt;/code&gt;は消費されません。&lt;/p&gt;
-
-&lt;p&gt;そうやりたいなら&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let bytes: Vec&amp;lt;u8&amp;gt; = vec![1, 2, 3, 4, 5, 6];
-let mut bytes = &amp;amp;bytes[..];
-let mut buf = [0;3];
-bytes.read_exact(&amp;amp;mut buf).unwrap();
-println!(&amp;quot;read: {:?}, rest: {:?}&amp;quot;, buf, bytes);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のように一旦スライスを束縛してから使います。&lt;/p&gt;
-
-&lt;p&gt;Writeの方も似ていて、そのまま&lt;code&gt;write&lt;/code&gt;出来ますし、消費されます。ただ、書き込み領域が空になってもそのままスルーされるので注意です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;let mut bytes: &amp;amp;mut [u8] = &amp;amp;mut [0; 6];
-let data = &amp;amp;[1, 2, 3];
-println!(&amp;quot;data: {:?}, buf: {:?}&amp;quot;, data, bytes);
-bytes.write(data).unwrap();
-println!(&amp;quot;data: {:?}, buf: {:?}&amp;quot;, data, bytes);
-bytes.write(data).unwrap();
-println!(&amp;quot;data: {:?}, buf: {:?}&amp;quot;, data, bytes);
-bytes.write(data).unwrap();
-println!(&amp;quot;data: {:?}, buf: {:?}&amp;quot;, data, bytes);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;data: [1, 2, 3], buf: [0, 0, 0, 0, 0, 0]
-data: [1, 2, 3], buf: [0, 0, 0]
-data: [1, 2, 3], buf: []
-data: [1, 2, 3], buf: []
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;最後、バッファが空になった状態で書き込んでも無言で書き込みが終了しています。そして書き込んだデータへのアクセスは出来てないですね。&lt;/p&gt;
-
-&lt;p&gt;こうすると出来ます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let mut bytes:[u8; 6] =  [0; 6];
-let data = &amp;amp;[1, 2, 3];
-{
-    let mut buf: &amp;amp;mut [u8] = &amp;amp;mut bytes;
-    println!(&amp;quot;data: {:?}, buf: {:?}&amp;quot;, data, buf);
-    buf.write(data).unwrap();
-    println!(&amp;quot;data: {:?}, buf: {:?}&amp;quot;, data, buf);
-    buf.write(data).unwrap();
-    println!(&amp;quot;data: {:?}, buf: {:?}&amp;quot;, data, buf);
-}
-println!(&amp;quot;bytes: {:?}&amp;quot;, bytes);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;data: [1, 2, 3], buf: [0, 0, 0, 0, 0, 0]
-data: [1, 2, 3], buf: [0, 0, 0]
-data: [1, 2, 3], buf: []
-bytes: [1, 2, 3, 1, 2, 3]
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;まあまあ面倒ですね。というかそもそも固定長のバッファに書き込みたいという需要が少ない。&lt;/p&gt;
-
-&lt;p&gt;でもこれは&lt;code&gt;Vec&lt;/code&gt;を使えば解決します。可変長ですし&lt;code&gt;Write&lt;/code&gt; も実装しているので便利です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let mut bytes: Vec&amp;lt;u8&amp;gt; = Vec::new();
-let data = &amp;amp;[1, 2, 3];
-println!(&amp;quot;data: {:?}, buf: {:?}&amp;quot;, data, bytes);
-bytes.write(data).unwrap();
-println!(&amp;quot;data: {:?}, buf: {:?}&amp;quot;, data, bytes);
-bytes.write(data).unwrap();
-println!(&amp;quot;data: {:?}, buf: {:?}&amp;quot;, data, bytes);
-println!(&amp;quot;bytes: {:?}&amp;quot;, bytes);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;data: [1, 2, 3], buf: []
-data: [1, 2, 3], buf: [1, 2, 3]
-data: [1, 2, 3], buf: [1, 2, 3, 1, 2, 3]
-bytes: [1, 2, 3, 1, 2, 3]
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;cursor&#34;&gt;&lt;code&gt;Cursor&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;さて、上で見た通り、なんとなく生のバイト列だと扱いづらそうな場面がありそうですよね。
-そこで &lt;a href=&#34;https://doc.rust-lang.org/stable/std/io/struct.Cursor.html&#34;&gt;&lt;code&gt;std::io::Cursor&lt;/code&gt;&lt;/a&gt;を使うと便利です。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;Cursor&lt;/code&gt;はコンストラクタで引数の所有権を奪うタイプの、ラッパーオブジェクト的構造体です。&lt;/p&gt;
-
-&lt;p&gt;readだとこんな感じです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let bytes: &amp;amp;[u8] = &amp;amp;[1,2,3,4,5,6];
-let data: &amp;amp;mut [u8] = &amp;amp;mut [0;3];
-let mut cur = Cursor::new(bytes);
-println!(&amp;quot;data: {:?}, position {}&amp;quot;, data, cur.position());
-cur.read_exact(data).unwrap();
-println!(&amp;quot;data: {:?}, position {}&amp;quot;, data, cur.position());
-cur.read_exact(data).unwrap();
-println!(&amp;quot;data: {:?}, position {}&amp;quot;, data, cur.position());
-println!(&amp;quot;bytes: {:?}&amp;quot;, cur.into_inner());
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;data: [0, 0, 0], position 0
-data: [1, 2, 3], position 3
-data: [4, 5, 6], position 6
-bytes: [1, 2, 3, 4, 5, 6]
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ポジションが取れるのと元のオブジェクトが無事なのが違いますね。&lt;/p&gt;
-
-&lt;p&gt;Writeも同様です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let bytes: &amp;amp;mut [u8] = &amp;amp;mut [0;6];
-let data: &amp;amp;[u8] = &amp;amp;[1, 2, 3];
-let mut cur = Cursor::new(bytes);
-println!(&amp;quot;bytes: {:?}, position {}&amp;quot;, cur.get_ref(), cur.position());
-cur.write(data).unwrap();
-println!(&amp;quot;bytes: {:?}, position {}&amp;quot;, cur.get_ref(), cur.position());
-cur.write(data).unwrap();
-println!(&amp;quot;bytes: {:?}, position {}&amp;quot;, cur.get_ref(), cur.position());
-println!(&amp;quot;bytes: {:?}&amp;quot;, cur.into_inner());
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;data: [0, 0, 0, 0, 0, 0], position 0
-data: [1, 2, 3, 0, 0, 0], position 3
-data: [1, 2, 3, 1, 2, 3], position 6
-bytes: [1, 2, 3, 1, 2, 3]
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;さて、この&lt;code&gt;Cursor&lt;/code&gt;の面白いのは&lt;code&gt;&amp;amp;[u8]&lt;/code&gt;でなく&lt;code&gt;AsRef&amp;lt;[u8]&amp;gt;&lt;/code&gt;で&lt;code&gt;Read&lt;/code&gt;を実装していますし&lt;code&gt;std::io::Seek&lt;/code&gt;も実装しているのでこういうことが出来ます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let bytes: Vec&amp;lt;u8&amp;gt; = Vec::new();
-let data: &amp;amp;[u8] = &amp;amp;[1, 2, 3];
-let buf: &amp;amp;mut [u8] = &amp;amp;mut [0; 3];
-let mut cur = Cursor::new(bytes);
-println!(&amp;quot;bytes: {:?}, position {}&amp;quot;, cur.get_ref(), cur.position());
-cur.write(data).unwrap();
-println!(&amp;quot;bytes: {:?}, position {}&amp;quot;, cur.get_ref(), cur.position());
-cur.write(data).unwrap();
-println!(&amp;quot;bytes: {:?}, position {}&amp;quot;, cur.get_ref(), cur.position());
-cur.seek(SeekFrom::Start(0)).unwrap();
-println!(&amp;quot;bytes: {:?}, position {}&amp;quot;, cur.get_ref(), cur.position());
-cur.read(buf).unwrap();
-println!(&amp;quot;bytes: {:?}, position {}, buf: {:?}&amp;quot;, cur.get_ref(), cur.position(), buf);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;bytes: [], position 0
-bytes: [1, 2, 3], position 3
-bytes: [1, 2, 3, 1, 2, 3], position 6
-bytes: [1, 2, 3, 1, 2, 3], position 0  // &amp;lt;- 0にシークした
-bytes: [1, 2, 3, 1, 2, 3], position 3, buf: [1, 2, 3] // &amp;lt;- 0からリード出来てる
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;生の&lt;code&gt;Vec&lt;/code&gt;では出来なかったread and writeが実現出来ています。そして好きにカーソルをシーク出来ます。
-ここまでくるとほとんどファイルと変わらなく扱えますね。&lt;/p&gt;
-
-&lt;h1 id=&#34;おりに&#34;&gt;おりに&lt;/h1&gt;
-
-&lt;p&gt;ちょっとしたTipsですが道具箱にこういうのを増やしておくと便利ですよね！！&lt;/p&gt;
-
-&lt;h1 id=&#34;参考&#34;&gt;参考&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;https://doc.rust-lang.org/stable/std/io/trait.Read.html&#34;&gt;std::io::Read - Rust&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://doc.rust-lang.org/stable/std/io/trait.Write.html&#34;&gt;std::io::Write - Rust&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://doc.rust-lang.org/stable/std/io/struct.Cursor.html&#34;&gt;std::io::Cursor - Rust&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://doc.rust-lang.org/stable/std/io/trait.Seek.html&#34;&gt;std::io::Seek - Rust&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://doc.rust-lang.org/stable/std/io/enum.SeekFrom.html&#34;&gt;std::io::SeekFrom - Rust&lt;/a&gt;&lt;/li&gt;
 &lt;/ul&gt;</description>
     </item>
     
