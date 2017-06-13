@@ -9,6 +9,74 @@
     <atom:link href="/categories/%E5%B0%8F%E3%83%8D%E3%82%BF/index.xml" rel="self" type="application/rss+xml" />
     
     <item>
+      <title>Rustでエラーが出てないのにファイルに書き出せないときは</title>
+      <link>/blog/2017/06/13/rustdeera_gadetenainonifairunikakidasenaitokiha</link>
+      <pubDate>Tue, 13 Jun 2017 22:53:46 +0900</pubDate>
+      
+      <guid>/blog/2017/06/13/rustdeera_gadetenainonifairunikakidasenaitokiha</guid>
+      <description>&lt;p&gt;κeenです。随分前から書こうと思いつつ先送りになっていた小ネタです。
+&lt;/p&gt;
+
+&lt;p&gt;例えばカレントディレクトリにある&lt;code&gt;some_file.txt&lt;/code&gt;に適当なデータを書き込もうとして、以下のようなコードを書いたとします。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::fs::File;
+use std::io::prelude::*;
+use std::io::BufWriter;
+
+fn main() {
+    let file = File::open(&amp;quot;some_file.txt&amp;quot;).unwrap();
+    let mut w = BufWriter::new(file);
+    // unwrapを呼んで書き込みエラーを検知
+    write!(w, &amp;quot;hello&amp;quot;).unwrap();
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これを実行してみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;$ rustc write_file.rs
+$ ./write_file
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;特段エラーは出ません。しかしながら&lt;code&gt;some_file.txt&lt;/code&gt;の中身は特に書き変わっていません。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;$ cat some_file.txt
+$
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これ、パッと原因分かりますか？&lt;/p&gt;
+
+&lt;p&gt;直接の原因は&lt;a href=&#34;https://doc.rust-lang.org/std/fs/struct.File.html#method.open&#34;&gt;&lt;code&gt;File::open&lt;/code&gt;&lt;/a&gt;です。&lt;code&gt;File::open&lt;/code&gt;はリードオンリーでファイルを開くので&lt;code&gt;File::open&lt;/code&gt;で開いたファイルに書き込もうとしても書き込めません（書き込みたいなら&lt;a href=&#34;https://doc.rust-lang.org/std/fs/struct.File.html#method.create&#34;&gt;&lt;code&gt;File::create&lt;/code&gt;&lt;/a&gt;を使います）。
+じゃあなぜエラーが出ないかというと&lt;code&gt;BufWriter&lt;/code&gt;のせいです。
+書き込んだ文字列&lt;code&gt;&amp;quot;hello&amp;quot;&lt;/code&gt;は短いので&lt;code&gt;write!&lt;/code&gt;を発効した時点ではまだデータはバッファに書き込まれるだけです。
+このときにはまだエラーは出ません。
+そして&lt;code&gt;main&lt;/code&gt;の末尾で&lt;code&gt;w&lt;/code&gt;のライフタイムが終わるときに&lt;code&gt;BufWrite&lt;/code&gt;の&lt;a href=&#34;https://doc.rust-lang.org/src/std/io/buffered.rs.html#511-518&#34;&gt;&lt;code&gt;drop&lt;/code&gt;&lt;/a&gt;が呼ばれますが、ここではエラーが無視されるのでユーザにはエラーが起きてないように見える訳です。&lt;/p&gt;
+
+&lt;p&gt;このような事故を防ぐために以下のように&lt;code&gt;flush&lt;/code&gt;を呼びましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::fs::File;
+use std::io::prelude::*;
+use std::io::BufWriter;
+
+fn main() {
+    let file = File::open(&amp;quot;some_file.txt&amp;quot;).unwrap();
+    let mut w = BufWriter::new(file);
+    // unwrapを呼んで書き込みエラーを検知
+    write!(w, &amp;quot;hello&amp;quot;).unwrap();
+    // flushを呼ぶことで書き込みエラーを全て拾える
+    w.flush().unwrap();
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;$ rustc write_file.rs
+$ ./write_file
+thread &#39;main&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: Error { repr: Os { code: 9, message: &amp;quot;Bad file descriptor&amp;quot; } }&#39;, /checkout/src/libcore/result.rs:859
+note: Run with `RUST_BACKTRACE=1` for a backtrace.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;参考: &lt;a href=&#34;http://keens.github.io/blog/2016/01/08/rusttoiedoriso_sunokaihouhachuui/&#34;&gt;Rustといえどリソースの解放は注意 | κeenのHappy Hacκing Blog&lt;/a&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
       <title>オーディナルの話とカーディナルの話</title>
       <link>/blog/2017/03/02/o_dinarunohanashitoka_dinarunohanashi</link>
       <pubDate>Thu, 02 Mar 2017 21:15:44 +0900</pubDate>
