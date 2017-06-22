@@ -43,13 +43,13 @@ title: ジェネリクス ディスパッチ 表裏
 --------------
 
 * 型でパラメータ化された何か
-* パラメータ化する方法にいくつか
+* パラメータ化する方法にいくつか方式が
   + 任意の型に対応する実装にする
     - Java
-  + 型毎に実体をつくる
+  + 使う型毎に実体をつくる
     - 型が引数になるイメージ
     - Rust
-* 便宜上前者をポインタ型、後者をテンプレート型と呼ぶ
+* 便宜上前者をポインタ方式、後者をテンプレート方式と呼ぶ
 
 ===
 # 関数ジェネリクス
@@ -129,11 +129,11 @@ start:
 # 関数ジェネリクス
 -----------------
 
-* ポインタ型は`void *`使ってるイメージ
+* ポインタ方式は`void *`使ってるイメージ
   +  コンパイルされたコードがコンパクト
   + 必ずポインタ経由する
     + Javaのオブジェクトは参照になってるのであまり問題ない
-* テンプレート型は型毎に`id_XXX`関数を定義してるイメージ
+* テンプレート方式は型毎に`id_XXX`関数を定義してるイメージ
   + 構造体の値渡しも可能
   + オブジェクトコードは大きくなる
   + 関数の使用箇所が分からないとコンパイルできない
@@ -153,7 +153,8 @@ start:
   ```rust
   let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
   ```
-* キモい
+* コンパイル中に実際の型が解決されるので関連関数（スタティックメソッド）が呼べる
+* キモいけど便利
 
 
 ===
@@ -163,7 +164,7 @@ start:
 
 * `ArrayList<T>`(Java) vs `Vec<T>`(Rust)
 * だいたい関数のときと似たような特徴
-* テンプレート型はサイズやアラインメントまで考慮できる
+* テンプレート方式はサイズやアラインメントまで考慮できる
   - `Vec<u8>`(バイト列型)が効率的
 * Rustの場合は構造体定義はオブジェクトコードに出ないのでサイズは気にならない
 
@@ -211,9 +212,8 @@ fn write_hello<W: io::Write>(mut w: W) -> io::Result<()> {
     obj.writeHello(w);
     ```
 * vtable引くオーバーヘッドがかかる
-[java - Virtual table/dispatch table - Stack Overflow](https://stackoverflow.com/questions/6606481/virtual-table-dispatch-table)
-[jvm - Java method table - Stack Overflow](https://stackoverflow.com/questions/10225668/java-method-table)
-
+  - [java - Virtual table/dispatch table - Stack Overflow](https://stackoverflow.com/questions/6606481/virtual-table-dispatch-table)
+  - [jvm - Java method table - Stack Overflow](https://stackoverflow.com/questions/10225668/java-method-table)
 
 ===
 
@@ -222,7 +222,7 @@ fn write_hello<W: io::Write>(mut w: W) -> io::Result<()> {
 * Rustだとメソッドを *コンパイル時* に解決する
   + テーブルを静的に解決するだけじゃなくてテーブルのメソッドまで解決
   ```rust
-   SomeWrite::write(w, b"Hello")
+   SomeWriter::write(w, b"Hello")
   ```
   + 辞書オブジェクトはみんなの心の中にあるんだよ
     - (テーブルだけ静的に解決する方式もある)
@@ -234,8 +234,8 @@ fn write_hello<W: io::Write>(mut w: W) -> io::Result<()> {
 # 動静まとめ
 ------------
 
-* ポインタ型で動的ディスパッチだとコンパクトだけど遅い
-* テンプレート型で静的ディスパッチだと速いけど嵩む
+* ポインタ方式で動的ディスパッチだとコンパクトだけど遅い
+* テンプレート方式で静的ディスパッチだと速いけど嵩む
 * 特徴は表裏な感じ
 
 
@@ -321,12 +321,12 @@ public class Generics {
 -------------
 
 * ジェネリクスの他にプリミティブ毎に専用のメソッドを生成
-* 半分テンプレート型みたい
+* 半分テンプレート方式みたい
   ``` scala
   class MyList[@specialized T]  ...
   ```
 * 実際には使われない型に対しても生成してしまう
-  + → テンプレート型よりも非効率
+  + → テンプレート方式よりも非効率
   + 型パラメータが3つあったら1000メソッドくらい出来てしまう
 * > 関数の使用箇所が分からないとコンパイルできない
 
@@ -437,12 +437,13 @@ fn getProc() -> Box<Processor> {
 * 「`P`を満たす`T`が存在する」ことを表わす型
 * `P`とは？
   + 本来は型を引数にとる述語。
+    + e.g.) 「`T`は`S`のサブタイプである」「`T`は`write`メソッドを持つ」
   + 実際は型の集合の方が便利
-    - CF: $P(x) \equiv x \in \{x| {}^\forall x, P(x) \}$
+    - $P(x) \leftrightarrow x \in \\{x| {}^\forall x, P(x) \\}$
   + Scala: `forSome`に続く何か
     - よく分からなかった。構造的superset?
   + Rust: トレイト境界
-* 実際に使うには`P`を満たす`T`を1つ与える
+* 実際に使うときには`P`を満たす`T`を1つ与える
 * 実際の型を変数`T`に匿名化してるとも見れる
   - Rustなら「トレイト`Tr`を実装しているとある型`T`」
 ===
@@ -484,11 +485,11 @@ fn getProc() -> Box<Processor> {
 * 何をしたいか伝わりやすい
   ```rust
   // Iterator
-  map<B, F>(self, f: F) -> Map<Self, F>;
+  map<B, F>(self, f: F) -> Map<Self, F> where ...
   ```
   vs
   ```rust
-  map<B, F>(self, f: F) -> impl Iterator;
+  map<B, F>(self, f: F) -> impl Iterator where ...
   ```
 * サブタイピングがあればアップキャストで終わる
 * Rustでも動的ディスパッチを許せばトレイトオブジェクトがある
@@ -502,10 +503,9 @@ fn getProc() -> Box<Processor> {
   + 匿名化した型を含む型
   + クロージャ、お前のことだ
 * 以下の型はジェネリクスでは書けない
-
-``` rust
-fn counter(x: isize) -> impl FnMut() -> isize;
-```
+  ``` rust
+  fn counter(x: isize) -> impl FnMut() -> isize;
+  ```
 
 * 動的ディスパッチを許せばトレイトオブジェクトで書ける
   + でも絶対動的ディスパッチをしたくない
@@ -532,11 +532,11 @@ fn counter(x: isize) -> impl FnMut() -> isize;
 * `map`すると元のイテレータとmapする関数の組が返る
   ```rust
   // Iterator
-  map<B, F>(self, f: F) -> Map<Self, F>;
+  map<B, F>(self, f: F) -> Map<Self, F> where ...
   ```
 * `impl Trait`で書くと分かりやすい
   ```rust
-  map<B, F>(self, f: F) -> impl Iterator;
+  map<B, F>(self, f: F) -> impl Iterator where ...
   ```
 
 ===
@@ -551,6 +551,10 @@ fn counter(x: isize) -> impl FnMut() -> isize;
   + 存在型がないと書けない
   + 引数でクロージャを受け取る訳ではないのでジェネリクスで書けない
 * `Future`を使うほぼ全てのコードで存在型が必要になる
+
+===
+# futures-rs
+------------
 
 ``` rust
 fn do_later() -> impl Future<Item = (), Err = Error> {
@@ -571,8 +575,16 @@ fn do_later() -> impl Future<Item = (), Err = Error> {
 * コンセプト的には`futures-rs`に似てる
 * 分岐しても`branch` APIでトレイトオブジェクト回避
   + 直和型を信じろ
-  ```rust
+* [マイクロベンチマーク](https://github.com/KeenS/transaction-rs/blob/master/transaction-stm/benches/boxed_vs_branch.rs)だとトレイトオブジェクトをなくすと *13%* 高速化
+
+===
+# transaction-rs
+----------------
+
+```rust
+fn find_and_delete() -> impl Transaction<Item = Option<User> ...> {
   match find_user() {
+    // 分岐の枝毎に違う型を返そうとしてるが、直和型を使えば問題無
     None => ok(none).branch().first()
     Some(user) =>
       delete_user()
@@ -580,8 +592,9 @@ fn do_later() -> impl Future<Item = (), Err = Error> {
         .branch()
         .second()
   }
-  ```
-* [マイクロベンチマーク](https://github.com/KeenS/transaction-rs/blob/master/transaction-stm/benches/boxed_vs_branch.rs)だとトレイトオブジェクトをなくすと *13%* 高速化
+}
+```
+
 
 ===
 # 存在型の深掘
@@ -601,13 +614,9 @@ fn do_later() -> impl Future<Item = (), Err = Error> {
 ===
 
 ``` rust
-fn foo<T: Trait>(t: T) -> impl Trait {
-    t
-}
+fn foo<T: Trait>(t: T) -> impl Trait {t}
 
-fn bar() -> impl Trait {
-    123
-}
+fn bar() -> impl Trait {123}
 
 fn equal_type<T>(a: T, b: T) {}
 
@@ -624,6 +633,7 @@ equal_type(foo::<bool>(false), foo::<i32>(0)); // ERROR, `impl Trait {foo<bool>}
 
 * 存在型のライフタイム
 * Rustのfeatureとリリーススケジュール
+  + 存在型はまだリリース版には入っていない
 * 関連型と存在型の関係(なんか関係ありそう)
 
 ===
@@ -637,34 +647,6 @@ equal_type(foo::<bool>(false), foo::<i32>(0)); // ERROR, `impl Trait {foo<bool>}
 * 存在型の実装は2種類あるよ
 * 2種類の実装は言語機能や型システムに密着してるよ
 
-
-* 主にRustの話
-* 型を匿名化したい `Map`型などの例
-* 匿名型が書けない
-  + futures
-  + transaction
-* 「トレイトを実装している何かの型」
-
-
-関数ジェネリクス(Java)、テンプレート(Rust)
-返り血ジェネリクスの話（外部の文脈によって値が決まる）
-構造体ジェネリクス(Java)、テンプレート(Rust)
-サブクラス/トレイト制約と動的ディスパッチ、静的ディスパッチ
-void * とプリミティブ
-静的ディスパッチと最適化、インライン、特殊化などなど
-ジェネリクスの裏、存在型
-  scalaの存在型(`forSome)`はよくわからん。∀ T s.t.っぽい
-  → ∀x(P(x) -> A) <-> ∃xP(x) -> A なので実質forall
-  こっちはwitness
-存在型の動的ディスパッチと静的ディスパッチ
-存在型で可能になること（可読性、匿名型（クロージャ）の返り血）
-不可能なこと(`trait { fn() -> impl Trait }`、`fn() -> impl Trait {if .. {..} else {..}}`)（後者は`branch`で回避できる）
-存在型の問題
-  ライフタイムどう表現するの
-  `vec![impl Trait, impl Trait]` など
-  学習コスト`fn(impl Trait)`
-
-[jvm - Java method table - Stack Overflow](https://stackoverflow.com/questions/10225668/java-method-table)
 
 </script>
 </section>
