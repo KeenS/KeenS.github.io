@@ -439,7 +439,7 @@ fn getProc() -> Box<Processor> {
   + 本来は型を引数にとる述語。
     + e.g.) 「`T`は`S`のサブタイプである」「`T`は`write`メソッドを持つ」
   + 実際は型の集合の方が便利
-    - $P(x) \leftrightarrow x \in \\{x| {}^\forall x, P(x) \\}$
+    - $P(x) \iff x \in \\{x| {}^\forall x, P(x) \\}$
   + Scala: `forSome`に続く何か
     - よく分からなかった。構造的superset?
   + Rust: トレイト境界
@@ -460,7 +460,7 @@ fn getProc() -> Box<Processor> {
   fn len(i: impl IntoIterator) -> usize
   ```
 * `R`が`x`を含まないなら
-  \\\[{}^\forall x(A(x) \to R) \leftrightarrow {}^\exists x A(x) \to R \\\]
+  \\\[{}^\forall x(A(x) \land x \to R) \leftrightarrow {}^\exists x (A(x) \land x) \to R \\\]
   なのでほぼジェネリクス
 * 違い
   + 関数が型パラメータを持たなくなる
