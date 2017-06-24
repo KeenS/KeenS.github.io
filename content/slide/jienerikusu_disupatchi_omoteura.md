@@ -1,7 +1,7 @@
 ---
 categories: [型, ジェネリクス, Rust, 言語実装]
 date: 2017-06-17T22:25:35+09:00
-description: null
+description: "ジェネリクス勉強会での発表用"
 title: ジェネリクス ディスパッチ 表裏
 ---
 
@@ -10,6 +10,7 @@ title: ジェネリクス ディスパッチ 表裏
     data-vertical="\n---\n"
     data-notes="^Note:">
 <script type="text/template">
+
 # ジェネリクス ディスパッチ 表裏
 ----------------------
 [ジェネリクス勉強会 - connpass](https://connpass.com/event/56773/?utm_campaign=event_participate_to_owner&utm_source=notifications&utm_medium=email&utm_content=title_link)
@@ -416,8 +417,8 @@ fn getProc() -> Box<Processor> {
 ```
 ===
 
-<!-- .slide:data-background-color="#000000" class="center" -->
-<span style="color=#ffffff;font-size:400%;">裏</span>
+<!-- .slide: class="center" -->
+<span style="font-size:400%;">裏</span>
 
 ===
 
