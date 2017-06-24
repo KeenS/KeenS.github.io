@@ -6,8 +6,207 @@
     <description>Recent content in Posts on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <lastBuildDate>Tue, 13 Jun 2017 22:53:46 +0900</lastBuildDate>
+    <lastBuildDate>Sat, 24 Jun 2017 23:22:16 +0900</lastBuildDate>
     <atom:link href="/post/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>ジェネリクス勉強会補足</title>
+      <link>/blog/2017/06/24/jienerikusubenkyoukaihosoku</link>
+      <pubDate>Sat, 24 Jun 2017 23:22:16 +0900</pubDate>
+      
+      <guid>/blog/2017/06/24/jienerikusubenkyoukaihosoku</guid>
+      <description>&lt;p&gt;κeenです。本日&lt;a href=&#34;https://connpass.com/event/56773/?utm_campaign=event_participate_to_owner&amp;amp;utm_source=notifications&amp;amp;utm_medium=email&amp;amp;utm_content=title_link&#34;&gt;ジェネリクス勉強会&lt;/a&gt;で発表したのですがいくつか拾いきれないコメントがあったのでここでお返事書きます&lt;/p&gt;
+
+&lt;p&gt;発表スライドは&lt;a href=&#34;https://keens.github.io/slide/jienerikusu_disupatchi_omoteura/&#34;&gt;こちら&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;
+
+&lt;h1 id=&#34;ジェネリクスの実装はポインタ方式とテンプレート方式だけじゃないよ&#34;&gt;ジェネリクスの実装はポインタ方式とテンプレート方式だけじゃないよ&lt;/h1&gt;
+
+&lt;p&gt;もちろんです。
+基本的な手法を大別しただけで、私の発表中にもポインタ方式でも最適化がありえるとの指摘がありましたし、ジェネリクス勉強会中でも.NETの実装の話も出てました。
+勉強会全体を見ているならここで私がフォローするまでもないかと思いますが、念のため拾っておきます。&lt;/p&gt;
+
+&lt;h1 id=&#34;クロージャの件が分からない&#34;&gt;クロージャの件が分からない&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;クロージャの型は関数型じゃないの？&lt;/li&gt;
+&lt;li&gt;無名関数は関数に名前がないだけで型はあるんじゃないの？&lt;/li&gt;
+&lt;li&gt;なんで(Iteratorのmapとかの)返り値に関数型がでてくるの&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;Rustの挙動を知らないとちょっと分かりづらかったですね。それとあとで見返したら私も発表中一箇所嘘いってました。
+詳しいことをコード例を出しながら説明していきます&lt;/p&gt;
+
+&lt;h2 id=&#34;rustのクロージャの型は匿名化された型&#34;&gt;Rustのクロージャの型は匿名化された型&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://keens.github.io/blog/2016/10/10/rustnokuro_ja3tanewotsukutterikaisuru/&#34;&gt;Rustのクロージャ3種を作って理解する | κeenのHappy Hacκing Blog&lt;/a&gt;や&lt;a href=&#34;http://keens.github.io/blog/2016/03/01/rustnozerokosutochuushouka/&#34;&gt;Rustのゼロコスト抽象化 | κeenのHappy Hacκing Blog&lt;/a&gt;
+で若干説明しましたが、Rustではクロージャリテラル毎に型が作られます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let mut x = 0;
+let mut counter = || { x += 1; x}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;こう書いたときにコンパイラは裏で以下のようなコードを生成します。（Rustを知らない人への説明のため、FnOnceの存在や実際は参照でキャプチャするなどを無視した疑似コードです）&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct AnonymousClosure{x: i32}
+impl FnMut&amp;lt;()&amp;gt; for AnonymousClosure {
+    extern &amp;quot;rust-call&amp;quot; fn call_mut(&amp;amp;mut self, (): ()) -&amp;gt; i32 {
+        self.x += 1;
+        x
+    }
+}
+let mut x = 0;
+let mut counter = AnnonymousClosure{x: x}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;要点は&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;クロージャ自体はただのキャプチャしたデータの集まり&lt;/li&gt;
+&lt;li&gt;関数本体は、メソッドとして定義される。 &lt;strong&gt;Rustは静的ディスパッチをする&lt;/strong&gt; ので &lt;strong&gt;関数ポインタはデータには含まれない&lt;/strong&gt;。コンパイラが解決する。
+
+&lt;ul&gt;
+&lt;li&gt;私が1つ嘘を言っていたというのはここです。関数ポインタもデータに含まれるって言っちゃってました。&lt;/li&gt;
+&lt;li&gt;クロージャだけど関数ポインタを使わないんですね&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;1クロージャリテラルにつき1型を生成することでクロージャリテラル毎の関数本体を出し分けている&lt;/li&gt;
+&lt;li&gt;キャプチャした変数をまとめた構造体自体はポインタ型になっていない&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;ということで&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;クロージャ自体の型は関数型ではなくて、関数っぽい振舞いをするトレイト(ここでは&lt;code&gt;FnMut&lt;/code&gt;)を実装しているだけのただの無名型です。&lt;/li&gt;
+&lt;li&gt;無名関数だから型が無名という説明は確かにちょっとおかしかったですね。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;クロージャを返したい&#34;&gt;クロージャを返したい&lt;/h2&gt;
+
+&lt;p&gt;ここから「なんで(Iteratorのmapとかの)返り値に関数型がでてくるの」へのお返事。&lt;/p&gt;
+
+&lt;p&gt;説明の例として遅延評価するイテレータへのマップを書きたいと思います。
+引数にはイテレータとクロージャを取ります。
+実際には適用する訳ではないのでマップするイテレータとクロージャの組を返せばよさそうですね。
+ここで思い出して欲しいのはクロージャはただの&lt;code&gt;FnMut&lt;/code&gt;を実装している構造体なのでした。
+なのでこう書くのですが、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn map&amp;lt;I, B, F&amp;gt;(i: I, f: F) -&amp;gt; (I, F)
+where
+  I: Iterator,
+  F: FnMut(I::Item) -&amp;gt; B,
+{
+  (I, F)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;実際にクロージャを渡したときには&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn map(i: SomeIter, f: AnnonymousClosure) -&amp;gt; (SomeIter, AnnonymousClosure)
+{
+  (i, f)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;のようになります。ここでも、クロージャデータにはポインタが挟まってないことに注意して下さい。そして型名が分かるのでクロージャを呼び出すときにはその関数が &lt;strong&gt;静的ディスパッチされます&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;返り値にクロージャの型を書く = クロージャの関数本体が静的ディスパッチされる = 速い&lt;/p&gt;
+
+&lt;p&gt;ということが伝わりますでしょうか。なのでRustではできるかぎり返り値にクロージャの型を書きたいのです。&lt;/p&gt;
+
+&lt;p&gt;で、このパターンだと引数で受け取ったものを返り値で返すだけなので関数を呼んだときに得られた名前を書くだけです。たとえクロージャが匿名型であっても書くことができます。&lt;/p&gt;
+
+&lt;h2 id=&#34;返り値にだけ書きたい&#34;&gt;返り値にだけ書きたい&lt;/h2&gt;
+
+&lt;p&gt;ところが返り値にだけクロージャの型を書こうとすると、ダメです。先程の&lt;code&gt;map&lt;/code&gt;関数を関数の中で使ってみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn inc&amp;lt;I&amp;gt;(i: I) -&amp;gt; ???
+where
+  I: Iterator&amp;lt;Item = i32&amp;gt;,
+{
+  map(i, |x| x + 1)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;こうすると型はこう解決されます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;sturct AnnonymousClosure;
+impl FnMut&amp;lt;(i32,)&amp;gt; for AnonymousClosure {
+    extern &amp;quot;rust-call&amp;quot; fn call_mut(&amp;amp;mut self, (x,): (i32,)) -&amp;gt; i32 {
+        x + 1
+    }
+}
+
+fn inc(i: SomeItr) -&amp;gt; (SomeItr, AnnonymousClosure)
+{
+  map(i, AnnonymousClosure::new())
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;返り値にだけ匿名型が出てきました。
+先程のようにパラメータで受け取ってそのまま返すということができません。
+なのでここで、返り値も匿名化する存在型が必要になるのです。&lt;/p&gt;
+
+&lt;p&gt;ここまでくれば以下のコードにも存在型が必要な理由が分かりますでしょうか。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn do_later() -&amp;gt; impl Future&amp;lt;Item = (), Err = Error&amp;gt; {
+    do_something()
+        // ここでクロージャが出てきた
+        .and_then(|()| do_another_thing())
+        // 本来の`and_then`の返り値は
+        // `AndThen&amp;lt;Self, B, F&amp;gt;`だが
+        // `F`の型が匿名化されていて書けない
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;存在型って-forallでできるよ&#34;&gt;存在型って、forallでできるよ&lt;/h1&gt;
+
+&lt;p&gt;マジレスなのかただ知識を披露してるのかよく分からなかったのですが、いちおうお返事書いておきます。&lt;/p&gt;
+
+&lt;p&gt;どの意味で「forall」でできるよと言っているのかよく分からなかったのですが、Coqの実装を見ていっているのなら見当違いです。
+Coqの実装はこの辺が参考になりますかね。 &lt;a href=&#34;http://inkar-us-i.hatenablog.com/entry/2016/11/16/175844&#34;&gt;Coqで「任意のxについて…」「あるxが存在して…」を扱う - きくらげ観察日記&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;これをRustで書くとこうなるでしょうか。Rustにはトレイトをパラメータで受け取る手段がないのでひとまず量化する一階の述語を&lt;code&gt;Fn() -&amp;gt; ()&lt;/code&gt;トレイトにしておきます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct FnExists&amp;lt;F: Fn() -&amp;gt; ()&amp;gt;(f: F)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これは命題論理としては正しいのですが、型パラメータを取るので目的である匿名化を実現できていません。&lt;/p&gt;
+
+&lt;p&gt;もう1つは、CPS変換の可能性もあります。
+この辺が参考になりますかね。&lt;a href=&#34;http://myuon-myon.hatenablog.com/entry/2016/05/11/215734&#34;&gt;データ型のCPS変換について - Just $ A sandbox&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;直観論理でも以下が成り立ちます。&lt;/p&gt;
+
+&lt;p&gt;\[
+{}^\exists x P(x) \to \lnot ^\forall x \lnot P(x)
+\]&lt;/p&gt;
+
+&lt;p&gt;因みに逆は直観論理では成り立ちません（直感的な説明をすると存在しないことを否定しても実際の値を構成できないからです）。&lt;/p&gt;
+
+&lt;p&gt;これは確かに正しいです。「&lt;code&gt;Tr&lt;/code&gt;トレイトを実装した型」という存在型は以下の疑似コードで書けるでしょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Tr{}
+fn exists() -&amp;gt; FnOnce&amp;lt;A&amp;gt;(FnOnce&amp;lt;T: Tr&amp;gt;(t: T) -&amp;gt; A) -&amp;gt; A {
+  let tr = SomeTr::new();
+  forall &amp;lt;A&amp;gt; move |cont: FnOnce&amp;lt;T: Tr&amp;gt;(t: T) -&amp;gt; A| -&amp;gt; A { cont(tr) }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ですがまあ、これは実際には無理です。
+1つにはRustには型の高ランク多相がありません。ランク1多相だけです。
+もしランクの概念を知らずにforallで書けると主張しているならそれは的外れです。
+ランクの概念を知った上で高ランク多相を入れろという主張なら理解はできますが、無理です。
+引数に渡す関数や返り値で返す関数、要はデータとして扱う関数はジェネリクスにできません。
+スライドの中でRustはテンプレート方式と説明しましたが、ジェネリクスはテンプレートであって実際のデータではないので値として扱えないのです。
+なのでRustのコンパイル方式を大きく変えるなどしないと実現できないでしょう。&lt;/p&gt;
+
+&lt;p&gt;それにもう1つ、ランクとは関係なしにクリティカルな理由があります。
+上で説明した通り、クロージャの実際の型は匿名データ型になります。なので返り値に型として書くことができません。
+冷静になって考えれば返り値のクロージャの型を書かないようにするための存在型のために返り値にクロージャの型を書くのは土台無理です。&lt;/p&gt;
+
+&lt;p&gt;さて、私の知識では全称型で存在型を構成する手法はこれくらいですがもし上記以外の構成方法が存在して、私が明後日な返事をしているなら連絡下さい。&lt;/p&gt;</description>
+    </item>
     
     <item>
       <title>Rustでエラーが出てないのにファイルに書き出せないときは</title>
@@ -2887,119 +3086,6 @@ TCPやTLSもRTTを減らそうと努力はしていますが、もっと抜本�
 &lt;li&gt;QUICの輻輳制御について調べる。&lt;/li&gt;
 &lt;li&gt;TLS1.3との統合について調べる&lt;/li&gt;
 &lt;/ul&gt;</description>
-    </item>
-    
-    <item>
-      <title>2017年注目していきたい技術</title>
-      <link>/blog/2017/01/01/2017nenchuumokushiteikitaigijutsu</link>
-      <pubDate>Sun, 01 Jan 2017 22:12:01 +0900</pubDate>
-      
-      <guid>/blog/2017/01/01/2017nenchuumokushiteikitaigijutsu</guid>
-      <description>&lt;p&gt;κeenです。毎年これやっていく。個人的に注目していきたい技術と飛び込んでみたい技術書いく。&lt;/p&gt;
-
-&lt;p&gt;あくまで個人的な内容。&lt;/p&gt;
-
-&lt;p&gt;&lt;/p&gt;
-
-&lt;h1 id=&#34;webassembly-http-webassembly-org&#34;&gt;&lt;a href=&#34;http://webassembly.org/&#34;&gt;WebAssembly&lt;/a&gt;&lt;/h1&gt;
-
-&lt;p&gt;ブラウザ上で動く仮想アセンブラ。ブラウザ上でのJSの高速実行はブラウザでの至上命題である。
-JIT技術を各ブラウザベンダが切磋琢磨していたがそれでも限界があるので&lt;a href=&#34;http://asmjs.org/&#34;&gt;asm.js&lt;/a&gt;なんかが産まれた。
-これは例えば&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-javascript&#34;&gt;function geometricMean(start, end) {
-  start = start|0; // start has type int
-  end = end|0;     // end has type int
-  return +exp(+logSum(start, end) / +((end - start)|0));
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のように&lt;code&gt;x|0&lt;/code&gt;と書くと&lt;code&gt;x&lt;/code&gt;が整数であることを表わす、などとしてJSのサブセットで型情報も付与出来るようにしたものだ。冗長なので人の手で書くことは意図していない。
-これはある程度上手くいって、&lt;a href=&#34;https://github.com/kripken/emscripten&#34;&gt;emscripten&lt;/a&gt;のようにLLVMからjsへのコンパイラでも使われている。&lt;/p&gt;
-
-&lt;p&gt;それでもまだ問題がある。1つに、JSよりも冗長な記法を使っているためファイルが嵩張る点。ロード時間やパース時間が長くなる。そもそも人の手で掛かないならバイナリフォーマットでもいい筈だ。
-そしてもう1つに低レベルな処理、例えばSIMDなんかは扱えない点。&lt;/p&gt;
-
-&lt;p&gt;WebAssemblyはこれらを解決する。仮想的な機械語でバイナリフォーマットがあるので低レベルなことが（将来）出来てコンパクトになっている。
-計算モデルはスタックベースのマシンになっている。メモリや関数テーブルなどもある。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;(module
-  (type (;0;) (func (param i32 i32) (result i32)))
-  (func (;0;) (type 0) (param i32 i32) (result i32)
-    get_local 0
-    get_local 1
-    i32.add)
-  (export &amp;quot;addTwo&amp;quot; (func 0)))
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;多くの人にとってWebAssemblyは意識して関るものではなく、emscriptenの吐くコードが効率的になる、程度のものだろう。
-私はコンパイラを作る人なので意識する必要がある。
-WebAssemblyにはundefined behaviourがないだとかThread API、 SIMD APIなどが入る予定だとかがあるのでLLVM経由で吐くよりも直接吐いた方が面白い。&lt;/p&gt;
-
-&lt;p&gt;少し追っていきたい。&lt;/p&gt;
-
-&lt;h1 id=&#34;quic-https-www-chromium-org-quic&#34;&gt;&lt;a href=&#34;https://www.chromium.org/quic&#34;&gt;QUIC&lt;/a&gt;&lt;/h1&gt;
-
-&lt;p&gt;HTTP/2のための代替TCP。HTTP/2はもうリリースされてるので次はQUICを。
-HTTP/2は1コネクションを複数のstreamに分割するが、stream内での到達順序保障は必要なもののstream同士ではそれが不要なのでTCPの到達順序保障が過剰要求になってしまう。
-それを緩めるためにUDPベースでプロトコルを作ったのがQUIC。まあ、他にも色々改善点はあるが。&lt;/p&gt;
-
-&lt;p&gt;これも基本的にはあまり追う必要はないが、自分の使いたい言語で実装がなかったら自分で実装することになる。
-まだその辺の環境が整っていないので今後どうなるか注視する必要がある。&lt;/p&gt;
-
-&lt;h1 id=&#34;idris-http-www-idris-lang-org&#34;&gt;&lt;a href=&#34;http://www.idris-lang.org/&#34;&gt;Idris&lt;/a&gt;&lt;/h1&gt;
-
-&lt;p&gt;依存型のある言語。今年もRustに忙しい可能性があるが、ちょっとIdrisに興味が湧いた。
-常々「多相があって正格評価で高階関数を簡単に扱えてサブタイピングのない、C FFIやThreadを扱える言語」を捜していて、それがATS2だったりSML#だったりRustだったりした。
-最近はRustに落ち着いたが、今度は低レベルな部分、「C FFIやThreadを扱える」がなくてもいいから依存型が入ってる言語が欲しくなった。ATS2は置いといてIdrisかなーと。&lt;/p&gt;
-
-&lt;p&gt;生の依存型だとつらいかな、と思っていたらtacticもあるようだったので機会があればやってみたい。&lt;/p&gt;
-
-&lt;p&gt;CF &lt;a href=&#34;http://wkwkes.hatenablog.com/entry/2016/12/17/000000&#34;&gt;プログラミング言語 idris - wkwkesのやつ&lt;/a&gt;&lt;/p&gt;
-
-&lt;h1 id=&#34;lean-http-leanprover-github-io&#34;&gt;&lt;a href=&#34;http://leanprover.github.io/&#34;&gt;Lean&lt;/a&gt;&lt;/h1&gt;
-
-&lt;p&gt;MSRで開発されている定理証明支援系。よく「Coqでいいじゃん」「Agdaは？」と訊かれるが、&lt;a href=&#34;https://leanprover.github.io/theorem_proving_in_lean/index.html&#34;&gt;オンラインチュートリアル&lt;/a&gt;が良さげだったのと、Emacsから使えるのと、
-&lt;a href=&#34;https://kha.github.io/2016/07/22/formally-verifying-rusts-binary-search.html&#34;&gt;RustからLeanへのトランスレートをやっている&lt;/a&gt;人がいたので興味湧いた。
-そもそもCoqをある程度やってからにしろとは自分でも思う。&lt;/p&gt;
-
-&lt;h1 id=&#34;coq-https-coq-inria-fr&#34;&gt;&lt;a href=&#34;https://coq.inria.fr/&#34;&gt;Coq&lt;/a&gt;&lt;/h1&gt;
-
-&lt;p&gt;定理証明支援系。去年も上がっていたが、今年は酉年なので。「Agdaは？」。知らん。&lt;/p&gt;
-
-&lt;h1 id=&#34;finagle-https-twitter-github-io-finagle&#34;&gt;&lt;a href=&#34;https://twitter.github.io/finagle/&#34;&gt;Finagle&lt;/a&gt;&lt;/h1&gt;
-
-&lt;p&gt;RPCのクライアント/サーバフレームワーク。RPCをやる時にいくつか問題が出る。
-1つはペイロードがRPC毎に違うのでフレームワークが定まりづらい点。
-もう1つはロードバランシングがしづらい点。
-ロードバランシングの方に言及しておくと、RPCをやる時は大抵コネクションを張りっぱなしなのでTCPロードバランサが使えない。
-例えば順番にサーバを起動していくと最初に上がったサーバにコネクションが集中して以後バランスされない。&lt;/p&gt;
-
-&lt;p&gt;これを解決するのがFinagleで、クライアントが全てのサーバにコネクションを貼って、クライアントサイドでロードバランシングをする。
-さらにクライアントが複数のサーバを知っているのでサーバがエラーを返したら別のサーバにリクエストを投げることも出来る。
-ペイロードの話は多相型で解決する。パーサとかその辺も含めたフレームワークになっている。&lt;/p&gt;
-
-&lt;h1 id=&#34;tokio-https-github-com-tokio-rs-tokio&#34;&gt;&lt;a href=&#34;https://github.com/tokio-rs/tokio&#34;&gt;Tokio&lt;/a&gt;&lt;/h1&gt;
-
-&lt;p&gt;FinagleのRust版。Rustは非同期IOに強いと思っているのでTokioがリリースされたらそこら辺のHTTPフレームワークも非同期化するのではと思っている。&lt;/p&gt;
-
-&lt;h1 id=&#34;tidb-https-github-com-pingcap-tidb&#34;&gt;&lt;a href=&#34;https://github.com/pingcap/tidb&#34;&gt;TiDB&lt;/a&gt;&lt;/h1&gt;
-
-&lt;p&gt;分散スケール可能なSQL DB。Rust製。&lt;a href=&#34;https://research.google.com/pubs/pub41344.html&#34;&gt;Google F1&lt;/a&gt;を参考に作られているらしい。
-ストレージエンジン自体は&lt;a href=&#34;http://rocksdb.org/&#34;&gt;RocksDB&lt;/a&gt;を使っていて、その上に分散合意、MVCC、トランザクションを載せてさらにそれにSQLレイヤー、MySQLプロトコルレイヤーを載せている。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://pingcap.github.io/blog/assets/img/how-we-build-tidb-2.png&#34; alt=&#34;TiDBのアーキテクチャ画像&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;アーキテクチャについては上の画像を引用した&lt;a href=&#34;https://pingcap.github.io/blog/2016/10/17/how-we-build-tidb/&#34;&gt;この記事&lt;/a&gt;が詳しい。&lt;/p&gt;
-
-&lt;h1 id=&#34;tantivy-https-github-com-tantivy-search-tantivy&#34;&gt;&lt;a href=&#34;https://github.com/tantivy-search/tantivy&#34;&gt;tantivy&lt;/a&gt;&lt;/h1&gt;
-
-&lt;p&gt;全文検索エンジンライブラリ。Rust製。アーキテクチャやアルゴリズムは&lt;a href=&#34;http://lucene.apache.org/core/&#34;&gt;Apache Lucene&lt;/a&gt;を参考に作られているらしいのでだいたいそのレイヤーのライブラリと思ってもらえれば。&lt;/p&gt;
-
-&lt;p&gt;Rust製なのでインデックスの構築が速いのが一つの特徴。今後、自前でElastic SearchやApache Solrのようなレイヤーを作るのかLuceneの置き換えを狙ってJava APIを提供するのかは不明。&lt;/p&gt;
-
-&lt;p&gt;注目したい理由はベースで使っている&lt;a href=&#34;https://github.com/BurntSushi/fst&#34;&gt;fstライブラリ&lt;/a&gt;の&lt;a href=&#34;http://blog.burntsushi.net/transducers/&#34;&gt;紹介記事&lt;/a&gt;が気に入ったから。&lt;/p&gt;</description>
     </item>
     
   </channel>

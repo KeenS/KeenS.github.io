@@ -9,6 +9,205 @@
     <atom:link href="/categories/%E3%82%B8%E3%82%A7%E3%83%8D%E3%83%AA%E3%82%AF%E3%82%B9/index.xml" rel="self" type="application/rss+xml" />
     
     <item>
+      <title>ジェネリクス勉強会補足</title>
+      <link>/blog/2017/06/24/jienerikusubenkyoukaihosoku</link>
+      <pubDate>Sat, 24 Jun 2017 23:22:16 +0900</pubDate>
+      
+      <guid>/blog/2017/06/24/jienerikusubenkyoukaihosoku</guid>
+      <description>&lt;p&gt;κeenです。本日&lt;a href=&#34;https://connpass.com/event/56773/?utm_campaign=event_participate_to_owner&amp;amp;utm_source=notifications&amp;amp;utm_medium=email&amp;amp;utm_content=title_link&#34;&gt;ジェネリクス勉強会&lt;/a&gt;で発表したのですがいくつか拾いきれないコメントがあったのでここでお返事書きます&lt;/p&gt;
+
+&lt;p&gt;発表スライドは&lt;a href=&#34;https://keens.github.io/slide/jienerikusu_disupatchi_omoteura/&#34;&gt;こちら&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;
+
+&lt;h1 id=&#34;ジェネリクスの実装はポインタ方式とテンプレート方式だけじゃないよ&#34;&gt;ジェネリクスの実装はポインタ方式とテンプレート方式だけじゃないよ&lt;/h1&gt;
+
+&lt;p&gt;もちろんです。
+基本的な手法を大別しただけで、私の発表中にもポインタ方式でも最適化がありえるとの指摘がありましたし、ジェネリクス勉強会中でも.NETの実装の話も出てました。
+勉強会全体を見ているならここで私がフォローするまでもないかと思いますが、念のため拾っておきます。&lt;/p&gt;
+
+&lt;h1 id=&#34;クロージャの件が分からない&#34;&gt;クロージャの件が分からない&lt;/h1&gt;
+
+&lt;ul&gt;
+&lt;li&gt;クロージャの型は関数型じゃないの？&lt;/li&gt;
+&lt;li&gt;無名関数は関数に名前がないだけで型はあるんじゃないの？&lt;/li&gt;
+&lt;li&gt;なんで(Iteratorのmapとかの)返り値に関数型がでてくるの&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;Rustの挙動を知らないとちょっと分かりづらかったですね。それとあとで見返したら私も発表中一箇所嘘いってました。
+詳しいことをコード例を出しながら説明していきます&lt;/p&gt;
+
+&lt;h2 id=&#34;rustのクロージャの型は匿名化された型&#34;&gt;Rustのクロージャの型は匿名化された型&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://keens.github.io/blog/2016/10/10/rustnokuro_ja3tanewotsukutterikaisuru/&#34;&gt;Rustのクロージャ3種を作って理解する | κeenのHappy Hacκing Blog&lt;/a&gt;や&lt;a href=&#34;http://keens.github.io/blog/2016/03/01/rustnozerokosutochuushouka/&#34;&gt;Rustのゼロコスト抽象化 | κeenのHappy Hacκing Blog&lt;/a&gt;
+で若干説明しましたが、Rustではクロージャリテラル毎に型が作られます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let mut x = 0;
+let mut counter = || { x += 1; x}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;こう書いたときにコンパイラは裏で以下のようなコードを生成します。（Rustを知らない人への説明のため、FnOnceの存在や実際は参照でキャプチャするなどを無視した疑似コードです）&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct AnonymousClosure{x: i32}
+impl FnMut&amp;lt;()&amp;gt; for AnonymousClosure {
+    extern &amp;quot;rust-call&amp;quot; fn call_mut(&amp;amp;mut self, (): ()) -&amp;gt; i32 {
+        self.x += 1;
+        x
+    }
+}
+let mut x = 0;
+let mut counter = AnnonymousClosure{x: x}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;要点は&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;クロージャ自体はただのキャプチャしたデータの集まり&lt;/li&gt;
+&lt;li&gt;関数本体は、メソッドとして定義される。 &lt;strong&gt;Rustは静的ディスパッチをする&lt;/strong&gt; ので &lt;strong&gt;関数ポインタはデータには含まれない&lt;/strong&gt;。コンパイラが解決する。
+
+&lt;ul&gt;
+&lt;li&gt;私が1つ嘘を言っていたというのはここです。関数ポインタもデータに含まれるって言っちゃってました。&lt;/li&gt;
+&lt;li&gt;クロージャだけど関数ポインタを使わないんですね&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;1クロージャリテラルにつき1型を生成することでクロージャリテラル毎の関数本体を出し分けている&lt;/li&gt;
+&lt;li&gt;キャプチャした変数をまとめた構造体自体はポインタ型になっていない&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;ということで&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;クロージャ自体の型は関数型ではなくて、関数っぽい振舞いをするトレイト(ここでは&lt;code&gt;FnMut&lt;/code&gt;)を実装しているだけのただの無名型です。&lt;/li&gt;
+&lt;li&gt;無名関数だから型が無名という説明は確かにちょっとおかしかったですね。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;クロージャを返したい&#34;&gt;クロージャを返したい&lt;/h2&gt;
+
+&lt;p&gt;ここから「なんで(Iteratorのmapとかの)返り値に関数型がでてくるの」へのお返事。&lt;/p&gt;
+
+&lt;p&gt;説明の例として遅延評価するイテレータへのマップを書きたいと思います。
+引数にはイテレータとクロージャを取ります。
+実際には適用する訳ではないのでマップするイテレータとクロージャの組を返せばよさそうですね。
+ここで思い出して欲しいのはクロージャはただの&lt;code&gt;FnMut&lt;/code&gt;を実装している構造体なのでした。
+なのでこう書くのですが、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn map&amp;lt;I, B, F&amp;gt;(i: I, f: F) -&amp;gt; (I, F)
+where
+  I: Iterator,
+  F: FnMut(I::Item) -&amp;gt; B,
+{
+  (I, F)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;実際にクロージャを渡したときには&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn map(i: SomeIter, f: AnnonymousClosure) -&amp;gt; (SomeIter, AnnonymousClosure)
+{
+  (i, f)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;のようになります。ここでも、クロージャデータにはポインタが挟まってないことに注意して下さい。そして型名が分かるのでクロージャを呼び出すときにはその関数が &lt;strong&gt;静的ディスパッチされます&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;返り値にクロージャの型を書く = クロージャの関数本体が静的ディスパッチされる = 速い&lt;/p&gt;
+
+&lt;p&gt;ということが伝わりますでしょうか。なのでRustではできるかぎり返り値にクロージャの型を書きたいのです。&lt;/p&gt;
+
+&lt;p&gt;で、このパターンだと引数で受け取ったものを返り値で返すだけなので関数を呼んだときに得られた名前を書くだけです。たとえクロージャが匿名型であっても書くことができます。&lt;/p&gt;
+
+&lt;h2 id=&#34;返り値にだけ書きたい&#34;&gt;返り値にだけ書きたい&lt;/h2&gt;
+
+&lt;p&gt;ところが返り値にだけクロージャの型を書こうとすると、ダメです。先程の&lt;code&gt;map&lt;/code&gt;関数を関数の中で使ってみましょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn inc&amp;lt;I&amp;gt;(i: I) -&amp;gt; ???
+where
+  I: Iterator&amp;lt;Item = i32&amp;gt;,
+{
+  map(i, |x| x + 1)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;こうすると型はこう解決されます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;sturct AnnonymousClosure;
+impl FnMut&amp;lt;(i32,)&amp;gt; for AnonymousClosure {
+    extern &amp;quot;rust-call&amp;quot; fn call_mut(&amp;amp;mut self, (x,): (i32,)) -&amp;gt; i32 {
+        x + 1
+    }
+}
+
+fn inc(i: SomeItr) -&amp;gt; (SomeItr, AnnonymousClosure)
+{
+  map(i, AnnonymousClosure::new())
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;返り値にだけ匿名型が出てきました。
+先程のようにパラメータで受け取ってそのまま返すということができません。
+なのでここで、返り値も匿名化する存在型が必要になるのです。&lt;/p&gt;
+
+&lt;p&gt;ここまでくれば以下のコードにも存在型が必要な理由が分かりますでしょうか。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn do_later() -&amp;gt; impl Future&amp;lt;Item = (), Err = Error&amp;gt; {
+    do_something()
+        // ここでクロージャが出てきた
+        .and_then(|()| do_another_thing())
+        // 本来の`and_then`の返り値は
+        // `AndThen&amp;lt;Self, B, F&amp;gt;`だが
+        // `F`の型が匿名化されていて書けない
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h1 id=&#34;存在型って-forallでできるよ&#34;&gt;存在型って、forallでできるよ&lt;/h1&gt;
+
+&lt;p&gt;マジレスなのかただ知識を披露してるのかよく分からなかったのですが、いちおうお返事書いておきます。&lt;/p&gt;
+
+&lt;p&gt;どの意味で「forall」でできるよと言っているのかよく分からなかったのですが、Coqの実装を見ていっているのなら見当違いです。
+Coqの実装はこの辺が参考になりますかね。 &lt;a href=&#34;http://inkar-us-i.hatenablog.com/entry/2016/11/16/175844&#34;&gt;Coqで「任意のxについて…」「あるxが存在して…」を扱う - きくらげ観察日記&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;これをRustで書くとこうなるでしょうか。Rustにはトレイトをパラメータで受け取る手段がないのでひとまず量化する一階の述語を&lt;code&gt;Fn() -&amp;gt; ()&lt;/code&gt;トレイトにしておきます。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct FnExists&amp;lt;F: Fn() -&amp;gt; ()&amp;gt;(f: F)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これは命題論理としては正しいのですが、型パラメータを取るので目的である匿名化を実現できていません。&lt;/p&gt;
+
+&lt;p&gt;もう1つは、CPS変換の可能性もあります。
+この辺が参考になりますかね。&lt;a href=&#34;http://myuon-myon.hatenablog.com/entry/2016/05/11/215734&#34;&gt;データ型のCPS変換について - Just $ A sandbox&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;直観論理でも以下が成り立ちます。&lt;/p&gt;
+
+&lt;p&gt;\[
+{}^\exists x P(x) \to \lnot ^\forall x \lnot P(x)
+\]&lt;/p&gt;
+
+&lt;p&gt;因みに逆は直観論理では成り立ちません（直感的な説明をすると存在しないことを否定しても実際の値を構成できないからです）。&lt;/p&gt;
+
+&lt;p&gt;これは確かに正しいです。「&lt;code&gt;Tr&lt;/code&gt;トレイトを実装した型」という存在型は以下の疑似コードで書けるでしょう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Tr{}
+fn exists() -&amp;gt; FnOnce&amp;lt;A&amp;gt;(FnOnce&amp;lt;T: Tr&amp;gt;(t: T) -&amp;gt; A) -&amp;gt; A {
+  let tr = SomeTr::new();
+  forall &amp;lt;A&amp;gt; move |cont: FnOnce&amp;lt;T: Tr&amp;gt;(t: T) -&amp;gt; A| -&amp;gt; A { cont(tr) }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ですがまあ、これは実際には無理です。
+1つにはRustには型の高ランク多相がありません。ランク1多相だけです。
+もしランクの概念を知らずにforallで書けると主張しているならそれは的外れです。
+ランクの概念を知った上で高ランク多相を入れろという主張なら理解はできますが、無理です。
+引数に渡す関数や返り値で返す関数、要はデータとして扱う関数はジェネリクスにできません。
+スライドの中でRustはテンプレート方式と説明しましたが、ジェネリクスはテンプレートであって実際のデータではないので値として扱えないのです。
+なのでRustのコンパイル方式を大きく変えるなどしないと実現できないでしょう。&lt;/p&gt;
+
+&lt;p&gt;それにもう1つ、ランクとは関係なしにクリティカルな理由があります。
+上で説明した通り、クロージャの実際の型は匿名データ型になります。なので返り値に型として書くことができません。
+冷静になって考えれば返り値のクロージャの型を書かないようにするための存在型のために返り値にクロージャの型を書くのは土台無理です。&lt;/p&gt;
+
+&lt;p&gt;さて、私の知識では全称型で存在型を構成する手法はこれくらいですがもし上記以外の構成方法が存在して、私が明後日な返事をしているなら連絡下さい。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
       <title>ジェネリクス ディスパッチ 表裏</title>
       <link>/slide/jienerikusu_disupatchi_omoteura/</link>
       <pubDate>Sat, 17 Jun 2017 22:25:35 +0900</pubDate>
