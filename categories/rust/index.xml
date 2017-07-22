@@ -2,376 +2,37 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>Rust on κeenのHappy Hacκing Blog</title>
-    <link>/categories/rust/index.xml</link>
+    <link>/categories/rust/</link>
     <description>Recent content in Rust on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <atom:link href="/categories/rust/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Sun, 02 Jul 2017 12:31:07 +0900</lastBuildDate>
+    
+	<atom:link href="/categories/rust/index.xml" rel="self" type="application/rss+xml" />
+    
     
     <item>
       <title>ステートマシン抽象化としてのFuture</title>
-      <link>/blog/2017/07/02/sute_tomashinchuushoukatoshitenofuture</link>
+      <link>/blog/2017/07/02/sute_tomashinchuushoukatoshitenofuture/</link>
       <pubDate>Sun, 02 Jul 2017 12:31:07 +0900</pubDate>
       
-      <guid>/blog/2017/07/02/sute_tomashinchuushoukatoshitenofuture</guid>
+      <guid>/blog/2017/07/02/sute_tomashinchuushoukatoshitenofuture/</guid>
       <description>&lt;p&gt;κeenです。最近Futureと一口にいってもいくつか種類があるなと気付いたのでRustの&lt;a href=&#34;https://github.com/alexcrichton/futures-rs&#34;&gt;&lt;code&gt;futures-rs&lt;/code&gt;&lt;/a&gt;に実装されているFutureの挙動を紐解こうと思います。&lt;/p&gt;
 
-&lt;p&gt;&lt;/p&gt;
-
-&lt;h1 id=&#34;イベント駆動io&#34;&gt;イベント駆動IO&lt;/h1&gt;
-
-&lt;p&gt;TCPサーバをノンブロッキングに書こうとすると、思いの他大変です。
-ブロックせずにIOできるタイミングまで処理を溜めておいて、できるときに読み書きします。ブロックしないタイミングをみつけるのも一苦労なので大抵ライブラリに頼ってライブラリからイベントを通知してもらいます。Rustには&lt;a href=&#34;https://github.com/carllerche/mio&#34;&gt;mio&lt;/a&gt;というライブラリがあります。&lt;/p&gt;
-
-&lt;p&gt;さて、これイベントの発見は書かなくてよくなりましたが、まだつらいです。リクエストがないのにレスポンスを返せる訳もないので処理とイベントに依存関係があって、「read readyイベントでデータを読み取って、足りれば処理開始、足りなければまだ読み取る。処理が終わればwrite readyイベントを待って書き込み。その後は次のリクエストに備えてread readyイベント待ち」などの複雑な条件分岐と処理をしなければなりません。しかもクライアントは1つじゃないのでそれらを複数管理しないといけません。やりきれませんね。私が昔書いた&lt;a href=&#34;https://github.com/KeenS/chat/blob/master/src/handler.rs#L32&#34;&gt;Websocketのechoサーバ&lt;/a&gt;を少し見ると大変そうなことが伝わると思います。（余談ですが、つらそうなコードを書いたのは抽象化ライブラリに頼らないコードを実感するためでした）&lt;/p&gt;
-
-&lt;h1 id=&#34;ステートマシン&#34;&gt;ステートマシン&lt;/h1&gt;
-
-&lt;p&gt;先程の複雑な条件分岐の例は、「ステート」があることに気付きます。「リクエストがまだ来てない」「リクエストの一部が届いたけど全部でない」「リクエストの処理中」「レスポンスの送信待ち」など。これを明確に「ステート」としてプログラムを書いてあげると綺麗に書くことができます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;[リクエストがまだ来てない]&amp;lt;----------------+
-  | read ready                            |
-  +------------------------------------+  |
-  |                                    |  |
-[リクエストの一部がきたが全部でない]&amp;lt;-+  |  |
-  | read ready                      |  |  |
-  +---------------------------------+  |  |
-  |                                    |  |
-[リクエストの処理中]&amp;lt;-------------------+  |
-  |                                       |
-[レスポンスの書き出し待ち]                 |
-  | write ready                           |
-[レスポンスの書き出し完了]-----------------+
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;さて、このステートマシンを図に書く範囲では明瞭なのですが、実際のプログラムに落とすとやや見通しが悪いです。&lt;/p&gt;
-
-&lt;p&gt;ナイーブな実装を疑似コードで書くとこうなるでしょうか。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;enum State = リクエストがまだ来てない
-           | リクエストの一部がきたが全部でない
-           | リクエストの処理中
-           | レスポンスの書き出し待ち
-           | レスポンスの書き出し完了
-
-event arrived
-  case (state, event)
-    when (リクエストがまだ来てない, read ready)
-      ...
-      if request is complete
-        state &amp;lt;- リクエストの処理中
-        wait for write ready
-      else
-        state &amp;lt;- リクエストの一部がきたが全部でない
-        wait for read ready
-    when リクエストの一部がきたが全部でない
-      ...
-      if request is complete
-        state &amp;lt;- リクエストの処理中
-        wait for write ready
-      else
-        state &amp;lt;- リクエストの一部がきたが全部でない
-        wait for read ready
-    ...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;モデリングは上手くいっているものの実際のコードに落とすとみづらいですね。
-ナイーブな実装方法の他に、デザインパターンのステートパターンを使う手もあります。まあ、そのまんまですね。
-疑似コードにするとこうなるでしょうか。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;abstract class State
-  method do returns (State, Event)
-
-class リクエストがまだ来てないState
-  method do returns (State, Event)
-      ...
-      if request is complete
-        return (new リクエストの処理中State, write ready)
-      else
-        return (new リクエストの一部がきたが全部でないState, read ready)
-
-class リクエストの一部がきたが全部でない
-  method do returns (State, Event)
-      ...
-      if request is complete
-        return (new リクエストの処理中State, write ready)
-      else
-        return (new リクエストの一部がきたが全部でないState, read ready)
-
-event arrived
-  if event equals waiting_event
-    (next_state, waiting_event) &amp;lt;- state.do()
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ステートと処理のかたまりで分離することができたのでコードの見通しもよくなりました。&lt;/p&gt;
-
-&lt;p&gt;しかし、Rust的にはまだ問題があります。Stateのサブクラスでモデリングしてますが、それだとメソッドのディスパッチが動的ディスパッチになってしまって遅いです。Zero-cost abstractionできてません。&lt;/p&gt;
-
-&lt;p&gt;もう1つ問題があって、これでもまだ直感的なコードとはかけ離れてます。本来ならこういうコードを書きたい筈です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;request &amp;lt;- empty
-until request is complete
-  request &amp;lt;&amp;lt; input
-response &amp;lt;- // do something with request
-output &amp;lt;&amp;lt; response
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これをどうにかできないでしょうか。&lt;/p&gt;
-
-&lt;h1 id=&#34;future&#34;&gt;Future&lt;/h1&gt;
-
-&lt;p&gt;そこでfutures-rsです。ゼロコストでステートマシンを抽象化してくれます。&lt;a href=&#34;https://aturon.github.io/blog/2016/08/11/futures/&#34;&gt;Zero-cost futures in Rust · Aaron Turon&lt;/a&gt;を読んだことのある人も多いでしょう。&lt;/p&gt;
-
-&lt;p&gt;基本的なアイディアは、1つのステートとその時の処理を表わす&lt;code&gt;Future&lt;/code&gt;の他にステート同士を繋げるコンビネータを用意することで柔軟にプログラムを書けるようにするということです。そしてステートの処理関数が静的ディスパッチされるようにコンビネータを工夫する（基本的には型パラメータに情報を残して静的ディスパッチできるようにする）ことでゼロコスト抽象化を実現しています。&lt;/p&gt;
-
-&lt;p&gt;先程のコードをfuturesを使って書くとこのような雰囲気になるでしょうか。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let f = loop_fn(Vec::new(), |mut buff| {
-    input.read()
-      .and_then(|data| {
-        buff.append(data);
-        match Request::parse(buff) {
-          Ok(request) =&amp;gt; Ok(Loop::Break(request))
-          Err(_) =&amp;gt; Ok(Loop::Continue((buff)))
-        }
-      })
-  }).and_then(|request| {
-    // do something with request
-  }).and_then(|response| {
-    output.write(response)
-  });
-
-run(f)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ダイレクトなコードに比べるとまだノイズが多いですが、ステートマシンを陽に作るコードよりは直感的になったと思います。&lt;/p&gt;
-
-&lt;h1 id=&#34;他のfutureとの違い&#34;&gt;他のFutureとの違い&lt;/h1&gt;
-
-&lt;p&gt;futuers-rsのFutureは1イベント起きる度に(&lt;a href=&#34;https://docs.rs/futures/0.1.14/futures/future/trait.Future.html#tymethod.poll&#34;&gt;&lt;code&gt;poll&lt;/code&gt;&lt;/a&gt;が呼ばれてReadyになる度に)次のステートの処理をし、その次のステートに移るという流れが基本です。
-次のステートに移っても、即座にそののステートの処理が走る訳ではありません。次に&lt;code&gt;poll&lt;/code&gt;が呼ばれるまで処理をしません。つまりマルチスレッドの文脈で語ると、イベントが発火したスレッド &lt;em&gt;ではなく&lt;/em&gt; &lt;code&gt;poll&lt;/code&gt;を呼んだスレッド、おおむね &lt;strong&gt;Futureを所有しているスレッドで処理が走ります&lt;/strong&gt; 。Futureの処理がスレッドを飛び越えたりはしません。ある1つのFutureを別スレッドで計算したければ&lt;a href=&#34;https://github.com/alexcrichton/futures-rs/tree/master/futures-cpupool&#34;&gt;CPU Pool&lt;/a&gt;などが使えますが、その後（&lt;a href=&#34;https://docs.rs/futures-cpupool/0.1.5/futures_cpupool/struct.CpuPool.html#method.spawn&#34;&gt;spawn&lt;/a&gt;の返り値の新たなFuture）に続けた処理は今のスレッドで実行されます。&lt;/p&gt;
-
-&lt;p&gt;一方他のFutureはほぼマルチスレッドと密結合したプロミスのようになっていて、&lt;/p&gt;
-
-&lt;p&gt;1 Future = 別スレッドで実行される計算への先物。
-コンビネータ(callback) = 別スレッドで実行される計算が終わったあとに同じスレッドで実行されるべき計算&lt;/p&gt;
-
-&lt;p&gt;のようなものが多い印象です。要は1つ処理が終わるとそのまま次の処理、その次の処理と自動で発火していく。もちろん、ライブラリの作りによってスレッドとの関係性などにバリエーションはあるでしょうが、Rustのように&lt;a href=&#34;https://docs.rs/futures/0.1.14/futures/future/trait.Future.html#tymethod.poll&#34;&gt;&lt;code&gt;poll&lt;/code&gt;&lt;/a&gt;を基本とした設計はあまりみません。&lt;/p&gt;
-
-&lt;p&gt;このようにFutureにも色々あるうち、Rustでメジャーに使われているfutures-rsの&lt;code&gt;Future&lt;/code&gt;はステートマシンの抽象化になっているよ、というお話でした。&lt;/p&gt;</description>
+&lt;p&gt;&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>ジェネリクス勉強会補足</title>
-      <link>/blog/2017/06/24/jienerikusubenkyoukaihosoku</link>
+      <link>/blog/2017/06/24/jienerikusubenkyoukaihosoku/</link>
       <pubDate>Sat, 24 Jun 2017 23:22:16 +0900</pubDate>
       
-      <guid>/blog/2017/06/24/jienerikusubenkyoukaihosoku</guid>
+      <guid>/blog/2017/06/24/jienerikusubenkyoukaihosoku/</guid>
       <description>&lt;p&gt;κeenです。本日&lt;a href=&#34;https://connpass.com/event/56773/?utm_campaign=event_participate_to_owner&amp;amp;utm_source=notifications&amp;amp;utm_medium=email&amp;amp;utm_content=title_link&#34;&gt;ジェネリクス勉強会&lt;/a&gt;で発表したのですがいくつか拾いきれないコメントがあったのでここでお返事書きます&lt;/p&gt;
 
 &lt;p&gt;発表スライドは&lt;a href=&#34;https://keens.github.io/slide/jienerikusu_disupatchi_omoteura/&#34;&gt;こちら&lt;/a&gt;&lt;/p&gt;
 
-&lt;p&gt;&lt;/p&gt;
-
-&lt;h1 id=&#34;ジェネリクスの実装はポインタ方式とテンプレート方式だけじゃないよ&#34;&gt;ジェネリクスの実装はポインタ方式とテンプレート方式だけじゃないよ&lt;/h1&gt;
-
-&lt;p&gt;もちろんです。
-基本的な手法を大別しただけで、私の発表中にもポインタ方式でも最適化がありえるとの指摘がありましたし、ジェネリクス勉強会中でも.NETの実装の話も出てました。
-勉強会全体を見ているならここで私がフォローするまでもないかと思いますが、念のため拾っておきます。&lt;/p&gt;
-
-&lt;h1 id=&#34;クロージャの件が分からない&#34;&gt;クロージャの件が分からない&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;クロージャの型は関数型じゃないの？&lt;/li&gt;
-&lt;li&gt;無名関数は関数に名前がないだけで型はあるんじゃないの？&lt;/li&gt;
-&lt;li&gt;なんで(Iteratorのmapとかの)返り値に関数型がでてくるの&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;Rustの挙動を知らないとちょっと分かりづらかったですね。それとあとで見返したら私も発表中一箇所嘘いってました。
-詳しいことをコード例を出しながら説明していきます&lt;/p&gt;
-
-&lt;h2 id=&#34;rustのクロージャの型は匿名化された型&#34;&gt;Rustのクロージャの型は匿名化された型&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://keens.github.io/blog/2016/10/10/rustnokuro_ja3tanewotsukutterikaisuru/&#34;&gt;Rustのクロージャ3種を作って理解する | κeenのHappy Hacκing Blog&lt;/a&gt;や&lt;a href=&#34;http://keens.github.io/blog/2016/03/01/rustnozerokosutochuushouka/&#34;&gt;Rustのゼロコスト抽象化 | κeenのHappy Hacκing Blog&lt;/a&gt;
-で若干説明しましたが、Rustではクロージャリテラル毎に型が作られます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let mut x = 0;
-let mut counter = || { x += 1; x}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;こう書いたときにコンパイラは裏で以下のようなコードを生成します。（Rustを知らない人への説明のため、FnOnceの存在や実際は参照でキャプチャするなどを無視した疑似コードです）&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct AnonymousClosure{x: i32}
-impl FnMut&amp;lt;()&amp;gt; for AnonymousClosure {
-    extern &amp;quot;rust-call&amp;quot; fn call_mut(&amp;amp;mut self, (): ()) -&amp;gt; i32 {
-        self.x += 1;
-        x
-    }
-}
-let mut x = 0;
-let mut counter = AnnonymousClosure{x: x}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;要点は&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;クロージャ自体はただのキャプチャしたデータの集まり&lt;/li&gt;
-&lt;li&gt;関数本体は、メソッドとして定義される。 &lt;strong&gt;Rustは静的ディスパッチをする&lt;/strong&gt; ので &lt;strong&gt;関数ポインタはデータには含まれない&lt;/strong&gt;。コンパイラが解決する。
-
-&lt;ul&gt;
-&lt;li&gt;私が1つ嘘を言っていたというのはここです。関数ポインタもデータに含まれるって言っちゃってました。&lt;/li&gt;
-&lt;li&gt;クロージャだけど関数ポインタを使わないんですね&lt;/li&gt;
-&lt;/ul&gt;&lt;/li&gt;
-&lt;li&gt;1クロージャリテラルにつき1型を生成することでクロージャリテラル毎の関数本体を出し分けている&lt;/li&gt;
-&lt;li&gt;キャプチャした変数をまとめた構造体自体はポインタ型になっていない&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;ということで&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;クロージャ自体の型は関数型ではなくて、関数っぽい振舞いをするトレイト(ここでは&lt;code&gt;FnMut&lt;/code&gt;)を実装しているだけのただの無名型です。&lt;/li&gt;
-&lt;li&gt;無名関数だから型が無名という説明は確かにちょっとおかしかったですね。&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h2 id=&#34;クロージャを返したい&#34;&gt;クロージャを返したい&lt;/h2&gt;
-
-&lt;p&gt;ここから「なんで(Iteratorのmapとかの)返り値に関数型がでてくるの」へのお返事。&lt;/p&gt;
-
-&lt;p&gt;説明の例として遅延評価するイテレータへのマップを書きたいと思います。
-引数にはイテレータとクロージャを取ります。
-実際には適用する訳ではないのでマップするイテレータとクロージャの組を返せばよさそうですね。
-ここで思い出して欲しいのはクロージャはただの&lt;code&gt;FnMut&lt;/code&gt;を実装している構造体なのでした。
-なのでこう書くのですが、&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn map&amp;lt;I, B, F&amp;gt;(i: I, f: F) -&amp;gt; (I, F)
-where
-  I: Iterator,
-  F: FnMut(I::Item) -&amp;gt; B,
-{
-  (I, F)
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;実際にクロージャを渡したときには&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn map(i: SomeIter, f: AnnonymousClosure) -&amp;gt; (SomeIter, AnnonymousClosure)
-{
-  (i, f)
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のようになります。ここでも、クロージャデータにはポインタが挟まってないことに注意して下さい。そして型名が分かるのでクロージャを呼び出すときにはその関数が &lt;strong&gt;静的ディスパッチされます&lt;/strong&gt;&lt;/p&gt;
-
-&lt;p&gt;返り値にクロージャの型を書く = クロージャの関数本体が静的ディスパッチされる = 速い&lt;/p&gt;
-
-&lt;p&gt;ということが伝わりますでしょうか。なのでRustではできるかぎり返り値にクロージャの型を書きたいのです。&lt;/p&gt;
-
-&lt;p&gt;で、このパターンだと引数で受け取ったものを返り値で返すだけなので関数を呼んだときに得られた名前を書くだけです。たとえクロージャが匿名型であっても書くことができます。&lt;/p&gt;
-
-&lt;h2 id=&#34;返り値にだけ書きたい&#34;&gt;返り値にだけ書きたい&lt;/h2&gt;
-
-&lt;p&gt;ところが返り値にだけクロージャの型を書こうとすると、ダメです。先程の&lt;code&gt;map&lt;/code&gt;関数を関数の中で使ってみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn inc&amp;lt;I&amp;gt;(i: I) -&amp;gt; ???
-where
-  I: Iterator&amp;lt;Item = i32&amp;gt;,
-{
-  map(i, |x| x + 1)
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;こうすると型はこう解決されます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;sturct AnnonymousClosure;
-impl FnMut&amp;lt;(i32,)&amp;gt; for AnonymousClosure {
-    extern &amp;quot;rust-call&amp;quot; fn call_mut(&amp;amp;mut self, (x,): (i32,)) -&amp;gt; i32 {
-        x + 1
-    }
-}
-
-fn inc(i: SomeItr) -&amp;gt; (SomeItr, AnnonymousClosure)
-{
-  map(i, AnnonymousClosure::new())
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;返り値にだけ匿名型が出てきました。
-先程のようにパラメータで受け取ってそのまま返すということができません。
-なのでここで、返り値も匿名化する存在型が必要になるのです。&lt;/p&gt;
-
-&lt;p&gt;ここまでくれば以下のコードにも存在型が必要な理由が分かりますでしょうか。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn do_later() -&amp;gt; impl Future&amp;lt;Item = (), Err = Error&amp;gt; {
-    do_something()
-        // ここでクロージャが出てきた
-        .and_then(|()| do_another_thing())
-        // 本来の`and_then`の返り値は
-        // `AndThen&amp;lt;Self, B, F&amp;gt;`だが
-        // `F`の型が匿名化されていて書けない
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;存在型って-forallでできるよ&#34;&gt;存在型って、forallでできるよ&lt;/h1&gt;
-
-&lt;p&gt;マジレスなのかただ知識を披露してるのかよく分からなかったのですが、いちおうお返事書いておきます。&lt;/p&gt;
-
-&lt;p&gt;どの意味で「forall」でできるよと言っているのかよく分からなかったのですが、Coqの実装を見ていっているのなら見当違いです。
-Coqの実装はこの辺が参考になりますかね。 &lt;a href=&#34;http://inkar-us-i.hatenablog.com/entry/2016/11/16/175844&#34;&gt;Coqで「任意のxについて…」「あるxが存在して…」を扱う - きくらげ観察日記&lt;/a&gt;。&lt;/p&gt;
-
-&lt;p&gt;これをRustで書くとこうなるでしょうか。Rustにはトレイトをパラメータで受け取る手段がないのでひとまず量化する一階の述語を&lt;code&gt;Fn() -&amp;gt; ()&lt;/code&gt;トレイトにしておきます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct FnExists&amp;lt;F: Fn() -&amp;gt; ()&amp;gt;(f: F)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これは命題論理としては正しいのですが、型パラメータを取るので目的である匿名化を実現できていません。&lt;/p&gt;
-
-&lt;p&gt;2017-06-25 追記:
-よく考えたらCoqの実装とは異なりました。Coqに忠実にするならこうでしょうか。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct FnExists(for&amp;lt;F: Fn() -&amp;gt; ()&amp;gt; f: F)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これもダメです。Fの実際のサイズが分からないのでコンパイルできません。
-これを実現できている言語ではポインタを使って実現しているのかと思います。
-Rustでも説明の通りトレイトオブジェクトがあれば可能です。しかしながらオーバーヘッドがかかるので避けたいという話でした。
-「型システムに表現能力がある」と「値レベルでのパフォーマンスを犠牲にしない表現能力がある」は別の話です。&lt;/p&gt;
-
-&lt;p&gt;/追記&lt;/p&gt;
-
-&lt;p&gt;もう1つは、CPS変換の可能性もあります。
-この辺が参考になりますかね。&lt;a href=&#34;http://myuon-myon.hatenablog.com/entry/2016/05/11/215734&#34;&gt;データ型のCPS変換について - Just $ A sandbox&lt;/a&gt;。&lt;/p&gt;
-
-&lt;p&gt;直観論理でも以下が成り立ちます。&lt;/p&gt;
-
-&lt;p&gt;\[
-{}^\exists x P(x) \to \lnot ^\forall x \lnot P(x)
-\]&lt;/p&gt;
-
-&lt;p&gt;因みに逆は直観論理では成り立ちません（直感的な説明をすると存在しないことを否定しても実際の値を構成できないからです）。&lt;/p&gt;
-
-&lt;p&gt;これは確かに正しいです。「&lt;code&gt;Tr&lt;/code&gt;トレイトを実装した型」という存在型は以下の疑似コードで書けるでしょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Tr{}
-fn exists() -&amp;gt; FnOnce&amp;lt;A&amp;gt;(FnOnce&amp;lt;T: Tr&amp;gt;(t: T) -&amp;gt; A) -&amp;gt; A {
-  let tr = SomeTr::new();
-  forall &amp;lt;A&amp;gt; move |cont: FnOnce&amp;lt;T: Tr&amp;gt;(t: T) -&amp;gt; A| -&amp;gt; A { cont(tr) }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ですがまあ、これは実際には無理です。
-1つにはRustには型の高ランク多相がありません。ジェネリクスだけです。
-もしランクの概念を知らずにforallで書けると主張しているならそれは的外れです。
-ランクの概念を知った上で高ランク多相を入れろという主張なら理解はできますが、無理です。
-引数に渡す関数や返り値で返す関数、要はデータとして扱う関数はジェネリクスにできません。
-スライドの中でRustはテンプレート方式と説明しましたが、ジェネリクスはテンプレートであって実際のデータではないので値として扱えないのです。
-なのでRustのコンパイル方式を大きく変えるなどしないと実現できないでしょう。&lt;/p&gt;
-
-&lt;p&gt;それにもう1つ、ランクとは関係なしにクリティカルな理由があります。
-上で説明した通り、クロージャの実際の型は匿名データ型になります。なので返り値に型として書くことができません。
-冷静になって考えれば返り値のクロージャの型を書かないようにするための存在型のために返り値にクロージャの型を書くのは土台無理です。&lt;/p&gt;
-
-&lt;p&gt;さて、私の知識では全称型で存在型を構成する手法はこれくらいですがもし上記以外の構成方法が存在して、私が明後日な返事をしているなら連絡下さい。&lt;/p&gt;</description>
+&lt;p&gt;&lt;/p&gt;</description>
     </item>
     
     <item>
@@ -380,2019 +41,70 @@ fn exists() -&amp;gt; FnOnce&amp;lt;A&amp;gt;(FnOnce&amp;lt;T: Tr&amp;gt;(t: T) 
       <pubDate>Sat, 17 Jun 2017 22:25:35 +0900</pubDate>
       
       <guid>/slide/jienerikusu_disupatchi_omoteura/</guid>
-      <description>&lt;section data-markdown
-    data-separator=&#34;\n===\n&#34;
-    data-vertical=&#34;\n---\n&#34;
-    data-notes=&#34;^Note:&#34;&gt;
-&lt;script type=&#34;text/template&#34;&gt;
-
-# ジェネリクス ディスパッチ 表裏
-----------------------
-[ジェネリクス勉強会 - connpass](https://connpass.com/event/56773/?utm_campaign=event_participate_to_owner&amp;utm_source=notifications&amp;utm_medium=email&amp;utm_content=title_link)
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-===
-# About Me
----------
-![κeenのアイコン](/images/kappa.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; width=&#34;20%&#34; --&gt;
-
- * κeen
- * [@blackenedgold](https://twitter.com/blackenedgold)
- * Github: [KeenS](https://github.com/KeenS)
- * [Idein Inc.](https://idein.jp/)のエンジニア
- * Lisp, ML, Rust, Shell Scriptあたりを書きます
-
-===
-# はじめに
------------
-
-* 例にはJavaとRustを使います
-  + それ以外にあまり詳しくない
-  + たまにScalaが出てくるかも
-* 主に裏側で何が起きてるかに焦点を当てます
-* 一般的な手法の比較と言語固有実装の比較がやや混じります
-  + 実例重視
-* 言語や機能を選ぶときの知識が増えればよし
-
-===
-# ジェネリクス
---------------
-
-* 型でパラメータ化された何か
-* パラメータ化する方法にいくつか方式が
-  + 任意の型に対応する実装にする
-    - Java
-  + 使う型毎に実体をつくる
-    - 型が引数になるイメージ
-    - Rust
-* 便宜上前者をポインタ方式、後者をテンプレート方式と呼ぶ
-
-===
-# 関数ジェネリクス
------------------
-
-* Javaコード
-
-
-``` java
-public class Generics {
-    public static void main(String[] args) {
-        Generics g = new Generics();
-        System.out.println(g.id(&#34;hello&#34;));
-    }
-
-    &lt;T&gt; T id(T t) {
-        return t;
-    }
-}
-```
-
-===
-
-# 関数ジェネリクス
------------------
-
-* Javaアセンブリ
-
-```
-public class Generics {
-  // ...
-  // Tの中身に言及していない
-  &lt;T&gt; T id(T);
-    Code:
-       0: aload_1
-       1: areturn
-
-```
-
-===
-
-# 関数ジェネリクス
------------------
-
-* Rustコード
-
-``` rust
-fn id&lt;T&gt;(t: T) -&gt; T {
-    t
-}
-
-
-fn main() {
-    println!(&#34;{}&#34;, id(&#34;hello&#34;));
-}
-```
-
-===
-
-# 関数ジェネリクス
------------------
-
-* Rustアセンブリ
-
-``` llvm
-define internal %str_slice @_ZN3tmp2id17hfe175cfdb5be0f46E(i8* noalias nonnull readonly, i64) unnamed_addr #0 {
-start:
-  ; str_sliceに特化した関数を生成している
-  %2 = insertvalue %str_slice undef, i8* %0, 0
-  %3 = insertvalue %str_slice %2, i64 %1, 1
-  ret %str_slice %3
-}
-```
-
-===
-
-# 関数ジェネリクス
------------------
-
-* ポインタ方式は`void *`使ってるイメージ
-  +  コンパイルされたコードがコンパクト
-  + 必ずポインタ経由する
-    + Javaのオブジェクトは参照になってるのであまり問題ない
-* テンプレート方式は型毎に`id_XXX`関数を定義してるイメージ
-  + 構造体の値渡しも可能
-  + オブジェクトコードは大きくなる
-  + 関数の使用箇所が分からないとコンパイルできない
-
-===
-
-# 返り値ジェネリクス
--------------------
-
-* Rustは返り値のジェネリクスがある
-  - コンテキストで返り値が決まる
-  ```rust
-  // str
-  parse&lt;F&gt;(&amp;self) -&gt; Result&lt;F, &lt;F as FromStr&gt;::Err&gt; where
-    F: FromStr;
-  ```
-  ```rust
-  let addr: SocketAddr = &#34;127.0.0.1:8080&#34;.parse().unwrap();
-  ```
-* コンパイル中に実際の型が解決されるので関連関数（スタティックメソッド）が呼べる
-* キモいけど便利
-
-
-===
-
-# データ型ジェネリクス
----------------------
-
-* `ArrayList&lt;T&gt;`(Java) vs `Vec&lt;T&gt;`(Rust)
-* だいたい関数のときと似たような特徴
-* テンプレート方式はサイズやアラインメントまで考慮できる
-  - `Vec&lt;u8&gt;`(バイト列型)が効率的
-* Rustの場合は構造体定義はオブジェクトコードに出ないのでサイズは気にならない
-
-===
-
-# 制約とディスパッチ
--------------------
-
-* パラメータ型に条件をつけたい
-  + Javaならインターフェースで `T extends SomeInterface` とか
-  + Rustならトレイトで `T: SomeTrait` とか
-* さらにパラメータ型の詳細にアクセスしたい
-  + `t.someMethod()` とか
-* このメソッドってどっからやってくるの？
-
-===
-
-``` java
-&lt;W extends Writer&gt; void writeHello(W w) throws IOException {
-    // このwriteメソッドはどこから？
-    w.write(&#34;Hello&#34;);
-}
-```
-
-``` rust
-fn write_hello&lt;W: io::Write&gt;(mut w: W) -&gt; io::Result&lt;()&gt; {
-    // このwrite_allメソッドはどこから？
-    w.write_all(b&#34;Hello&#34;)
-}
-```
-
-===
-
-# 動的ディスパッチ
--------------------
-* Javaだとオブジェクトに紐付くメソッドテーブルを *実行時* に引く
-  + テーブルもオブジェクトから *実行時* に取得する
-   ``` java
-   w.vtable[write](w, &#34;Hello&#34;);
-   ```
-* ダイナミックなことができる
-  + サブクラスのインスタンスと入り交じっても問題無
-    ```java
-    Writer w = new MyWriter();
-    obj.writeHello(w);
-    ```
-* vtable引くオーバーヘッドがかかる
-  - [java - Virtual table/dispatch table - Stack Overflow](https://stackoverflow.com/questions/6606481/virtual-table-dispatch-table)
-  - [jvm - Java method table - Stack Overflow](https://stackoverflow.com/questions/10225668/java-method-table)
-
-===
-
-# 静的ディスパッチ
------------------
-* Rustだとメソッドを *コンパイル時* に解決する
-  + テーブルを静的に解決するだけじゃなくてテーブルのメソッドまで解決
-  ```rust
-   SomeWriter::write(w, b&#34;Hello&#34;)
-  ```
-  + 辞書オブジェクトはみんなの心の中にあるんだよ
-    - (テーブルだけ静的に解決する方式もある)
-* 速い
-  + オーバーヘッドがない
-  + メソッドのインライン化などの最適化ができる
-
-===
-# 動静まとめ
-------------
-
-* ポインタ方式で動的ディスパッチだとコンパクトだけど遅い
-* テンプレート方式で静的ディスパッチだと速いけど嵩む
-* 特徴は表裏な感じ
-
-
-===
-# Java固有の問題と解決
-----------------------
-
-* ジェネリクスとプリミティブ問題
-* → ヴァルハラ
-* → Scalaのspecialized
-* → DottyのLinker
-
-===
-
-# ジェネリクスとプリミティブ問題
---------------------------------
-
-* ジェネリクスは必ずポインタ経由
-  + プリミティブはどうするの？
-* 一旦オブジェクトに包む(ボクシングする)必要がある
-  + 関数もデータ型も同じ問題
-  + 関数は暗黙の変換があるので気付きづらい
-* 割と深刻なパフォーマンス低下を招くこともある
-
-
-===
-
-``` java
-public class Generics {
-    public static void main(String[] args) {
-        Generics g = new Generics();
-        // プリミティブを渡す
-        System.out.println(g.id(0));
-    }
-
-    &lt;T&gt; T id(T t) {
-        return t;
-    }
-}
-
-```
-
-
-===
-
-```
-public class Generics {
-  public static void main(java.lang.String[]);
-   // ..
-    Code:
-      // ..
-      // ここで一旦`Integer`を作る
-      13: invokestatic  #5                  // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
-      16: invokevirtual #6                  // Method id:(Ljava/lang/Object;)Ljava/lang/Object;
-      19: invokevirtual #7                  // Method java/io/PrintStream.println:(Ljava/lang/Object;)V
-      22: return
-
-  &lt;T&gt; T id(T);
-    Code:
-       0: aload_1
-       1: areturn
-
-}
-
-```
-
-===
-
-# ヴァルハラ
-------------
-
-* [OpenJDK: Valhalla](http://openjdk.java.net/projects/valhalla/)
-  + [JEP 169: Value Objects](http://openjdk.java.net/jeps/169)
-  + [JEP 218: Generics over Primitive Types](http://openjdk.java.net/jeps/218) ← こっち
-* プリミティブタイプもボクシングせずにジェネリクスに使える
-* やったね
-* いつ入るんだろうね。
-* [JDK 9](http://openjdk.java.net/projects/jdk9/) にはまだっぽい？
-
-===
-
-# [scala.specialized](http://www.scala-lang.org/api/2.9.2/scala/specialized.html)
--------------
-
-* ジェネリクスの他にプリミティブ毎に専用のメソッドを生成
-* 半分テンプレート方式みたい
-  ``` scala
-  class MyList[@specialized T]  ...
-  ```
-* 実際には使われない型に対しても生成してしまう
-  + → テンプレート方式よりも非効率
-  + 型パラメータが3つあったら1000メソッドくらい出来てしまう
-* &gt; 関数の使用箇所が分からないとコンパイルできない
-
-  + JVMの分割コンパイル下では何が使われるか事前に分からない
-
-===
-
-# DottyのLinker
----------------
-
-* &gt; 関数の使用箇所が分からないとコンパイルできない
-* リンクフェーズを用意すれば使用箇所が全て分かる
-* [Dotty Linker: Making your Scala applications smaller and faster](https://d-d.me/talks/scaladays2015/#/)
-  + スライドを見る限りspecializeしといてDCE?
-* 実際には生のバイトコードじゃ情報が足りないのでTASTYも付加
-* Dottyはいつ使えるようになるんでしょうね。
-
-===
-
-# Rust固有の問題と解決
----------------------
-
-* トレイト境界とヘテロな型の問題
-  * ヘテロなVec
-  * 分岐からのreturn
-* → トレイトオブジェクト
-
-===
-# トレイト境界とヘテロな型の問題
--------------------------------
-
-* ジェネリックデータ型に2つ以上の異なる型を入れられない
-* つまり以下のようなコードが書けない
-  ``` rust
-  trait Processor {}
-  let procs: Vec&lt;Processor&gt; = vec![
-    TwProc::new(),
-    FbProc::new(),
-  ];
-  ```
-* トレイトは実際の型ではないので同じ振舞をしても共通の型として扱えない
-* でも一緒に扱いたいケースがあるんだけど？？
-
-===
-# トレイト境界とヘテロな型の問題2
--------------------------------
-
-* 分岐して型を出し分けるのも出来ない
-  ```rust
-  fn getProc() -&gt; Processor {
-    if xxx {
-      TwProc::new()
-    } else {
-      FbProc::new()
-    }
-  }
-  ```
-
-===
-
-# トレイトオブジェクト
----------------------
-
-* オプトインで動的ディスパッチする仕組み
-* データとトレイトからvtableを作る
-* `Box`や`&amp;`などポインタ型を通すと使える
-
-===
-
-``` rust
-let procs: Vec&lt;Box&lt;Processor&gt;&gt; = vec![
-  Box::new(TwProc::new()),
-  Box::new(FbProc::new()),
-];
-
-```
-
-``` rust
-
-fn getProc() -&gt; Box&lt;Processor&gt; {
-  if xxx {
-    Box::new(TwProc::new())
-  } else {
-    Box::new(FbProc::new())
-  }
-}
-```
-===
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-&lt;span style=&#34;font-size:400%;&#34;&gt;裏&lt;/span&gt;
-
-===
-
-# ジェネリクスの双対
--------------------
-
-* ジェネリクスは$\forall$の量化
-  + 関数$T \to S$に対して${}^\forall x(T \to S)$
-* $\exists$の量化があってもよくない？
-  + 存在型と呼ばれる
-  + 因みに${}^\exists x(T \to S)$は虚無
-
-===
-
-# 存在型
----------
-
-* 「`P`を満たす`T`が存在する」ことを表わす型
-* `P`とは？
-  + 本来は型を引数にとる述語。
-    + e.g.) 「`T`は`S`のサブタイプである」「`T`は`write`メソッドを持つ」
-  + 実際は型の集合の方が便利
-    - $P(x) \iff x \in \\{x| {}^\forall x, P(x) \\}$
-  + Scala: `forSome`に続く何か
-    - よく分からなかった。構造的superset?
-  + Rust: トレイト境界
-* 実際に使うときには`P`を満たす`T`を1つ与える
-* 実際の型を変数`T`に匿名化してるとも見れる
-  - Rustなら「トレイト`Tr`を実装しているとある型`T`」
-===
-
-# 引数の存在型
----------------
-
-* Scalaの`forSome`
-  ```scala
-  def len(l: List[T] forSome {type T}): Int
-  ```
-* Rustのarg position `impl Trait`
-  ```rust
-  fn len(i: impl IntoIterator) -&gt; usize
-  ```
-* `R`が`x`を含まないなら
-  \\\[{}^\forall x(A(x) \land x \to R) \leftrightarrow {}^\exists x (A(x) \land x) \to R \\\]
-  なのでほぼジェネリクス
-* 違い
-  + 関数が型パラメータを持たなくなる
-  + 量化した場所以外（他の引数や返り値）でその型変数を使えない
-
-===
-# 返り値の存在型
-----------------
-
-* Rustの`impl Trait`
-  ```rust
-  fn do_later() -&gt; impl Future&lt;Item = (), Err = Error&gt;
-  ```
-* 実際の型は関数の定義で決まっている
-* 実質返り値を匿名化しているだけ
-* 必要？
-
-===
-# 存在型の利点
---------------
-
-* 何をしたいか伝わりやすい
-  ```rust
-  // Iterator
-  map&lt;B, F&gt;(self, f: F) -&gt; Map&lt;Self, F&gt; where ...
-  ```
-  vs
-  ```rust
-  map&lt;B, F&gt;(self, f: F) -&gt; impl Iterator where ...
-  ```
-* サブタイピングがあればアップキャストで終わる
-* Rustでも動的ディスパッチを許せばトレイトオブジェクトがある
-  + でも絶対動的ディスパッチをしたくない
-
-===
-# 存在型の必要性
-----------------
-
-* 存在型でないと書けない型が存在する
-  + 匿名化した型を含む型
-  + クロージャ、お前のことだ
-* 以下の型はジェネリクスでは書けない
-  ``` rust
-  fn counter(x: isize) -&gt; impl FnMut() -&gt; isize;
-  ```
-
-* 動的ディスパッチを許せばトレイトオブジェクトで書ける
-  + でも絶対動的ディスパッチをしたくない
-  + 極端な話、関数抽象する度にパフォーマンスが落ちる
-
-===
-
-# ユースケース
---------------
-
-* 実際そんなに必要なの？
-* 極一部のケースだけじゃないの？
-* 分岐したら結局トレイトオブジェクト必要なんじゃなかった？
-* 動的ディスパッチで妥協できないの？
-
-===
-
-# `Iterator`
-------------
-
-* 標準ライブラリ
-* 遅延評価
-  * 融合変換するため
-* `map`すると元のイテレータとmapする関数の組が返る
-  ```rust
-  // Iterator
-  map&lt;B, F&gt;(self, f: F) -&gt; Map&lt;Self, F&gt; where ...
-  ```
-* `impl Trait`で書くと分かりやすい
-  ```rust
-  map&lt;B, F&gt;(self, f: F) -&gt; impl Iterator where ...
-  ```
-
-===
-
-# [futures-rs](https://github.com/alexcrichton/futures-rs)
------------------
-
-* 非同期処理を抽象化
-* 実行時にはステートマシンになる
-  + 動的ディスパッチを挟まない
-* `Future`に`map`や`and_then`すると返り値に関数型が出てくる
-  + 存在型がないと書けない
-  + 引数でクロージャを受け取る訳ではないのでジェネリクスで書けない
-* `Future`を使うほぼ全てのコードで存在型が必要になる
-
-===
-# futures-rs
-------------
-
-``` rust
-fn do_later() -&gt; impl Future&lt;Item = (), Err = Error&gt; {
-    do_something()
-        // ここでクロージャが出てきた
-        .and_then(|()| do_another_thing())
-        // 本来の`and_then`の返り値は
-        // `AndThen&lt;Self, B, F&gt;`だが
-        // `F`の型が匿名化されていて書けない
-}
-```
-
-===
-# [transaction-rs](https://github.com/KeenS/transaction-rs)
-------------------
-
-* トランザクションを抽象化
-* コンセプト的には`futures-rs`に似てる
-* 分岐しても`branch` APIでトレイトオブジェクト回避
-  + 直和型を信じろ
-* [マイクロベンチマーク](https://github.com/KeenS/transaction-rs/blob/master/transaction-stm/benches/boxed_vs_branch.rs)だとトレイトオブジェクトをなくすと *13%* 高速化
-
-===
-# transaction-rs
-----------------
-
-```rust
-fn find_and_delete() -&gt; impl Transaction&lt;Item = Option&lt;User&gt; ...&gt; {
-  match find_user() {
-    // 分岐の枝毎に違う型を返そうとしてるが、直和型を使えば問題無
-    None =&gt; ok(none).branch().first()
-    Some(user) =&gt;
-      delete_user()
-        .map(move|_| user)
-        .branch()
-        .second()
-  }
-}
-```
-
-
-===
-# 存在型の深掘
---------------
-
-* ユーザには匿名化された型の実体は分からない
-* コンパイラは実際の型で扱う
-* 色々エッジケースが出てきそう
-  + 同じ関数から返る型は同じ型？
-  + 違う関数でも実体が同じなら？
-  + 関数がジェネリクスだったら？
-    - 返り値もジェネリクスパターン
-    - 引数だけジェネリクスパターン
-  + トレイトのメソッドだったら？
-* 例えば`vec![foo(), bar()]`って書けるの？
-
-===
-
-``` rust
-fn foo&lt;T: Trait&gt;(t: T) -&gt; impl Trait {t}
-
-fn bar() -&gt; impl Trait {123}
-
-fn equal_type&lt;T&gt;(a: T, b: T) {}
-
-equal_type(bar(), bar());                      // OK
-equal_type(foo::&lt;i32&gt;(0), foo::&lt;i32&gt;(0));      // OK
-equal_type(bar(), foo::&lt;i32&gt;(0));              // ERROR, `impl Trait {bar}` is not the same type as `impl Trait {foo&lt;i32&gt;}`
-equal_type(foo::&lt;bool&gt;(false), foo::&lt;i32&gt;(0)); // ERROR, `impl Trait {foo&lt;bool&gt;}` is not the same type as `impl Trait {foo&lt;i32&gt;}`
-// トレイトのメソッドには`impl Trait`は書けないらしい
-```
-
-===
-# 話さなかったこと
------------------
-
-* 存在型のライフタイム
-* Rustのfeatureとリリーススケジュール
-  + 存在型はまだリリース版には入っていない
-* 関連型と存在型の関係(なんか関係ありそう)
-
-===
-
-# まとめ
---------
-
-* 総称を表わすジェネリクスというのがあるよ
-* ジェネリクスの実装は2種類あるよ
-* 存在を表わす存在型というのがあるよ
-* 存在型の実装は2種類あるよ
-* 2種類の実装は言語機能や型システムに密着してるよ
-
-
-&lt;/script&gt;
-&lt;/section&gt;
-</description>
+      <description># ジェネリクス ディスパッチ 表裏 ---------------------- [ジェネリクス勉強会 - connpass](https://connpass.com/event/56773/?utm_campaign=event_participate_to_owner&amp;utm_source=notifications&amp;utm_medium=email&amp;utm_content=title_link) === # About Me --------- ![κeenのアイコン](/images/kappa.png) * κeen * [@blackenedgold](https://twitter.com/blackenedgold) * Github: [KeenS](https://github.com/KeenS) * [Idein Inc.](https://idein.jp/)のエンジニア * Lisp, ML, Rust, Shell Scriptあたりを書きます === # はじめに ----------- * 例にはJavaとRustを使います + それ以外にあまり詳しくない + たまにScalaが出てくるかも * 主に裏側で何が起きてるかに焦点を当てます * 一般的な手法の比較と言語固有実装の比較がやや混じります + 実例重視 * 言語や機能を選ぶときの知識が増えればよし === # ジェネリクス -------------- * 型でパラメータ化された何か * パラメータ化する方法にいくつか方式が + 任意の型に対応する実装にする - Java + 使う型毎に実体をつくる - 型が引数になるイメージ - Rust * 便宜上前者をポインタ方式、後者をテンプレート方式と呼ぶ === # 関数ジェネリクス ----------------- * Javaコード ``` java public class Generics { public static void main(String[] args) { Generics g = new Generics(); System.</description>
     </item>
     
     <item>
       <title>Rustでエラーが出てないのにファイルに書き出せないときは</title>
-      <link>/blog/2017/06/13/rustdeera_gadetenainonifairunikakidasenaitokiha</link>
+      <link>/blog/2017/06/13/rustdeera_gadetenainonifairunikakidasenaitokiha/</link>
       <pubDate>Tue, 13 Jun 2017 22:53:46 +0900</pubDate>
       
-      <guid>/blog/2017/06/13/rustdeera_gadetenainonifairunikakidasenaitokiha</guid>
+      <guid>/blog/2017/06/13/rustdeera_gadetenainonifairunikakidasenaitokiha/</guid>
       <description>&lt;p&gt;κeenです。随分前から書こうと思いつつ先送りになっていた小ネタです。
-&lt;/p&gt;
-
-&lt;p&gt;例えばカレントディレクトリにある&lt;code&gt;some_file.txt&lt;/code&gt;に適当なデータを書き込もうとして、以下のようなコードを書いたとします。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::fs::File;
-use std::io::prelude::*;
-use std::io::BufWriter;
-
-fn main() {
-    let file = File::open(&amp;quot;some_file.txt&amp;quot;).unwrap();
-    let mut w = BufWriter::new(file);
-    // unwrapを呼んで書き込みエラーを検知
-    write!(w, &amp;quot;hello&amp;quot;).unwrap();
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これを実行してみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;$ rustc write_file.rs
-$ ./write_file
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;特段エラーは出ません。しかしながら&lt;code&gt;some_file.txt&lt;/code&gt;の中身は特に書き変わっていません。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;$ cat some_file.txt
-$
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これ、パッと原因分かりますか？&lt;/p&gt;
-
-&lt;p&gt;直接の原因は&lt;a href=&#34;https://doc.rust-lang.org/std/fs/struct.File.html#method.open&#34;&gt;&lt;code&gt;File::open&lt;/code&gt;&lt;/a&gt;です。&lt;code&gt;File::open&lt;/code&gt;はリードオンリーでファイルを開くので&lt;code&gt;File::open&lt;/code&gt;で開いたファイルに書き込もうとしても書き込めません（書き込みたいなら&lt;a href=&#34;https://doc.rust-lang.org/std/fs/struct.File.html#method.create&#34;&gt;&lt;code&gt;File::create&lt;/code&gt;&lt;/a&gt;を使います）。
-じゃあなぜエラーが出ないかというと&lt;code&gt;BufWriter&lt;/code&gt;のせいです。
-書き込んだ文字列&lt;code&gt;&amp;quot;hello&amp;quot;&lt;/code&gt;は短いので&lt;code&gt;write!&lt;/code&gt;を発効した時点ではまだデータはバッファに書き込まれるだけです。
-このときにはまだエラーは出ません。
-そして&lt;code&gt;main&lt;/code&gt;の末尾で&lt;code&gt;w&lt;/code&gt;のライフタイムが終わるときに&lt;code&gt;BufWrite&lt;/code&gt;の&lt;a href=&#34;https://doc.rust-lang.org/src/std/io/buffered.rs.html#511-518&#34;&gt;&lt;code&gt;drop&lt;/code&gt;&lt;/a&gt;が呼ばれますが、ここではエラーが無視されるのでユーザにはエラーが起きてないように見える訳です。&lt;/p&gt;
-
-&lt;p&gt;このような事故を防ぐために以下のように&lt;code&gt;flush&lt;/code&gt;を呼びましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::fs::File;
-use std::io::prelude::*;
-use std::io::BufWriter;
-
-fn main() {
-    let file = File::open(&amp;quot;some_file.txt&amp;quot;).unwrap();
-    let mut w = BufWriter::new(file);
-    // unwrapを呼んで書き込みエラーを検知
-    write!(w, &amp;quot;hello&amp;quot;).unwrap();
-    // flushを呼ぶことで書き込みエラーを全て拾える
-    w.flush().unwrap();
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;$ rustc write_file.rs
-$ ./write_file
-thread &#39;main&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: Error { repr: Os { code: 9, message: &amp;quot;Bad file descriptor&amp;quot; } }&#39;, /checkout/src/libcore/result.rs:859
-note: Run with `RUST_BACKTRACE=1` for a backtrace.
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;参考: &lt;a href=&#34;http://keens.github.io/blog/2016/01/08/rusttoiedoriso_sunokaihouhachuui/&#34;&gt;Rustといえどリソースの解放は注意 | κeenのHappy Hacκing Blog&lt;/a&gt;&lt;/p&gt;</description>
+&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>Rustのトランザクション抽象化ライブラリ作った</title>
-      <link>/blog/2017/06/06/rustnotoranzakushonchuushoukaraiburaritsukutta</link>
+      <link>/blog/2017/06/06/rustnotoranzakushonchuushoukaraiburaritsukutta/</link>
       <pubDate>Tue, 06 Jun 2017 18:20:52 +0900</pubDate>
       
-      <guid>/blog/2017/06/06/rustnotoranzakushonchuushoukaraiburaritsukutta</guid>
+      <guid>/blog/2017/06/06/rustnotoranzakushonchuushoukaraiburaritsukutta/</guid>
       <description>&lt;p&gt;κeenです。最近&lt;a href=&#34;https://github.com/KeenS/transaction-rs&#34;&gt;KeenS/transaction-rs: The transaction abstraction library and its executors for rust&lt;/a&gt;というライブラリをリリースしたのでそれについて。&lt;/p&gt;
 
-&lt;p&gt;&lt;/p&gt;
-
-&lt;h1 id=&#34;モチベーション&#34;&gt;モチベーション&lt;/h1&gt;
-
-&lt;p&gt;Rustでドメインロジックを書いていると以下のようなコードが出てきました。
-(実際はもうちょっと複雑ですが本質ではないので簡略化します)&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct GroupPgDao(r2d2::Pool&amp;lt;ConnectionManager&amp;lt;PgConnection&amp;gt;&amp;gt;);
-impl GroupPgDao {
-  fn get_conn(&amp;amp;self) -&amp;gt; &amp;amp;PgConnection { /*... */ }
-  fn delete_user(&amp;amp;self, user: &amp;amp;User, group: &amp;amp;Group) -&amp;gt; Result&amp;lt;()&amp;gt; {
-      let cn = self.get_conn();
-      //...
-  }
-  fn add_user(&amp;amp;self, user: &amp;amp;User, group: &amp;amp;Group) -&amp;gt; Result&amp;lt;()&amp;gt; {
-      let cn = self.get_conn();
-      //...
-  }
-}
-
-trait GroupService: HaveGroupDao {
-  fn change_group(&amp;amp;self, user: &amp;amp;User, from: &amp;amp;Group, to: &amp;amp;Group) -&amp;gt; Result&amp;lt;()&amp;gt; {
-     let service = self.group_dao();
-     dao.delete_user(user, from)?;
-     dao.add_user(user, to)
-  }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;この&lt;code&gt;change_group&lt;/code&gt;はDBのトランザクション内で実行しないと困ります。&lt;code&gt;delete_user&lt;/code&gt;が成功して&lt;code&gt;add_user&lt;/code&gt;が失敗するとuserがどちらにも所属しなくなるからです。じゃあ&lt;code&gt;change_group&lt;/code&gt;の中でトランザクションを作って実行すればいいかというとそうでもなく、いくつか問題があります。&lt;/p&gt;
-
-&lt;ol&gt;
-&lt;li&gt;もっと外側でトランザクションが必要な操作が発生するかもしれない&lt;/li&gt;
-&lt;li&gt;同一トランザクション内で実行するにはコネクションを共有しないといけないが、関数個々でプールからコネクションを取得している&lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;p&gt;1に関しては誰がトランザクションを実行するのかという責任問題と、どの操作がトランザクションを必要とするのかという契約問題の2つが複合しています。
-dieselのトランザクションはネストをサポートしているので必要そうな部分至るところトランザクションを作るというのも考えられますが、プログラマが目で責任と契約を追うことになりバグりかねません&lt;/p&gt;
-
-&lt;p&gt;2つ目はインジェクションの問題ですね。これについてはシンプルに引数にコネクションを渡すというのも考えられますが持ち回るのは非常に大変です。&lt;/p&gt;
-
-&lt;p&gt;これらを解決するために作ったのが冒頭に挙げたtransaction-rsです。&lt;/p&gt;
-
-&lt;h1 id=&#34;transaction-rs&#34;&gt;transaction-rs&lt;/h1&gt;
-
-&lt;p&gt;transaction-rsは非常に&lt;a href=&#34;https://github.com/alexcrichton/futures-rs&#34;&gt;future-rs&lt;/a&gt;に似ています。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub trait Transaction&amp;lt;Ctx&amp;gt; {
-    type Item;
-    type Err;
-    fn run(&amp;amp;self, ctx: &amp;amp;mut Ctx) -&amp;gt; Result&amp;lt;Self::Item, Self::Err&amp;gt;;
-
-    fn map&amp;lt;F, B&amp;gt;(self, f: F) -&amp;gt; Map&amp;lt;Self, F&amp;gt;
-    where
-        F: Fn(Self::Item) -&amp;gt; B,
-        Self: Sized,
-    { ... }
-    fn and_then&amp;lt;F, B&amp;gt;(self, f: F) -&amp;gt; AndThen&amp;lt;Self, F, B&amp;gt;
-    where
-        B: Transaction&amp;lt;Ctx, Err = Self::Err&amp;gt;,
-        F: Fn(Self::Item) -&amp;gt; B,
-        Self: Sized,
-    { ... }
-    fn map_err&amp;lt;F, B&amp;gt;(self, f: F) -&amp;gt; MapErr&amp;lt;Self, F&amp;gt;
-    where
-        F: Fn(Self::Err) -&amp;gt; B,
-        Self: Sized,
-    { ... }
-    fn or_else&amp;lt;F, B&amp;gt;(self, f: F) -&amp;gt; OrElse&amp;lt;Self, F, B&amp;gt;
-    where
-        B: Transaction&amp;lt;Ctx, Item = Self::Item&amp;gt;,
-        F: Fn(Self::Err) -&amp;gt; B,
-        Self: Sized,
-    { ... }
-
-    // ...
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;map&lt;/code&gt;や&lt;code&gt;and_then&lt;/code&gt;のある「よくあるパターン」です。&lt;code&gt;futures&lt;/code&gt;の他&lt;code&gt;Result&lt;/code&gt;や&lt;code&gt;Option&lt;/code&gt;にもありますね。
-&lt;code&gt;Transaction&lt;/code&gt;を作った時点ではまだ計算は実行されません。DBへのクエリも実行されてません。&lt;code&gt;run&lt;/code&gt;が呼ばれた時点でようやく計算が実行され、結果を取り出すことができます。&lt;code&gt;future-rs&lt;/code&gt;と同じくこれは &lt;em&gt;ゼロコスト抽象化&lt;/em&gt; をしていて、トランザクションの関数を積んでいくと実行時にはオートマトンにまで落ちます。 詳しくはこちらをどうぞ&lt;a href=&#34;https://aturon.github.io/blog/2016/08/11/futures/&#34;&gt;Zero-cost futures in Rust · Aaron Turon&lt;/a&gt;。&lt;/p&gt;
-
-&lt;h1 id=&#34;トランザクションの合成と要求&#34;&gt;トランザクションの合成と要求&lt;/h1&gt;
-
-&lt;p&gt;話を冒頭のコードに戻しすと、transaction-rsを使うとDAOはこう書けるでしょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct GroupPgDao;
-impl GroupPgDao {
-  fn delete_user(&amp;amp;self, user: &amp;amp;User, group: &amp;amp;Group) -&amp;gt; Box&amp;lt;Transaction&amp;lt;... ()&amp;gt; {
-      with_conn(|cn| {
-          //...
-      })
-      .boxed()
-  }
-  fn add_user(&amp;amp;self, user: &amp;amp;User, group: &amp;amp;Group) -&amp;gt; Box&amp;lt;Transaction&amp;lt;... ()&amp;gt; {
-      with_conn(|cn| {
-          //...
-      })
-      .boxed()
-  }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;返り値の型がやや残念になるものの、中身はそれほど変わらないです。
-&lt;code&gt;Transaction&lt;/code&gt;を返しているのでこのコードはトランザクション下で実行されることを要求しているのが分かりますね。&lt;/p&gt;
-
-&lt;p&gt;そして自分で持っていたコネクションプールと&lt;code&gt;self.get_conn()&lt;/code&gt;が消え、変わりに&lt;code&gt;with_conn&lt;/code&gt;関数でコネクションを取得しています。この関数は付属の&lt;code&gt;transaction-diesel&lt;/code&gt;にて定義されています。何やら虚空からコネクションが沸いてるようにも見えますがちゃんと正規のルートで渡ってきています。これについては後で説明します。&lt;/p&gt;
-
-&lt;p&gt;さらにサービスの方も書き換えてみます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait GroupService&amp;lt;Ctx&amp;gt;: HaveGroupDao&amp;lt;Ctx {
-  fn change_group(&amp;amp;self, user: &amp;amp;User, from: &amp;amp;Group, to: &amp;amp;Group) -&amp;gt; Box&amp;lt;Transaction&amp;lt;Ctx, ... ()&amp;gt;&amp;gt;&amp;gt; {
-     let service = self.group_dao();
-     dao.delete_user(user, from)
-         .and_then(move|()| dao.add_user(user, to))
-         .boxed()
-  }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;疑似コードなのでコンパイルが通るか分かりませんがまあ、こんなところになるでしょう。
-このコードで分かるように、トランザクション同士の合成も可能なのです。
-そして、&lt;code&gt;Transaction&lt;/code&gt;を返しているのでこのコード自身もまたトランザクションを要求していることが分かります。&lt;/p&gt;
-
-&lt;p&gt;さて、気付いたでしょうか。これで上記の契約問題、責任問題、インジェクション問題が解決しています。&lt;/p&gt;
-
-&lt;p&gt;契約問題については&lt;code&gt;Transaction&lt;/code&gt;を返す関数はトランザクションを要求するというシグナルですね。非常に分かりやすいです。
-責任問題についても&lt;code&gt;Transaction&lt;/code&gt;を&lt;code&gt;run&lt;/code&gt;する関数にトランザクションの責任があります。&lt;code&gt;run&lt;/code&gt;しないと結果を取り出せないので結果が欲しい人がそのまま責任を持つ形になります。&lt;/p&gt;
-
-&lt;p&gt;なんとなく、&lt;code&gt;unsafe&lt;/code&gt;に似ているのが分かりますか？&lt;code&gt;unsafe fn&lt;/code&gt;は内部でアンセーフなことをやるし、呼び出す関数に契約を満たすことを要求します。&lt;code&gt;unsafe&lt;/code&gt;ブロックはアンセーフな処理の契約に責任を持ちます。同じく&lt;code&gt;Transaction&lt;/code&gt;を返す関数は内部でトランザクションを要求する処理をするし、呼び出し側に契約を満たすことを要求します。&lt;code&gt;run&lt;/code&gt;がトランザクションという契約に責任を持ちます。&lt;/p&gt;
-
-&lt;h1 id=&#34;インジェクションの仕組み&#34;&gt;インジェクションの仕組み&lt;/h1&gt;
-
-&lt;p&gt;先のコードでマジカルにコネクションが外からやってきていました。この仕組みについて説明します。とはいっても複雑ではないです。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;Transaction&lt;/code&gt;のコードを思い出してみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub trait Transaction&amp;lt;Ctx&amp;gt; {
-    fn run(&amp;amp;self, ctx: &amp;amp;mut Ctx) -&amp;gt; Result&amp;lt;Self::Item, Self::Err&amp;gt;;
-    // ...
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;run&lt;/code&gt;すると結果が取り出せるのでした。そして&lt;code&gt;run&lt;/code&gt;は引数&lt;code&gt;Ctx&lt;/code&gt;をとります。
-これは抽象的なトランザクションなので抽象的な「コンテキスト」ですが、&lt;a href=&#34;https://github.com/Marthog/rust-stm&#34;&gt;STM&lt;/a&gt;ならSTM、データベースならコネクションがコンテキストです。
-コンテキストを受け取って計算を実行するということは、&lt;code&gt;Transaction&lt;/code&gt;は見方を変えると&lt;code&gt;Ctx&lt;/code&gt;を引数にとる関数になっています。&lt;/p&gt;
-
-&lt;p&gt;なので&lt;code&gt;with_conn&lt;/code&gt;関数は&lt;code&gt;run&lt;/code&gt;で受け取った引数を取り出しているだけです。&lt;/p&gt;
-
-&lt;h1 id=&#34;小まとめ&#34;&gt;小まとめ&lt;/h1&gt;
-
-&lt;p&gt;このtransaction-rsは&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;トランザクションの契約と責任を型で表現している&lt;/li&gt;
-&lt;li&gt;コネクションをインジェクトしている&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;さらに、&lt;code&gt;run&lt;/code&gt;するまでは実際にはトランザクションは実行されていないので&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;「トランザクションを必要とする計算とその合成」と「トランザクションの実行」を分離している&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;というのが特徴です。大筋はこれがメインなのですが、実用の話をいくつか。&lt;/p&gt;
-
-&lt;h1 id=&#34;つらい話と救いの話&#34;&gt;つらい話と救いの話&lt;/h1&gt;
-
-&lt;p&gt;&lt;code&gt;Transaction&lt;/code&gt;で契約と責任は明確になりました。
-では、便利になったかというとそうでもありません。例えばUserをCRUDしてみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn crud_user(dao: UserDao, ctx: Ctx) -&amp;gt; Result&amp;lt;()&amp;gt; {
-    let tx = dao.create(&amp;quot;name&amp;quot;, 24)
-      .and_then(move |id|
-          dao.find(id)
-              .and_then(move |user|
-                  dao.update(None, user.age + 1)
-                      .and_then(move |()|
-                          dao.delete(user))));
-    tx.run(ctx)
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;このように、&lt;code&gt;and_then&lt;/code&gt;がネストしてしまいます。コードが不要に複雑になっただけですね。つらい。&lt;/p&gt;
-
-&lt;p&gt;しかしながら救いはあって、&lt;a href=&#34;https://github.com/TeXitoi/rust-mdo&#34;&gt;&lt;code&gt;mdo&lt;/code&gt;&lt;/a&gt;というライブラリがあります。
-mがなんなのかやdoがどこからきたのかは気にしてはいけません。
-&lt;code&gt;transaction-rs&lt;/code&gt;もこれをサポートしていて、マクロを使うことで以下のように書き換えられます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn crud_user(dao: UserDao, ctx: Ctx) -&amp;gt; Result&amp;lt;()&amp;gt; {
-    let tx = mdo! {
-        id =&amp;lt;&amp;lt; dao.create(&amp;quot;name&amp;quot;, 24);
-        user =&amp;lt;&amp;lt; dao.find(id);
-        () =&amp;lt;&amp;lt; dao.update(None, user.age + 1);
-        ret dao.delete(user)
-    };
-
-    tx.run(ctx)
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;本質的にはネストを代入っぽく書き換えただけですが、絶大な可読性の向上があります。
-なので実際に&lt;code&gt;transaction&lt;/code&gt;を使うときは&lt;code&gt;mdo&lt;/code&gt;を併用することになるでしょう。&lt;/p&gt;
-
-&lt;h1 id=&#34;futures-との違い&#34;&gt;&lt;code&gt;futures&lt;/code&gt;との違い&lt;/h1&gt;
-
-&lt;p&gt;&lt;code&gt;futures&lt;/code&gt;に非常によく似ていると言いましたが、逆に何が違うのかという話です。大きな違いは2つあります。&lt;/p&gt;
-
-&lt;p&gt;1つには結果を取り出すメソッドの違いです。&lt;code&gt;Future&lt;/code&gt;の&lt;code&gt;poll&lt;/code&gt;は引数を取りませんが、&lt;code&gt;Transaction&lt;/code&gt;の&lt;code&gt;run&lt;/code&gt;は取ります。また、それに合わせてトレイトがジェネリクスになっています。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub trait Future {
-    fn poll(&amp;amp;mut self) -&amp;gt; Poll&amp;lt;Self::Item, Self::Error&amp;gt;;
-}
-
-pub trait Transaction&amp;lt;Ctx&amp;gt; {
-    fn run(&amp;amp;self, ctx: &amp;amp;mut Ctx) -&amp;gt; Result&amp;lt;Self::Item, Self::Err&amp;gt;;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;もう1つはクロージャを取るメソッドの違いで、&lt;code&gt;Future&lt;/code&gt;は&lt;code&gt;FnOnce&lt;/code&gt;を取るのに対して&lt;code&gt;Transaction&lt;/code&gt;は&lt;code&gt;Fn&lt;/code&gt;を取ります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub trait Future {
-    fn map&amp;lt;F, U&amp;gt;(self, f: F) -&amp;gt; Map&amp;lt;Self, F&amp;gt;
-        where
-            F: FnOnce(Self::Item) -&amp;gt; U,
-            Self: Sized,
-}
-
-pub trait Transaction&amp;lt;Ctx&amp;gt; {
-    fn map&amp;lt;F, B&amp;gt;(self, f: F) -&amp;gt; Map&amp;lt;Self, F&amp;gt;
-    where
-        F: Fn(Self::Item) -&amp;gt; B,
-        Self: Sized,
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;Future&lt;/code&gt;は単純に計算の合成と実行を分離しているのに対して&lt;code&gt;Transaction&lt;/code&gt;はSTMのように失敗した計算のリトライにまで責任を持つことがあるので再実行可能でないといけません。さらに、再実行するということは羃等性の確保も必要です。羃等性を保つためコンテキスト以外への副作用も禁止する必要があって、&lt;code&gt;FnOnce&lt;/code&gt;でも&lt;code&gt;FnMut&lt;/code&gt;でもなく &lt;del&gt;&lt;code&gt;FnOnce&lt;/code&gt;を&lt;/del&gt; &lt;code&gt;Fn&lt;/code&gt; を要求します。（間違いを&lt;a href=&#34;https://twitter.com/so_zaneli/status/872271289636986880&#34;&gt;指摘された&lt;/a&gt;ので修正しました。）&lt;/p&gt;
-
-&lt;p&gt;実はこのことが若干問題になるケースもあります。データベースのトランザクションなら別に再実行せずにロールバックするだけなので&lt;code&gt;FnOnce&lt;/code&gt;で十分なケースもあります。&lt;code&gt;FnOnce&lt;/code&gt;の方が所有権に寛容なので&lt;code&gt;FnOnce&lt;/code&gt;なら書けるのに&lt;code&gt;Fn&lt;/code&gt;が要求されて、実際には&lt;code&gt;FnOnce&lt;/code&gt;しか必要ない、というケースに何度か直面しました。いくつかのハックで乗り越えられましたが本質的ではない問題なので今後何か変更があるかもしれません。&lt;/p&gt;
-
-&lt;h1 id=&#34;他の問題点&#34;&gt;他の問題点&lt;/h1&gt;
-
-&lt;p&gt;ちょっと説明するのが面倒なのでコードを出さないのですが、計算の合成と実行を分離すると合成の時点では生きているけど実行するときに生きてるか分からないオブジェクトが出てきたりします。
-概ねライフタイム境界を明示的に書いてあげると解決するのですが、一部&lt;code&gt;join&lt;/code&gt;などを駆使してハックしないとコンパイルが通らないことがあり面倒です。&lt;/p&gt;
-
-&lt;p&gt;返り値型が複雑なのも問題で、ひとまず&lt;a href=&#34;https://github.com/rust-lang/rust/issues/34511&#34;&gt;&lt;code&gt;impl Trait&lt;/code&gt;&lt;/a&gt;がstableに降ってくるまではそもそも型を書けません（クロージャが匿名なせい）。
-&lt;code&gt;Box&lt;/code&gt;に包むにしても少なくとも&lt;code&gt;Ctx&lt;/code&gt;が型引数に増えますし、&lt;code&gt;diesel&lt;/code&gt;と一緒に使うならコネクションのライフタイムも型に入れる必要があったりと&lt;code&gt;Result&lt;/code&gt;や&lt;code&gt;BoxFuture&lt;/code&gt;に比べてやや重くなっています。&lt;/p&gt;
-
-&lt;p&gt;記法についても問題があります。&lt;code&gt;mdo&lt;/code&gt;を使うとある程度は解決しますが、早期リターンがしづらく、頑張って分岐のネストを書かないといけません。これは&lt;code&gt;futures&lt;/code&gt;も抱える問題です。
-&lt;code&gt;futures&lt;/code&gt;についてはのジェネレータのパッチを当てることで&lt;a href=&#34;https://github.com/alexcrichton/futures-await&#34;&gt;&lt;code&gt;Result&lt;/code&gt;のように書けるデモ&lt;/a&gt;があるのですが、先述の通り&lt;code&gt;transaction&lt;/code&gt;では&lt;code&gt;FnOnce&lt;/code&gt;ではなく&lt;code&gt;Fn&lt;/code&gt;を取っているのでジェネレータにはエンコードできないのではないかと思っています（あまり調査してないです）。&lt;/p&gt;
-
-&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;code&gt;transaction-rs&lt;/code&gt;を作ったよ&lt;/li&gt;
-&lt;li&gt;トランザクションの契約と責任を型で明示するよ&lt;/li&gt;
-&lt;li&gt;コネクションをインジェクトするよ&lt;/li&gt;
-&lt;li&gt;コードは複雑になるかもね&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;mdo&lt;/code&gt;を使うと複雑さを抑えられるよ&lt;/li&gt;
-&lt;li&gt;でもライフタイムとかの問題もあるよ&lt;/li&gt;
-&lt;li&gt;将来どうにかするかもね&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h1 id=&#34;零れ話&#34;&gt;零れ話&lt;/h1&gt;
-
-&lt;p&gt;これを作ったあとに&lt;a href=&#34;http://qiita.com/pab_tech/items/86e4c31d052c678f6fa6&#34;&gt;【ScalaMatsuriセッション当選御礼】ドワンゴ秘伝のトランザクションモナドを解説！ - Qiita&lt;/a&gt;を思い出して読んでみたらほぼ同じものを作ってましたね。
-Scalaのpoor-man&amp;rsquo;s type classだと読み辛いですがほぼ同じです。&lt;/p&gt;
-
-&lt;p&gt;相違点は1つには返り値が&lt;code&gt;Result&lt;/code&gt;か&lt;code&gt;Future&lt;/code&gt;か。実際、トランザクションモナドは成功と失敗両方に対してモナドになっている型であれば（こういうの名前ついてないのかな、重モナドとかそんなの）何にでも定義できます。要はトランスフォーマーとして定義可能です。
-しかしながらRustには高階多相がなくてトランスフォーマーは書けないのでどちらかを選ぶ必要があり、&lt;code&gt;transaction-rs&lt;/code&gt;では&lt;code&gt;Result&lt;/code&gt;を選びました。外部ライブラリへの依存を減らしたいだとかウェブアプリケーションフレームワークにFutureを受け付けてくれるものがなくてあまり意味がないとかその辺です。
-需要が発生したらトランスフォーマーマクロとか作るかもしれません。&lt;/p&gt;
-
-&lt;p&gt;もう1つ相違点があって、fujitaskの方はRead/Writeを型で判別するようになっていますが&lt;code&gt;transaction-rs&lt;/code&gt;にはそういう機能はありません。
-fujitaskを読み返すまではそれには思い至りませんでした。
-で、存在を知った後に実装したかというと別にしてません。
-Rustでも&lt;code&gt;Ctx&lt;/code&gt;に幽霊型を付ければ実装自体は可能なのですがデータベースライブラリがトランザクションの分離レベルの変更をサポートしていないのであまり意味がないからです。
-データベース側でサポートされたらやるかもしれません。&lt;/p&gt;
-
-&lt;p&gt;Scalaのfujitaskは便利そうで、概ねこちらもそのようなものなのですが、Rust特有の所有権/ライフタイムによる問題とScalaの&lt;code&gt;for&lt;/code&gt;式相当のものがないという理由でちょっとつらい感じになってます。つらい。&lt;/p&gt;
-
-&lt;h1 id=&#34;追記&#34;&gt;追記&lt;/h1&gt;
-
-&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-conversation=&#34;none&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;ノリでジェネリクスにしたけど関連型の方が良かったのでは？&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/872093400417189888&#34;&gt;2017年6月6日&lt;/a&gt;&lt;/blockquote&gt;
-&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
-
-&lt;p&gt;ひとまずmasterはそう書き直しました。&lt;/p&gt;</description>
+&lt;p&gt;&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>Rust風にデザインパターン23種</title>
-      <link>/blog/2017/05/06/rustkazenidezainpata_n23tane</link>
+      <link>/blog/2017/05/06/rustkazenidezainpata_n23tane/</link>
       <pubDate>Sat, 06 May 2017 21:59:30 +0900</pubDate>
       
-      <guid>/blog/2017/05/06/rustkazenidezainpata_n23tane</guid>
+      <guid>/blog/2017/05/06/rustkazenidezainpata_n23tane/</guid>
       <description>&lt;p&gt;κeenです。
 GoFのデザインパターンは有名ですが、言語機能によっては単純化できたりあるいは不要だったりするのでRust風に書き換えたらどうなるか試してみます。
 
-発端はこのツイート。&lt;/p&gt;
-
-&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;デザインパターン、古いJavaの機能の足りなさのワークアラウンド的なテクニックも含まれてるからあまり宜しくないんだよね。enumやクロージャで十分なのもいくつかある。&lt;br&gt;&lt;br&gt;Rustで写経、デザインパターン23種 - Qiita&lt;a href=&#34;https://t.co/MhpS3Z2OlF&#34;&gt;https://t.co/MhpS3Z2OlF&lt;/a&gt;&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/860635079600513024&#34;&gt;2017年5月5日&lt;/a&gt;&lt;/blockquote&gt;
-&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
-
-&lt;p&gt;一応誤解のないように説明しておくと、該当のQiitaの記事に不満がある訳ではなくてGoFのデザインパターンついての言及です。&lt;/p&gt;
-
-&lt;p&gt;リンク先のコードで十分な時にはここでは流すのでリンク先も同時に参照下さい。
-また、比較しやすいようにサンプルコードはリンク先のものに則って書きます。&lt;/p&gt;
-
-&lt;p&gt;一応デザインパターンの教科書として結城先生の本を参照しつつ書いていきます。&lt;/p&gt;
-
-&lt;h1 id=&#34;command-パターン&#34;&gt;Command パターン&lt;/h1&gt;
-
-&lt;p&gt;列挙型を使うところです。
-Javaにまともなenumがないのでクラスが使われていますが、列挙型があるならそちらの方がデータとコードの分離ができて見通しがいいです。また、コマンドが1つの型に収まるのでトレイトオブジェクトを作る必要がなくなります。&lt;/p&gt;
-
-&lt;p&gt;比較的マイナーな変更です。&lt;/p&gt;
-
-&lt;p&gt;Lispだとクロージャで解決したりしますが、Rustだと列挙型の方がしっくりくるかなと思います。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Command&amp;lt;T&amp;gt; {
-    fn execute(&amp;amp;self, &amp;amp;mut T);
-    fn undo(&amp;amp;self, &amp;amp;mut T);
-}
-
-
-
-struct Invoker&amp;lt;&#39;a, Cmd, T: &#39;a&amp;gt; {
-    commands: Vec&amp;lt;Cmd&amp;gt;,
-    target: &amp;amp;&#39;a mut T,
-    current_index: usize,
-}
-
-
-impl&amp;lt;&#39;a, Cmd, T&amp;gt; Invoker&amp;lt;&#39;a, Cmd, T&amp;gt; {
-    fn new(t: &amp;amp;&#39;a mut T) -&amp;gt; Self {
-        Invoker {
-            commands: Vec::new(),
-            target: t,
-            current_index: 0,
-        }
-    }
-
-
-    fn target(&amp;amp;self) -&amp;gt; &amp;amp;T {
-        self.target
-    }
-
-    fn append_command(&amp;amp;mut self, c: Cmd) {
-        self.commands.push(c);
-    }
-}
-
-impl&amp;lt;&#39;a, Cmd, T&amp;gt; Invoker&amp;lt;&#39;a, Cmd, T&amp;gt;
-    where Cmd: Command&amp;lt;T&amp;gt;
-{
-    fn execute_command(&amp;amp;mut self) {
-        if self.commands.len() &amp;lt;= self.current_index {
-            // Nothing to do.
-            return;
-        }
-
-        let c = &amp;amp;self.commands[self.current_index];
-        let t = &amp;amp;mut *self.target;
-        c.execute(t);
-
-        self.current_index += 1;
-    }
-
-    fn execute_all_commands(&amp;amp;mut self) {
-        for _ in self.current_index..self.commands.len() {
-            self.execute_command();
-        }
-    }
-
-    fn undo(&amp;amp;mut self) {
-        if 0 == self.current_index {
-            return;
-        }
-
-        self.current_index -= 1;
-
-        let c = &amp;amp;self.commands[self.current_index];
-        let t = &amp;amp;mut *self.target;
-        c.undo(t);
-    }
-}
-
-
-#[derive(Debug, Eq, PartialEq)]
-struct Robot {
-    x: i32,
-    y: i32,
-    dx: i32,
-    dy: i32,
-}
-
-
-impl Robot {
-    fn new() -&amp;gt; Robot {
-        Robot {
-            x: 0,
-            y: 0,
-            dx: 0,
-            dy: 1,
-        }
-    }
-
-    fn move_forward(&amp;amp;mut self) {
-        self.x += self.dx;
-        self.y += self.dy;
-    }
-
-    fn set_direction(&amp;amp;mut self, d: (i32, i32)) {
-        self.dx = d.0;
-        self.dy = d.1;
-    }
-
-    fn get_direction(&amp;amp;self) -&amp;gt; (i32, i32) {
-        (self.dx, self.dy)
-    }
-}
-
-enum RoboCommand {
-    MoveForward,
-    TurnRight,
-    TurnLeft,
-}
-
-impl Command&amp;lt;Robot&amp;gt; for RoboCommand {
-    fn execute(&amp;amp;self, r: &amp;amp;mut Robot) {
-        use RoboCommand::*;
-        match *self {
-            MoveForward =&amp;gt; r.move_forward(),
-            TurnRight =&amp;gt; {
-                let (dx, dy) = r.get_direction();
-                r.set_direction((dy, -dx))
-            }
-            TurnLeft =&amp;gt; {
-                let (dx, dy) = r.get_direction();
-                r.set_direction((-dy, dx));
-            }
-
-        }
-    }
-    fn undo(&amp;amp;self, r: &amp;amp;mut Robot) {
-        use RoboCommand::*;
-        match *self {
-            MoveForward =&amp;gt; {
-                let c1 = TurnRight;
-                c1.execute(r);
-                c1.execute(r);
-                self.execute(r);
-                c1.execute(r);
-                c1.execute(r);
-            }
-            TurnRight =&amp;gt; {
-                let c = TurnLeft;
-                c.execute(r);
-            }
-            TurnLeft =&amp;gt; {
-                let c = TurnRight;
-                c.execute(r);
-
-            }
-
-        }
-    }
-}
-
-
-
-fn main() {
-    let mut r = Robot::new();
-
-    let mut invoker = Invoker::new(&amp;amp;mut r);
-    assert_eq!(*invoker.target(),
-               Robot {
-                   x: 0,
-                   y: 0,
-                   dx: 0,
-                   dy: 1,
-               });
-
-    {
-        use RoboCommand::*;
-        invoker.append_command(TurnRight);
-        invoker.append_command(TurnLeft);
-        invoker.append_command(MoveForward);
-    }
-
-    invoker.execute_all_commands();
-    assert_eq!(*invoker.target(),
-               Robot {
-                   x: 0,
-                   y: 1,
-                   dx: 0,
-                   dy: 1,
-               });
-
-    invoker.undo();
-    assert_eq!(*invoker.target(),
-               Robot {
-                   x: 0,
-                   y: 0,
-                   dx: 0,
-                   dy: 1,
-               });
-
-    invoker.undo();
-    assert_eq!(*invoker.target(),
-               Robot {
-                   x: 0,
-                   y: 0,
-                   dx: 1,
-                   dy: 0,
-               });
-}
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;stateパターン&#34;&gt;Stateパターン&lt;/h1&gt;
-
-&lt;p&gt;参照先のままです。トレイトオブジェクトを使う代表的なケースだと思います。。
-あるいは列挙型を使う可能性もあります。&lt;/p&gt;
-
-&lt;h1 id=&#34;strategyパターン&#34;&gt;Strategyパターン&lt;/h1&gt;
-
-&lt;p&gt;参照先でも説明されていますが、Rustにはクロージャがあるので不要です。&lt;/p&gt;
-
-&lt;h1 id=&#34;template-methodパターン&#34;&gt;Template Methodパターン&lt;/h1&gt;
-
-&lt;p&gt;そもそもトレイトを使った普通のプログラミングなのでRustでわざわざ名前をつけるほどかな？と個人的には思いますがあえて書くなら参照先のままです。
-あるいはものによっては高階関数でも。&lt;/p&gt;
-
-&lt;p&gt;個人的にはトレイトオブジェクトを作るより関連型を使った方が好みです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait AbstractFactory&amp;lt;&#39;a&amp;gt; {
-    type ProdX: ProductX;
-    type ProdY: ProductY;
-    fn create_product_x(&amp;amp;self) -&amp;gt; Box&amp;lt;ProdX + &#39;a&amp;gt;;
-    fn create_product_y(&amp;amp;self) -&amp;gt; Box&amp;lt;ProdY + &#39;a&amp;gt;;
-}
-
-// ...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;mementoパターン&#34;&gt;Mementoパターン&lt;/h1&gt;
-
-&lt;p&gt;参照先のままです&lt;/p&gt;
-
-&lt;h1 id=&#34;observerパターン&#34;&gt;Observerパターン&lt;/h1&gt;
-
-&lt;p&gt;参照先のままです&lt;/p&gt;
-
-&lt;h1 id=&#34;visitorパターン&#34;&gt;Visitorパターン&lt;/h1&gt;
-
-&lt;p&gt;参照先では簡単な例なので分かりづらいのですが、列挙型を使うところです。
-まともな列挙型がない+シングルディスパッチしかなく引数はオーバーロードという二重苦によって生まれたパターンであり、まともな列挙型か多重ディスパッチがあれば複雑怪奇なプログラムは書かなくて済みます。&lt;/p&gt;
-
-&lt;p&gt;ここでは参照先とは違ってもう少し複雑な例を出します。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Visitor&amp;lt;T&amp;gt; {
-    fn visit(&amp;amp;mut self, &amp;amp;T);
-}
-
-enum Entity {
-    File(String),
-    Dir(String, Vec&amp;lt;Entity&amp;gt;),
-}
-
-struct ConcreteFileVisitor;
-
-impl Visitor&amp;lt;Entity&amp;gt; for ConcreteFileVisitor {
-    fn visit(&amp;amp;mut self, e: &amp;amp;Entity) {
-        use Entity::*;
-        match *e {
-            File(ref name) =&amp;gt; println!(&amp;quot;file: {}&amp;quot;, name),
-            Dir(ref name, ref files) =&amp;gt; {
-                println!(&amp;quot;dir: {}&amp;quot;, name);
-                for file in files {
-                    self.visit(file)
-                }
-            }
-        }
-    }
-}
-
-fn main() {
-    use Entity::*;
-    let e = Dir(&amp;quot;/&amp;quot;.to_string(),
-                vec![File(&amp;quot;etc&amp;quot;.to_string()), File(&amp;quot;usr&amp;quot;.to_string())]);
-    let mut visitor = ConcreteFileVisitor;
-    visitor.visit(&amp;amp;e);
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;特段パターンというほどの処理をしている感じがしませんね。&lt;/p&gt;
-
-&lt;h1 id=&#34;iteratorパターン&#34;&gt;Iteratorパターン&lt;/h1&gt;
-
-&lt;p&gt;参照先のままです。&lt;/p&gt;
-
-&lt;h1 id=&#34;mediatorパターン&#34;&gt;Mediatorパターン&lt;/h1&gt;
-
-&lt;p&gt;だいたい参照先のままです。複雑なことをしようと思うと&lt;code&gt;Colleague&lt;/code&gt;が複数種類出てきて列挙型かトレイトオブジェクトが必要になりそうな気がします。&lt;/p&gt;
-
-&lt;h1 id=&#34;interpreterパターン&#34;&gt;Interpreterパターン&lt;/h1&gt;
-
-&lt;p&gt;略&lt;/p&gt;
-
-&lt;h1 id=&#34;builderパターン&#34;&gt;Builderパターン&lt;/h1&gt;
-
-&lt;p&gt;あまりここまで抽象化してるのは見たことありませんがやるとしたら参照先のままです。
-そもそもRustには継承がないので抽象化する意義があまりなく、型固有のBuilderパターンで十分です。&lt;/p&gt;
-
-&lt;h1 id=&#34;prototypeパターン&#34;&gt;Prototypeパターン&lt;/h1&gt;
-
-&lt;p&gt;参照先のままです。&lt;/p&gt;
-
-&lt;h1 id=&#34;factoryパターン&#34;&gt;Factoryパターン&lt;/h1&gt;
-
-&lt;p&gt;クロージャで十分です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Product {
-    fn convert(&amp;amp;self, String) -&amp;gt; String;
-}
-
-
-struct Factory;
-
-impl Factory {
-    fn convert&amp;lt;P, F&amp;gt;(&amp;amp;self, s: String, create_product: F) -&amp;gt; String
-        where P: Product,
-              F: FnOnce() -&amp;gt; P
-    {
-        create_product().convert(s)
-    }
-}
-
-
-struct ConcreteProductX;
-impl Product for ConcreteProductX {
-    fn convert(&amp;amp;self, s: String) -&amp;gt; String {
-        s.to_uppercase()
-    }
-}
-
-
-fn main() {
-    let f = Factory;
-    println!(&amp;quot;{}&amp;quot;,
-             f.convert(&amp;quot;hogehoge piyopiyo&amp;quot;.to_string(), || ConcreteProductX))
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;abstractfactoryパターン&#34;&gt;AbstractFactoryパターン&lt;/h1&gt;
-
-&lt;p&gt;そもそもここまでやる？というのは置いといてやるとしたら参照先のままかなぁと思います。&lt;/p&gt;
-
-&lt;p&gt;TemplateMethodパターンでも述べた通り個人的には関連型を使う方が好みです。&lt;/p&gt;
-
-&lt;h1 id=&#34;chain-of-responsibility-cor-パターン&#34;&gt;Chain of Responsibility/CoR パターン&lt;/h1&gt;
-
-&lt;p&gt;参照先のままです。&lt;/p&gt;
-
-&lt;h1 id=&#34;singletonパターン&#34;&gt;Singletonパターン&lt;/h1&gt;
-
-&lt;p&gt;そもそもアンチパターンです。分かりづらいグローバル変数なだけです。あえてRustでやるとしたら&lt;a href=&#34;https://github.com/rust-lang-nursery/lazy-static.rs&#34;&gt;lazy_static&lt;/a&gt;かなと思います。&lt;/p&gt;
-
-&lt;h1 id=&#34;adapterパターン&#34;&gt;Adapterパターン&lt;/h1&gt;
-
-&lt;p&gt;これは捉え方が2種類あるかなーと思います。。&lt;/p&gt;
-
-&lt;p&gt;1つにはクラスの定義時にしかインターフェースを実装できない窮屈な言語仕様へのワークアラウンドとして。
-この捉え方では参照先のコードようにただトレイトを実装してしまえば終わりです。&lt;/p&gt;
-
-&lt;p&gt;もう1つにはラッパーオブジェクトとして。&lt;code&gt;std::fs::File&lt;/code&gt;の実装とかがそれっぽいと思います。。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub struct File {
-    inner: fs_imp::File,
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;bridgeパターン&#34;&gt;Bridgeパターン&lt;/h1&gt;
-
-&lt;p&gt;そもそも機能の追加とAPIの抽象化をどちらも継承に押し込める言語仕様が悪い。
-それにRustでは継承しないので関係ないです。&lt;/p&gt;
-
-&lt;h1 id=&#34;proxyパターン&#34;&gt;Proxyパターン&lt;/h1&gt;
-
-&lt;p&gt;参照先のままです。&lt;/p&gt;
-
-&lt;h1 id=&#34;facadeパターン&#34;&gt;Facadeパターン&lt;/h1&gt;
-
-&lt;p&gt;参照先のままです。Rustにはモジュールや可視性の制御があって特別意識することなく普段からやっていることなのであまり名前をつけるほどのことではないと思ってます。&lt;/p&gt;
-
-&lt;h1 id=&#34;flyweightパターン&#34;&gt;Flyweightパターン&lt;/h1&gt;
-
-&lt;p&gt;所有権があるのでRustだとちょっと難しいパターンです。
-参照だけなら参照先のように&lt;code&gt;HashMap&lt;/code&gt;にいれるか、オブジェクトを区別しないなら&lt;code&gt;Vec&lt;/code&gt;にいれるかなと思います。&lt;/p&gt;
-
-&lt;p&gt;因みにLispとかでは&lt;code&gt;intern&lt;/code&gt;という名前で呼ばれてると思います。&lt;/p&gt;
-
-&lt;h1 id=&#34;compositeパターン&#34;&gt;Compositeパターン&lt;/h1&gt;
-
-&lt;p&gt;ただの列挙型の再実装です。&lt;/p&gt;
-
-&lt;h1 id=&#34;decoratorパターン&#34;&gt;Decoratorパターン&lt;/h1&gt;
-
-&lt;p&gt;よくあるやつです。参照先のコードの他、&lt;code&gt;std::io::WriteBuf&lt;/code&gt;のようなものが代表的です。&lt;/p&gt;
-
-&lt;h1 id=&#34;おわりに&#34;&gt;おわりに&lt;/h1&gt;
-
-&lt;p&gt;デザインパターンをdisろうと思って書いたのですが案外多くのケースで便利でした。Rustで不要なものは10本指で数えられる程度でしたね。すごい。&lt;/p&gt;
-
-&lt;p&gt;因みにLisperでAIの研究者（確か今GoogleのAI研究所の所長）のPeter Norvigは&lt;a href=&#34;http://www.norvig.com/design-patterns/design-patterns.pdf&#34;&gt;Design Patterns in Dynamic Languages&lt;/a&gt;で16個はLispの機能を使えばパターンという程のものではなくなると言ってます。
-それぞれどの機能でどれが不要になるかを解説しているのですが、Rustは高階関数とモジュールの分に加えて列挙型の分で不要になってるかなと思います。&lt;/p&gt;</description>
+発端はこのツイート。&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>Cargoのサブプロジェクトとreplace</title>
-      <link>/blog/2017/04/05/cargonosabupurojiekutotoreplace</link>
+      <link>/blog/2017/04/05/cargonosabupurojiekutotoreplace/</link>
       <pubDate>Wed, 05 Apr 2017 20:46:26 +0900</pubDate>
       
-      <guid>/blog/2017/04/05/cargonosabupurojiekutotoreplace</guid>
-      <description>&lt;p&gt;κeenです。最近Cargoのreplace機能を使おうとしてハマったのでメモを残しておきます。&lt;/p&gt;
-
-&lt;p&gt;
-最近何箇所かで喋ったのでご存知の方もいらっしゃるかと思いますが、Cargoにはワークスペース機能があります。
-fat repositoryスタイルに便利な機能で、1つのディレクトリ下に複数のサブプロジェクトを配置しつつ&lt;code&gt;target/&lt;/code&gt;は共有するのでマイクロプロジェクトのモジュール性とモノリシックプロジェクトのコンパイルの速さを実現することが出来ます。&lt;/p&gt;
-
-&lt;p&gt;さて、問題になるのはクレートを公開するときの依存関係の記述です。
-サブプロジェクト同士で依存し合っているので&lt;code&gt;Cargo.toml&lt;/code&gt;には&lt;code&gt;my-project-lib = {path = &amp;quot;../my-project-lib&amp;quot;}&lt;/code&gt; のような依存の記述がある筈です。
-しかしながらローカルのクレートに依存していると&lt;code&gt;crates.io&lt;/code&gt;に公開は出来ません。
-そこで今回はそれをどうにかするお話。&lt;/p&gt;
-
-&lt;h1 id=&#34;replace&#34;&gt;replace&lt;/h1&gt;
-
-&lt;p&gt;Cargoには&lt;a href=&#34;http://doc.crates.io/manifest.html#the-replace-section&#34;&gt;replace&lt;/a&gt;という機能があります。
-特定のライブラリの特定のバージョンを、crates.ioにあるものではなくてユーザが指定した場所にあるものを使うように指示します。
-&lt;a href=&#34;http://doc.crates.io/specifying-dependencies.html#overriding-dependencies&#34;&gt;Specifying Dependencies&lt;/a&gt;のドキュメントによると、以下のように使えます。&lt;/p&gt;
-
-&lt;p&gt;例えば&lt;code&gt;uuid&lt;/code&gt;クレートを使っているときにそれが依存している&lt;code&gt;rand&lt;/code&gt;クレートにバグを見付けて修正し、修正した結果を試したいとします。
-その時にreplaceは以下のように使えます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-toml&#34;&gt;# ワークスペースの親プロジェクト
-...
-
-[replace]
-&amp;quot;rand:0.3.14&amp;quot; = { path = &amp;quot;./rand&amp;quot; }
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-toml&#34;&gt;# ワークスペースの子プロジェクト
-
-[package]
-name = &amp;quot;my-awesome-crate&amp;quot;
-version = &amp;quot;0.2.0&amp;quot;
-authors = [&amp;quot;The Rust Project Developers&amp;quot;]
-
-[dependencies]
-uuid = &amp;quot;0.2&amp;quot;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;間接的に依存してる&lt;code&gt;rand:0.3.14&lt;/code&gt;を、crates.ioにあるものではなく指定したパスにあるものを使うように指示しています。&lt;/p&gt;
-
-&lt;p&gt;この仕組みを使って先のローカルパス問題を解決出来ないでしょうか。すなわち、&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-toml&#34;&gt;# 子プロジェクト
-[dependencies]
-my-project-lib = &amp;quot;0.1.0&amp;quot;
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のように、見た目上はcrates.ioにあるものに依存しておきつつ実際は&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-toml&#34;&gt;# 親プロジェクト
-[replace]
-&amp;quot;my-project-lib:0.1.0&amp;quot; = { path = &amp;quot;./my-project-lib&amp;quot; }
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のように実際の依存先をローカルのパスに向ければ問題を解決できないでしょうか。&lt;/p&gt;
-
-&lt;p&gt;この答えは、半分no、半分yesになります。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;replace&lt;/code&gt;はあくまでcrates.ioにあるものを置き換えるのでまだ公開していないプロジェクトに対しては使えません。
-一方、一度crates.ioに公開してしまえば上記のテクニックは可能になります。&lt;/p&gt;
-
-&lt;p&gt;なので一番最初にcrates.ioに公開する時の手順はやや煩雑になります。&lt;/p&gt;
-
-&lt;ol&gt;
-&lt;li&gt;(ローカルサブプロジェクトへの依存の記述は&lt;code&gt;path = &amp;quot;...&amp;quot;&lt;/code&gt;のまま)&lt;/li&gt;
-&lt;li&gt;どのプロジェクトにも依存しないローカルサブプロジェクトを公開する&lt;/li&gt;
-&lt;li&gt;既に公開されたローカルサブプロジェクトへの依存は順次&lt;code&gt;replace&lt;/code&gt;に書き換える&lt;/li&gt;
-&lt;li&gt;ローカルパスへの依存のなくなったローカルプロジェクトから順に公開していく&lt;/li&gt;
-&lt;li&gt;全てのサブプロジェクトのローカルサブプロジェクトへの依存が&lt;code&gt;replace&lt;/code&gt;に置き換わったら以後はそのまま使える。&lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;p&gt;このようなテクニックは例えばdieselなどで&lt;a href=&#34;https://github.com/diesel-rs/diesel/blob/master/Cargo.toml#L21&#34;&gt;使われています&lt;/a&gt;。
-この辺、改善あるといいですね。&lt;/p&gt;</description>
+      <guid>/blog/2017/04/05/cargonosabupurojiekutotoreplace/</guid>
+      <description>&lt;p&gt;κeenです。最近Cargoのreplace機能を使おうとしてハマったのでメモを残しておきます。&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>関数型プログラマからみたRust</title>
-      <link>/blog/2017/04/04/kansuugatapuroguramakaramitarust</link>
+      <link>/blog/2017/04/04/kansuugatapuroguramakaramitarust/</link>
       <pubDate>Tue, 04 Apr 2017 21:38:57 +0900</pubDate>
       
-      <guid>/blog/2017/04/04/kansuugatapuroguramakaramitarust</guid>
+      <guid>/blog/2017/04/04/kansuugatapuroguramakaramitarust/</guid>
       <description>&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;C++からRustに入った人あたりから「関数型言語から来た人のRustの感想を知りたい」とたまに言われるのでいつかブログ書こうか。&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/848900720573075458&#34;&gt;2017年4月3日&lt;/a&gt;&lt;/blockquote&gt;
 &lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
 
-&lt;p&gt;&lt;/p&gt;
-
-&lt;h1 id=&#34;イントロ&#34;&gt;イントロ&lt;/h1&gt;
-
-&lt;p&gt;私はRustをやる前にはCommon LispやSMLを主に使っていましたが、仕事ではScalaを使っていましたし他にもOCamlやSchemeやClojureやATS2やHaskellなどを書くこともありました。&lt;/p&gt;
-
-&lt;p&gt;私を含めた多くの関数型言語経験者人が一度は &lt;a href=&#34;http://science.raphael.poss.name/rust-for-functional-programmers.html&#34;&gt;Rust for functional programmers&lt;/a&gt; を読んだことがあるかと思います。
-このように関数型言語と比較して書かれるといかにも似た言語に見えるので私は興味を持ちました。そこで私は実際にRustに触れ始めたのです。&lt;/p&gt;
-
-&lt;h1 id=&#34;構文&#34;&gt;構文&lt;/h1&gt;
-
-&lt;p&gt;&lt;code&gt;let&lt;/code&gt; があるのでおよそOCamlなどに似ているという印象を受けました。
-デフォルトでイミュータブルですしパターンマッチやシャドイングなもどするのでまさにMLの&lt;code&gt;let&lt;/code&gt;そのものです。
-行末にセミコロンが要求されますが、&lt;code&gt;in&lt;/code&gt;の代わりだと思うことにして自分をなだめました。
-式指向で&lt;code&gt;return&lt;/code&gt;を書かなくて済むのも関数型言語らしさを感じました。&lt;/p&gt;
-
-&lt;p&gt;関数定義の構文は手続型言語風ですが手続き型言語に馴れた人に寄り添うために必要なんだと思って深くは気にしないことにしました。&lt;/p&gt;
-
-&lt;p&gt;一方、ジェネリクスの構文については憤りすら感じました。
-どうして &lt;code&gt;&amp;lt;&amp;gt;&lt;/code&gt; を採用したのか、そもそも比較演算子の &lt;code&gt;&amp;lt;&lt;/code&gt;, &lt;code&gt;&amp;gt;&lt;/code&gt;と紛らわしい上に&lt;code&gt;&amp;lt;&amp;lt;&lt;/code&gt;の扱いでも困ることは目に見えていました。
-私はML風に前置、あるいは少なくともHaskellのように関数と引数のように書くべきだと思いましたし、少なくともScalaのように型と値でカッコを分けるくらいはできるはずです。
-しかしながら、不平を言っても始まらないので我慢して次に進むことにしました。&lt;/p&gt;
-
-&lt;h1 id=&#34;言語機能&#34;&gt;言語機能&lt;/h1&gt;
-
-&lt;p&gt;トレイト、タプル、代数的データ型とマッチ式、高階関数、型推論。
-これらは明らかに関数型言語から輸入されたものです。
-これはとても喜ばしいことです、なぜなら今までしていた通りのプログラミングを新しい言語でもできるからです！
-関数の引数と返り値に型宣言が必要なのはMLプログラマとしては少し残念でしたがHaskellやIdrisも同じようなスタイルなのでそういうものと自分で納得しました。
-そして私はさっそく、倉庫番のゲームを作り始めました。あの、十分にシンプルで、コンソールで動かせて、楽しいゲームです。&lt;/p&gt;
-
-&lt;p&gt;しかしすぐにそううまい話はないと気付きます。
-再帰的データ型を定義するとすぐにエラーになりますし（&lt;code&gt;Box&lt;/code&gt;が必要と気付くまでしばらくかかりました）、ハッシュテーブルを使うとすぐミュータブルが必要になります（ハッシュテーブルの操作が破壊的ということをすっかり忘れていました）。
-そして何より所有権のせいで思うようにプログラムが書けませんでした。
-関数型プログラミングではメモリは無尽蔵にあると思ってプログラミングするのでRustのパラダイムとはとてつもない隔りがありました。
-最初は、所有権についてはCleanやGHCにある一意型、あるいはATS2の線形型のようなものだと思えばそう難しくないと踏んでいましたが、実際のところ何もかも思い通りにいきませんでした。
-プログラム全てで所有権を意識するのが思いの外難しかったのです。
-それでもコンパイル時にコードの安全性を検査出来るのは喜ばしいことだと思って、&amp;rdquo;ボローチェッカとの戦い&amp;rdquo;を数日続けました。&lt;/p&gt;
-
-&lt;p&gt;&amp;ldquo;ボローチェッカとの戦い&amp;rdquo;をしばらく続けて気付いたのは、コンパイラは理不尽な理由で怒ったりしていないということでした。
-関数型言語ではデータほとんどイミュータブルなのでデータをコピーしたいのか参照したいのかあまり区別する必要がありませんでしたがRustでは厳密に区別しているだけのことでした。
-むしろ、所有権の概念は、一度コンパイラの気持ちを理解してしまえば所有権や参照を意識せずにプログラミングするのが気持ち悪いとさえ感じるほどに自然でした。&lt;/p&gt;
-
-&lt;p&gt;それ以外の点ではトレイトや導出はMLプログラマからすると羨望の的でしたし（余談ですがRustの導出は昔はHaskell風に&lt;code&gt;#[deriving(Show)]&lt;/code&gt;と書いていましたが、いつからか&lt;code&gt;#[derive(Debug)]&lt;/code&gt;と書くようになったようです。）、
-オブジェクト指向についても上手くやっていると感じました（関数型プログラミング言語でもオブジェクト指向はします！）。&lt;/p&gt;
-
-&lt;p&gt;Lispプログラマから一言あるとすれば、マクロです。RustのマクロはSchemeの&lt;code&gt;syntax-rules&lt;/code&gt;相当の機能しかなく、Common Lispプログラマの私にはもの足りませんでした。
-&lt;code&gt;macro_rules&lt;/code&gt;でも無いよりはましですし、C言語のマクロよりは素晴らしいものです。
-それでもどうしても伝統的なマクロが欲しくなりますが、不安定なコンパイラプラグインの機能しか選択肢がありません（訳注: 現在のRustにはproc_macroが入ったので伝統的なマクロも書けます）。&lt;/p&gt;
-
-&lt;h1 id=&#34;ツール&#34;&gt;ツール&lt;/h1&gt;
-
-&lt;p&gt;私の好きなEmacsのサポートはしっかりしていましたし、大きな不満はありませんでした。
-REPLこそありませんがむしろSMLに比べると補完や定義ジャンプなどリッチな機能さえありました。&lt;/p&gt;
-
-&lt;p&gt;それよりも、ビルドツールについてです。
-Rustは関数型プログラムで永遠のテーマだった分割コンパイルをするとインライン化が妨げられるが全プログラムコンパイルをするとコンパイル時間が掛かりすぎるという問題にモジュールより上位のクレートという単位を設けることで解決を見出したのです。
-それに素晴らしきCargo。依存関係の地獄はありませんし、Makefileを書く必要もありません。パッケージインストーラがランタイムにまで侵入してくることもありません。
-私達がプログラムを書くことに集中させてくれます。&lt;/p&gt;
-
-&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
-
-&lt;p&gt;関数型プログラマがRustを使うと、所有権やミュータビリティ、メモリへの厳しさに最初は面くらうもののすぐに馴れて普段通りにプログラムを書けるようになります。
-もちろん、Rustはむしろ手続き型な言語なので関数型プログラムそのまま、とはいきませんが普段使っている道具がそのまま使えるのでハードルは低いですし、むしろ手続き型プログラムに馴れた人が戸惑わないか心配にすらなります（初めてC++プログラマがRustをスラスラ書けると聞いたときには大変驚きました）。
-Rustは関数型プログラマ、手続き型プログラマ問わず良い言語なのでみなさんも最初の一歩を踏み出しましょう！&lt;/p&gt;
-
-&lt;h1 id=&#34;メタ&#34;&gt;メタ&lt;/h1&gt;
-
-&lt;p&gt;私のブログは記事によって意識的に文体を変えているのですが、今回は新たな試みとして「海外でちょっと流行った記事の野良和訳」風に書いてみました。
-なので海外風に「明らかに」などの強いワードを用いたり誤訳っぽいワードを埋めたいあまつさえ（訳注:〜）なんてものが出現しますが特に原文はないです。
-案外疲れました。&lt;/p&gt;</description>
+&lt;p&gt;&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>Rust in Production</title>
-      <link>/slide/Rust_in_Production/</link>
+      <link>/slide/rust_in_production/</link>
       <pubDate>Wed, 22 Mar 2017 19:57:28 +0900</pubDate>
       
-      <guid>/slide/Rust_in_Production/</guid>
-      <description>&lt;section data-markdown
-    data-separator=&#34;\n===\n&#34;
-    data-vertical=&#34;\n---\n&#34;
-    data-notes=&#34;^Note:&#34;&gt;
-&lt;script type=&#34;text/template&#34;&gt;
-# Rust in Production
-----------------------
-[Rust プログラマーミートアップ / Rust programmers&#39; meetup - connpass](https://rust.connpass.com/event/49304/)
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-===
-# About Me
----------
-![κeenのアイコン](/images/kappa.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; width=&#34;20%&#34; --&gt;
-
- * κeen
- * 若者
- * [@blackenedgold](https://twitter.com/blackenedgold)
- * Github: [KeenS](https://github.com/KeenS)
- * [Idein Inc.](https://idein.jp/)のエンジニア
- * Lisp, ML, Rust, Shell Scriptあたりを書きます
-
-===
-
-# Rust採用までの流れ
---------------------
-
-Ω＜「κeen君継続的ベンチマークサーバ作って」&lt;!-- .element: style=&#34;color:#a00;text-align:left;&#34; --&gt;  
-Ω＜「GitHubにpushする度ベンチマーク走る感じで」&lt;!-- .element: style=&#34;color&#34;:#a00;text-align:left;&#34; --&gt;  
-Ω＜「GPUとRaspberry Piでベンチマークするから」&lt;!-- .element: style=&#34;color:#a00;text-align:left;&#34; --&gt;  
-Ω＜「全部任せるね」&lt;!-- .element: style=&#34;color:#a00;text-align:left;&#34; --&gt;  
-
-⸜( ¯⌓¯ )⸝「Rustで書くか」&lt;!-- .element: style=&#34;color:#00a;text-align:left;&#34; --&gt;  
-
-
-やったこととか知見とかトピック毎にかいつまんで話します
-
-&lt;!-- .slide: class=&#34;left&#34; --&gt;
-
-===
-# Rustのメリット
----------------
-
-* κeenが馴れてる
-* 社員の半分くらい書ける
-* Linux, Mac, Raspberry Piで動く
-* テスト書かなくてもそんなにバグらなそう
-* 将来のために小さいところでノウハウ溜めていきたい
-* シングルバイナリで楽に動きそう
-* **単純に使いたかった**
-* ※今回は速度や安全性は必要ない
-
-===
-# コンポーネント
----------------
-
-* CLIクライアント
-  + 各自の手元やCIサーバから起動
-* アグリゲータ
-  + ワーカに仕事を投げ、結果を受け取る
-  + ジョブ管理
-* ワーカ
-  + GPUマシンやRSPiなどでベンチマーク
-  + 結果をアグリゲータに返す
-* ブラウザ
-  + ベンチマーク結果の閲覧
-
-===
-# プロジェクト構成
--------------------
-
-* [ワークスペース](http://doc.crates.io/manifest.html#the-workspace--field-optional)を使ってサブプロジェクトに分割
-  + モノリシックだとビルドが重かった
-  + targetは全てのプロジェクトで共有する
-* CLI, aggregator, worker, browserの他にmodel, api
-* modelはaggregatorとbrowserで共有
-* apiはaggergatorとcliとworkerで共有
-* コード
-
-===
-
-# プロジェクト構成
--------------------
-
-
-```
-Cargo.lock
-Cargo.toml
-README.md
-bench_aggregator/
-bench_api/
-bench_browser/
-bench_cli/
-bench_model/
-bench_worker/
-build.sh
-circle.yml
-docker-compose-deploy.yml
-docker-compose.yml
-migrations
-rustfmt.toml
-src/
-static/
-target/
-```
-
-===
-# プロジェクト構成
--------------------
-
-![構成のイメージ](/images/rust-in-production/composition.png)&lt;!--  width=&#34;100%&#34; --&gt;
-
-
-===
-# パーサ
---------
-
-* workerで使う
-* timeやgprofの結果を数値で欲しい
-* →パースするか…
-  + フォーマット
-* timeはbash固定
-  + シェルコマンドなのでシェル毎にフォーマットが違う
-* gprofは`-b`オプションでの結果をパース
-  + gmon.outではない
-
-===
-# パーサ
---------
-
-* パーサコンビネータ [nom](https://github.com/Geal/nom)
-* サクっと作れた
-* デバッグつらい
-  + gprofが思ったより変なフォーマットしてた
-  + nomがバイト指向なのと位置を保存しない
-  + 自力でどうにかする？
-  + [combine](https://github.com/Marwes/combine)使うか手書きにするかで書き直したい
-* コード
-
-===
-
-# CLIオプション
----------------
-
-* workerとcliで必要
-* 多機能な[clap](https://github.com/kbknapp/clap-rs)を採用
-* 特に困らない
-* 採用プロジェクトも多くてliving exampleに事欠かない
-* CLIツールに思考停止で採用していいと思う
-* コード
-
-===
-# HTTPクライアント
-------------------
-
-* CLIとworkerで使う
-* [hyper](https://github.com/hyperium/hyper) vs [reqwest](https://github.com/seanmonstar/reqwest)
-* 非同期な必要はないのでreqwest使いたかった
-* reqwestにmultipart対応がない→生hyper+[multipart](https://github.com/abonander/multipart)
-* コネクションの管理とかjsonの扱いとかそこそこ面倒だった…
-* reqwestにmultipart対応入ったら乗り換えるかも
-
-===
-# HTTPサーバ
-------------
-
-* aggregatorとbrowserで使う
-* 簡単なREST API
-* 生hyper vs [nickel](https://github.com/nickel-org/nickel.rs) vs [iron](https://github.com/iron/iron)
-* 生hyperはすぐつらくなる→やめた
-* **nickelとironはそんなに変わらなかった**
-* nickel(agregator)+iron(browser)
-  + aggregatorはなんとなくでnickel選んじゃった
-  + browserは結局[rustc-perf](https://github.com/rust-lang-nursery/rustc-perf)からフォークしたためironだった
-
-===
-
-# HTTPサーバ(Nickel)
-------------
-
-* サーバデータの扱いがちょっと特殊？
-  ```rust
-    let data = req.server_data();
-  ```
-* 400 BadRequestと500 InternalServerErrorのマクロ作った
-  + `validate!(res, serde_json::from_str(field));`
-  + `server_try_with!(res, serde_json::to_string(&amp;ret));`
-  + 「エラー出たら処理終了」が他の言語と比べて書きづらい？
-* 非同期IOしない…
-  + ポーリングでコネクション張りっぱなしなのでクライアント分スレッドが必要（ハマった）
-* マルチスレッド→DBコネクションにロックが必要
-* コード
-
-===
-# APIモデル
------------
-
-* apiクレートを分けた
-  + バイナリ毎に別クレートに分けるために必要だった
-* [serde](https://github.com/serde-rs/serde)と[serde_json](https://github.com/serde-rs/json)でjson化
-* proc-macroがstableになって格段に使いやすくなった
-* モジュール分けて`Request`と`Response`を作ってAPIが分かりやすく
-* コード
-
-===
-# DB
------
-
-* aggergatorとbrowserで必要
-* ほぼ[diesel](https://github.com/diesel-rs/diesel)一択
-  + コネクション、マイグレーション、ORMなど
-  + proc-macroで大分楽に
-* [仕事でdiesel使ってみた | κeenのHappy Hacκing Blog](https://keens.github.io/slide/shigotodedieseltsukattemita/)
-* DBはPostgreSQL
-  + 半分dieselのため、もう半分機能のため
-* 開発時はdocker-composeで立てる
-  + CF [docker-composeでmysql &amp; postgreSQL をサクッと起動 - Qiita](http://qiita.com/astrsk_hori/items/1e683a7a2f2b7189cb6e)
-
-===
-# diesel
------
-
-* Pros
-  + SQLでスキーマ書ける
-  + マイグレーションの面倒みてくれる
-  + proc-macroのおかげで楽
-  + クエリDSL案外普通に書けた
-  + 最悪SQL生牡蠣出来る
-  + CLI便利
-
-===
-# diesel
---------
-
-* Cons
-  + deriveいっぱいあって難しい
-    - has_manyとbelongs_toあたりをどう書くか
-  + enum扱えない
-  + DSLで2重join書けない
-  + 偶に機能足りない
-    - ネットワークアドレス型サポートとか
-  + SQL生牡蠣の型付けつらい
-  + has_manyの扱いに難あり
-    - eager loadingしない設計判断
-    - `(User, Vec&lt;Tweets&gt;)` みたいなのを持ち回す羽目に
-    - モデル設計にも影響
-
-===
-# マイグレーション
------------------
-
-* 普通のマイグレーション運用かな
-* 最初のデプロイまでは`diesel database reset`で何度も初期化した
-* 最初デプロイ後は手元で`diesel migration run`と`diesel migration revert`を何度か
-* デプロイ時に雑に手元から本番サーバに `diesel migration run`
-  + 本当はデプロイプロセスに組込みたい
-  + diesel CLIの入ったdockerコンテナ…
-* まだほとんど使われてないので雑運用
-
-
-===
-# マイグレーション(コード)
------------------
-
-* スキーマ変更したらコードの変更も必要
-  + そもそも必要だからスキーマ変更するので割と自然に出来る
-* `infer_schema` があるので先に開発環境のマイグレーションをしないといけない
-* カラムの順番とフィールドの順番が一致する必要
-  + 地味に面倒
-  + 今後改善予定 CF [#747](https://github.com/diesel-rs/diesel/pull/747)
-* SQL生牡蠣の対応がつらい
-  + コンパイル時にカラム不足が分からない
-
-===
-# エラー管理
-------------
-
-* 全ての場所で必要
-* [error_chain](https://github.com/brson/error-chain)を採用
-* 公式ドキュメントの[エラーハンドリング](https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/error-handling.html)のボイラプレートをマクロで生成
-* `?`でのエラー処理が楽になる→ `unwrap`が消えた
-* 全てのプロジェクトに思考停止で採用していいんじゃないかな
-
-===
-
-# ログ
-------
-
-* 全ての場所で必要
-* nurseryの[log](https://github.com/rust-lang-nursery/log)と[env_logger](https://github.com/rust-lang-nursery/log)を採用
-* `println!`より高機能な（on/offが出来る）ので`println!`の代わりに`debug!`を入れる
-* あとたまにエラーハンドリングで`error!`使ったり
-* `main`で一行`env_logger::init().expect(&#34;failed to init env logger&#34;);`を忘れずに
-* 運用以前に開発に便利なので問答無用で入れていいと思う
-
-===
-# コンフィグ
-------------
-
-* [serde_yaml](https://github.com/dtolnay/serde-yaml) + [dotenv](https://github.com/slapresta/rust-dotenv)
-* コンフィグファイルといえばyamlだよね
-  + ちょこっといじって再起動がやりやすい
-* dotenvはdockerと相性がいい気がする
-* どっちがいいか判断出来なかったので両方実装
-* プロダクションで動いてるのはdotenv（というか普通の環境変数）の方
-
-===
-
-# テスト
---------
-
-* 全ての場所で必要
-* 組込みの`#[test]`を使用
-* 正直あまり出来てない
-* 型強いし多少はなくてもバグらない…？
-* 一応レイヤ(DB/ビジネスロジック/インタフェース)を跨ぐときにはtraitで抽象化
-  + 出来てないところもいっぱい
-* 今後の課題とさせて頂きます
-
-===
-# デバッグ
-----------
-
-* 基本はlogの`debug!`でトレース
-* ちゃんと型つけときゃバグらない
-* GDB使う…？
-* デモ
-
-===
-
-# ビルド
---------
-
-* cargoでサブプロジェクト全てをビルドするコマンドがなかった
-  + 最近 `cargo build --all` が入った
-* Raspberri Pi向けにクロスコンパイルが必要
-* シェルスクリプトでビルドスクリプト
-* クロスコンパイルはdockerを使う CF [dlecan/rust-crosscompiler-arm: Docker images for Rust dedicated to cross compilation for ARM v6 and more](https://github.com/dlecan/rust-crosscompiler-arm)
-* 正解なのか分からない
-
-===
-# CI
-----
-
-* 全てのクレートで必要
-* Circle CIを使ってる
-* 普通にrustupでRustのインストール
-  + travisならRustサポートあるけど…
-* 普通に `cargo test --all`
-
-===
-
-# デプロイ
-----------
-
-* シングルバイナリだけど…
-* シュっとdocker-swarmとかでデプロイしたい
-* dockerイメージ作ってdocker-composeで管理
-  + 開発も便利に
-* raspberry piはバイナリだけ配る
-* browserは`static/`もイメージに同梱
-
-===
-# Docker
---------
-
-* ベースイメージはUbuntu
-  + libcの扱いが面倒そうなのでalpineはやめといた
-  + イメージサイズに困ってからどうにか考える
-* swarmなのでdocker-composeの設定そのままで動かせる
-* ログの管理もswarm任せ
-  + env_loggerが標準出力に吐くのもそんなに困ってない
-
-===
-# Docker
---------
-
-* rustのビルドからのdockerのビルドが面倒
-* Dockerfileの管理も面倒
-* 便利なの作った
-* [KeenS/cargo-pack-docker: a cargo subcommand to package your application into a docker image](https://github.com/KeenS/cargo-pack-docker)
-* DockerfileなしでRustのビルドからイメージ作成までやってくれる
-* 今のところ使えてる
-  + 作りが甘いことは認識してる…
-
-===
-# まとめ
----------
-
-* Rustを仕事で使ったときの知見を話した
-* 微妙に痒いところに手が届かないけど概ね揃ってる
-* 開発が速いので問題は放置しとくと勝手に直るかも
-* テストとかデプロイとかまだ知見が足りない
-
-
-&lt;/script&gt;
-&lt;/section&gt;
-</description>
+      <guid>/slide/rust_in_production/</guid>
+      <description># Rust in Production ---------------------- [Rust プログラマーミートアップ / Rust programmers&#39; meetup - connpass](https://rust.connpass.com/event/49304/) === # About Me --------- ![κeenのアイコン](/images/kappa.png) * κeen * 若者 * [@blackenedgold](https://twitter.com/blackenedgold) * Github: [KeenS](https://github.com/KeenS) * [Idein Inc.](https://idein.jp/)のエンジニア * Lisp, ML, Rust, Shell Scriptあたりを書きます === # Rust採用までの流れ -------------------- Ω＜「κeen君継続的ベンチマークサーバ作って」Ω＜「GitHubにpushする度ベンチマーク走る感じで」Ω＜「GPUとRaspberry Piでベンチマークするから」Ω＜「全部任せるね」⸜( ¯⌓¯ )⸝「Rustで書くか」やったこととか知見とかトピック毎にかいつまんで話します === # Rustのメリット --------------- * κeenが馴れてる * 社員の半分くらい書ける * Linux, Mac, Raspberry Piで動く * テスト書かなくてもそんなにバグらなそう * 将来のために小さいところでノウハウ溜めていきたい * シングルバイナリで楽に動きそう * **単純に使いたかった** * ※今回は速度や安全性は必要ない === # コンポーネント --------------- * CLIクライアント + 各自の手元やCIサーバから起動 * アグリゲータ + ワーカに仕事を投げ、結果を受け取る + ジョブ管理 * ワーカ + GPUマシンやRSPiなどでベンチマーク + 結果をアグリゲータに返す * ブラウザ + ベンチマーク結果の閲覧 === # プロジェクト構成 ------------------- * [ワークスペース](http://doc.</description>
     </item>
     
     <item>
@@ -2401,2166 +113,436 @@ target/
       <pubDate>Wed, 01 Mar 2017 10:57:38 +0900</pubDate>
       
       <guid>/slide/shigotodedieseltsukattemita/</guid>
-      <description>&lt;section data-markdown
-    data-separator=&#34;\n===\n&#34;
-    data-vertical=&#34;\n---\n&#34;
-    data-notes=&#34;^Note:&#34;&gt;
-&lt;script type=&#34;text/template&#34;&gt;
-# 仕事でdiesel使ってみた
-----------------------
-[RustのLT会！ Rust入門者の集い #2 - connpass](https://rust.connpass.com/event/48826/)
-
-&lt;!-- .slide: class=&#34;center&#34; --&gt;
-===
-# About Me
----------
-![κeenのアイコン](/images/kappa.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; width=&#34;20%&#34; --&gt;
-
- * κeen
- * [@blackenedgold](https://twitter.com/blackenedgold)
- * Github: [KeenS](https://github.com/KeenS)
- * [Idein Inc.](https://idein.jp/)のエンジニア
- * Lisp, ML, Rust, Shell Scriptあたりを書きます
-
-===
-
-# [diesel.rs](diesel.rs)
-
-![dieselのwebページ](/images/diesel/diesel-web.png)
-
-===
-
-# diesel
----------
-
-
-* RustのORM
-  * スキーマからコード自動生成
-  * diesel_codegen
-* クエリビルダ
-* マイグレーション管理
-* PostgreSQL, MySQL, SQLiteサポート
-
-===
-
-# 準備
--------
-
-* [docker-composeでmysql &amp; postgreSQL をサクッと起動 - Qiita](http://qiita.com/astrsk_hori/items/1e683a7a2f2b7189cb6e)
-
-```
-cargo install diesel_cli
-echo DATABASE_URL=postgres://username:password@localhost/hoge &gt; .env
-diesel setup
-diesel migration generate create_posts
-```
-
-===
-
-# 準備
--------
-
-``` toml
-[dependencies]
-chrono = &#34;0.3.0&#34;
-diesel = {version = &#34;0.11.4&#34;, features = [&#34;chrono&#34;, &#34;postgres&#34;, &#34;serde_json&#34;]}
-dotenv = &#34;0.8.0&#34;
-serde_json = &#34;0.9.6&#34;
-serde_derive = &#34;0.9.7&#34;
-serde = &#34;0.9.7&#34;
-
-[dependencies.diesel_codegen]
-features = [&#34;postgres&#34;]
-version = &#34;0.11.0&#34;
-```
-
-===
-# プロジェクト構成
------------------
-
-* モデルのコンパイルが遅いので分離したい
-* Cargoの[ワークスペース](http://doc.crates.io/manifest.html#the-workspace-section)機能を使う
-
-===
-# プロジェクト構成
------------------
-
-```
-$ ls
-Cargo.lock
-Cargo.toml
-hoge_model &lt;- diesel_derive使う
-hoge_XXX   &lt;- diesel使う
-hoge_YYY   &lt;- diesel使う
-docker-compose.yml
-migrations
-...
-```
-===
-
-# テーブル
----------
-
-* up.sqlとdown.sqlを書く
-
-``` sql
-CREATE TABLE hoge_suites (
-  id SERIAL PRIMARY KEY,
-  hoge_entry_id INT NOT NULL,
-  hostname VARCHAR NOT NULL,
-  status INT NOT NULL DEFAULT 0,
-  CONSTRAINT unique_hoge_entry_id_hostname
-             UNIQUE (
-                      hoge_entry_id,
-                      hostname
-                      -- and other matrix
-                     ),
-  CONSTRAINT fkey_hoge_entry_id
-             FOREIGN KEY(hoge_entry_id)
-             REFERENCES hoge_entries(id) MATCH SIMPLE
-             ON UPDATE NO ACTION
-             ON DELETE CASCADE
-);
-
-```
-
-===
-# モデル
---------
-
-``` rust
-// なんかいっぱいderive
-// QueryableとInsertableは分ける
-#[derive(Default, Queryable, Associations, Identifiable, Debug, Clone)]
-// belongs_to関係のstruct
-#[belongs_to(HogeEntry)]
-// has_many関係のテーブル
-#[has_many(hoge_results)]
-#[table_name=&#34;hoge_suites&#34;]
-pub struct HogeSuite {
-    pub id: i32,
-    pub bench_entry_id: i32,
-    // String
-    pub hostname: String,
-    pub status: HogeStatus,
-}
-
-```
-
-===
-
-# モデル
---------
-
-```
-// Insertableの方
-#[derive(Default, Insertable, Debug, Clone)]
-#[table_name=&#34;hoge_suites&#34;]
-pub struct NewHogeSuite&lt;&#39;a&gt; {
-    pub hoge_entry_id: i32,
-    // Stringではなく&amp;str
-    pub hostname: &amp;&#39;a str,
-}
-```
-
-===
-
-# enumの扱い
------------
-
-* dieselはenumのcodegenをサポートしてない
-* 気合
-
-===
-
-# enumの扱い
------------
-
-```rust
-// Queryableとかはderive出来ない
-#[derive(Debug, Clone)]
-pub enum HogeStatus {
-    Waiting,
-    Running,
-    Finished,
-    Failed,
-    Canceled,
-}
-
-// 手で実装
-impl&lt;BE, QB, BC&gt; FromSql&lt;Integer, BE&gt; for HogeStatus
-    where QB: QueryBuilder&lt;BE&gt;,
-          BC: BindCollector&lt;BE&gt;,
-          BE: Backend&lt;RawValue = [u8], QueryBuilder = QB, BindCollector = BC&gt;
-{
-    fn from_sql(bytes: Option&lt;&amp;&lt;Pg as Backend&gt;::RawValue&gt;)
-                -&gt; Result&lt;Self, Box&lt;Error + Send + Sync&gt;&gt; {
-        use self::HogeStatus::*;
-        match &lt;i32 as FromSql&lt;Integer, Pg&gt;&gt;::from_sql(bytes)? {
-            0 =&gt; Ok(Waiting),
-            1 =&gt; Ok(Running),
-            2 =&gt; Ok(Finished),
-            3 =&gt; Ok(Failed),
-            4 =&gt; Ok(Canceled),
-            n =&gt; Err(format!(&#34;invalid status: {}&#34;, n).into()),
-        }
-    }
-}
-
-impl&lt;BE, QB, BC&gt; FromSqlRow&lt;Integer, BE&gt; for HogeStatus
-    where QB: QueryBuilder&lt;BE&gt;,
-          BC: BindCollector&lt;BE&gt;,
-          BE: Backend&lt;RawValue = [u8], QueryBuilder = QB, BindCollector = BC&gt;
-{
-    fn build_from_row&lt;T: Row&lt;BE&gt;&gt;(row: &amp;mut T) -&gt; Result&lt;Self, Box&lt;Error + Send + Sync&gt;&gt; {
-        use self::HogeStatus::*;
-        match &lt;i32 as FromSqlRow&lt;Integer, BE&gt;&gt;::build_from_row(row)? {
-            0 =&gt; Ok(Waiting),
-            1 =&gt; Ok(Running),
-            2 =&gt; Ok(Finished),
-            3 =&gt; Ok(Failed),
-            4 =&gt; Ok(Canceled),
-            n =&gt; Err(format!(&#34;invalid status: {}&#34;, n).into()),
-        }
-    }
-}
-```
-
-===
-# クエリ
---------
-
-* モデルプロジェクトとは別
-* 各プロジェクトのdb.rsで関数を定義
-* SQLよりRsutのイテレータを意識した書き方
-
-===
-# クエリ
---------
-
-```rust
-pub fn is_hoge_finished&lt;&#39;a, Cn&gt;(conn: &amp;Cn, entry_id: i32) -&gt; Result&lt;bool, Error&gt;
-    where Cn: Connection&lt;Backend = Pg&gt;
-{
-    use self::schema::hoge_suites::dsl::*;
-    // SELECT ... じゃなくてsourceからfileterして最後にselect
-    let ret = hoge_suites
-        .filter(hoge_entry_id.eq(entry_id))
-        .select(status)
-        // ここまでクエリビルダ
-        .load::&lt;i32&gt;(conn)?
-        // ここからイテレータ
-        .into_iter()
-        .all(|i| [HogeStatus::Finished as i32, HogeStatus::Failed as i32].contains(&amp;i));
-    Ok(ret)
-}
-
-```
-
-===
-# 複雑なクエリ
--------------
-
-* トランザクション
-* join
-* order by
-
-===
-
-# 複雑なクエリ
--------------
-
-``` rust
-pub fn pic_suite&lt;Cn&gt;(conn: &amp;Cn,
-                     query: &amp;api::worker_poll::Request)
-                     -&gt; Result&lt;Option&lt;(HogeEntry, HogeSuite)&gt;, Error&gt;
-    where Cn: Connection&lt;Backend = Pg&gt;
-{
-    use self::schema::hoge_entries::dsl::*;
-    use self::schema::hoge_suites::dsl::*;
-    use self::schema::hoge_suites::dsl::id;
-    // transaction
-    conn.transaction(|| {
-        let suite = hoge_suites
-             // join
-            .inner_join(hoge_entries)
-            .filter(status.eq(HogeStatus::Waiting as i32)
-                .and(hostname.eq(&amp;query.hostname)))
-            // order by
-            .order(created_at.asc())
-            .select((id, hoge_entry_id, hostname, status))
-            .first::&lt;HogeSuite&gt;(conn)
-            // NotFoundErrorをOptionにできる
-            .optional()?;
-        // transactionの中で普通にrustの式が書ける
-        if let Some(s) = suite {
-            let entry = hoge_entries.find(s.hoge_entry_id)
-                .first::&lt;HogeEntry&gt;(conn)?;
-            let suite =
-                diesel::update(hoge_suites.find(s.id)).set(status.eq(HogeStatus::Running as i32))
-                    .get_result::&lt;HogeSuite&gt;(conn)?;
-            Ok(Some((entry, suite)))
-
-        } else {
-            Ok(None)
-        }
-    })
-}
-```
-
-===
-
-# もっと複雑なクエリ
--------------------
-
-* 2重join
-* dieselは2重joinを扱えない…
-
-===
-
-# もっと複雑なクエリ
--------------------
-
-
-``` rust
-pub fn load_all_data&lt;&#39;a, Cn&gt;(conn: &amp;Cn)
-                             -&gt; Result&lt;Vec&lt;(HogeEntry, Vec&lt;((HogeSuite, HogeResult), Vec&lt;HogeProfile&gt;)&gt;)&gt;&gt;
-    where Cn: Connection&lt;Backend = Pg&gt;
-{
-    use diesel::types::{Integer, Timestamp, VarChar, Double};
-    use diesel::pg::types::sql_types::{Array, Jsonb};
-    use diesel::expression::dsl::*;
-    use diesel::select;
-
-    let status = sql::&lt;Integer&gt;(&#34;s.status&#34;);
-    let ret = select(sql::&lt;(
-        (Integer, VarChar, VarChar, Array&lt;VarChar&gt;,Timestamp, VarChar, Integer, Jsonb),
-        (Integer, Integer, VarChar, Integer),
-        (Integer, Integer, VarChar, Integer, Integer, VarChar),
-        (Integer, Integer, VarChar, Integer, Double))&gt;(
-        &#34;
-e.id, e.repo, e.committish, e.files, e.created_at, e.command, e.format, e.format_data,
-s.id, s.hoge_entry_id, s.hostname, s.status,
-r.id, r.hoge_suite_id, r.hoge_name, r.score, r.status, r.result,
-p.id, p.hoge_result_id, p.function_name, p.score, p.percent
-FROM hoge_profiles p
-INNER JOIN hoge_results r on r.id = p.hoge_result_id
-INNER JOIN hoge_suites s ON s.id = r.hoge_suite_id
-INNER JOIN hoge_entries e ON e.id = s.hoge_entry_id&#34;))
-    .filter(status.eq(HogeStatus::Finished as i32))
-    .load::&lt;(HogeEntry, HogeSuite, HogeResult, HogeProfile)&gt;(conn)?;
-    let mut hash = HashMap::new();
-    for (e, s, r, p) in ret {
-        let mut hash_entry1 = hash         .entry(e.id).or_insert((e, HashMap::new()));
-        let mut hash_entry2 = hash_entry1.1.entry(r.id).or_insert(((s, r), Vec::new()));
-        hash_entry2.1.push(p);
-    }
-    let ret = hash.into_iter().map(|(_, v)| (v.0,  v.1.into_iter().map(|(_, p)| p).collect())).collect();
-    Ok(ret)
-}
-
-```
-
-===
-
-# テスト
--------
-
-* ￣\＿(ツ)＿/￣
-
-===
-
-# まとめ
---------
-
-* 案外普通に使えるよ
-* モデルはちょっと面倒かもね
-* クエリは困ったらSQL生牡蠣
-* マイグレーションとかはまた今度
-
-&lt;/script&gt;
-&lt;/section&gt;
-</description>
+      <description># 仕事でdiesel使ってみた ---------------------- [RustのLT会！ Rust入門者の集い #2 - connpass](https://rust.connpass.com/event/48826/) === # About Me --------- ![κeenのアイコン](/images/kappa.png) * κeen * [@blackenedgold](https://twitter.com/blackenedgold) * Github: [KeenS](https://github.com/KeenS) * [Idein Inc.](https://idein.jp/)のエンジニア * Lisp, ML, Rust, Shell Scriptあたりを書きます === # [diesel.rs](diesel.rs) ![dieselのwebページ](/images/diesel/diesel-web.png) === # diesel --------- * RustのORM * スキーマからコード自動生成 * diesel_codegen * クエリビルダ * マイグレーション管理 * PostgreSQL, MySQL, SQLiteサポート === # 準備 ------- * [docker-composeでmysql &amp; postgreSQL をサクッと起動 - Qiita](http://qiita.com/astrsk_hori/items/1e683a7a2f2b7189cb6e) ``` cargo install diesel_cli echo DATABASE_URL=postgres://username:password@localhost/hoge  .</description>
     </item>
     
     <item>
       <title>RustのちょっとやりすぎなBuilderパターン</title>
-      <link>/blog/2017/02/09/rustnochottoyarisuginabuilderpata_n</link>
+      <link>/blog/2017/02/09/rustnochottoyarisuginabuilderpata_n/</link>
       <pubDate>Thu, 09 Feb 2017 23:03:45 +0900</pubDate>
       
-      <guid>/blog/2017/02/09/rustnochottoyarisuginabuilderpata_n</guid>
+      <guid>/blog/2017/02/09/rustnochottoyarisuginabuilderpata_n/</guid>
       <description>&lt;p&gt;κeenです。Rustでちょっとやりすぎだけど使う側の自由度が高くて安全なBuilderパターンを思い付いたので紹介しますね。&lt;/p&gt;
 
 &lt;p&gt;※2017-02-11T13:18:58Z+09:00 最下部に追記しました
-&lt;/p&gt;
-
-&lt;h1 id=&#34;目的コード&#34;&gt;目的コード&lt;/h1&gt;
-
-&lt;p&gt;以下のような構造体のビルダーを作りたいとします。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-struct&#34;&gt;#[derive(Debug)]
-struct Person {
-    id: u32,
-    name: String,
-    age: u32,
-    address: Option&amp;lt;String&amp;gt;,
-    zipcode: Option&amp;lt;String&amp;gt;,
-}
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;雑にやると&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct PersonBuilder {
-    id: Option&amp;lt;u32&amp;gt;,
-    name: Option&amp;lt;String&amp;gt;,
-    age: Option&amp;lt;u32&amp;gt;,
-    address: Option&amp;lt;String&amp;gt;,
-    zipcode: Option&amp;lt;String&amp;gt;,
-}
-
-impl PersonBuilder {
-  pub fn new() -&amp;gt; Self { ... }
-  pub fn id(self, id: u32) -&amp;gt; Self { ... }
-  pub fn name(self, name: String) -&amp;gt; Self { ... }
-  pub fn age(self, id: u32) -&amp;gt; Self { ... }
-  pub fn address(self, address: String) -&amp;gt; Self { ... }
-  pub fn zipcode(self, zipcode: String) -&amp;gt; Self { ... }
-  // 返り値がOption型になってしまう
-  pub fn build(self) -&amp;gt; Option&amp;lt;Person&amp;gt; {
-    // try_opt!は標準ライブラリには存在しませんが各所で使われてるので動きは分かると思います
-    Person {
-       id: try_opt!(self.id),
-       name: try_opt!(self.name),
-       age: try_opt!(self.age),
-       address: self.address,
-       zipcode: self.zipcode,
-    }
-  }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;とbuildの返り値が&lt;code&gt;Option&lt;/code&gt;型になってしまい、あまりうれしくありません。
-さらには例えば&lt;code&gt;id&lt;/code&gt;を2回呼んだらどうなるんだとかツッコミどころが数多くあります。&lt;/p&gt;
-
-&lt;p&gt;ということで色々な回避策を先人達は考えてきました。&lt;/p&gt;
-
-&lt;h1 id=&#34;不自由なコード&#34;&gt;不自由なコード&lt;/h1&gt;
-
-&lt;p&gt;普通にやるなら&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct PersonBuilder {
-    id: u32,
-    name: String,
-    age: u32,
-    address: Option&amp;lt;String&amp;gt;,
-    zipcode: Option&amp;lt;String&amp;gt;,
-}
-
-impl PersonBuilder {
-  fn new(id: u32, name: String, age: String) -&amp;gt; Self { ... }
-  fn address(self, address: String) -&amp;gt; Self { ... }
-  fn zipcode(self, zipcode: String) -&amp;gt; Self { ... }
-  // 返り値がOptionじゃない
-  fn build(self) -&amp;gt; Person { ... }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のように&lt;code&gt;Option&lt;/code&gt;でないフィールドをコンストラクタで受け取れば安全に作れますが、コンストラクタを呼ぶ時点でいくつかフィールドが揃っている必要がある、そもそも元の構造体と何が違うんだ、など色々問題があります。&lt;/p&gt;
-
-&lt;h1 id=&#34;少しマシなコード&#34;&gt;少しマシなコード&lt;/h1&gt;
-
-&lt;p&gt;オートマトンのようにビルダーが状態遷移するコードを使うと、1つ1つの引数をビルドしつつ安全なコードが出来ます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct PersonBuilderId;
-struct PersonBuilderName{id: u32}
-struct PersonBuilderAge{id: u32, name: String}
-struct PersonBuilder {
-    id: u32,
-    name: String,
-    age: u32,
-    address: Option&amp;lt;String&amp;gt;,
-    zipcode: Option&amp;lt;String&amp;gt;,
-}
-
-impl PersonBuilderId {
-  pub fn new() -&amp;gt; Self { ... }
-  // idの次はname
-  pub fn id(self, id: u32) -&amp;gt; PersonBuilderName {
-    PersonBuilderName { id: id }
-  }
-}
-
-impl PersonBuilderName {
-  // nameの次はage
-  pub name(self, name: String) -&amp;gt; PersonBuilderAge {
-    PersonBuilderAge {
-      id: self.id,
-      name: name,
-    }
-  }
-}
-impl PersonBuilderAge {
-  // ageは最後
-  pub name(self, age: u32) -&amp;gt; PersonBuilder {
-    PersonBuilder {
-      id: self.id,
-      name: self.name,
-      age: age,
-      address: None,
-      zipcode: None,
-    }
-  }
-}
-
-impl PersonBuilder {
-  // 気持ち悪いけど PersonBuilderIdを返す
-  pub fn new -&amp;gt; PersonBuilderId { ... }
-  pub fn address(self, address: String) -&amp;gt; Self { ... }
-  pub fn zipcode(self, zipcode: String) -&amp;gt; Self { ... }
-  // これまたOptionじゃなくなってる
-  pub fn build(self) -&amp;gt; Person { ... }
-}
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これは以下のように&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;fn main() {
-  let person = PersonBuilder::new()
-         .id(1)
-         .name(&amp;quot;κeen&amp;quot;.to_string())
-         .age(24)
-         .address(&amp;quot;Tokyo&amp;quot;.to_string())
-         .build();
-  println!(&amp;quot;{:?}&amp;quot;, person)
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;と使えます(即興で書いたので試してないけど)。&lt;/p&gt;
-
-&lt;p&gt;とりあえず使えそうな気がしますが、型レベルで状態遷移をハードコードしているのでメソッドを呼び出す順番が固定されてしまいます。
-なので以下はエラーです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;fn main() {
-  let person = PersonBuilder::new()
-         // nameとidを逆順に呼び出してみる
-         .name(&amp;quot;κeen&amp;quot;.to_string())
-         .id(1)
-         .age(24)
-         .address(&amp;quot;Tokyo&amp;quot;.to_string())
-         .build();
-  println!(&amp;quot;{:?}&amp;quot;, person)
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;あとは単純に&lt;code&gt;struct PersonBuilderId&lt;/code&gt;、&lt;code&gt;struct PersonBuilderName{id: u32}&lt;/code&gt;、&lt;code&gt;struct PersonBuilderAge{id: u32, name: String}&lt;/code&gt;と作っていくのが面倒という話もあります。&lt;/p&gt;
-
-&lt;p&gt;今回はそれを改善したいという話&lt;/p&gt;
-
-&lt;h1 id=&#34;幽霊型を使ったフィールド状態&#34;&gt;幽霊型を使ったフィールド状態&lt;/h1&gt;
-
-&lt;p&gt;今回提案するビルダー型はこれです。提案するといってもどうせ既に誰かが考えてるでしょうが。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::marker::PhantomData;
-struct Empty;
-struct Filled;
-
-struct PersonBuilder&amp;lt;Id, Name, Age&amp;gt; {
-    id: Option&amp;lt;u32&amp;gt;,
-    id_state: PhantomData&amp;lt;Id&amp;gt;,
-    name: Option&amp;lt;String&amp;gt;,
-    name_state: PhantomData&amp;lt;Name&amp;gt;,
-    age: Option&amp;lt;u32&amp;gt;,
-    age_state: PhantomData&amp;lt;Age&amp;gt;,
-    address: Option&amp;lt;String&amp;gt;,
-    zipcode: Option&amp;lt;String&amp;gt;,
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://doc.rust-lang.org/std/marker/struct.PhantomData.html&#34;&gt;PhantomData&lt;/a&gt;という特殊な型を使ってビルダーに余計な型を付けています。&lt;/p&gt;
-
-&lt;p&gt;この型、最初は&lt;code&gt;Empty&lt;/code&gt;から出発します。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;impl PersonBuilder&amp;lt;Empty, Empty, Empty&amp;gt; {
-    pub fn new() -&amp;gt; Self {
-        PersonBuilder {
-            id: None,
-            id_state: PhantomData,
-            name: None,
-            name_state: PhantomData,
-            age: None,
-            age_state: PhantomData,
-            address: None,
-            zipcode: None,
-        }
-
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;そしてフィールドが埋められると対応する型がEmptyからFilledになります。&lt;/p&gt;
-
-&lt;p&gt;フィールドに&lt;code&gt;Some&lt;/code&gt;が埋められるのと同時に対応する&lt;code&gt;_state&lt;/code&gt;フィールドを&lt;code&gt;Empty&lt;/code&gt;から&lt;code&gt;Filled&lt;/code&gt;にすると整合性が崩れません。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;// Id以外、つまりNameとAgeはいじらないのでジェネリクスに
-impl&amp;lt;Name, Age&amp;gt; PersonBuilder&amp;lt;Empty, Name, Age&amp;gt; {
-    pub fn id(self, id: u32) -&amp;gt; PersonBuilder&amp;lt;Filled, Name, Age&amp;gt; {
-        PersonBuilder {
-            id: Some(id),
-            id_state: PhantomData,
-            name: self.name,
-            name_state: self.name_state,
-            age: self.age,
-            age_state: self.age_state,
-            address: self.address,
-            zipcode: self.zipcode,
-        }
-    }
-}
-impl&amp;lt;Id, Age&amp;gt; PersonBuilder&amp;lt;Id, Empty, Age&amp;gt; {
-    // 地味なテクニックとして、SringではなくてInto&amp;lt;String&amp;gt;で受けることでリテラルのStringとかも受け取れる。
-    pub fn name&amp;lt;S: Into&amp;lt;String&amp;gt;&amp;gt;(self, name: S) -&amp;gt; PersonBuilder&amp;lt;Id, Filled, Age&amp;gt; {
-        PersonBuilder {
-            id: self.id,
-            id_state: self.id_state,
-            name: Some(name.into()),
-            name_state: PhantomData,
-            age: self.age,
-            age_state: self.age_state,
-            address: self.address,
-            zipcode: self.zipcode,
-        }
-    }
-}
-
-impl&amp;lt;Id, Name&amp;gt; PersonBuilder&amp;lt;Id, Name, Empty&amp;gt; {
-    pub fn age(self, age: u32) -&amp;gt; PersonBuilder&amp;lt;Id, Name, Filled&amp;gt; {
-        PersonBuilder {
-            id: self.id,
-            id_state: self.id_state,
-            name: self.name,
-            name_state: self.name_state,
-            age: Some(age),
-            age_state: PhantomData,
-            address: self.address,
-            zipcode: self.zipcode,
-        }
-    }
-}
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;Option&lt;/code&gt;のままで構わないフィールドについては雑で構いません。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;impl&amp;lt;Id, Name, Age&amp;gt; PersonBuilder&amp;lt;Id, Name, Age&amp;gt; {
-    pub fn address&amp;lt;S: Into&amp;lt;String&amp;gt;&amp;gt;(mut self, address: S) -&amp;gt; Self {
-        self.address = Some(address.into());
-        self
-    }
-
-    pub fn zipcode&amp;lt;S: Into&amp;lt;String&amp;gt;&amp;gt;(mut self, zipcode: S) -&amp;gt; Self {
-        self.zipcode = Some(zipcode.into());
-        self
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;そして必須フィールド全てが満たされた時にだけ&lt;code&gt;build&lt;/code&gt;が呼べます。&lt;code&gt;unwrap&lt;/code&gt;を呼んでますが安全であることに注意して下さい。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;impl PersonBuilder&amp;lt;Filled, Filled, Filled&amp;gt; {
-    pub fn build(self) -&amp;gt; Person {
-        Person {
-            id: self.id.unwrap(),
-            name: self.name.unwrap(),
-            age: self.age.unwrap(),
-            address: self.address,
-            zipcode: self.zipcode,
-        }
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;こうすることで、呼び出しが非常に自由になります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
-    let person = PersonBuilder::new()
-        .age(24)
-        .id(1)
-        .address(&amp;quot;Tokyo&amp;quot;)
-        .name(&amp;quot;κeen&amp;quot;)
-        .build();
-    println!(&amp;quot;{:?}&amp;quot;, person);
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;メソッドは自由に組み換えられますが、必須フィールドがなかったら&lt;code&gt;build&lt;/code&gt;が呼べません（コンパイルエラー）になります。&lt;/p&gt;
-
-&lt;p&gt;これは応用も出来て、それぞれの状態が独立しているので例えば「2つのVector合計3つ以上要素が入っていたら」、とか「R、G、BあるいはH、S、Vの3つが揃っていたら」とかオートマトンではエンコードしづらいものでも比較的楽に書けます。&lt;/p&gt;
-
-&lt;p&gt;ということで便利なbuilderが出来ました。めでたしめでたし。といいたいところですが、ちょっとコードが冗長ですよね。マクロで生成なんかも出来るのですがあまりやりたくありません。ということで「ちょっとやりすぎな」Builderパターンでした。&lt;/p&gt;
-
-&lt;h1 id=&#34;some-like-it-unsafe&#34;&gt;Some like it unsafe&lt;/h1&gt;
-
-&lt;p&gt;上のコード、実はもうちょっと短く書けます。ただし&lt;code&gt;unsafe&lt;/code&gt;な機能を使いますが。&lt;/p&gt;
-
-&lt;p&gt;こう書いていたものが&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;impl&amp;lt;Name, Age&amp;gt; PersonBuilder&amp;lt;Empty, Name, Age&amp;gt; {
-    pub fn id(self, id: u32) -&amp;gt; PersonBuilder&amp;lt;Filled, Name, Age&amp;gt; {
-        PersonBuilder {
-            id: Some(id),
-            id_state: PhantomData,
-            name: self.name,
-            name_state: self.name_state,
-            age: self.age,
-            age_state: self.age_state,
-            address: self.address,
-            zipcode: self.zipcode,
-        }
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://doc.rust-lang.org/std/mem/fn.transmute.html&#34;&gt;&lt;code&gt;std::mem::transmute&lt;/code&gt;&lt;/a&gt;を使うことで2行になります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::mem::transmute;
-
-impl&amp;lt;Name, Age&amp;gt; PersonBuilder&amp;lt;Empty, Name, Age&amp;gt; {
-    pub fn id(mut self, id: u32) -&amp;gt; PersonBuilder&amp;lt;Filled, Name, Age&amp;gt; {
-        self.id = Some(id);
-        unsafe { transmute(self) }
-    }
-}
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;すごいですね。
-しかし、案外しょっちゅうtransmuteはミスなどで間違った変換をしてしまう（上記で言えばidフィールドを更新したのにname_stateの型を変更してしまう）上に型検査で弾けないので個人的にはあまりおすすめ出来ません。
-これも「ちょっとやりすぎ」なTipsでした。&lt;/p&gt;
-
-&lt;h1 id=&#34;2017-02-11t13-18-58z-09-00-追記&#34;&gt;2017-02-11T13:18:58Z+09:00 追記&lt;/h1&gt;
-
-&lt;p&gt;qnighyさんからもっと便利な方法の提案がありました。&lt;/p&gt;
-
-&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;こう &lt;a href=&#34;https://t.co/undNgEM2IQ&#34;&gt;https://t.co/undNgEM2IQ&lt;/a&gt; やったらunwrapしなくてすみそう？ / “RustのちょっとやりすぎなBuilderパターン | κeenのHappy Hacκing Blog” &lt;a href=&#34;https://t.co/ogDOpYifjh&#34;&gt;https://t.co/ogDOpYifjh&lt;/a&gt;&lt;/p&gt;&amp;mdash; Masaki⊣Hara (@qnighy) &lt;a href=&#34;https://twitter.com/qnighy/status/830053476096843776&#34;&gt;2017年2月10日&lt;/a&gt;&lt;/blockquote&gt;
-&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
-
-&lt;p&gt;実際のコードはこちら。&lt;/p&gt;
-
-&lt;script src=&#34;https://gist.github.com/qnighy/e7a833eebd57ef778eaff3a8ab3649d7.js&#34;&gt;&lt;/script&gt;
-
-&lt;p&gt;transmuteを使ったサボった実装は出来なくなるけどそもそも余計なフィールドを使う必要がなくなるので手軽ですね。&lt;/p&gt;
-
-&lt;p&gt;qnighyさんありがとうございました。&lt;/p&gt;</description>
+&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>Rustのモジュールの使い方</title>
-      <link>/blog/2017/01/15/rustnomoju_runokirikata</link>
+      <link>/blog/2017/01/15/rustnomoju_runokirikata/</link>
       <pubDate>Sun, 15 Jan 2017 20:52:14 +0900</pubDate>
       
-      <guid>/blog/2017/01/15/rustnomoju_runokirikata</guid>
-      <description>&lt;p&gt;κeenです。たまにRustのモジュールが分かりづらいとの声を聞くので解説しますね。&lt;/p&gt;
-
-&lt;p&gt;
-とりあえずサンプルプロジェクトを作ります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo new module
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;エラいのは-lib-rs-と-main-rs&#34;&gt;エラいのは &lt;code&gt;lib.rs&lt;/code&gt; と &lt;code&gt;main.rs&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;モジュールの話をする前にクレートの話をしないといけません。
-クレートはRustのプログラムの一番大きな単位です。
-大きく分けてライブラリを作るlibクレートと実行可能ファイルを作るbinクレートがあります。&lt;/p&gt;
-
-&lt;p&gt;libクレートならば&lt;code&gt;lib.rs&lt;/code&gt;が、binクレートならば&lt;code&gt;main.rs&lt;/code&gt;がルートにあたるファイルです。ここから辿れるモジュールが全てです。プロジェクトにファイルが存在していてもこれらから辿れなかったらコンパイルされません。&lt;/p&gt;
-
-&lt;h1 id=&#34;モジュールの作り方は3種類&#34;&gt;モジュールの作り方は3種類&lt;/h1&gt;
-
-&lt;ol&gt;
-&lt;li&gt;ファイルの中にインラインで作る&lt;/li&gt;
-&lt;li&gt;1ファイルで作る&lt;/li&gt;
-&lt;li&gt;1ディレクトリで作る&lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;p&gt;のやり方があります。 1.はそんなに使われなくて、説明のために1ファイルにまとめたい時や、可視性でアレコレする時のテクニックなんかに使われます。&lt;/p&gt;
-
-&lt;p&gt;2.と3.の境界はサブモジュールを持つかどうかです。&lt;/p&gt;
-
-&lt;p&gt;2.のファイルで作る時は&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ find src
-src
-src/lib.rs
-src/new_module.rs
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のように作っておいて、lib.rsの中を&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;mod new_module;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のように&lt;code&gt;mod&lt;/code&gt;で参照してあげれば使えます。&lt;/p&gt;
-
-&lt;p&gt;3.のディレクトリの時もそんなに変わらなくて、&lt;code&gt;lib.rs&lt;/code&gt;は変わらず、ファイルを&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ find src
-src
-src/lib.rs
-src/new_module
-src/new_module/mod.rs
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のようにしてあげます。&lt;code&gt;mod.rs&lt;/code&gt;の名前はこれでないといけません。丁度サブモジュールの&lt;code&gt;new_module&lt;/code&gt;にとっての&lt;code&gt;lib.rs&lt;/code&gt;のような存在が&lt;code&gt;mod.rs&lt;/code&gt;な訳です。&lt;/p&gt;
-
-&lt;h1 id=&#34;兄弟モジュール同士の可視性&#34;&gt;兄弟モジュール同士の可視性&lt;/h1&gt;
-
-&lt;h2 id=&#34;モジュールの身分&#34;&gt;モジュールの身分&lt;/h2&gt;
-
-&lt;p&gt;さて、次のように2つのモジュールを作ってみましょう。lib.rsには&lt;code&gt;module_a&lt;/code&gt;のみ&lt;code&gt;mod&lt;/code&gt;宣言しておきます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ find src
-src
-src/lib.rs
-src/module_a.rs
-src/module_b.rs
-$ cat src/lib.rs
-mod module_a;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これで&lt;code&gt;module_a.rs&lt;/code&gt;に&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;mod module_b;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;と書くと&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo build
-   Compiling module v0.1.0 (file:///home/kim/Rust/module)
-error[E0432]: unresolved import `module_a`
- --&amp;gt; src/lib.rs:1:5
-  |
-1 | use module_a;
-  |     ^^^^^^^^ no `module_a` in the root
-
-error: aborting due to previous error
-
-error: Could not compile `module`.
-
-To learn more, run the command again with --verbose.
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;と怒られます。一番エラいのは&lt;code&gt;lib.rs&lt;/code&gt;ですから、身分の低い &lt;code&gt;module_a&lt;/code&gt;では&lt;code&gt;mod&lt;/code&gt;宣言出来ません。&lt;/p&gt;
-
-&lt;h2 id=&#34;君の名は&#34;&gt;君の名は&lt;/h2&gt;
-
-&lt;p&gt;同じ設定で、&lt;code&gt;lib.rs&lt;/code&gt;に&lt;code&gt;module_a&lt;/code&gt;と&lt;code&gt;module_b&lt;/code&gt;両方を&lt;code&gt;mod&lt;/code&gt;宣言しておきます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ find src
-src
-src/lib.rs
-src/module_a.rs
-src/module_b.rs
-$ cat src/lib.rs
-mod module_a;
-mod module_b;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;この時、&lt;code&gt;module_b&lt;/code&gt;が&lt;code&gt;lib.rs&lt;/code&gt;から見た時と&lt;code&gt;module_a.rs&lt;/code&gt;から見た時で名前が変わります。&lt;/p&gt;
-
-&lt;p&gt;lib.rsから見た時は、以下の3つが使えます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;use ::module_a;     // 絶対パス
-use module_a;       // 省略絶対パス
-use self::module_a; // 相対パス
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;self&lt;/code&gt;というのは予約語で、ディレクトリでいうところの&lt;code&gt;.&lt;/code&gt;に相当します。&lt;/p&gt;
-
-&lt;p&gt;module_a.rsからは同じく3つが使えますが、相対パスが変わります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;use ::module_a;     // 絶対パス
-use module_a;       // 省略絶対パス
-use super::module_a; // 相対パス
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;super&lt;/code&gt;も予約語で、&lt;code&gt;..&lt;/code&gt;に相当します。
-ファイルが同じディレクトリにいるので分かりづらいですが、libが1つ上の階層で、その下にmodule_aとmodule_bがぶら下がってる感じですね。&lt;/p&gt;
-
-&lt;h1 id=&#34;おじさんと隠し子&#34;&gt;おじさんと隠し子&lt;/h1&gt;
-
-&lt;p&gt;次のように、サブモジュールを作ってみます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$src
-src/lib.rs
-src/module_a
-src/module_a/mod.rs
-src/module_a/submodule.rs
-src/module_b.rs
-$ cat src/lib.rs
-mod module_a;
-mod module_b;
-$ cat src/module_a/mod.rs
-mod submodule;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;さて、この時&lt;code&gt;sumbmodule&lt;/code&gt;から見た&lt;code&gt;module_b&lt;/code&gt;の名前はどうなるでしょうか。もうお分かりかと思いますが、以下の3つです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use ::module_a;     // 絶対パス
-use module_a;       // 省略絶対パス
-use super::super::module_a; // 相対パス
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;じゃ、逆に&lt;code&gt;module_b&lt;/code&gt;から見た&lt;code&gt;submodule&lt;/code&gt;はどうなるでしょうか。実は、&lt;code&gt;module_b&lt;/code&gt;から&lt;code&gt;submodule&lt;/code&gt;は見えません（lib.rsからも見えません）。&lt;code&gt;module_a&lt;/code&gt;1つで所帯を持っているので子である&lt;code&gt;submodule&lt;/code&gt;を外に出すかは&lt;code&gt;module_a&lt;/code&gt;の一存で決まります。今回は隠し子にしている訳ですね。いくら兄弟モジュールとはいえ家庭にまでは入り込めないのです。&lt;/p&gt;
-
-&lt;p&gt;子供をちゃんと公開するには&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cat src/module_a/mod.rs
-mod submodule;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;となっていたモジュール宣言を&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cat src/module_a/mod.rs
-pub mod submodule;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;としてあげればOKです。そうすると&lt;code&gt;module_b&lt;/code&gt;からも見えて、以下の3種類で参照出来ます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use ::module_a::submodule;
-use module_a::submodule;
-use super::module_a::submodule;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;木箱の外から&#34;&gt;木箱の外から&lt;/h1&gt;
-
-&lt;p&gt;さて、今までは1クレート内での話でした。クレートの外から見るとどうなるでしょうか。&lt;/p&gt;
-
-&lt;p&gt;新たに&lt;code&gt;main.rs&lt;/code&gt;を追加しましょう。先程 &lt;code&gt;lib.rs&lt;/code&gt;と&lt;code&gt;main.rs&lt;/code&gt;がエラいと話しましたが、どちらも別々のクレートを作るので&lt;code&gt;main.rs&lt;/code&gt;は完全にクレートの外です。&lt;/p&gt;
-
-&lt;p&gt;こんな感じですね。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ find src
-src
-src/lib.rs
-src/main.rs
-src/module_a
-src/module_a/mod.rs
-src/module_a/submodule.rs
-src/module_b.rs
-$ cat src/lib.rs
-mod module_a;
-mod module_b;
-$ cat src/module_a/mod.rs
-pub mod submodule;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;まず、外部のクレートを参照するには&lt;code&gt;extern crate&lt;/code&gt;を書く必要があります。あとまあ、binクレートなので&lt;code&gt;main&lt;/code&gt;関数も必要ですね。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cat src/main.rs
-extern carte module;
-fn main() {}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;では、&lt;code&gt;module_b&lt;/code&gt;はどういう名前で見えるでしょうか。見えません。一番エラい&lt;code&gt;lib.rs&lt;/code&gt;が&lt;code&gt;module_b&lt;/code&gt;を&lt;code&gt;pub&lt;/code&gt;にしていないのでクレートの外からは見えなくなっています。見たければ、&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cat src/lib.rs
-mod module_a;
-pub mod module_b;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のようにします。&lt;/p&gt;
-
-&lt;p&gt;さて、これでmain.rsからどのように見えるかというと。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;use ::module::module_b;
-use module::module_b;
-use self::module::module_b;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のように気持的にルート直下にクレートがモジュールとして配置されたように見えます。&lt;/p&gt;
-
-&lt;h1 id=&#34;家出&#34;&gt;家出&lt;/h1&gt;
-
-&lt;p&gt;さて、同じように&lt;code&gt;lib.rs&lt;/code&gt;で&lt;code&gt;module_a&lt;/code&gt;を&lt;code&gt;pub mod&lt;/code&gt;すれば&lt;code&gt;module::module_a::submodule&lt;/code&gt;も参照出来るようになります。ところで、例えば&lt;code&gt;module_a&lt;/code&gt;は外に出さずに&lt;code&gt;submodule&lt;/code&gt;だけを公開したい時にはどうしたらいいでしょうか。そんなケースあるのかと疑問に思うかもしれませんが、あります。同じクレートであっても&lt;code&gt;pub&lt;/code&gt;にしないとサブモジュールにアクセス出来ないことを思い出して下さい。そうすると&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub mod submodule;
-pub mod internal_submodule_a;
-pub mod internal_submodule_b;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;みたいなケースが発生するのは想像出来ると思います。そういう時は、&lt;code&gt;lib.rs&lt;/code&gt;側でどうにかいじれます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cat src/lib.rs
-mod module_a;
-pub mod module_b;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;となっていると思いますが、&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;$ cat src/lib.rs
-mod module_a;
-pub mod module_b;
-
-pub use module_a::submodule;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;と、&lt;code&gt;pub use&lt;/code&gt; を加えてあげることで&lt;code&gt;module_a&lt;/code&gt;の下から出すことが出来ます。&lt;/p&gt;
-
-&lt;p&gt;これを&lt;code&gt;main.rs&lt;/code&gt;から使う時は&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use module::submodule;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のように名字の&lt;code&gt;module_a&lt;/code&gt;が取れます。&lt;/p&gt;
-
-&lt;p&gt;さらに踏み込めば、&lt;code&gt;use&lt;/code&gt;は&lt;code&gt;as&lt;/code&gt;を使ってリネーム出来るので&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;$ cat src/lib.rs
-mod module_a;
-pub mod module_b;
-
-pub use module_a::submodule as module_c;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のようにリネーム&lt;code&gt;use&lt;/code&gt;してあげれば&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use module::module_c;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のように参照することも出来ます。完全に籍を外れて名前の上では別人ですね。&lt;/p&gt;
-
-&lt;p&gt;実装する時の都合とAPIとして公開する時の都合が違うので公開用にいじれる作りになってるんですね。&lt;/p&gt;
-
-&lt;h1 id=&#34;lib-rsとmain-rs&#34;&gt;lib.rsとmain.rs&lt;/h1&gt;
-
-&lt;p&gt;上では&lt;code&gt;lib.rs&lt;/code&gt;を使って説明しましたが、&lt;code&gt;main.rs&lt;/code&gt;でも同じことが出来ます。&lt;/p&gt;
-
-&lt;p&gt;さて、ここからはスタイルの話ですが、私がRustを書く時は&lt;code&gt;main.rs&lt;/code&gt;の中に&lt;code&gt;mod&lt;/code&gt;を書くことはないです。必ず&lt;code&gt;lib.rs&lt;/code&gt;を作って、そこでライブラリとしてまとめてから&lt;code&gt;main.rs&lt;/code&gt;で使います。「アプリケーションはアプリケーションを記述するための巨大なDSLとそれを使った小さな実装からなる」という思想ですね。明示的に境界を作ることで自然とAPIを設計出来るのでコードが整理しやすくなります。&lt;/p&gt;
-
-&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;code&gt;lib.rs&lt;/code&gt;と&lt;code&gt;main.rs&lt;/code&gt;が一番エラい。&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;mod&lt;/code&gt; で「モジュールがある」宣言&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;pub mod&lt;/code&gt; で加えて上位のモジュールにも公開&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;self&lt;/code&gt;と&lt;code&gt;super&lt;/code&gt;の予約語&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;pub use&lt;/code&gt; で改名&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;力尽きてテストのためのモジュールの話が出来なかったので&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/testing.html#tests-%E3%83%A2%E3%82%B8%E3%83%A5%E3%83%BC%E3%83%AB&#34;&gt;ドキュメント&lt;/a&gt;を読んでみて下さい。&lt;/p&gt;
-
-&lt;p&gt;因みに&lt;a href=&#34;https://github.com/BurntSushi/fst/blob/master/src/lib.rs&#34;&gt;これ&lt;/a&gt;のようにテクニックが詰まった&lt;code&gt;lib.rs&lt;/code&gt;ファイルなんかも存在するので参考にどうぞ。&lt;/p&gt;</description>
+      <guid>/blog/2017/01/15/rustnomoju_runokirikata/</guid>
+      <description>&lt;p&gt;κeenです。たまにRustのモジュールが分かりづらいとの声を聞くので解説しますね。&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>気付いたらRustの環境構築がかなり楽になってた</title>
-      <link>/blog/2016/12/29/kizuitararustnokankyoukouchikugakanarirakuninatteta</link>
+      <link>/blog/2016/12/29/kizuitararustnokankyoukouchikugakanarirakuninatteta/</link>
       <pubDate>Thu, 29 Dec 2016 11:52:55 +0900</pubDate>
       
-      <guid>/blog/2016/12/29/kizuitararustnokankyoukouchikugakanarirakuninatteta</guid>
+      <guid>/blog/2016/12/29/kizuitararustnokankyoukouchikugakanarirakuninatteta/</guid>
       <description>&lt;p&gt;κeenです。ここのところRustの開発ツール回りでリリースが続いてセットアップが楽になってるようだったので最新の情報をお届けします。&lt;/p&gt;
 
-&lt;p&gt;&lt;/p&gt;
-
-&lt;p&gt;とりあえず私は既存の環境があるので一旦全て破棄してから再度セットアップしてみます。&lt;/p&gt;
-
-&lt;h1 id=&#34;rustのインストール&#34;&gt;Rustのインストール&lt;/h1&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://rustup.rs/&#34;&gt;rustup.rs - The Rust toolchain installer&lt;/a&gt;がリリースされたので以下で一発です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ curl https://sh.rustup.rs -sSf | sh
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;そして&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;source $HOME/.cargo/env
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;をシェルのrcファイルに書き加えたらOKです。
-今のシェルにも反映するには同じく上記のコマンドを打ちます。&lt;/p&gt;
-
-&lt;h1 id=&#34;周辺ツールのインストール&#34;&gt;周辺ツールのインストール&lt;/h1&gt;
-
-&lt;p&gt;cargoがあるので楽ですね&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;# コードフォーマッタ
-$ cargo install rustfmt
-# 補完、定義ジャンプなど
-$ cargo install racer
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;まあまあ時間がかかります。&lt;/p&gt;
-
-&lt;h1 id=&#34;エディタ-emacs-の設定&#34;&gt;エディタ(Emacs)の設定&lt;/h1&gt;
-
-&lt;p&gt;私がEmacsを使ってるのでEmacsの設定を。&lt;/p&gt;
-
-&lt;p&gt;まず、必要パッケージをインストールします。&lt;/p&gt;
-
-&lt;p&gt;&lt;del&gt;&lt;code&gt;racer&lt;/code&gt; &lt;code&gt;rustfmt&lt;/code&gt; &lt;code&gt;flycheck-rust&lt;/code&gt; をインストールします。&lt;/del&gt;&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;racer&lt;/code&gt; &lt;code&gt;flycheck-rust&lt;/code&gt; をインストールします。rust-modeにrustfmtの機能が含まれているようでした。&lt;/p&gt;
-
-&lt;blockquote class=&#34;twitter-tweet&#34; data-conversation=&#34;none&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;&lt;a href=&#34;https://twitter.com/blackenedgold&#34;&gt;@blackenedgold&lt;/a&gt; rustfmtを emacsから使うの rust-modeが現在サポートしているので, rustfmt.elパッケージは不要ですね. rust-format-on-saveが non-nilなら保存時に rustfmtが実行されます.&lt;/p&gt;&amp;mdash; Syohei YOSHIDA (@syohex) &lt;a href=&#34;https://twitter.com/syohex/status/814354653672415232&#34;&gt;2016年12月29日&lt;/a&gt;&lt;/blockquote&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-emacs-lisp&#34;&gt;;;; racerやrustfmt、コンパイラにパスを通す
-(add-to-list &#39;exec-path (expand-file-name &amp;quot;~/.cargo/bin/&amp;quot;))
-;;; rust-modeでrust-format-on-saveをtにすると自動でrustfmtが走る
-(eval-after-load &amp;quot;rust-mode&amp;quot;
-  &#39;(setq-default rust-format-on-save t))
-;;; rustのファイルを編集するときにracerとflycheckを起動する
-(add-hook &#39;rust-mode-hook (lambda ()
-                            (racer-mode)
-                            (flycheck-rust-setup)))
-;;; racerのeldocサポートを使う
-(add-hook &#39;racer-mode-hook #&#39;eldoc-mode)
-;;; racerの補完サポートを使う
-(add-hook &#39;racer-mode-hook (lambda ()
-                             (company-mode)
-                             ;;; この辺の設定はお好みで
-                             (set (make-variable-buffer-local &#39;company-idle-delay) 0.1)
-                             (set (make-variable-buffer-local &#39;company-minimum-prefix-length) 0)))
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;とりあえずこれでセットアップ完了です。racerの最新版でrustのソースコードの位置を設定しなくてよくなったので簡潔になりましたね。&lt;/p&gt;
-
-&lt;p&gt;racer-modeは補完をしてくれる他、&lt;code&gt;M-.&lt;/code&gt;で定義元ジャンプ、&lt;code&gt;M-,&lt;/code&gt;でジャンプ元に戻れます。
-あとは&lt;code&gt;M-x racer-describe&lt;/code&gt;でポイント位置にあるシンボルのrustdocを(Emacs内で)表示してくれます。&lt;/p&gt;
-
-&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;おお! racerでEmacs内でrustdocレンダ出来るようになってる！便利！！&lt;br&gt;&lt;br&gt;Rustdoc Meets The Self-Documenting Editor&lt;a href=&#34;https://t.co/gDEHl2fSfx&#34;&gt;https://t.co/gDEHl2fSfx&lt;/a&gt; &lt;a href=&#34;https://t.co/sdrX9OoEnr&#34;&gt;pic.twitter.com/sdrX9OoEnr&lt;/a&gt;&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/770796719185408000&#34;&gt;2016年8月31日&lt;/a&gt;&lt;/blockquote&gt;
-&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
-
-&lt;p&gt;その他は放っておくと勝手に機能してくれるので考えることが少なくていいですね。&lt;/p&gt;
-
-&lt;h1 id=&#34;その他便利ツール&#34;&gt;その他便利ツール&lt;/h1&gt;
-
-&lt;p&gt;セットアップがあっけなかったのでついでに入れておくと便利なツールをいくつか紹介します。&lt;/p&gt;
-
-&lt;h2 id=&#34;cargo-edit&#34;&gt;cargo-edit&lt;/h2&gt;
-
-&lt;p&gt;インストールは&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo install cargo-edit
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;「libcクレートの最新版に依存したい」なんて時に一々libcの最新版を確認するのは面倒ですよね。そんなときにcargo-editがあれば&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo add libc
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;で &lt;code&gt;Cargo.toml&lt;/code&gt; に追記してくれます。&lt;/p&gt;
-
-&lt;h2 id=&#34;cargo-script&#34;&gt;cargo-script&lt;/h2&gt;
-
-&lt;p&gt;インストールは&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo install cargo-script
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ちょっとした実験スクリプトとかをコンパイル→実行のステップを踏まずにいきなり実行出来ます。
-&lt;code&gt;cargo script FILE&lt;/code&gt;でファイルを実行出来ます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cat &amp;lt;&amp;lt;&#39;EOF&#39; &amp;gt; hello.rs
-fn main() {
-    println!(&amp;quot;hello, script&amp;quot;)
-}
-EOF
-$ cargo script hello.rs
-   Compiling hello v0.1.0 (file:///home/kim/.cargo/.cargo/script-cache/file-hello-f6b1735a519bb659)
-    Finished release [optimized] target(s) in 0.15 secs
-hello, script
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;というふうに使います。&lt;/p&gt;
-
-&lt;p&gt;シェルのrcファイルで&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;alias rust=&#39;cargo-script&#39;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;としておくと吉。&lt;/p&gt;
-
-&lt;h2 id=&#34;cargo-update&#34;&gt;cargo-update&lt;/h2&gt;
-
-&lt;p&gt;インストールは&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo install cargo-update
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;今までインストールしたバイナリのアップデートを出来ます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo install-update -a
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;以上&lt;/p&gt;</description>
+&lt;p&gt;&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>Rustのライフタイムを使ったスコープ解析</title>
-      <link>/blog/2016/12/24/rustnoraifutaimuwotsukattasuko_pukaiseki</link>
+      <link>/blog/2016/12/24/rustnoraifutaimuwotsukattasuko_pukaiseki/</link>
       <pubDate>Sat, 24 Dec 2016 22:51:46 +0900</pubDate>
       
-      <guid>/blog/2016/12/24/rustnoraifutaimuwotsukattasuko_pukaiseki</guid>
+      <guid>/blog/2016/12/24/rustnoraifutaimuwotsukattasuko_pukaiseki/</guid>
       <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2016/rust-lang-2&#34;&gt;Rust その2 Advent Calendar 2016 - Qiita&lt;/a&gt;の25日目の記事です。&lt;/p&gt;
 
 &lt;p&gt;κeenです。大トリに小ネタで申し訳ないのですが最近書いたコードでちょっと便利だなと思ったテクニックを紹介します。&lt;/p&gt;
 
-&lt;p&gt;&lt;/p&gt;
-
-&lt;p&gt;次のような言語のインタプリタを作ることを考えます。意味論はエスパーして下さい。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;x = 1
-y = 2
-println(&amp;quot;x = &amp;quot;, x)
-println(&amp;quot;y = &amp;quot;, y)
-
-println(&amp;quot;--&amp;quot;)
-
-{
-    x = 3
-    println(&amp;quot;x = &amp;quot;, x)
-    println(&amp;quot;y = &amp;quot;, y)
-}
-
-println(&amp;quot;--&amp;quot;)
-
-println(&amp;quot;x = &amp;quot;, x)
-println(&amp;quot;y = &amp;quot;, y)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;この実行結果は&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;x = 1
-y = 2
---
-x = 3
-y = 2
---
-x = 1
-y = 2
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;になりますね。このインタプリタをRustで作りましょう。&lt;/p&gt;
-
-&lt;h1 id=&#34;初期実装&#34;&gt;初期実装&lt;/h1&gt;
-
-&lt;p&gt;雛形はこんなもんでしょうか。後でリファレンスが出てきてややこしくなるので値は全て所有権を貰っています。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;#[derive(Debug, Clone)]
-struct AST(Vec&amp;lt;Stmt&amp;gt;);
-
-#[derive(Debug, Clone)]
-enum Stmt {
-    Subst(String, Expr),
-    Print(Vec&amp;lt;Expr&amp;gt;),
-    Block(Vec&amp;lt;Stmt&amp;gt;),
-}
-
-
-#[derive(Debug, Clone)]
-enum Expr {
-    Str(String),
-    Num(isize),
-    Var(String),
-}
-
-
-struct Interpreter {
-    // これを実装する
-}
-
-impl Interpreter {
-    pub fn new() -&amp;gt; Self {
-        Interpreter{}
-    }
-
-    fn run(&amp;amp;mut self, ast: AST) {
-        for stmt in ast.0 {
-            self.run_stmt(stmt);
-        }
-    }
-
-    fn run_stmt(&amp;amp;mut self, stmt: Stmt) {
-        // これを実装する
-    }
-}
-
-fn main() {
-    let ast = {
-        use Stmt::*;
-        use Expr::*;
-        AST(
-            vec![
-                Subst(&amp;quot;x&amp;quot;.to_string(), Num(1)),
-                Subst(&amp;quot;y&amp;quot;.to_string(), Num(2)),
-                Print(vec![Str(&amp;quot;x = &amp;quot;.to_string()), Var(&amp;quot;x&amp;quot;.to_string())]),
-                Print(vec![Str(&amp;quot;y = &amp;quot;.to_string()), Var(&amp;quot;y&amp;quot;.to_string())]),
-                Print(vec![Str(&amp;quot;--&amp;quot;.to_string())]),
-                Block(vec![
-                    Subst(&amp;quot;x&amp;quot;.to_string(), Num(3)),
-                    Print(vec![Str(&amp;quot;x = &amp;quot;.to_string()), Var(&amp;quot;x&amp;quot;.to_string())]),
-                    Print(vec![Str(&amp;quot;y = &amp;quot;.to_string()), Var(&amp;quot;y&amp;quot;.to_string())]),
-                ]),
-                Print(vec![Str(&amp;quot;--&amp;quot;.to_string())]),
-                Print(vec![Str(&amp;quot;x = &amp;quot;.to_string()), Var(&amp;quot;x&amp;quot;.to_string())]),
-                Print(vec![Str(&amp;quot;y = &amp;quot;.to_string()), Var(&amp;quot;y&amp;quot;.to_string())]),
-            ]
-        )
-    };
-    let mut interpreter = Interpreter::new();
-
-    interpreter.run(ast);
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;(コンストラクタ関数作っときゃよかったかも)&lt;/p&gt;
-
-&lt;p&gt;今回の本質ではないのでパーサは用意してません。&lt;/p&gt;
-
-&lt;p&gt;さて、とりあえずのところ変数の管理のためにシンボルテーブルが必要です。実装しましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;//...
-
-use std::collections::HashMap;
-struct Interpreter {
-    symbol_table: HashMap&amp;lt;String, Expr&amp;gt;,
-}
-
-impl Interpreter {
-    pub fn new() -&amp;gt; Self {
-        Interpreter{
-            symbol_table: HashMap::new(),
-        }
-    }
-
-    fn add_to_scope(&amp;amp;mut self, name: String, expr: Expr) {
-        self.symbol_table.insert(name, expr);
-    }
-
-    fn find_scope(&amp;amp;self, name: &amp;amp;str) -&amp;gt; Expr {
-        self.symbol_table
-            .get(name)
-            .expect(&amp;quot;reference to unknown variable&amp;quot;)
-            .clone()
-    }
-
-  //...
-}
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;簡略化のためにcloneやpanicしてますがご愛嬌。&lt;/p&gt;
-
-&lt;p&gt;これがあれば&lt;code&gt;run_stmt&lt;/code&gt;のそれっぽい実装は出来ます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    fn run_stmt(&amp;amp;mut self, stmt: Stmt) {
-        use Stmt::*;
-
-        match stmt {
-            Subst(name, expr) =&amp;gt; {
-                let expr = self.eval(expr);
-                self.add_to_scope(name, expr);
-            },
-            Print(exprs) =&amp;gt; {
-                for expr in exprs {
-                    self.print_expr(expr);
-                }
-                println!(&amp;quot;&amp;quot;);
-            },
-            Block(stmts) =&amp;gt; {
-                for stmt in stmts {
-                    self.run_stmt(stmt);
-                }
-            },
-        }
-
-    }
-
-    fn eval(&amp;amp;self, expr: Expr) -&amp;gt; Expr {
-        use Expr::*;
-        match expr {
-            Var(v) =&amp;gt; self.find_scope(&amp;amp;v),
-            e @ Str(_) |
-            e @ Num(_) =&amp;gt; e
-        }
-    }
-
-    fn print_expr(&amp;amp;self, expr: Expr) {
-        use Expr::*;
-        match self.eval(expr) {
-            Str(ref s) =&amp;gt; print!(&amp;quot;{}&amp;quot;, s),
-            Num(ref n) =&amp;gt; print!(&amp;quot;{}&amp;quot;, n),
-            Var(_) =&amp;gt; panic!(&amp;quot;reference to unknown variable&amp;quot;) ,
-        }
-    }
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;さて、これを走らせてみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo run
-x = 1
-y = 2
---
-x = 3
-y = 2
---
-x = 3
-y = 2
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;スコープを実装していないので最後の&lt;code&gt;x&lt;/code&gt;が3になっていますね。スコープを実装しましょう。&lt;/p&gt;
-
-&lt;p&gt;スコープを実装するには簡単にはハッシュテーブルを複数持てば良さそうです。
-3段にネストしたスコープなら3つのハッシュテーブルを持ちます。
-そしてスコープを抜けた時にそのスコープに対応するハッシュテーブルを消せば（忘れれば）良さそうです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct Interpreter {
-   // スコープに対応したテーブル達。
-   symbol_tables: Vec&amp;lt;HashMap&amp;lt;String, Expr&amp;gt;&amp;gt;,
-   // 今どのスコープを指しているか。
-   // スコープを抜けてもベクトルは縮まないのでこれが必要。
-   pos: usize,
-}
-
-impl Interpreter {
-    pub fn new() -&amp;gt; Self {
-        // 新しいフィールドの初期化
-        Interpreter{
-            symbol_tables: Vec::new(),
-            // ややこしくなるが、0で初期化しているのでpos-1番目のハッシュマップが現スコープのテーブルになる
-            pos: 0,
-        }
-    }
-
-    // スコープに入る処理。
-    fn in_scope(&amp;amp;mut self) {
-        let pos = self.pos;
-        // スコープから抜けてもハッシュマップは消えないので
-        // 入る → 出る → 入るをしたときに既にテーブルがある場合が出てくる。
-        // 必要なテーブルが既にある場合とない場合で条件分岐
-        if self.symbol_tables.len() &amp;lt;= pos {
-            self.symbol_tables.push(HashMap::new())
-        } else {
-            // 既にテーブルがある場合は古い情報を消す
-            self.symbol_tables[pos - 1].clear()
-        }
-        // ポジションは忘れずインクリメント
-        self.pos += 1;
-    }
-
-    // スコープから抜ける処理
-    fn out_scope(&amp;amp;mut self) {
-        // スコープから抜けるのはデクリメントのみでOK
-        self.pos -= 1;
-    }
-
-    pub fn run(&amp;amp;mut self, ast: AST) {
-        // in_scope が増えた
-        self.in_scope();
-        for stmt in ast.0 {
-            self.run_stmt(stmt);
-        }
-        // out_scope が増えた
-        self.out_scope();
-    }
-
-    fn add_to_scope(&amp;amp;mut self, name: String, expr: Expr) {
-        // 現在のスコープに変数を入れる
-        let pos = self.pos - 1;
-        self.symbol_tables[pos].insert(name, expr);
-    }
-
-    fn find_scope(&amp;amp;self, name: &amp;amp;str) -&amp;gt; Expr {
-        let pos = self.pos;
-        // 一番内側(現在)のスコープから外側のスコープの順に調べていく。
-        // `[0..pos]` や `rev()` に注意。
-        for table in self.symbol_tables[0..pos].iter().rev() {
-            if let Some(e) = table.get(name) {
-                return e.clone()
-            }
-        }
-        // どこにもなければ未定義変数
-        panic!(&amp;quot;reference to unknown variable&amp;quot;)
-    }
-
-    fn run_stmt(&amp;amp;mut self, stmt: Stmt) {
-        use Stmt::*;
-
-        match stmt {
-            // ..
-            Block(stmts) =&amp;gt; {
-                // in_scope が増えた
-                self.in_scope();
-                for stmt in stmts {
-                    self.run_stmt(stmt);
-                }
-                // out_scope が増えた
-                self.out_scope();
-            },
-        }
-
-    }
-
-    // ..
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これで走らせてみます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo run
-x = 1
-y = 2
---
-x = 3
-y = 2
---
-x = 1
-y = 2
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;はい。動きました。&lt;/p&gt;
-
-&lt;h1 id=&#34;scope-の導入&#34;&gt;&lt;code&gt;Scope&lt;/code&gt; の導入&lt;/h1&gt;
-
-&lt;p&gt;さて、上のコードでは&lt;code&gt;in_scope&lt;/code&gt;と&lt;code&gt;out_scope&lt;/code&gt;が対で現れました。というか現れないといけません。
-でもプログラミングエラーで&lt;code&gt;out_scope&lt;/code&gt;を忘れるなんてことはよくある話です（現に私はこのサンプルを書いてて間違えかけました）。これをRustのライフタイムの仕組みに乗っけて自動で解決しようというのが今回のお話。&lt;/p&gt;
-
-&lt;p&gt;手法は簡単で、とりあえず&lt;code&gt;Scope&lt;/code&gt;という型を用意します。そして&lt;code&gt;new&lt;/code&gt;する時に&lt;code&gt;in_scope&lt;/code&gt;を呼んであげて、&lt;code&gt;drop&lt;/code&gt;する時に&lt;code&gt;out_scope&lt;/code&gt;を呼んであげます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::ops::Drop;
-struct Scope&amp;lt;&#39;a&amp;gt;(&amp;amp;&#39;a mut Interpreter);
-
-impl &amp;lt;&#39;a&amp;gt;Scope&amp;lt;&#39;a&amp;gt; {
-    fn new(inpr: &amp;amp;&#39;a mut Interpreter) -&amp;gt; Self {
-        inpr.in_scope();
-        Scope(inpr)
-    }
-}
-
-impl &amp;lt;&#39;a&amp;gt;Drop for Scope&amp;lt;&#39;a&amp;gt; {
-    fn drop(&amp;amp;mut self) {
-        self.0.out_scope()
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;さて、この&lt;code&gt;&amp;amp;mut Interpreter&lt;/code&gt;で参照しているというのが丁度良くて、Scopeの分岐というのを防ぐことが出来ます。こういうやつですね。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;let scope1 = Scope::new(&amp;amp;mut intr);
-let scope2 = Scope::new(&amp;amp;mut intr); // error: 既に&amp;amp;mut されている変数は&amp;amp;mut出来ない
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;では、これを使ってみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    pub fn run(&amp;amp;mut self, ast: AST) {
-        // in_scopeをScope::new()に置き換えた
-        let scope = Scope::new(self);
-        for stmt in ast.0 {
-            // scopeに渡してしまったのでselfはsope.0で参照する必要がある
-            scope.0.run_stmt(stmt);
-        }
-        // out_scopeは自動で呼ばれる
-    }
-
-    // run_stmtのBlockも同様に書き換える
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo run
-x = 1
-y = 2
---
-x = 3
-y = 2
---
-x = 1
-y = 2
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;動きました。でも、あまり&lt;code&gt;scope.0&lt;/code&gt;なんて使いたくないですよね。出来れば透過的に扱いたい。
-そんなときのために&lt;code&gt;Deref&lt;/code&gt; と &lt;code&gt;DerefMut&lt;/code&gt; です。Rustは型が合わなければ自動で&lt;code&gt;deref&lt;/code&gt;を呼んでくれます。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;Deref&lt;/code&gt; と &lt;code&gt;DerefMut&lt;/code&gt; を実装しましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::ops::{Deref, DerefMut};
-impl &amp;lt;&#39;a&amp;gt; Deref for Scope&amp;lt;&#39;a&amp;gt; {
-    type Target = Interpreter;
-    fn deref(&amp;amp;self) -&amp;gt; &amp;amp;Interpreter {
-        self.0
-    }
-}
-
-impl &amp;lt;&#39;a&amp;gt; DerefMut for Scope&amp;lt;&#39;a&amp;gt; {
-    fn deref_mut(&amp;amp;mut self) -&amp;gt; &amp;amp;mut Interpreter {
-        self.0
-    }
-}
-
-impl Interpreter {
-    // ..
-
-    pub fn run(&amp;amp;mut self, ast: AST) {
-        // deref_mutするために mutをつける
-        let mut scope = Scope::new(self);
-        for stmt in ast.0 {
-            // scope.0しなくてもInterpreterのメソッドが呼べる
-            scope.run_stmt(stmt);
-        }
-    }
-
-   // ..
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;生成と消滅が対になるものはRustのオブジェクトで管理出来るよ&lt;/li&gt;
-&lt;li&gt;シンプルなラッパー型は&lt;code&gt;Deref&lt;/code&gt;や&lt;code&gt;DerefMut&lt;/code&gt;を実装しておくと便利だよ&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h1 id=&#34;参考&#34;&gt;参考&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/drop.html&#34;&gt;Drop&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/deref-coercions.html&#34;&gt;&lt;code&gt;Deref&lt;/code&gt; による型強制&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h1 id=&#34;付録a&#34;&gt;付録A&lt;/h1&gt;
-
-&lt;p&gt;最終的なソースコード全文を掲載します。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;#[derive(Debug, Clone)]
-struct AST(Vec&amp;lt;Stmt&amp;gt;);
-
-#[derive(Debug, Clone)]
-enum Stmt {
-    Subst(String, Expr),
-    Print(Vec&amp;lt;Expr&amp;gt;),
-    Block(Vec&amp;lt;Stmt&amp;gt;),
-}
-
-
-#[derive(Debug, Clone)]
-enum Expr {
-    Str(String),
-    Num(isize),
-    Var(String),
-}
-
-
-use std::collections::HashMap;
-struct Interpreter {
-   symbol_tables: Vec&amp;lt;HashMap&amp;lt;String, Expr&amp;gt;&amp;gt;,
-   pos: usize,
-}
-
-use std::ops::{Drop, Deref, DerefMut};
-struct Scope&amp;lt;&#39;a&amp;gt;(&amp;amp;&#39;a mut Interpreter);
-
-impl &amp;lt;&#39;a&amp;gt;Scope&amp;lt;&#39;a&amp;gt; {
-    fn new(inpr: &amp;amp;&#39;a mut Interpreter) -&amp;gt; Self {
-        inpr.in_scope();
-        Scope(inpr)
-    }
-}
-
-impl &amp;lt;&#39;a&amp;gt;Drop for Scope&amp;lt;&#39;a&amp;gt; {
-    fn drop(&amp;amp;mut self) {
-        self.0.out_scope()
-    }
-}
-
-impl &amp;lt;&#39;a&amp;gt; Deref for Scope&amp;lt;&#39;a&amp;gt; {
-    type Target = Interpreter;
-    fn deref(&amp;amp;self) -&amp;gt; &amp;amp;Interpreter {
-        self.0
-    }
-}
-
-impl &amp;lt;&#39;a&amp;gt; DerefMut for Scope&amp;lt;&#39;a&amp;gt; {
-    fn deref_mut(&amp;amp;mut self) -&amp;gt; &amp;amp;mut Interpreter {
-        self.0
-    }
-}
-
-impl Interpreter {
-    pub fn new() -&amp;gt; Self {
-        Interpreter{
-            symbol_tables: Vec::new(),
-            pos: 0,
-        }
-    }
-
-    fn in_scope(&amp;amp;mut self) {
-        let pos = self.pos;
-        if self.symbol_tables.len() &amp;lt;= pos {
-            self.symbol_tables.push(HashMap::new())
-        } else {
-            self.symbol_tables[pos - 1].clear()
-        }
-        self.pos += 1;
-    }
-
-    fn out_scope(&amp;amp;mut self) {
-        self.pos -= 1;
-    }
-
-    pub fn run(&amp;amp;mut self, ast: AST) {
-        let mut scope = Scope::new(self);
-        for stmt in ast.0 {
-            scope.run_stmt(stmt);
-        }
-    }
-
-    fn add_to_scope(&amp;amp;mut self, name: String, expr: Expr) {
-        let pos = self.pos - 1;
-        self.symbol_tables[pos].insert(name, expr);
-    }
-
-    fn find_scope(&amp;amp;self, name: &amp;amp;str) -&amp;gt; Expr {
-        let pos = self.pos;
-        for table in self.symbol_tables[0..pos].iter().rev() {
-            if let Some(e) = table.get(name) {
-                return e.clone()
-            }
-        }
-        panic!(&amp;quot;reference to unknown variable&amp;quot;)
-    }
-
-    fn run_stmt(&amp;amp;mut self, stmt: Stmt) {
-        use Stmt::*;
-
-        match stmt {
-            Subst(name, expr) =&amp;gt; {
-                let expr = self.eval(expr);
-                self.add_to_scope(name, expr);
-            },
-            Print(exprs) =&amp;gt; {
-                for expr in exprs {
-                    self.print_expr(expr);
-                }
-                println!(&amp;quot;&amp;quot;);
-            },
-            Block(stmts) =&amp;gt; {
-                let scope = Scope::new(self);
-
-                for stmt in stmts {
-                    scope.0.run_stmt(stmt);
-                }
-            },
-        }
-
-    }
-
-    fn eval(&amp;amp;self, expr: Expr) -&amp;gt; Expr {
-        use Expr::*;
-        match expr {
-            Var(v) =&amp;gt; self.find_scope(&amp;amp;v),
-            e @ Str(_) |
-            e @ Num(_) =&amp;gt; e
-        }
-    }
-
-    fn print_expr(&amp;amp;self, expr: Expr) {
-        use Expr::*;
-        match self.eval(expr) {
-            Str(ref s) =&amp;gt; print!(&amp;quot;{}&amp;quot;, s),
-            Num(ref n) =&amp;gt; print!(&amp;quot;{}&amp;quot;, n),
-            Var(_) =&amp;gt; panic!(&amp;quot;reference to unknown variable&amp;quot;) ,
-        }
-    }
-}
-
-fn main() {
-    let ast = {
-        use Stmt::*;
-        use Expr::*;
-        AST(
-            vec![
-                Subst(&amp;quot;x&amp;quot;.to_string(), Num(1)),
-                Subst(&amp;quot;y&amp;quot;.to_string(), Num(2)),
-                Print(vec![Str(&amp;quot;x = &amp;quot;.to_string()), Var(&amp;quot;x&amp;quot;.to_string())]),
-                Print(vec![Str(&amp;quot;y = &amp;quot;.to_string()), Var(&amp;quot;y&amp;quot;.to_string())]),
-                Print(vec![Str(&amp;quot;--&amp;quot;.to_string())]),
-                Block(vec![
-                    Subst(&amp;quot;x&amp;quot;.to_string(), Num(3)),
-                    Print(vec![Str(&amp;quot;x = &amp;quot;.to_string()), Var(&amp;quot;x&amp;quot;.to_string())]),
-                    Print(vec![Str(&amp;quot;y = &amp;quot;.to_string()), Var(&amp;quot;y&amp;quot;.to_string())]),
-                ]),
-                Print(vec![Str(&amp;quot;--&amp;quot;.to_string())]),
-                Print(vec![Str(&amp;quot;x = &amp;quot;.to_string()), Var(&amp;quot;x&amp;quot;.to_string())]),
-                Print(vec![Str(&amp;quot;y = &amp;quot;.to_string()), Var(&amp;quot;y&amp;quot;.to_string())]),
-            ]
-        )
-    };
-    let mut interpreter = Interpreter::new();
-
-    interpreter.run(ast);
-}
-&lt;/code&gt;&lt;/pre&gt;</description>
+&lt;p&gt;&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>Rustの所有権、ライフタイム、参照、型、しがらみ</title>
-      <link>/blog/2016/12/14/rustnoshoyuuken_raifutaimu_sanshou_kata_shigarami</link>
+      <link>/blog/2016/12/14/rustnoshoyuuken_raifutaimu_sanshou_kata_shigarami/</link>
       <pubDate>Wed, 14 Dec 2016 11:19:12 +0900</pubDate>
       
-      <guid>/blog/2016/12/14/rustnoshoyuuken_raifutaimu_sanshou_kata_shigarami</guid>
+      <guid>/blog/2016/12/14/rustnoshoyuuken_raifutaimu_sanshou_kata_shigarami/</guid>
       <description>&lt;p&gt;κeenです。Rustには所有権やらライフタイムやら参照やらがあって型システムが面倒ですよね。線形（アフィン）と言われてるのに「あれ？」と思う部分もあるので詳しく探っていこうと思います。&lt;/p&gt;
 
 &lt;p&gt;尚、この記事は型システムに興味のある人向けです。単にRustを書きたい方に有用な情報があるかは分かりません。&lt;/p&gt;
 
 &lt;p&gt;2016-212-14T15:28Z09:00 加筆訂正しました。diffは&lt;a href=&#34;https://github.com/KeenS/KeenS.github.io/commit/f86c03a3793fde1787a9c0eb47f8efda305c2be4&#34;&gt;こちら&lt;/a&gt;&lt;/p&gt;
 
-&lt;p&gt;&lt;/p&gt;
-
-&lt;h1 id=&#34;線形型-アフィン型&#34;&gt;線形型？アフィン型？&lt;/h1&gt;
-
-&lt;p&gt;はじめにこの辺をハッキりさせておきたいです。
-アフィン型は線形型に弱化規則を許す型です。
-プログラミング的に言えば線形型は &lt;code&gt;free&lt;/code&gt; しないと型エラーになるけどアフィン型はそうでない。
-Rustはご存知の通り &lt;code&gt;free&lt;/code&gt; 相当のものを手で書くことはないのでアフィンな気がしますし、昔のドキュメントにもそう書いてました。&lt;/p&gt;
-
-&lt;p&gt;しかし実際に実行されるプログラムではコンパイラが差し込んだ &lt;code&gt;free&lt;/code&gt; が実行されるので &lt;code&gt;free&lt;/code&gt; を省略出来るというシンタックスシュガーの類な気もします。&lt;/p&gt;
-
-&lt;p&gt;ただまあ、 &lt;code&gt;free&lt;/code&gt; を差し込む位置を特定するのに弱化規則を使った場所で推論している筈なのでアフィンを使ってる筈ですよね。&lt;/p&gt;
-
-&lt;p&gt;ってことで今回の記事はアフィン型で統一したいと思います。&lt;/p&gt;
-
-&lt;h1 id=&#34;参照も値&#34;&gt;参照も値&lt;/h1&gt;
-
-&lt;p&gt;なんとなく、構文が用意されているので参照自体特別な存在な気がしますが、そんなことはありません。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn take_any&amp;lt;T&amp;gt;(t: T) -&amp;gt; T {
-    t
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;このように任意の値を取れる関数を用意してあげます。
-すると、以下のように所有、参照、可変参照全て渡せます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let s = &amp;quot;foo&amp;quot;.to_string();
-let mut s = take_any(s);
-take_any(&amp;amp;s);
-take_any(&amp;amp;mut s);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;は-copy-mut-は違う&#34;&gt;&lt;code&gt;&amp;amp;&lt;/code&gt; は &lt;code&gt;Copy&lt;/code&gt; 、 &lt;code&gt;&amp;amp;mut&lt;/code&gt; は違う&lt;/h1&gt;
-
-&lt;p&gt;先と同じように &lt;code&gt;Copy&lt;/code&gt; を実装した型を受け取る関数を書いてみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn take_copy&amp;lt;T: Copy&amp;gt;(t: T) -&amp;gt; T {
-    t
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これに参照を渡してあげると、 &lt;code&gt;&amp;amp;mut&lt;/code&gt; がエラーになります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let mut s = &amp;quot;foo&amp;quot;.to_string();
-take_copy(&amp;amp;s);
-take_copy(&amp;amp;mut s); // error[E0277]: the trait bound `&amp;amp;mut std::string::String: std::marker::Copy` is not satisfied
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;もちろん、 &lt;code&gt;Copy&lt;/code&gt; なので普通に何度も使えます。線形型でいう &lt;code&gt;!&lt;/code&gt; に近いですね。違いますけど。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let s = &amp;quot;foo&amp;quot;.to_string();
-let ref_s = &amp;amp;s;
-let x: &amp;amp;String = ref_s;
-let y: &amp;amp;String = ref_s;
-// Copy(が要求するClone)に実装されているメソッドを陽に呼ぶ
-let z: &amp;amp;String = (&amp;amp;ref_s).clone();
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;また、 &lt;code&gt;Copy&lt;/code&gt; への参照は参照外しが可能です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let x: isize = 1;
-let ref_x = &amp;amp;x;
-let x: isize = *x;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;なので、 &lt;code&gt;&amp;amp;&amp;amp;&lt;/code&gt; や &lt;code&gt;&amp;amp;mut&amp;amp;&lt;/code&gt; は &lt;code&gt;&amp;amp;&lt;/code&gt; への参照（&lt;code&gt;Copy&lt;/code&gt;への参照）なので &lt;code&gt;&amp;amp;&lt;/code&gt; へ参照外しが可能ですが、 &lt;code&gt;&amp;amp;&amp;amp;mut&lt;/code&gt; は&lt;code&gt;&amp;amp;mut&lt;/code&gt;への参照（&lt;code&gt;Copy&lt;/code&gt;ではない値への参照）なので参照外し出来ません。&lt;code&gt;&amp;amp;mut&amp;amp;&lt;/code&gt; や &lt;code&gt;&amp;amp;&amp;amp;mut&lt;/code&gt; とややこしいですね。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let mut s = &amp;quot;foo&amp;quot;.to_string();
-// &amp;amp;&amp;amp;
-{
-    let ref_ref_s = &amp;amp;&amp;amp;s;
-    let ref_s: &amp;amp;String = *ref_refs;
-}
-// &amp;amp;mut &amp;amp;
-{
-    let refmut_ref_s = &amp;amp;mut &amp;amp; s;
-    let reft_s: &amp;amp;String = *s;
-}
-
-// &amp;amp;&amp;amp;mut
-{
-    let ref_refmut_s = &amp;amp;&amp;amp;mut s;
-    let refmut_s: &amp;amp;mut String = *s; // error[E0389]: cannot borrow data mutably in a `&amp;amp;` reference
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ということで &lt;code&gt;&amp;amp;&amp;amp;&amp;amp;&amp;amp;&amp;amp;&amp;amp;&amp;amp;&amp;amp;&amp;amp;&amp;amp;&amp;amp;&amp;amp;&amp;amp;&amp;amp;&amp;amp;&amp;amp;&amp;amp;&amp;amp;&amp;amp;T&lt;/code&gt; が &lt;code&gt;&amp;amp;T&lt;/code&gt; に参照外し出来る理由も分かったかと思います。&lt;/p&gt;
-
-&lt;h1 id=&#34;mut-は-deref&#34;&gt;&lt;code&gt;&amp;amp;mut&lt;/code&gt; は &lt;code&gt;Deref&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;さて、 &lt;code&gt;&amp;amp;mut&lt;/code&gt; がたまに &lt;code&gt;&amp;amp;&lt;/code&gt; のように振る舞うことがありますが、これは &lt;code&gt;Deref&lt;/code&gt; のせいです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::ops::Deref;
-
-let mut s = &amp;quot;foo&amp;quot;.to_string();
-let refmut_s = &amp;amp;mut s;
-{
-    // derefを陽に呼ぶ
-    let ref_s: &amp;amp;string = refmut_s.deref();
-}
-
-{
-    // 暗黙のDerefによる型強制
-    let ref_s: &amp;amp;string = refmut_s;
-}
-
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;rustは&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/deref-coercions.html&#34;&gt;&lt;code&gt;deref&lt;/code&gt; による型強制&lt;/a&gt;を行うため、無言で &lt;code&gt;&amp;amp;mut&lt;/code&gt; を &lt;code&gt;&amp;amp;&lt;/code&gt; に変換することが出来ます。&lt;/p&gt;
-
-&lt;hr /&gt;
-
-&lt;p&gt;さて、ここまでで &lt;code&gt;&amp;amp;&lt;/code&gt; や &lt;code&gt;&amp;amp;mut&lt;/code&gt; もただの値であること、アフィン型に反しないことを調べました。
-次はライフタイムについて探ります。&lt;/p&gt;
-
-&lt;h1 id=&#34;ライフタイムとサブタイピング&#34;&gt;ライフタイムとサブタイピング&lt;/h1&gt;
-
-&lt;p&gt;実は、Rustにはサブタイピングがあります。ライフタイムです。ライフタイムにはサブタイプ関係があるのです。&lt;/p&gt;
-
-&lt;p&gt;このように、2つの引数が厳密に同じライフタイムであることを要求する関数を用意します。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn take_two_ref&amp;lt;&#39;a&amp;gt;(_: &amp;amp;&#39;a String, _: &amp;amp;&#39;a String) {
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これに、違うライフタイムを持つ型を放り込んでみます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;{
-    let a = &amp;quot;aaa&amp;quot;.to_string();
-    let ref_a = &amp;amp;a;
-    {
-        let b = &amp;quot;bbb&amp;quot;.to_string();
-        let ref_b = &amp;amp;b;
-        take_two_ref(ref_a, ref_b);
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これはコンパイルが通ります。明示的にライフタイムを書くとこうです。これは有効な構文ではないです（余談ですがラベル付きbreak文のための構文と衝突します）。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;&#39;a: {
-    let a: &#39;a String = &amp;quot;aaa&amp;quot;.to_string();
-    let ref_a = &amp;amp;&#39;a a;
-    &#39;b: {
-        let b: &#39;b String = &amp;quot;bbb&amp;quot;.to_string();
-        let ref_b = &amp;amp;&#39;b b;
-        take_two_ref::&amp;lt;&#39;b&amp;gt;(ref_a, ref_b);
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;大は小を兼ねるので &lt;code&gt;&#39;a&lt;/code&gt; は &lt;code&gt;&#39;b&lt;/code&gt; のサブタイプになっています。
-ちょっと言葉がややこしいのですが、スコープが狭いライフタイムの方が大きい型です。狭い方が大きい。この言い回しに馴れてない人に説明すると、上の例でいえば &lt;code&gt;&#39;b&lt;/code&gt; を要求する部分に渡せるのは &lt;code&gt;&#39;a&lt;/code&gt; と &lt;code&gt;&#39;b&lt;/code&gt; 2つありますが、 &lt;code&gt;&#39;a&lt;/code&gt; を要求する部分に渡せるのは &lt;code&gt;&#39;a&lt;/code&gt; だけです。 2つと1つだったら2つの方が大きいですよね。&lt;/p&gt;
-
-&lt;p&gt;さて、今回の例ではちゃんとスコープの入れ子とサブタイプ関係が一致していました。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;&#39;a: {----------
-              |
-              |
-    &#39;b: {--   |
-          |   |
-          |   |
-          |   |
-    }------   |
-}--------------
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;参照を取るときは参照のライフタイムが元のライフタイムのサブタイプになっている必要があります。&lt;/p&gt;
-
-&lt;p&gt;この関係に反するとエラーになります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let ref_s: &amp;amp;String;
-{
-    let s = &amp;quot;foo&amp;quot;.to_string();
-    ref_s = &amp;amp;s; // error: `s` does not live long enough
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;図示するとこうでしょうか。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let ref_s: &amp;amp;String;
-{
-    let s = &amp;quot;foo&amp;quot;.to_string();-----
-    ref_s = &amp;amp;s; ----------------  |
-                               |  |
-}------------------------------+---
-                               |
---------------------------------
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ライフタイムといえどある種、型なんですね。余談ですが確かリージョンの論文には「リージョンはプログラム全体を静的に伝播する型のようなもの」と表現していた気がします。既存の型と直行するので型とは別とも言えますし、タプルのように両方並べたものを型と言うことも出来ますね。&lt;/p&gt;
-
-&lt;h1 id=&#34;所有型とライフタイムと-static&#34;&gt;所有型とライフタイムと &lt;code&gt;&#39;static&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;適切な語彙がなかったので勝手に所有型と名付けましたが、参照でない型のことを指しています。（先の例で見せた通り、参照型にも所有権はあるので適切ではないですがひとまず我慢して下さい。）&lt;/p&gt;
-
-&lt;p&gt;さて、なんとなくライフタイムと参照型は結び付いている気がしますが、参照じゃない型にもライフタイムはあります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn take_two_value&amp;lt;&#39;a, T: &#39;a, S: &#39;a&amp;gt;(_: T, _: S){}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;このように、任意の2つの型を取るけども両方ともにライフタイムを要求する関数を書いてみます。&lt;/p&gt;
-
-&lt;p&gt;これに、所有型を渡すことが出来ます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let t = &amp;quot;t&amp;quot;.to_string();
-{
-    let s = &amp;quot;s&amp;quot;.to_string();
-    let s_ref = &amp;amp;s;
-    take_two_value(t, s_ref);
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ということで、所有型にもライフタイムはあります（多分）。&lt;/p&gt;
-
-&lt;p&gt;ところで、ライフタイムのボトム型相当のものに &lt;code&gt;&#39;static&lt;/code&gt; というものがあります。
-グローバル変数やリテラルなどに割り当てられるライフタイムで、プログラムが死ぬまで生き続けます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;static foo: &amp;amp;&#39;static isize = &amp;amp;3;
-static bar: isize = 3;
-
-fn main() {
-    let x: &amp;amp;&#39;static str = &amp;quot;x&amp;quot;;
-    let ref_bar: &amp;amp;&#39;static isize = &amp;amp;bar
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;&#39;static&lt;/code&gt; のみを受け取る関数を書いてみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn take_static&amp;lt;T: &#39;static&amp;gt;(_: T){}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;もちろん、先の例に出たstaticな値達を渡せます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;static foo: &amp;amp;&#39;static isize = &amp;amp;3;
-static bar: isize = 3;
-
-fn main() {
-    let x: &amp;amp;&#39;static str = &amp;quot;x&amp;quot;;
-    let ref_bar: &amp;amp;&#39;static isize = &amp;amp;bar;
-    take_static(foo);
-    take_static(x);
-    take_static(ref_bar);
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;実は、これに所有型を渡せます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let s = &amp;quot;foo&amp;quot;.to_string();
-take_static(s);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;そして、任意の参照型は渡せません。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let s = &amp;quot;foo&amp;quot;.to_string();
-take_static(&amp;amp;s); // error: `s` does not live long enough
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ということで所有型には &lt;code&gt;&#39;static&lt;/code&gt; というライフタイムが付いているようです（？）。
-&lt;code&gt;&#39;static&lt;/code&gt; イメージとしては「自分がその値を保持している限り無効になることはない型」ですかね。&lt;/p&gt;
-
-&lt;p&gt;これに関連するTipsとして関数や構造体のジェネリクスで所有型しか受け取らないようにするには &lt;code&gt;&amp;lt;T: &#39;static&amp;gt;&lt;/code&gt; が使えます。&lt;/p&gt;
-
-&lt;hr /&gt;
-
-&lt;p&gt;さてさて、これまた参照型は特別扱いされることなく他のRustの値と同じようにライフタイムで管理されていることを調べました。&lt;/p&gt;
-
-&lt;p&gt;最後に今回到達出来なかった謎、「参照を取る」について考えたいと思います。&lt;/p&gt;
-
-&lt;h1 id=&#34;mut-の規則&#34;&gt;&lt;code&gt;&amp;amp;mut&lt;/code&gt; の規則&lt;/h1&gt;
-
-&lt;p&gt;みなさん御存じの通り、&lt;code&gt;&amp;amp;mut&lt;/code&gt; を取ると値への他の操作が許されなくなります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let mut s = &amp;quot;foo&amp;quot;.to_string();
-let refmut_s = &amp;amp;mut s;
-let t = s;  // error[E0505]: cannot move out of `s` because it is borrowed
-let ref_s = &amp;amp;s; // error[E0502]: cannot borrow `s` as immutable because it is also borrowed as mutable
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;&amp;amp;mut T&lt;/code&gt; と &lt;code&gt;T&lt;/code&gt; が相互排他的なのでこれは線形論理のシーケント計算っぽく書くと以下のような規則を考えれば良さそうです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;Γ, T:&#39;a |- Σ
--------------- &amp;amp;mut-intro
-Γ, (&amp;amp;&#39;a mut T): &#39;b |- Σ
-where &#39;a &amp;lt;: &#39;b
-
-Γ, (&amp;amp;&#39;a mut T):&#39;b |- (&amp;amp;&#39;a mut T): &#39;b, Σ
------------------------ &amp;amp;mut-elim
-Γ, T: &#39;a |- Σ
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;型付け規則の書き方になれてないのでシーケント計算で書きましたがサブタイプの記述で困りましたね。&lt;/p&gt;
-
-&lt;h1 id=&#34;の謎&#34;&gt;&lt;code&gt;&amp;amp;&lt;/code&gt; の謎&lt;/h1&gt;
-
-&lt;p&gt;さて、問題は &lt;code&gt;&amp;amp;&lt;/code&gt; です。 &lt;code&gt;&amp;amp;&lt;/code&gt; は &lt;code&gt;Copy&lt;/code&gt; なのでそこら中に生えてきます。
-なので &lt;code&gt;&amp;amp;-elim&lt;/code&gt; のような規則では対応出来ません。&lt;/p&gt;
-
-&lt;p&gt;ただ、ライフタイムによる制約があるので「参照のライフタイムが死ぬときに元の値が復活する」ような規則を考えたくなります。&lt;/p&gt;
-
-&lt;p&gt;しかし、それでもだめです。複数回 &lt;code&gt;&amp;amp;&lt;/code&gt; を取れてしまうので、以下のように複数のライフタイムを持つ場合で破綻します。&lt;code&gt;&amp;amp; T&lt;/code&gt; と &lt;code&gt;T&lt;/code&gt; の間でなにかしらのしがらみがある筈です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let s = &amp;quot;foo&amp;quot;.to_string();
-{
-    let ref_s1 = &amp;amp;s;
-    {
-        let ref_s2 = &amp;amp;s;
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;それに、 &lt;code&gt;&amp;amp;mut&lt;/code&gt; と &lt;code&gt;&amp;amp;&lt;/code&gt; が相互排他であることも説明出来る規則でないといけません。謎が多い。&lt;/p&gt;
-
-&lt;hr /&gt;
-
-&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
-
-&lt;p&gt;さて、Rustの型システムのリソース管理回りを探ってみました。とりあえず分かったことを纏めると&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;値には全てアフィン型が付く
-
-&lt;ul&gt;
-&lt;li&gt;参照型も例外ではない&lt;/li&gt;
-&lt;/ul&gt;&lt;/li&gt;
-&lt;li&gt;値には全てライフタイムが付く
-
-&lt;ul&gt;
-&lt;li&gt;所有型も例外ではないっぽい&lt;/li&gt;
-&lt;li&gt;もしかしたら所有型はライフタイムを無視している？&lt;/li&gt;
-&lt;/ul&gt;&lt;/li&gt;
-&lt;li&gt;「参照を取る」のセマンティクスが謎
-
-&lt;ul&gt;
-&lt;li&gt;勿論、直感的には分かる&lt;/li&gt;
-&lt;li&gt;どういう規則なんだろう&lt;/li&gt;
-&lt;li&gt;アフィン型とライフタイム両方が絡むはず。&lt;/li&gt;
-&lt;/ul&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;特に論文も読んでないのでちょっと遠回りだったかもしれません。
-もしかしたら論文漁ったら一発で解決するのかも。
-詳しい方、 &lt;code&gt;&amp;amp;&lt;/code&gt; の謎を教えて下さい。&lt;/p&gt;</description>
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustのstructとtraitって似てるよね</title>
+      <link>/blog/2016/12/03/rustnostructtotraittteniteruyone/</link>
+      <pubDate>Sat, 03 Dec 2016 22:06:18 +0900</pubDate>
+      
+      <guid>/blog/2016/12/03/rustnostructtotraittteniteruyone/</guid>
+      <description>&lt;p&gt;κeenです。関連型について考えてたらtraitがstructに見えてきたので一筆。小ネタです。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustのプロセス</title>
+      <link>/blog/2016/12/02/rustnopurosesu/</link>
+      <pubDate>Fri, 02 Dec 2016 17:52:30 +0900</pubDate>
+      
+      <guid>/blog/2016/12/02/rustnopurosesu/</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2016/rust-lang-2&#34;&gt;Rust その2 Advent Calendar 2016 - Qiita&lt;/a&gt;3日目の記事です。&lt;/p&gt;
+
+&lt;p&gt;κeenです。Rustの&lt;a href=&#34;https://doc.rust-lang.org/std/process/index.html&#34;&gt;&lt;code&gt;std::process&lt;/code&gt;&lt;/a&gt;の扱い方を紹介します。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>新しいコンパイラバックエンドcretonne</title>
+      <link>/blog/2016/12/02/atarashiikonpairabakkuendocretonne/</link>
+      <pubDate>Fri, 02 Dec 2016 14:00:11 +0900</pubDate>
+      
+      <guid>/blog/2016/12/02/atarashiikonpairabakkuendocretonne/</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2016/lang_dev&#34;&gt;言語実装 Advent Calendar 2016 - Qiita&lt;/a&gt;3日目の記事です。&lt;/p&gt;
+
+&lt;p&gt;κeenです。先日、Rustの開発者フォーラムに新しいバックエンドして&lt;a href=&#34;https://github.com/stoklund/cretonne&#34;&gt;cretonne&lt;/a&gt;が&lt;a href=&#34;https://internals.rust-lang.org/t/possible-alternative-compiler-backend-cretonne/4275&#34;&gt;提案されていました&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;ちょっと気になったのでそれを紹介します。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustでバイト列を扱う時のtips</title>
+      <link>/blog/2016/12/01/rustdebaitoretsuwoatsukautokinotips/</link>
+      <pubDate>Thu, 01 Dec 2016 14:29:33 +0900</pubDate>
+      
+      <guid>/blog/2016/12/01/rustdebaitoretsuwoatsukautokinotips/</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2016/rust-lang-2&#34;&gt;Rust その2 Advent Calendar 2016 - Qiita&lt;/a&gt;2日目の記事です。&lt;/p&gt;
+
+&lt;p&gt;Rustはシステムプログラミング言語なのでバイト列をあれこれしたいことがあると思います。その時にイテレータでバイト列を舐める以外にも色々方法があるなと気付いたので。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustで非同期Thriftしたい</title>
+      <link>/slide/rustdehidoukithriftshitai/</link>
+      <pubDate>Sat, 26 Nov 2016 13:07:29 +0900</pubDate>
+      
+      <guid>/slide/rustdehidoukithriftshitai/</guid>
+      <description># Rustで非同期Thrift ---------------------- [歌舞伎座.tech#12「メッセージフォーマット/RPC勉強会」 - connpass](https://kbkz.connpass.com/event/40629/) === # About Me --------- ![κeenのアイコン](/images/icon.png) * κeen * [@blackenedgold](https://twitter.com/blackenedgold) * Github: [KeenS](https://github.com/KeenS) * サイバーエージェントのエンジニア * Lisp, ML, Rust, Shell Scriptあたりを書きます === * X RPCライブラリを使う話 * O RPCライブラリを作る話 === # RPC ----- * Remote Procedure Call * リモートで呼べる * 言語跨げる * シリアライズフォーマットが決まれば大体出来る * Thrift, protobuf/gRPC, avro... * 大抵バイナリ + JSONに比べて2倍くらい効率がいい === # Thrift -------- * Facebook発(現apache)RPCフレームワーク * IDLから複数の言語向けのコードを吐ける * 対応言語多い * 新しい言語はthriftレポジトリフォークして追加 === # Thrift vs gRPC ---------------- \ | Thrift | gRPC ------------------------|:------:|:----: ベース | 自前 | HTTP/2 コード生成 | o | o プロトコルのアップデート | o | o 通信の多重化 | トランスポート次第 | o (HTTP/2) 認証 | x | o 例外 | ユーザ定義可能 | 事前定義のみ?</description>
+    </item>
+    
+    <item>
+      <title>Rustの関連型の使いどころ</title>
+      <link>/blog/2016/11/22/rustnokanrenkatanotsukaidokoro/</link>
+      <pubDate>Tue, 22 Nov 2016 18:26:47 +0900</pubDate>
+      
+      <guid>/blog/2016/11/22/rustnokanrenkatanotsukaidokoro/</guid>
+      <description>&lt;p&gt;κeenです。昨日は&lt;a href=&#34;https://rust.connpass.com/event/41467/&#34;&gt;RustのLT会！ Rust入門者の集い - connpass&lt;/a&gt;に参加してきました。
+そこで&lt;a href=&#34;http://qiita.com/tacke_jp/items/9c7617971dc341146c0f&#34;&gt;関連型に関する発表&lt;/a&gt;があったので感化されて私も一筆。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustの話とリソースの話</title>
+      <link>/slide/rustnohanashitoriso_sunohanashi/</link>
+      <pubDate>Sun, 20 Nov 2016 14:08:07 +0900</pubDate>
+      
+      <guid>/slide/rustnohanashitoriso_sunohanashi/</guid>
+      <description># Rustの話とリソースの話 ---------------------- [RustのLT会！ Rust入門者の集い](https://rust.connpass.com/event/41467/) 2016-11-21 === # About Me --------- ![κeenのアイコン](/images/icon.png) * κeen * [@blackenedgold](https://twitter.com/blackenedgold) * Github: [KeenS](https://github.com/KeenS) * 若者 * サイバーエージェントのエンジニア * Lisp, ML, Rust, Shell Scriptあたりを書きます * [プログラミング言語Rust](https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/)の翻訳 * [Join rust-jp on Slack!](http://rust-jp.herokuapp.com/) にもいます。 * [Rust その2 Advent Calendar 2016 - Qiita](http://qiita.com/advent-calendar/2016/rust-lang-2) === # 注意 ------ * たまにマニアックな話が出ますが気にせず無視して下さい * 「なんかRustすげー」って思ってもらえれば幸いです === # Rustとの出会い ---------------- * 元々Lisperだった * 他にはML, Ruby, JVM言語など === ![lis books](/images/rust-and-resource/lisp.jpg)=== 「Lisperは自分で処理系作って一人前」 === ![compiler books](/images/rust-and-resource/compiler.jpg) === # 苦悩 ------- * Cは低級すぎる * Javaは向いてない * C++は怖そう + 闇の軍団 + 縄文土器飛んできそう + あと **nullあるしメモリ破壊あるし** * MLは向いてるけどシステムプログラミングしづらい * ATS2, Golang, D.</description>
+    </item>
+    
+    <item>
+      <title>Rustの型レベルLispっぽいの作った</title>
+      <link>/blog/2016/11/06/rustnokatareberulispppoinotsukutta/</link>
+      <pubDate>Sun, 06 Nov 2016 11:49:43 +0900</pubDate>
+      
+      <guid>/blog/2016/11/06/rustnokatareberulispppoinotsukutta/</guid>
+      <description>&lt;p&gt;κeenです。ふとした気紛れでRustの型レベルLispっぽいの作りました。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustのクロージャ3種を作って理解する</title>
+      <link>/blog/2016/10/10/rustnokuro_ja3tanewotsukutterikaisuru/</link>
+      <pubDate>Mon, 10 Oct 2016 16:48:43 +0900</pubDate>
+      
+      <guid>/blog/2016/10/10/rustnokuro_ja3tanewotsukutterikaisuru/</guid>
+      <description>&lt;p&gt;κeenです。Rustのクロージャ、3種類もあって複雑ですよね。
+こういう複雑なものはRustの気持になって考えれば理解出来たりします。ということで手でクロージャを作って理解してみましょう。&lt;/p&gt;
+
+&lt;p&gt;尚、これはRustの1.12.0-stableと1.14.0-nightly (6e8f92f11 2016-10-07)で実験しています。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustでシェル作った</title>
+      <link>/blog/2016/09/04/rustdeshierutsukutta/</link>
+      <pubDate>Sun, 04 Sep 2016 16:26:20 +0900</pubDate>
+      
+      <guid>/blog/2016/09/04/rustdeshierutsukutta/</guid>
+      <description>&lt;p&gt;κeenです。
+先日、先輩社員と話してるとシェルを作る話になりました。
+だいたいのコンピュータサイエンスの学生なら学部生の頃に課題でシェルを作りますが数学科にいた私は作ったことありませんでした。
+でも、その時「今ならシェルなんて作ろうと思えばすぐに作れますよ」なんて言っちゃったのでなんか作りました。
+まあ、習作程度の雑なものです。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustの所有権/ミュータビリティの分割</title>
+      <link>/blog/2016/06/19/rustnoshoyuuken_myu_tabiriteinobunkatsu/</link>
+      <pubDate>Sun, 19 Jun 2016 20:42:14 +0900</pubDate>
+      
+      <guid>/blog/2016/06/19/rustnoshoyuuken_myu_tabiriteinobunkatsu/</guid>
+      <description>&lt;p&gt;κeenです。昔所有権/ミュータビリティを分割したくなったけどぱっと方法が思いつかなくて困ったことがあるので今更ながら備忘録として残しておきます。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>multirustが非推奨になったようなのでrustupに移行する</title>
+      <link>/blog/2016/06/12/multirustgahisuishouninattayounanoderustupniikousuru/</link>
+      <pubDate>Sun, 12 Jun 2016 15:23:06 +0900</pubDate>
+      
+      <guid>/blog/2016/06/12/multirustgahisuishouninattayounanoderustupniikousuru/</guid>
+      <description>&lt;p&gt;κeenです。どうやらもうそろそろRustのツールチェーン管理はmultirustじゃなくてrustupを使った方が良さそうなので移行しようと思います。
+
+きっかけはmultirustにそういうコミットがされたから。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>cargo-profilerを試す</title>
+      <link>/blog/2016/05/14/cargo_profilerwotamesu/</link>
+      <pubDate>Sat, 14 May 2016 20:59:13 +0900</pubDate>
+      
+      <guid>/blog/2016/05/14/cargo_profilerwotamesu/</guid>
+      <description>&lt;p&gt;κeenです。先日Rustのニュースに流れてきたcargo profilerを試してみます。
+元の紹介記事はこちら&lt;a href=&#34;http://www.suchin.co/2016/05/11/Introducing-Cargo-Profiler/&#34;&gt;Introducing Cargo Profiler · suchin&lt;/a&gt;。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>RustでベアメタルRaspberry PiのLチカ</title>
+      <link>/blog/2016/05/04/rustdebeametaruraspberry_pinolchika/</link>
+      <pubDate>Wed, 04 May 2016 11:43:26 +0900</pubDate>
+      
+      <guid>/blog/2016/05/04/rustdebeametaruraspberry_pinolchika/</guid>
+      <description>&lt;p&gt;κeenです。GWもくもく会で机の片隅で埃被ってたRSPiのベアメタルを触ってみたのでその成果報告を。
+ベアメタルについて知らない人でも読めるように書きます。そしてアセンブラもCも出てきませんし、半田付けも必要ありません。
+Rustしか使いません。&lt;/p&gt;
+
+&lt;p&gt;Rustは分かるけどLチカは全く知らない、けど興味のある方は是非読んでみて下さい。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustとは何か。どんな言語か。</title>
+      <link>/slide/rusttohananika_donnagengoka_/</link>
+      <pubDate>Sun, 06 Mar 2016 05:27:39 +0900</pubDate>
+      
+      <guid>/slide/rusttohananika_donnagengoka_/</guid>
+      <description># Rustとは何か。どんな言語か。 ---------------------- [異種プログラミング言語格闘勉強会](http://kbkz.connpass.com/event/26677/) 2016-03-20 === # About Me --------- ![κeenのアイコン](/images/icon.png) + κeen + [@blackenedgold](https://twitter.com/blackenedgold) + Github: [KeenS](https://github.com/KeenS) + サイバーエージェントのエンジニア + Lisp, ML, Rust, Shell Scriptあたりを書きます === # Rustって? ---------- * システムプログラミング言語 * だけど函数型言語から影響を受けた * 安全かつ高速 * ゼロコスト抽象化 === ## システムプログラミング言語 --------------------------- * スレッドはネイティブ、Cとの相互呼び出し、小さなバイナリサイズ * ゲームエンジンとか作れる([piston](https://github.com/PistonDevelopers/piston)) * レンダリングエンジンとか作れる([Servo](https://github.com/servo/servo)) * Lチカとか出来る * OSとか作れる([Redox](https://github.com/redox-os/redox)) === ## 函数型言語的からの影響 ----------------------- 最近ではめずらしくなくなった * デフォルトイミュータブル * 代数的データ型 * コンビネータ * トレイト (型クラス) === ## 安全かつ高速 -------------- * データ競合が起きない + 所有権システム + だいたいコンパイル時Read Writeロック + Read only参照複数 or Write可能参照1つ * LLVMベースの強力な最適化 * スレッド周辺のAPIが揃ってる === ## ゼロコスト抽象化 ------------------ 省略 * [Rustのゼロコスト抽象化 | κeenのHappy Hacκing Blog](http://keens.</description>
+    </item>
+    
+    <item>
+      <title>リージョンとRustの返り値</title>
+      <link>/blog/2016/03/02/ri_jontorustnokaerichi/</link>
+      <pubDate>Wed, 02 Mar 2016 00:05:03 +0900</pubDate>
+      
+      <guid>/blog/2016/03/02/ri_jontorustnokaerichi/</guid>
+      <description>&lt;p&gt;Rustにおいては返り値ポインタで返すよりもそのまま返して、受け取る側でポインタで受け取るかそのまま受け取るかを指定するのが良い選択肢だ、といっています。
+しかし初めて見る時にはどうしてそんなことが出来るのかわからず、びっくりしますよね。
+それをRustがリージョンを使ってメモリ管理をしていると分かればどうなっているのか分かったのですこしばかり。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustのゼロコスト抽象化</title>
+      <link>/blog/2016/03/01/rustnozerokosutochuushouka/</link>
+      <pubDate>Tue, 01 Mar 2016 23:32:12 +0900</pubDate>
+      
+      <guid>/blog/2016/03/01/rustnozerokosutochuushouka/</guid>
+      <description>&lt;p&gt;κeenです。今日Twitter上でのやりとりから少し面白いことが分かったのでそれについて。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>RustのHigher-Kinded type Trait</title>
+      <link>/blog/2016/02/28/rustnohigherkinded_type_trait/</link>
+      <pubDate>Sun, 28 Feb 2016 14:40:59 +0900</pubDate>
+      
+      <guid>/blog/2016/02/28/rustnohigherkinded_type_trait/</guid>
+      <description>&lt;p&gt;κeenです。少し前の話になりますがRustの関連型を駆使してHigher Kinded type Trait（高階型トレイト）を実現してしまったものが出回ってたのでそれについて。
+本来RustはHKTをサポートしていませんが不思議なことに実装出来てしまっているのです。&lt;/p&gt;
+
+&lt;p&gt;HKTについて微塵も知らない方にも分かるように解説していきます。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustのパッケージをcrates.ioに登録する</title>
+      <link>/blog/2016/01/31/rustnopakke_jiwocrates_ionitourokusuru/</link>
+      <pubDate>Sun, 31 Jan 2016 14:43:14 +0900</pubDate>
+      
+      <guid>/blog/2016/01/31/rustnopakke_jiwocrates_ionitourokusuru/</guid>
+      <description>&lt;p&gt;κeenです。技術の話題を書くのは久し振りですね。今日初めてRustのパッケージのセントラルレポジトリ、&lt;a href=&#34;crates.io&#34;&gt;crates.io&lt;/a&gt;にパッケージを登録したのでその流れを共有します。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustといえどリソースの解放は注意</title>
+      <link>/blog/2016/01/08/rusttoiedoriso_sunokaihouhachuui/</link>
+      <pubDate>Fri, 08 Jan 2016 00:50:31 +0900</pubDate>
+      
+      <guid>/blog/2016/01/08/rusttoiedoriso_sunokaihouhachuui/</guid>
+      <description>&lt;p&gt;κeenです。深夜にですが小ネタを。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustのロガーを作る</title>
+      <link>/blog/2015/12/26/rustnoroga_wotsukuru/</link>
+      <pubDate>Sat, 26 Dec 2015 19:18:31 +0900</pubDate>
+      
+      <guid>/blog/2015/12/26/rustnoroga_wotsukuru/</guid>
+      <description>&lt;p&gt;κeenです。Advent Calendarのためにネタやアイディアを用意したものの時間/場所的都合でAdvent Calendarとして出せなかったボツネタでも供養しようかと。
+Advent Calendarが終わってしまったので投げやり気味ですね。
+第1段はRustのロガーを作る話。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://qiita.com/advent-calendar/2015/rust-lang&#34;&gt;Rust Advent Calendar&lt;/a&gt;の&lt;a href=&#34;//KeenS.github.io/blog/2015/11/14/rustdechiisanatsu_ruwotsukuttemiru/&#34;&gt;初日&lt;/a&gt;でロガーはfacadと実装に分かれてると書きましたが、実装を作る話ですね。
+
+&lt;a href=&#34;https://doc.rust-lang.org/log/log/index.html&#34;&gt;ドキュメント&lt;/a&gt;を見てもらえば分かる通り、logは&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>最近作ってるLispの話</title>
+      <link>/blog/2015/12/20/saikintsukutterulispnohanashi/</link>
+      <pubDate>Sun, 20 Dec 2015 22:40:16 +0900</pubDate>
+      
+      <guid>/blog/2015/12/20/saikintsukutterulispnohanashi/</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2015/lisp&#34;&gt;Lisp Advent Calendar 2015&lt;/a&gt;21日目の記事です。&lt;/p&gt;
+
+&lt;p&gt;κeenです。最近あまりLispを書いてなくてネタがないので最近作ってるLispの話でもしようかと。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>travisとappveyorでクロスプラットフォームなCIする話</title>
+      <link>/blog/2015/12/20/travistoappveyerdekurosupurattofo_munacisuruhanashi/</link>
+      <pubDate>Sun, 20 Dec 2015 22:19:21 +0900</pubDate>
+      
+      <guid>/blog/2015/12/20/travistoappveyerdekurosupurattofo_munacisuruhanashi/</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2015/rust-lang&#34;&gt;Rust Advent Calendar 2015&lt;/a&gt;20日目の記事です。
+日付を覚え間違っていて、締切ギリギリに書いてます。&lt;/p&gt;
+
+&lt;p&gt;κeenです。ものすごい小ネタですがRustでCIする話でも。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustでの日本語の扱い</title>
+      <link>/blog/2015/12/13/rustdenonihongonoatsukai/</link>
+      <pubDate>Sun, 13 Dec 2015 17:14:18 +0900</pubDate>
+      
+      <guid>/blog/2015/12/13/rustdenonihongonoatsukai/</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2015/rust-lang&#34;&gt;Rust Advent Calendar&lt;/a&gt; 14日目の記事です&lt;br /&gt;
+前:gifnksmさんの &lt;a href=&#34;http://gifnksm.hatenablog.jp/entry/2015/12/13/204655&#34;&gt;kcovを使ってRustプログラムのカバレッジを測定する - gifnksmの雑多なメモ&lt;/a&gt;&lt;br /&gt;
+後:nacika_insさんのtimeこわい&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Cargoの使い方</title>
+      <link>/blog/2015/11/29/cargonotsukaikata/</link>
+      <pubDate>Sun, 29 Nov 2015 23:25:54 +0900</pubDate>
+      
+      <guid>/blog/2015/11/29/cargonotsukaikata/</guid>
+      <description>&lt;p&gt;この記事は&lt;a href=&#34;http://qiita.com/advent-calendar/2015/rust-lang&#34;&gt;Rust Advent Calendar 2015&lt;/a&gt; 3日目の記事です。&lt;br /&gt;
+前 &lt;a href=&#34;/blog/2015/11/29/rustdechiisanatsu_ruwotsukuttemiru_kouhen_/&#34;&gt;Rustで小さなツールを作ってみる(後編)&lt;/a&gt;&lt;br /&gt;
+次  szkttyさん インデックス構文によるアクセスを実装する&lt;/p&gt;
+
+&lt;p&gt;κeenです。Rustを使うにはCargoを使う必要がありますが、&lt;code&gt;cargo help&lt;/code&gt;を見てもあまり情報が載っていないので少しばかり書きましょう。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustで小さなツールを作ってみる(後編)</title>
+      <link>/blog/2015/11/29/rustdechiisanatsu_ruwotsukuttemiru_kouhen_/</link>
+      <pubDate>Sun, 29 Nov 2015 13:54:39 +0900</pubDate>
+      
+      <guid>/blog/2015/11/29/rustdechiisanatsu_ruwotsukuttemiru_kouhen_/</guid>
+      <description>&lt;p&gt;この記事は&lt;a href=&#34;http://qiita.com/advent-calendar/2015/rust-lang&#34;&gt;Rust Advent Calendar 2015&lt;/a&gt; 2日目の記事です。&lt;br /&gt;
+前 &lt;a href=&#34;/blog/2015/11/14/rustdechiisanatsu_ruwotsukuttemiru/&#34;&gt;Rustで小さなツールを作ってみる(前編)&lt;/a&gt;&lt;br /&gt;
+次 &lt;a href=&#34;/blog/2015/11/29/cargonotsukaikata/&#34;&gt;Cargoの使い方&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;κeenです。昨日の記事で作りかけだったIRCの生ログのDBへのインポートの続きです。今日はDBへのインポートをやります。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustで小さなツールを作ってみる(前編)</title>
+      <link>/blog/2015/11/14/rustdechiisanatsu_ruwotsukuttemiru/</link>
+      <pubDate>Sat, 14 Nov 2015 23:57:43 +0900</pubDate>
+      
+      <guid>/blog/2015/11/14/rustdechiisanatsu_ruwotsukuttemiru/</guid>
+      <description>&lt;p&gt;この記事は&lt;a href=&#34;http://qiita.com/advent-calendar/2015/rust-lang&#34;&gt;Rust Advent Calendar 2015&lt;/a&gt; 1日目の記事です。&lt;br /&gt;
+次 &lt;a href=&#34;/blog/2015/11/29/rustdechiisanatsu_ruwotsukuttemiru_kouhen_/&#34;&gt;Rustで小さなツールを作ってみる(後編)&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;κeenです。Rust Advent Calendar初日ということで軽い話から。
+小さなツールって何だよって感じですが手元にIRCの生ログが大量にあるのでそれをDBにインポートしてみましょう。
+あまりRustに向いた仕事じゃなさそうですが手始めとして。&lt;/p&gt;
+
+&lt;p&gt;前編でログのパースを、後編でDBへのインポートをやります。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>一時ファイルの作り方</title>
+      <link>/blog/2015/11/08/ichijifairunotsukurikata/</link>
+      <pubDate>Sun, 08 Nov 2015 21:40:14 +0900</pubDate>
+      
+      <guid>/blog/2015/11/08/ichijifairunotsukurikata/</guid>
+      <description>&lt;p&gt;Rustに&lt;a href=&#34;https://github.com/Stebalien/tempfile&#34;&gt;tempfile&lt;/a&gt;というライブラリがある。その名の通りテンポラリファイルを作るライブラリだ。
+必要に迫られてそのライブラリにPRを送ろうとして実装を読んだのだが普段あまり意識しなかったテンポラリファイルの作り方を知ったのでちょっと解説してみる。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>rust初心者へのガイド</title>
+      <link>/blog/2015/09/23/rustwokakutokinochiken/</link>
+      <pubDate>Wed, 23 Sep 2015 22:43:14 +0900</pubDate>
+      
+      <guid>/blog/2015/09/23/rustwokakutokinochiken/</guid>
+      <description>&lt;p&gt;シルバーウィークの進捗が芳しくなかったので雑な記事書いてお茶を濁しとく。rustをそれなりに（といっても1000行くらい）書いて溜まった知見をとりあえず出す。rust1.3時点。&lt;/p&gt;
+
+&lt;p&gt;最初の方で熱く語ってるが多くの人にとって欲しい情報は下の方にあると思う。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustでstructのmutableなfieldあれこれ</title>
+      <link>/blog/2015/06/14/rustdestructnomutablenafieldarekore/</link>
+      <pubDate>Sun, 14 Jun 2015 17:53:11 +0900</pubDate>
+      
+      <guid>/blog/2015/06/14/rustdestructnomutablenafieldarekore/</guid>
+      <description>&lt;p&gt;κeenです。人々にRustを薦めておきながら本人は昨日ようやく入門しました。その時に困ったことをメモ。タイトルがルー語になってますが気にしない。&lt;/p&gt;
+
+&lt;p&gt;因みにこれはRust 1.0の情報です。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>静的なメモリ管理の話。リージョン推論とλ計算からRustまで</title>
+      <link>/slide/seitekinamemorikanrinohanashi.rijonsuirontolambdakeisankararustmade/</link>
+      <pubDate>Tue, 21 Apr 2015 00:25:56 +0900</pubDate>
+      
+      <guid>/slide/seitekinamemorikanrinohanashi.rijonsuirontolambdakeisankararustmade/</guid>
+      <description># 静的なメモリ管理の話。リージョン推論とλ計算からRustまで ---------------------- サイバーエージェント新卒エンジニア勉強会 === # About Me --------- ![κeenのアイコン](/images/icon.png) * κeen * [@blackenedgold](https://twitter.com/blackenedgold) * Github: [KeenS](https://github.com/KeenS) * 大学では非情報系学科。趣味のプログラマ。 + 非ガチ勢なので優しくして下さい=== # 強い静的メモリ管理の話をしよう ------------------------------ * まずは可能性の議論が必要 * 実現可能性 * 実用性 === # 可能性の議論 ------------- * プログラミング言語の理論 ≒ λ計算 * そもそもλ計算はメモリのことを考慮してない + GCがあるかのように記述される === # 可能性の議論 ------------- * λ計算にメモリ管理まで含めて理論を立てたものは存在する（静的なメモリ管理） + リージョンというものをベースにしている [参考](http://www.elsman.com/mlkit/pdf/popl94.pdf) * さらにリージョンを自動で推論する理論もある（強いメモリ管理） + リージョン推論という === # 軽くリージョンの話 ------------------- * 型と同じようにプログラム全体を伝わるメタデータ。 * データが保存される場所を指す。リージョンはいくつもある。 * リージョン推論でデータがどのリージョンに入るかが分かる * さらにリージョンのサイズもある程度予想がつくので静的に管理出来る * 関数などは引数のリージョンに対して多相になる「リージョン多相」などもある * この辺は[Martin Elsmanの論文たち](http://www.</description>
     </item>
     
   </channel>
