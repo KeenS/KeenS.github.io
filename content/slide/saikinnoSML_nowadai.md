@@ -197,6 +197,7 @@ val it = () : unit
 * `_import` で`pthread_create`を呼べる
 
 ``` sml
+type pthread_t = unit ptr;
 val pthread_create =
     _import "pthread_create"
     : (pthread_t ref, unit ptr, unit ptr -> unit ptr, unit ptr) -> int
@@ -213,8 +214,10 @@ fun create f =
 
 ===
 
-最近のSML#
+# 最近のSML#
+-----------
 Changesベース
+<!-- .slide: class="center" -->
 
 ===
 
@@ -231,7 +234,6 @@ Changesベース
 
 # Fully Concurrent GC
 ---------------------
-
 
 * SML#のBit Map GCベース
 * アロケーションはスレッド毎にセグメントを割り当てる
@@ -416,6 +418,8 @@ val reco2 =  _json json2 as {name: string, version: string, date: string option}
   + sqlexcとsqlevalが廃止されてコネクションを渡されたら実行するように
   + リフレクション導入？（reifyできる型に対して`pp`が導入された）
 * type reification
+* ML式の自然結合
+
 
 ===
 # Massive Threads
@@ -432,7 +436,7 @@ val reco2 =  _json json2 as {name: string, version: string, date: string option}
   - [Couple](https://github.com/smlsharp/smlsharp/blob/master/src/thread/main/concurrent.smi#L23)
   - [Thread](https://github.com/smlsharp/smlsharp/blob/master/src/thread/main/concurrent.smi#L31)
   - [Future](https://github.com/smlsharp/smlsharp/blob/master/src/thread/main/concurrent.smi#L37)
-* CML: Concurrent ML互換インタフェース
+* [CML](https://github.com/smlsharp/smlsharp/blob/master/src/thread/main/cml.smi): Concurrent ML互換インタフェース
   - なんかCSPっぽい作りらしい？
 
 ===
@@ -443,7 +447,7 @@ val reco2 =  _json json2 as {name: string, version: string, date: string option}
 * 長い
 
 ``` sml
-foreach id in dataExp [where setUpExp]
+_foreach id in dataExp [where setUpExp]
 with pat do iteratorExp while predicateExp
 end
 ```
@@ -543,6 +547,35 @@ val it = () : unit
 
 ```
 
+===
+# ML式の自然結合
+----------------
+
+``` sml
+# _join(1, 1);
+val it = 1 : int
+# _join(1, 2);
+uncaught exception NaturalJoin.NaturalJoin at (interactive):2
+# _join([1, 2, 3], [2, 3, 4]);
+val it = [2, 3] : int list
+# val l1 = [{id = 1, age = 10}, {id = 2, age = 20}, {id = 3, age = 30}];
+val l1 =
+  [{age = 10, id = 1}, {age = 20, id = 2}, {age = 30, id = 3}] : {age: int, id: int} list
+# val l2 = [{id = 2, salary = 200}, {id = 3, salary = 300}, {id = 4, salary = 400}];
+val l2 =
+  [{id = 2, salary = 200}, {id = 3, salary = 300}, {id = 4, salary = 400}] : {id: int, salary: int} list
+# _join(l1, l2);
+val it =
+  [{age = 20, id = 2, salary = 200}, {age = 30, id = 3, salary = 300}] : {age: int, id: int, salary: int} list
+```
+
+===
+# まとめ
+--------
+
+* SML# 3系の変更を追ったよ
+* SQL、JSON、Concurrency
+* みんなもSML# 使おうね
 
 </script>
 </section>
