@@ -2,650 +2,74 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>Shell on κeenのHappy Hacκing Blog</title>
-    <link>/categories/shell/index.xml</link>
+    <link>/categories/shell/</link>
     <description>Recent content in Shell on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <atom:link href="/categories/shell/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Sun, 04 Sep 2016 16:26:20 +0900</lastBuildDate>
+    
+	<atom:link href="/categories/shell/index.xml" rel="self" type="application/rss+xml" />
+    
     
     <item>
       <title>Rustでシェル作った</title>
-      <link>/blog/2016/09/04/rustdeshierutsukutta</link>
+      <link>/blog/2016/09/04/rustdeshierutsukutta/</link>
       <pubDate>Sun, 04 Sep 2016 16:26:20 +0900</pubDate>
       
-      <guid>/blog/2016/09/04/rustdeshierutsukutta</guid>
+      <guid>/blog/2016/09/04/rustdeshierutsukutta/</guid>
       <description>&lt;p&gt;κeenです。
 先日、先輩社員と話してるとシェルを作る話になりました。
 だいたいのコンピュータサイエンスの学生なら学部生の頃に課題でシェルを作りますが数学科にいた私は作ったことありませんでした。
 でも、その時「今ならシェルなんて作ろうと思えばすぐに作れますよ」なんて言っちゃったのでなんか作りました。
-まあ、習作程度の雑なものです。&lt;/p&gt;
-
-&lt;p&gt;
-作ったのはこれ、&lt;a href=&#34;https://github.com/KeenS/igaguri&#34;&gt;KeenS/igaguri: my toy shell written in Rust&lt;/a&gt;。
-名前は、Shellは木の実を覆う殻のようにカーネルを覆う殻とのことなのでRustのロゴに似てる毬栗を選びました。&lt;/p&gt;
-
-&lt;h1 id=&#34;パーサ&#34;&gt;パーサ&lt;/h1&gt;
-
-&lt;p&gt;パーサコンビネータライブラリの&lt;a href=&#34;https://github.com/Geal/nom&#34;&gt;nom&lt;/a&gt;を使いました。&lt;/p&gt;
-
-&lt;p&gt;雰囲気こんな感じ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;named!(token&amp;lt;String&amp;gt;, map!(map_res!(is_a!(&amp;quot;abcdefghijklmnopqlrstuvwxyzABCDEFGHIJKLMNOPQLRSTUVWXYZ-!$%^&amp;amp;@/1234567890&amp;quot;), str::from_utf8), |i: &amp;amp;str| i.to_string()));
-named!(pipe, tag!(&amp;quot;|&amp;quot;));
-named!(redirect_out&amp;lt;String&amp;gt;, chain!(tag!(&amp;quot;&amp;gt;&amp;quot;) ~ opt!(multispace) ~ filename: token, || filename));
-
-named!(command&amp;lt;Ast&amp;gt;, chain!(
-    opt!(multispace)
-        ~ cmd: separated_list!(multispace, token)
-        ~ outfile: opt!(chain!(multispace ~ out: redirect_out, || out))
-        ~ opt!(multispace), || Ast::Command{cmd: cmd, out: outfile}));
-named!(parse&amp;lt;Ast&amp;gt;, map!(separated_list!(pipe, command), Ast::Pipe));
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;入力ハンドリング&#34;&gt;入力ハンドリング&lt;/h1&gt;
-
-&lt;p&gt;readlineのRust実装、&lt;a href=&#34;https://github.com/kkawakam/rustyline&#34;&gt;rustyline&lt;/a&gt;を使いました。&lt;/p&gt;
-
-&lt;p&gt;それっぽいからとりあえず、で選んだものの、複数行入力（履歴）とか考えるともうちょっとリッチなものを選んだ方が良かったかもしれません。&lt;/p&gt;
-
-&lt;h1 id=&#34;実行&#34;&gt;実行&lt;/h1&gt;
-
-&lt;p&gt;最初、&lt;a href=&#34;https://github.com/rust-lang/libc&#34;&gt;libcバインディング&lt;/a&gt;の &lt;code&gt;pipe&lt;/code&gt; や &lt;code&gt;fork&lt;/code&gt; 、 &lt;code&gt;execve&lt;/code&gt; なんかを考えてましたが、標準ライブラリの &lt;a href=&#34;https://doc.rust-lang.org/std/process/struct.Command.html&#34;&gt;&lt;code&gt;std::process::Command&lt;/code&gt;&lt;/a&gt;で実現出来そうだったのでそれを使いました。&lt;/p&gt;
-
-&lt;p&gt;こんな感じ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;Command::new(cmd)
-    .args(&amp;amp;terms)
-    .stdin(stdin)
-    .stdout(stdout)
-    .stderr(stderr)
-    .spawn()
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;パイプ-リダイレクト&#34;&gt;パイプ/リダイレクト&lt;/h2&gt;
-
-&lt;p&gt;一応、パイプも標準ライブラリでサポートされてるのでそれを使いました。&lt;/p&gt;
-
-&lt;p&gt;ただ、普通のCとは違って子プロセスと親プロセスの間に一旦パイプを作って、子プロセスの出力の生のfdを取り出して、次の子プロセスの入力に与えて、と案外面倒でした。 &lt;code&gt;unsafe&lt;/code&gt; も出てくれば &lt;code&gt;unreachable&lt;/code&gt; も出てくるのでもう少し書き直したい。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let mut si = stdin;
-let mut itr = commands.into_iter().peekable();
-unsafe {
-    while let Some(command) = itr.next() {
-        if itr.peek().is_some() {
-            let process =
-                try!(self.run(command, si, Stdio::piped(), Stdio::inherit()));
-            si = Stdio::from_raw_fd(process.stdout.unwrap().into_raw_fd());
-        } else {
-            return self.run(command, si, stdout, stderr);
-        }
-    }
-}
-unreachable!()
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;リダイレクトも似たようなもので、ファイルを作って生のfdを取り出して、とやります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let stdout = out.map(|f| {
-    unsafe {
-        let file = File::create(f)
-        // FIXME: do not panic
-            .unwrap();
-        Stdio::from_raw_fd(file.into_raw_fd())
-    }
-
-}).unwrap_or(stdout);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;おわりに&#34;&gt;おわりに&lt;/h1&gt;
-
-&lt;p&gt;昨日の夜からちょろっと作り始めてさっきそれっぽく動くようになった程度なのでまだ適当にしか動きません。
-パイプと標準出力のリダイレクトだけで、 &lt;code&gt;cd&lt;/code&gt; なんかのシェルコマンドもなければシェル変数もありません。
-が、そろそろ飽きたのでこの辺で。&lt;/p&gt;
-
-&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;そろそろ飽きてきた&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/772334565264232454&#34;&gt;2016年9月4日&lt;/a&gt;&amp;lt;/
-blockquote&amp;gt;
-&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
-
-&lt;p&gt;シェルコマンドとシェル変数くらいはいつか実装しようかな。&lt;/p&gt;</description>
+まあ、習作程度の雑なものです。&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>シェル芸十八般</title>
-      <link>/blog/2016/07/13/shierugeijuuhachihan</link>
+      <link>/blog/2016/07/13/shierugeijuuhachihan/</link>
       <pubDate>Wed, 13 Jul 2016 23:34:03 +0900</pubDate>
       
-      <guid>/blog/2016/07/13/shierugeijuuhachihan</guid>
+      <guid>/blog/2016/07/13/shierugeijuuhachihan/</guid>
       <description>&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;武芸十八般のひとつシェル芸ってワードがふと湧いてきたけどどちらかというとシェル芸十八般とかの方がよさそう。grep, cut, xargs,&amp;hellip;&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/753211663927513088&#34;&gt;2016年7月13日&lt;/a&gt;&lt;/blockquote&gt;
 &lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;
-&lt;/p&gt;
-
-&lt;h1 id=&#34;cat&#34;&gt;&lt;code&gt;cat&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;ファイルの内容を吐くのに使う。 -n とか使えそうなオプションがあるが滅多に使わない&lt;/p&gt;
-
-&lt;h2 id=&#34;例&#34;&gt;例&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;cat file
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;head&#34;&gt;&lt;code&gt;head&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;標準入力の先頭のほうだけを切り取る。大きなファイルに対して処理する前にちょろっと試すのに使う&lt;/p&gt;
-
-&lt;h2 id=&#34;例-1&#34;&gt;例&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;cat large_file | head -n 10 | ...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;tail&#34;&gt;&lt;code&gt;tail&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;標準入力の末尾のほうだけを切り取る。&lt;code&gt;-f&lt;/code&gt; オプションでよく使う&lt;/p&gt;
-
-&lt;h2 id=&#34;例-2&#34;&gt;例&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;tail -f log_file | grep -ie error -e &#39;$&#39;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;grep&#34;&gt;&lt;code&gt;grep&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;globally regexp print. 汎用フィルタとして様々に活躍する他飛び道具的な使い方もある。&lt;/p&gt;
-
-&lt;h2 id=&#34;例-3&#34;&gt;例&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;cat file | grep some_word
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;cat file | grep -v &amp;quot;^[ \n\t]+$&amp;quot;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;echo hello | grep -o .
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;awk&#34;&gt;&lt;code&gt;awk&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;プログラミング言語awk。だいたい &lt;code&gt;cut&lt;/code&gt; の上位互換として使われる。&lt;/p&gt;
-
-&lt;h2 id=&#34;例-4&#34;&gt;例&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;ls -l | awk &#39;{print $3}&#39;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;seq 1 100 | awk &#39;BEGIN{sum=0}{sum+=$0}END{print sum}&#39;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;sed&#34;&gt;&lt;code&gt;sed&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;プログラミング言語sed。だいたい &lt;code&gt;s/RE/replace/&lt;/code&gt; が使われるが使いこなすと深い。&lt;/p&gt;
-
-&lt;h2 id=&#34;例-5&#34;&gt;例&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;cat log_file | sed &#39;s/error/ERROR/gi&#39;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;cat some.csv | sed 1d
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;xargs&#34;&gt;&lt;code&gt;xargs&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;標準入力を横に並べる、コマンドを並列に実行する、繰り返し実行をするなどストリーム内での制御機構的働きをする&lt;/p&gt;
-
-&lt;h2 id=&#34;例-6&#34;&gt;例&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;seq 1 10 | xargs echo
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;find . -type f | xargs -P $(nproc) grep FIXME
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;inc(){ echo $(( 1 + $1 ));}
-export -f sum
-seq 1 10 | xargs -I@ bash -c &#39;sum @&#39;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;find&#34;&gt;&lt;code&gt;find&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;複雑なクエリ式を書けるコマンド。(シェルに依存してしまう)ワイルドカード展開の肩代わりなんかも出来る。xargsに繋げることが多い。&lt;/p&gt;
-
-&lt;h2 id=&#34;例-7&#34;&gt;例&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;find . -type f -name &#39;*.md&#39; -exec basename &#39;{}&#39; .md \;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;sort&#34;&gt;&lt;code&gt;sort&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;ほぼ次のuniqに繋げるために使うことが多い。あるいはuniqした結果を使う。&lt;/p&gt;
-
-&lt;h2 id=&#34;例-8&#34;&gt;例&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;cat .histfile | grep &#39;|&#39; | sed &#39;s/|/\n/g&#39; | awk &#39;{print $1}&#39; | LANG=C sort | uniq -c | LANG=C sort
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;uniq&#34;&gt;&lt;code&gt;uniq&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;多くは頻度のカウントに使う。&lt;/p&gt;
-
-&lt;h1 id=&#34;tar&#34;&gt;&lt;code&gt;tar&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;リモートホストとファイルをやりとりするのに使う。&lt;/p&gt;
-
-&lt;h2 id=&#34;例-9&#34;&gt;例&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;ssh stepper ssh host1 tar czf - -C &#39;/var/log/somedir/&#39; stdout.log stderr.log | tar xzf - -C /tmp
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;zcat&#34;&gt;&lt;code&gt;zcat&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;圧縮ファイル扱うのに使う。よくtarと組み合わせる。
-プロセスが分かれる分マルチコアを使えるのでtarのzオプション使うより速いかもしれない。&lt;/p&gt;
-
-&lt;h2 id=&#34;例-10&#34;&gt;例&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;zcat some.tar.gz | tar tf - | xargs -I@ -n 1 basename @ .java
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;date&#34;&gt;&lt;code&gt;date&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;日付操作用コマンド。BSD系とGNU系で全然違う。つらい。&lt;/p&gt;
-
-&lt;h2 id=&#34;例-11&#34;&gt;例&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;find logs -type f -name &#39;*.log&#39; | xargs -I@ dirname @ | sed &#39;s|logs/||&#39; | tr / - | xargs -I@ date --date=@ +%w | sort | uniq -c
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;tr&#34;&gt;&lt;code&gt;tr&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;文字置換、削除。&lt;code&gt;sed&lt;/code&gt;で出来るじゃんとか言わない。&lt;/p&gt;
-
-&lt;h2 id=&#34;例-12&#34;&gt;例&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;cat data.list | tr -c &#39;[a-zA-Z0-9\n]&#39; _ | xargs touch
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;curl&#34;&gt;&lt;code&gt;curl&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;なんでもプロトコル喋る人。結果を標準出力に吐くのでREST APIを叩いた後シェル芸に繋げやすい。&lt;/p&gt;
-
-&lt;h2 id=&#34;例-13&#34;&gt;例&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;curl http://example.io/status | jq -r &#39;.status&#39;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;jq&#34;&gt;&lt;code&gt;jq&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;チューリング完全言語jq。REST API叩いてjsonが返ってきた時に使うと便利。&lt;/p&gt;
-
-&lt;h1 id=&#34;od&#34;&gt;&lt;code&gt;od&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;バイナリデータを扱うのに使う。&lt;/p&gt;
-
-&lt;h2 id=&#34;例-14&#34;&gt;例&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;cat /dev/urandom | od -x | head -n 10 | ...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;tee&#34;&gt;&lt;code&gt;tee&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;T字管のようにパイプを分岐させるのに使う。あるいはシェルの機能であるリダイレクトをコマンドとして実行するのに使う。&lt;/p&gt;
-
-&lt;h2 id=&#34;例-15&#34;&gt;例&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;cat nginx.conf | ssh stepper ssh host1 sudo tee /etc/nginx/nginx.conf &amp;gt; /dev/null
-&lt;/code&gt;&lt;/pre&gt;</description>
+&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>tarballベースの軽量バックアップツール&#39;Sheltar&#39;を作った</title>
-      <link>/blog/2015/05/06/tarballbe_sunokeiryoubakkuapputsu_rutsukutta</link>
+      <link>/blog/2015/05/06/tarballbe_sunokeiryoubakkuapputsu_rutsukutta/</link>
       <pubDate>Wed, 06 May 2015 20:45:53 +0900</pubDate>
       
-      <guid>/blog/2015/05/06/tarballbe_sunokeiryoubakkuapputsu_rutsukutta</guid>
+      <guid>/blog/2015/05/06/tarballbe_sunokeiryoubakkuapputsu_rutsukutta/</guid>
       <description>&lt;p&gt;κeenです。みなさんバックアップは何使ってますか？大抵のOSには標準でバックアップツールが付いてますがそれ使ってます？私も使ってます。
 しかしやつらはそのOSでしか動かない/動かす方法があまり知られていないのでマシンがクラッシュしたりマシンを失くした時に困ります。&lt;/p&gt;
 
 &lt;p&gt;そこで候補に上がるのが安心と信頼のtarballですが今度は増分バックアップが取りづらいという問題があります。なのでtarballベースの差分バックアップツールを作りました。
 
-まあ、捜せば同じようなものが色々あるでしょうが捜し回るのが面倒だし色々インストールするのも嫌なのでえいやと作ってしまいました。&lt;/p&gt;
-
-&lt;p&gt;タイトルにある通り&lt;a href=&#34;https://github.com/KeenS/sheltar&#34;&gt;Sheltar&lt;/a&gt;といいます。ポータブルなB Shellスクリプト製です。どこでも動くと思います。バックアップ（避難）だしshellだしtarだしって適当に付けたら意外にもコンフリクトがありませんでした。しかも&lt;a href=&#34;http://ultra.wikia.com/wiki/Sheltar&#34;&gt;ウルトラ怪獣&lt;/a&gt;にも居るという奇跡的な名前です。&lt;/p&gt;
-
-&lt;h1 id=&#34;目的&#34;&gt;目的&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;http://ja.wikipedia.org/wiki/%E5%A2%97%E5%88%86%E3%83%90%E3%83%83%E3%82%AF%E3%82%A2%E3%83%83%E3%83%97&#34;&gt;増分バックアップ&lt;/a&gt;をとる&lt;/li&gt;
-&lt;li&gt;UbuntuとMac間でのデータ同期にも使いたい(家のルータがしょぼいのでrsyncを使いたくなく、USBメモリ経由とかが良い)&lt;/li&gt;
-&lt;li&gt;なのでファイル形式はポータブルなtarballで&lt;/li&gt;
-&lt;li&gt;メタデータとかは極力置かず、最悪他のツールからでもバックアップデータをサルベージ出来るようにしたい&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;です。 GNU tarには増分バックアップ用のオプションがありますがファイル抽出は手作業でやる必要があります。
-また、(多分)BSD tarには増分バックアップ用のオプションがないのでそこもカバーする必要があるかなと思って作りました。&lt;/p&gt;
-
-&lt;p&gt;あとオプションがあるとはいっても一々覚えてられないのでスクリプト化してしまいたかったってのもあります。&lt;/p&gt;
-
-&lt;h1 id=&#34;使い方&#34;&gt;使い方&lt;/h1&gt;
-
-&lt;h2 id=&#34;step0&#34;&gt;STEP0&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/KeenS/sheltar&#34;&gt;ここ&lt;/a&gt;からSheltarを入手しましょう。&lt;code&gt;sheltar&lt;/code&gt;スクリプト1つで完結しているのでcloneしなくてもrawをwgetしてきても大丈夫です。&lt;/p&gt;
-
-&lt;h2 id=&#34;step1&#34;&gt;STEP1&lt;/h2&gt;
-
-&lt;p&gt;増分バックアップなので複数のtarballが作られます。バックアップ用のディレクトリを用意しましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;$ mkdir /mnt/dev1/backup
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;step2&#34;&gt;STEP2&lt;/h2&gt;
-
-&lt;p&gt;バックアップしたいファイルをリストアップしましょう。バックアップは継続的に行なうものなので1回限りのコマンドライン引数で渡す訳にはいきませんね。&lt;/p&gt;
-
-&lt;p&gt;pngファイルをバックアップしたいとしましょうか。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;$ find Pictures -name &#39;*.png&#39; &amp;gt;&amp;gt; list.txt
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これで良さそうです。ディレクトリの中身全部をバックアップしたいなら&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;$ echo Pictures/ &amp;gt;&amp;gt; list.txt
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;でも構いません。最後の&amp;rsquo;/&amp;lsquo;重要です。最初のバックアップの時には問題ありませんが&amp;rsquo;/&amp;lsquo;がないと増分バックアップの時にディレクトリ自体のlast modified timeを見て変更を判断します。&lt;/p&gt;
-
-&lt;h2 id=&#34;step3&#34;&gt;STEP3&lt;/h2&gt;
-
-&lt;p&gt;あとは実行するだけですね。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;$ sheltar backup /mnt/dev1/backup list.txt
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;その後、増分バックアップを取るのも同じく&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;$ sheltar backup /mnt/dev1/backup list.txt
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;で可能です。前回のアーカイブファイルのlast modified time より新しいファイルだけをバックアップしてくれます。&lt;/p&gt;
-
-&lt;p&gt;因みに今のところバックアップディレクトリに余計なものがあると正しく動作してくれないので注意です。&lt;/p&gt;
-
-&lt;h2 id=&#34;復元&#34;&gt;復元&lt;/h2&gt;
-
-&lt;p&gt;全部のファイルをカレントディレクトリにぶちまけたいなら&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;$ sheltar extract /mnt/dev1/backup
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;です。抽出するファイルを指定したいなら&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;$ sheltar extract /mnt/dev1/backup file1 file2 ...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;とします。&lt;/p&gt;
-
-&lt;p&gt;カレントディレクトリに同名ファイルが既にある場合は新しい方を残します。&lt;/p&gt;
-
-&lt;h1 id=&#34;その他&#34;&gt;その他&lt;/h1&gt;
-
-&lt;p&gt;まだまだ未完成です。欲しい機能があったら&lt;a href=&#34;https://github.com/KeenS/sheltar/issues&#34;&gt;issue&lt;/a&gt;に投げてくれると実装するかもしれません。&lt;a href=&#34;https://github.com/KeenS/sheltar/pulls&#34;&gt;Pull Request&lt;/a&gt;もお待ちしております
-あと、ドックフードはまだ食べてません。一応テストはしてますが…。Macをまともに使う気になったら使い始めると思います。&lt;/p&gt;
-
-&lt;p&gt;あ、そうそう。今回比較的コメントを多く書いたのでシェルスクリプトを勉強したい方はソース読んでみて下さい。
-こんな感じです。Doxygenがシェルスクリプトに対応してないので疑似ドキュメント形式のコメントですが。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sh&#34;&gt;# Extract the all files from backups in $ST_BACKUP_DIR.
-# A file with the same name as extracting file will be preserved if it is newer than its counterpart.
-## @filesystem extract all the backup files to CWD
-st_extract_all()
-{
-    # This is preferable to `for TARBALL in $(ls)` because the names of listed files
-    # can contain whilespaces
-    ls --sort=time -r &amp;quot;${ST_BACKUP_DIR}&amp;quot; | while read TARBALL
-    do
-        tar xf &amp;quot;${ST_BACKUP_DIR}/${TARBALL}&amp;quot; \
-            --keep-newer-files               \
-            --preserve-permissions           \
-            --preserve-order
-    done
-}
-&lt;/code&gt;&lt;/pre&gt;</description>
+まあ、捜せば同じようなものが色々あるでしょうが捜し回るのが面倒だし色々インストールするのも嫌なのでえいやと作ってしまいました。&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>割と処理系ポータブルなCommon Lisp実行可能ファイルを作る</title>
-      <link>/blog/2014/12/08/ge-tochu-li-xi-potaburunacommon-lispshi-xing-ke-neng-huairuwozuo-ru</link>
+      <link>/blog/2014/12/08/ge-tochu-li-xi-potaburunacommon-lispshi-xing-ke-neng-huairuwozuo-ru/</link>
       <pubDate>Mon, 08 Dec 2014 00:00:00 +0000</pubDate>
       
-      <guid>/blog/2014/12/08/ge-tochu-li-xi-potaburunacommon-lispshi-xing-ke-neng-huairuwozuo-ru</guid>
+      <guid>/blog/2014/12/08/ge-tochu-li-xi-potaburunacommon-lispshi-xing-ke-neng-huairuwozuo-ru/</guid>
       <description>&lt;p&gt;κeenです。Lisp Advent Calendarはもう枠埋まっちゃったので普通にブログで。&lt;/p&gt;
 
 &lt;p&gt;コマンドラインから実行可能なLispファイルをそれなりに多くの処理系で動くように作る話。
-&lt;/p&gt;
-
-&lt;p&gt;この話はCIMの生い立ちとも関連するんだけどシェルからLispを使いたいときは&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;#!/usr/bin/env sbcl --script
-
-...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;なんて書いてた人も多いんじゃないかと思うんだけどこれは色々問題がある。&lt;/p&gt;
-
-&lt;ol&gt;
-&lt;li&gt;envは環境に依っては/usr/local/bin/envだったりする&lt;/li&gt;
-&lt;li&gt;envは環境に依っては複数引数を取れない。&amp;rdquo;sbcl &amp;ndash;script&amp;rdquo;という名前のファイルを捜しにいく&lt;/li&gt;
-&lt;li&gt;sbclでしか動かない&lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;p&gt;この問題の扱いは一応解決策がある&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;#!/bin/sh
-
-#|
-exec sbcl --script &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
-|#
-
-...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;3行目の&lt;code&gt;#|&lt;/code&gt;がシェルのコメントでありLispのブロックコメントであるのがポイント。&lt;/p&gt;
-
-&lt;ol&gt;
-&lt;li&gt;シェルは&lt;code&gt;#!/bin/sh&lt;/code&gt;を見てシェルスクリプトとして実行する&lt;/li&gt;
-&lt;li&gt;1,3行目はコメントなのでシェルは無視&lt;/li&gt;
-&lt;li&gt;4行目でsbclにそのファイルを引数として与えてexecする。execしたあとはシェルには戻らないのでその後何が書いてあっても構わない&lt;/li&gt;
-&lt;li&gt;sbclを&lt;code&gt;--script&lt;/code&gt;付きで読んでるので1行目の&lt;code&gt;#!&lt;/code&gt;で始まる行は無視する&lt;/li&gt;
-&lt;li&gt;3~5行目はブロックコメントなのでsbclは無視&lt;/li&gt;
-&lt;li&gt;それ以降がLispとして実行される&lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;p&gt;というカラクリになっている。こういうのをピジン言語っていうんだけ？&lt;/p&gt;
-
-&lt;p&gt;まあいいや。&lt;/p&gt;
-
-&lt;p&gt;ところでこのブロックコメントの中にはシェルスクリプト書き放題だよね？そのシェルスクリプト内でどのLisp使うか決めたらポータブルになりそうじゃない？&lt;/p&gt;
-
-&lt;p&gt;こういうのはどう？&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;#!/bin/sh
-
-#|
-run_if_exists(){
- command -v $1 &amp;gt; /dev/null 2&amp;gt;&amp;amp;1 &amp;amp;&amp;amp; exec &amp;quot;$@&amp;quot;
-}
- run_if_exists sbcl --noinform --no-sysinit --no-userinit --script &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
- run_if_exists clisp -norc --quiet --silent -on-error exit  &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
- run_if_exists ecl -norc -q -shell &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
- run_if_exists mkcl -norc -q -shell &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
- run_if_exists alisp -qq -#! &amp;quot;$0&amp;quot; -- &amp;quot;$@&amp;quot;
-|#
-
-(write-line (lisp-implementation-type))
-(force-output)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;cclとabclは1行目のシェバンを読み飛ばせなかった&amp;amp;評価結果をエコーバックしない方法が見当らなかったからパス。CMUCLは自分の環境で動かないから検証出来てない。&lt;/p&gt;
-
-&lt;p&gt;これでポータブルに実行は可能。コマンドライン引数の扱いとかはライブラリを頼ってくれ。因みにCIMでは&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-lisp&#34;&gt;  #+allegro  (cdr (system:command-line-arguments))
-  #+sbcl (do*  ((var sb-ext:*posix-argv* (cdr list))
-                (list var var))
-               ((string= (car list) &amp;quot;--&amp;quot;) (return (cdr list))))
-  #+clisp ext:*args*
-  #+ecl (do*  ((var (si:command-args) (cdr list))
-               (list var var))
-              ((string= (car list) &amp;quot;--&amp;quot;) (return (cdr list))))
-  #+abcl extensions:*command-line-argument-list*
-  #+gcl (do*  ((var si::*command-args* (cdr list))
-               (list var var))
-              ((string= (car list) &amp;quot;--&amp;quot;) (return (cdr list))))
-  #+cmu ext:*command-line-words*
-  #+ccl ccl:*unprocessed-command-line-arguments*
-  #+mkcl (do*  ((var (si:command-args) (cdr list))
-               (list var var))
-              ((string= (car list) &amp;quot;--&amp;quot;) (return (cdr list))))
-  #+lispworks system:*line-arguments-list*
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;としている。参考までに。&lt;/p&gt;</description>
+&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>.emacsの整理をした話 &#43; EmacsとViとShellとLispを悪魔合体させたら超絶便利だった</title>
-      <link>/blog/2013/12/13/dot-emacs-clean-up</link>
+      <link>/blog/2013/12/13/dot-emacs-clean-up/</link>
       <pubDate>Fri, 13 Dec 2013 00:00:00 +0000</pubDate>
       
-      <guid>/blog/2013/12/13/dot-emacs-clean-up</guid>
+      <guid>/blog/2013/12/13/dot-emacs-clean-up/</guid>
       <description>&lt;p&gt;やや長いタイトルですが・・・年末になって大掃除がやってきましたね。みなさんもそろそろ.emacsの大掃除をしましょう。&lt;/p&gt;
 
-&lt;p&gt;&lt;/p&gt;
-
-&lt;p&gt;私の.emacsは元々1300行ちょいあってEmacsの起動に7~8秒(体感)かかってましたが大掃除&amp;amp;高速化をした結果800行弱、起動に1秒(体感)ほどになったので整理の仕方を共有しますね。&lt;/p&gt;
-
-&lt;p&gt;前提ですが、私はinitローダーとかは使ってません。全部&lt;code&gt;init.el&lt;/code&gt;に書いてます。で、機能毎にページを作って(&lt;code&gt;C-q C-l&lt;/code&gt;)ます。ただ、それだけだと視認性が悪いので見出しとして&lt;code&gt;C-u C-u C-u ;&lt;/code&gt;で&lt;code&gt;;&lt;/code&gt;を64個挿入して次の行にコメントで&lt;code&gt;#&lt;/code&gt;付きのタイトルを付けてます。&lt;/p&gt;
-
-&lt;p&gt;具体的には&lt;/p&gt;
-
-&lt;figure class=&#34;code&#34;&gt;&lt;figcaption&gt;&lt;span&gt;&lt;/span&gt;&lt;/figcaption&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
-&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
-&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
-&lt;span class=&#34;line-number&#34;&gt;3&lt;/span&gt;
-&lt;/pre&gt;&lt;/td&gt;
-&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;common-lisp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;nv&#34;&gt;^L&lt;/span&gt;
-&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;c1&#34;&gt;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;&lt;/span&gt;
-&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;c1&#34;&gt;;; #Lisp&lt;/span&gt;
-&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
-&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
-
-&lt;p&gt;こんな感じのものが機能毎に書かれてます。これで&lt;code&gt;C-s&lt;/code&gt;や&lt;code&gt;M-x occur&lt;/code&gt;でハッシュタグのように検索することも&lt;code&gt;C-v&lt;/code&gt;でスクロールしていって目grepすることも&lt;code&gt;C-x ]&lt;/code&gt;で機能毎にジャンプすることもできます。&lt;/p&gt;
-
-&lt;h1 id=&#34;1-emacsの最新版を使う&#34;&gt;1. Emacsの最新版を使う&lt;/h1&gt;
-
-&lt;p&gt;結構重要です。「標準のやつだと欲いこの機能がないから拡張パッケージ入れた」なんてのも最新版では改善されていたりします。例えば私は&lt;code&gt;emacs-w3m&lt;/code&gt;を使っていましたが、Emacsのmasterブランチには&lt;code&gt;eww&lt;/code&gt;なるEmacs Lisp製のブラウザが入っているのでそれを使うようにしました。&lt;/p&gt;
-
-&lt;p&gt;&lt;s&gt;ただ、これが絶対的正義かというとそうでもなく、パッケージで入れてない分
-Ubuntuのインプットメソッドとの連携部分がなかったので&lt;code&gt;uim.el&lt;/code&gt;を入れる
-必要が出てきたりと、面倒な部分もありました。Emacs標準のインプットメソッドはどうにも使いものにならず、
-&lt;code&gt;ddskk&lt;/code&gt;もuim-skkとコンフリクトする(というか&lt;code&gt;C-j&lt;/code&gt;上書きとかありえない)ので使いません。インプットメソッドの切り替え部分は&lt;/s&gt;&lt;/p&gt;
-
-&lt;figure class=&#34;code&#34;&gt;&lt;figcaption&gt;&lt;span&gt;&lt;/span&gt;&lt;/figcaption&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;table&gt;&lt;tr&gt;
-&lt;td class=&#34;gutter&#34;&gt;&lt;pre class=&#34;line-numbers&#34;&gt;&lt;span class=&#34;line-number&#34;&gt;1&lt;/span&gt;
-&lt;span class=&#34;line-number&#34;&gt;2&lt;/span&gt;
-&lt;/pre&gt;&lt;/td&gt;
-&lt;td class=&#34;code&#34;&gt;&lt;pre&gt;&lt;code class=&#34;common-lisp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;nv&#34;&gt;global-set-key&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;nv&#34;&gt;kbd&lt;/span&gt; &lt;span class=&#34;s&#34;&gt;&#34;&amp;lt;hiragana-katakana&amp;gt;&#34;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;nf&#34;&gt;#&#39;&lt;/span&gt;&lt;span class=&#34;nv&#34;&gt;uim-mode&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt;
-&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;nv&#34;&gt;global-set-key&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;nv&#34;&gt;kbd&lt;/span&gt; &lt;span class=&#34;s&#34;&gt;&#34;&amp;lt;zenkaku-hankaku&amp;gt;&#34;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;nf&#34;&gt;#&#39;&lt;/span&gt;&lt;span class=&#34;nv&#34;&gt;uim-mode&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;nv&#34;&gt;autoload&lt;/span&gt; &lt;span class=&#34;nf&#34;&gt;#&#39;&lt;/span&gt;&lt;span class=&#34;nv&#34;&gt;uim-mode&lt;/span&gt; &lt;span class=&#34;s&#34;&gt;&#34;uim&#34;&lt;/span&gt; &lt;span class=&#34;no&#34;&gt;nil&lt;/span&gt; &lt;span class=&#34;no&#34;&gt;t&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt;
-&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
-&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;&lt;/figure&gt;
-
-&lt;p&gt;になりました。&lt;/p&gt;
-
-&lt;p&gt;2013-12-16追記&lt;br /&gt;
-これは私が&lt;code&gt;~/.Xresources&lt;/code&gt;に&lt;code&gt;Emacs*useXIM: false&lt;/code&gt;を書いていたのが原因でした。&lt;code&gt;Emacs*useXIM: true&lt;/code&gt;に書き換え、&lt;code&gt;xrdb ~/.Xresources&lt;/code&gt;すると直りました。&lt;/p&gt;
-
-&lt;h1 id=&#34;2-普段使わない設定は全部消す&#34;&gt;2. 普段使わない設定は全部消す&lt;/h1&gt;
-
-&lt;p&gt;基本ですね。私は&lt;code&gt;summary-edit.el&lt;/code&gt;だとか&lt;code&gt;multiverse.el&lt;/code&gt;だとかるびきちさんの本を読んで便利そうだから入れたものの、結局使わなかったものの設定&amp;amp;elispをごっそり削除。あとかなりの言語に対してデフォルトで&lt;code&gt;auto-mode-alist&lt;/code&gt;が設定されていたので&lt;code&gt;auto-mode-alist&lt;/code&gt;の設定も全部消して、必要になったら書き足すようにしました。&lt;/p&gt;
-
-&lt;h1 id=&#34;3-普段使っていても代替の効くものは削除&#34;&gt;3. 普段使っていても代替の効くものは削除&lt;/h1&gt;
-
-&lt;p&gt;これは高速化の意味と自分の環境に依存しない意味があります。最近、自分のラップトップ以外でもEmacsを触ることが多くあって、デフォルトのキーを上書きして使ってる部分で何度も誤操作したのでそれを減らす目的です。&lt;code&gt;bm.el&lt;/code&gt;は&lt;code&gt;C-x r SPC&lt;/code&gt;の&lt;code&gt;register&lt;/code&gt;系や&lt;code&gt;C-x C-SPC&lt;/code&gt;で対応(registerは覚えれば使い出がありそうなのでいつか解説書くかもです)、&lt;code&gt;open-junk-file.el&lt;/code&gt;は&lt;code&gt;~/tmp&lt;/code&gt;を作って対応、&lt;code&gt;recentf-ext.el&lt;/code&gt;は&lt;code&gt;helm-file-buffers&lt;/code&gt;だとか。&lt;/p&gt;
-
-&lt;p&gt;あと全て&lt;code&gt;helm.el&lt;/code&gt;に置き換えて&lt;code&gt;helm.el&lt;/code&gt;と&lt;code&gt;anything.el&lt;/code&gt;が混在してる状態をどうにかしたかったのですが、&lt;code&gt;php-completion.el&lt;/code&gt;かなにかが依存しててトドメを刺せませんでした。&lt;/p&gt;
-
-&lt;p&gt;あと、&lt;code&gt;viewer&lt;/code&gt;の代替を探していたらタイトルにあるように悪魔合体が起きたので後で書きますね。&lt;/p&gt;
-
-&lt;h1 id=&#34;4-できる限り標準のものを使う&#34;&gt;4. できる限り標準のものを使う&lt;/h1&gt;
-
-&lt;p&gt;標準で提供されているパッケージは&lt;code&gt;autoload&lt;/code&gt;が&lt;code&gt;emacs&lt;/code&gt;バイナリに組込まれてる(と思う)ので起動時のオーバーヘッドはありません。&lt;code&gt;flymake.el&lt;/code&gt;や&lt;code&gt;ruby-mode.el&lt;/code&gt;が標準で提供されてるのに気付いたのでそれを使ったりなど。一度&lt;code&gt;(emacsroot)/lisp&lt;/code&gt;以下を眺めてみることをお勧めします。結構発見があるものです。&lt;/p&gt;
-
-&lt;h1 id=&#34;5-autoload-を使う&#34;&gt;5.&lt;code&gt;autoload&lt;/code&gt;を使う&lt;/h1&gt;
-
-&lt;p&gt;&lt;code&gt;autoload&lt;/code&gt;とはファイルの読み込みを必要になるまで遅らせる仕組みです。「必要になる」ってのはそのファイルで定義されている関数が呼ばれたときです。賢い&lt;code&gt;require&lt;/code&gt;と思えば良いでしょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;(autoload #&#39;関数名 &amp;quot;関数が呼ばれたときに読むファイル名&amp;quot; nil interactivep)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;みたいに使います。&lt;code&gt;interactivep&lt;/code&gt;の部分は&lt;code&gt;M-x&lt;/code&gt;で呼ぶものなら&lt;code&gt;t&lt;/code&gt;、そうでなければ&lt;code&gt;nil&lt;/code&gt;です。&lt;code&gt;require&lt;/code&gt;を&lt;code&gt;autoload&lt;/code&gt;で書き換えていけば理論上起動時の読み込み0にできるのでかなり高速化できます。&lt;/p&gt;
-
-&lt;p&gt;が、実際は一々&lt;code&gt;autoload&lt;/code&gt;書くのはしんどいので次です。&lt;/p&gt;
-
-&lt;h1 id=&#34;6-できる限り-package-el-を使う&#34;&gt;6.できる限り&lt;code&gt;package.el&lt;/code&gt;を使う&lt;/h1&gt;
-
-&lt;p&gt;&lt;code&gt;package.el&lt;/code&gt;は必要な関数の&lt;code&gt;autoload&lt;/code&gt;を自動生成して読み込んでおいてくれるのでかなりの手間が省けます。そして&lt;code&gt;autoload&lt;/code&gt;があるのに&lt;code&gt;require&lt;/code&gt;してると折角の&lt;code&gt;package.el&lt;/code&gt;の配慮が無駄になります。&lt;/p&gt;
-
-&lt;p&gt;自動生成された&lt;code&gt;autoload&lt;/code&gt;は&lt;code&gt;elpa/パッケージのディレクトリ/パッケージ-autoloads.el&lt;/code&gt;にあるので確認しながら&lt;code&gt;init.el&lt;/code&gt;の邪魔なものを消していきます。これでかなり&lt;code&gt;init.el&lt;/code&gt;の行数が減ります。今まで無駄な設定していたんだなと気付きます。&lt;/p&gt;
-
-&lt;h1 id=&#34;7-eval-after-load-を使う&#34;&gt;7. &lt;code&gt;eval-after-load&lt;/code&gt;を使う&lt;/h1&gt;
-
-&lt;p&gt;8割程の設定は&lt;code&gt;autoload&lt;/code&gt;で対応できるのですが、踏み込んだ設定をしているとパッケージの内部の関数を使ってしまってどうしてもその式が評価される前にパッケージが読み込まれている必要があることがあります。&lt;/p&gt;
-
-&lt;p&gt;そんなときは&lt;code&gt;eval-after-load&lt;/code&gt;を使います。名前のまんま、ロードした後で&lt;code&gt;eval&lt;/code&gt;してくれます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;(eval-after-load &#39;ファイル名
-    &#39;式)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;の形で使います。複数の式を使いたい場合は&lt;code&gt;progn&lt;/code&gt;を使って&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;(eval-after-load &#39;ファイル名
-    &#39;(progn
-         式1
-         式2...))
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のように使います。あるパッケージの拡張パッケージなんかもここで読むと良いかもしれません。&lt;/p&gt;
-
-&lt;h1 id=&#34;8-その他&#34;&gt;8.その他&lt;/h1&gt;
-
-&lt;p&gt;メールクライアントを標準のものにしようとしましたが、&lt;code&gt;gnus.el&lt;/code&gt;はちょっと受け付けなくてその他はimapを喋らないので断念。でも色々調べてたら&lt;code&gt;mew&lt;/code&gt;より&lt;code&gt;wanderlust&lt;/code&gt;の方が良いようなので使い初めました。表示が綺麗で良いですね。HTMLのレンダリングも&lt;code&gt;emacs-w3m&lt;/code&gt;に頼らず標準の&lt;code&gt;shr.el&lt;/code&gt;を使っているのも◎。&lt;/p&gt;
-
-&lt;p&gt;同じような経緯で&lt;code&gt;JDEE&lt;/code&gt;をやめて&lt;code&gt;malabar.el&lt;/code&gt;を使うようにしました。ただ、私は&lt;code&gt;maven&lt;/code&gt;使いではないので微妙ではあります。まあ、そもそもプロジェクト単位でJavaを書くことがないってのもあるんですが。Androidのスケルトンがantなのでantでできたら嬉しいなーって。&lt;/p&gt;
-
-&lt;h1 id=&#34;emacsとviとshellとlispを悪魔合体させた話&#34;&gt;EmacsとViとShellとLispを悪魔合体させた話&lt;/h1&gt;
-
-&lt;p&gt;私はEmacsの狂信者ですが読み専のときはちょいちょいviを使うこともあります。片手で操作できるのは便利です。Emacsで読み専といえば&lt;code&gt;view-mode&lt;/code&gt;です。そこでもhjklを使うべく&lt;code&gt;view-mode-map&lt;/code&gt;に手を加えてましたが、大掃除ということで全部削除。&lt;/p&gt;
-
-&lt;p&gt;その後で&lt;code&gt;emacsroot/lisp/emulate/&lt;/code&gt;以下を読んでいるとなんかviのエミュレーターが3つも見付かりました。&lt;code&gt;vi.el&lt;/code&gt;、&lt;code&gt;vip.el&lt;/code&gt;、&lt;code&gt;viper.el&lt;/code&gt;です。後者になるほどviとの互換性が高くなります。とりあえずは&lt;code&gt;hjkl&lt;/code&gt;が使えれば良いので&lt;code&gt;vi.el&lt;/code&gt;を使ってみたところ、ん〜…といったところ。&lt;code&gt;vip.el&lt;/code&gt;と試して結局&lt;code&gt;viper.el&lt;/code&gt;に落ち着きました。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;(global-set-key (kbd &amp;quot;C-x C-q&amp;quot;) #&#39;(lambda ()
-                    (interactive)
-                    (toggle-viper-mode)
-                    (force-mode-line-update)))
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;設定はこんな感じです。&lt;code&gt;toggle-viper-mode&lt;/code&gt;してもモードラインの表示が変わらないことがあったので&lt;code&gt;force-mode-line-update&lt;/code&gt;を加えました。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;viper.el&lt;/code&gt;は単なるviのエミュレートだけではなく、Levelに応じて良い感じにemacsと悪魔合体してくれます。私は最高レベルの5にしました。”C-x C-s”など基本的なコマンドはそのまま使えるようになってます。&lt;code&gt;:&lt;/code&gt;で始まるvi(ex)のコマンドも使えます。&lt;code&gt;C-z&lt;/code&gt;でemacs&amp;lt;–&amp;gt;viを切り替えたり。非常に便利です。&lt;/p&gt;
-
-&lt;p&gt;尚、私はvi使いであってvim使いではないのでevilは使いません。&lt;/p&gt;
-
-&lt;p&gt;もう一つ、shellの話。今までは&lt;code&gt;multiterm&lt;/code&gt; × &lt;code&gt;zsh&lt;/code&gt;な感じでしたが、「できる限り標準のものを使う」方針で&lt;code&gt;eshell&lt;/code&gt;に切り替えました。&lt;code&gt;eshell&lt;/code&gt;はEmacs Lispで書かれたshellです。これが思った以上に便利です。るびきちさんの本では標準出力とエラー出力の切り分けができてないと書かれてましたがそれは修正されてるようです。&lt;/p&gt;
-
-&lt;p&gt;あとは&lt;code&gt;/dev/kill&lt;/code&gt;だとか&lt;code&gt;&amp;gt;&amp;gt;&amp;gt;&lt;/code&gt;だとかバッファへのリダイレクトだとか&lt;code&gt;grep&lt;/code&gt;の上書きだとか色々楽しい拡張もあるのですが、一番は&lt;code&gt;eshell&lt;/code&gt;がLispであること。&lt;code&gt;eshell&lt;/code&gt;上で任意のEmacs Lisp式を実行できます。最近Emacs LispやLispに精通してきたので非常に有り難いです。&lt;br /&gt;
-それにファイルを開くときもその後で同じディレクトリのファイルを開くことが多いので一旦 &lt;code&gt;cd&lt;/code&gt;してから&lt;code&gt;find-file&lt;/code&gt;をするとアクセスし易くて捗ります。もう起動時に&lt;code&gt;eshell&lt;/code&gt;が立ち上がるようにして、基本そこから操作するようにしてます。guakeもそんなに使わなくなりました。他の環境でも使えるので安心して依存できます。&lt;/p&gt;
-
-&lt;p&gt;で、ファイルを開くときはどうしてるかというと実はemacsの&lt;code&gt;find-file&lt;/code&gt;ではなくviの&lt;code&gt;:e file-name&lt;/code&gt;です。Emacs上でLispで出来たShellを使いつつviを動かしてます。かなり人を選びますが「EmacsのヘビーユーザーでLispに精通しててviを便利だと思ってる人」は試してみてはいかがでしょうか。&lt;/p&gt;</description>
+&lt;p&gt;&lt;/p&gt;</description>
     </item>
     
   </channel>

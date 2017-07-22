@@ -2,3259 +2,357 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>Advent Calendar on κeenのHappy Hacκing Blog</title>
-    <link>/categories/advent-calendar/index.xml</link>
+    <link>/categories/advent-calendar/</link>
     <description>Recent content in Advent Calendar on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
-    <atom:link href="/categories/advent-calendar/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Sat, 24 Dec 2016 22:51:46 +0900</lastBuildDate>
+    
+	<atom:link href="/categories/advent-calendar/index.xml" rel="self" type="application/rss+xml" />
+    
     
     <item>
       <title>Rustのライフタイムを使ったスコープ解析</title>
-      <link>/blog/2016/12/24/rustnoraifutaimuwotsukattasuko_pukaiseki</link>
+      <link>/blog/2016/12/24/rustnoraifutaimuwotsukattasuko_pukaiseki/</link>
       <pubDate>Sat, 24 Dec 2016 22:51:46 +0900</pubDate>
       
-      <guid>/blog/2016/12/24/rustnoraifutaimuwotsukattasuko_pukaiseki</guid>
+      <guid>/blog/2016/12/24/rustnoraifutaimuwotsukattasuko_pukaiseki/</guid>
       <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2016/rust-lang-2&#34;&gt;Rust その2 Advent Calendar 2016 - Qiita&lt;/a&gt;の25日目の記事です。&lt;/p&gt;
 
 &lt;p&gt;κeenです。大トリに小ネタで申し訳ないのですが最近書いたコードでちょっと便利だなと思ったテクニックを紹介します。&lt;/p&gt;
 
-&lt;p&gt;&lt;/p&gt;
-
-&lt;p&gt;次のような言語のインタプリタを作ることを考えます。意味論はエスパーして下さい。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;x = 1
-y = 2
-println(&amp;quot;x = &amp;quot;, x)
-println(&amp;quot;y = &amp;quot;, y)
-
-println(&amp;quot;--&amp;quot;)
-
-{
-    x = 3
-    println(&amp;quot;x = &amp;quot;, x)
-    println(&amp;quot;y = &amp;quot;, y)
-}
-
-println(&amp;quot;--&amp;quot;)
-
-println(&amp;quot;x = &amp;quot;, x)
-println(&amp;quot;y = &amp;quot;, y)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;この実行結果は&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;x = 1
-y = 2
---
-x = 3
-y = 2
---
-x = 1
-y = 2
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;になりますね。このインタプリタをRustで作りましょう。&lt;/p&gt;
-
-&lt;h1 id=&#34;初期実装&#34;&gt;初期実装&lt;/h1&gt;
-
-&lt;p&gt;雛形はこんなもんでしょうか。後でリファレンスが出てきてややこしくなるので値は全て所有権を貰っています。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;#[derive(Debug, Clone)]
-struct AST(Vec&amp;lt;Stmt&amp;gt;);
-
-#[derive(Debug, Clone)]
-enum Stmt {
-    Subst(String, Expr),
-    Print(Vec&amp;lt;Expr&amp;gt;),
-    Block(Vec&amp;lt;Stmt&amp;gt;),
-}
-
-
-#[derive(Debug, Clone)]
-enum Expr {
-    Str(String),
-    Num(isize),
-    Var(String),
-}
-
-
-struct Interpreter {
-    // これを実装する
-}
-
-impl Interpreter {
-    pub fn new() -&amp;gt; Self {
-        Interpreter{}
-    }
-
-    fn run(&amp;amp;mut self, ast: AST) {
-        for stmt in ast.0 {
-            self.run_stmt(stmt);
-        }
-    }
-
-    fn run_stmt(&amp;amp;mut self, stmt: Stmt) {
-        // これを実装する
-    }
-}
-
-fn main() {
-    let ast = {
-        use Stmt::*;
-        use Expr::*;
-        AST(
-            vec![
-                Subst(&amp;quot;x&amp;quot;.to_string(), Num(1)),
-                Subst(&amp;quot;y&amp;quot;.to_string(), Num(2)),
-                Print(vec![Str(&amp;quot;x = &amp;quot;.to_string()), Var(&amp;quot;x&amp;quot;.to_string())]),
-                Print(vec![Str(&amp;quot;y = &amp;quot;.to_string()), Var(&amp;quot;y&amp;quot;.to_string())]),
-                Print(vec![Str(&amp;quot;--&amp;quot;.to_string())]),
-                Block(vec![
-                    Subst(&amp;quot;x&amp;quot;.to_string(), Num(3)),
-                    Print(vec![Str(&amp;quot;x = &amp;quot;.to_string()), Var(&amp;quot;x&amp;quot;.to_string())]),
-                    Print(vec![Str(&amp;quot;y = &amp;quot;.to_string()), Var(&amp;quot;y&amp;quot;.to_string())]),
-                ]),
-                Print(vec![Str(&amp;quot;--&amp;quot;.to_string())]),
-                Print(vec![Str(&amp;quot;x = &amp;quot;.to_string()), Var(&amp;quot;x&amp;quot;.to_string())]),
-                Print(vec![Str(&amp;quot;y = &amp;quot;.to_string()), Var(&amp;quot;y&amp;quot;.to_string())]),
-            ]
-        )
-    };
-    let mut interpreter = Interpreter::new();
-
-    interpreter.run(ast);
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;(コンストラクタ関数作っときゃよかったかも)&lt;/p&gt;
-
-&lt;p&gt;今回の本質ではないのでパーサは用意してません。&lt;/p&gt;
-
-&lt;p&gt;さて、とりあえずのところ変数の管理のためにシンボルテーブルが必要です。実装しましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;//...
-
-use std::collections::HashMap;
-struct Interpreter {
-    symbol_table: HashMap&amp;lt;String, Expr&amp;gt;,
-}
-
-impl Interpreter {
-    pub fn new() -&amp;gt; Self {
-        Interpreter{
-            symbol_table: HashMap::new(),
-        }
-    }
-
-    fn add_to_scope(&amp;amp;mut self, name: String, expr: Expr) {
-        self.symbol_table.insert(name, expr);
-    }
-
-    fn find_scope(&amp;amp;self, name: &amp;amp;str) -&amp;gt; Expr {
-        self.symbol_table
-            .get(name)
-            .expect(&amp;quot;reference to unknown variable&amp;quot;)
-            .clone()
-    }
-
-  //...
-}
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;簡略化のためにcloneやpanicしてますがご愛嬌。&lt;/p&gt;
-
-&lt;p&gt;これがあれば&lt;code&gt;run_stmt&lt;/code&gt;のそれっぽい実装は出来ます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    fn run_stmt(&amp;amp;mut self, stmt: Stmt) {
-        use Stmt::*;
-
-        match stmt {
-            Subst(name, expr) =&amp;gt; {
-                let expr = self.eval(expr);
-                self.add_to_scope(name, expr);
-            },
-            Print(exprs) =&amp;gt; {
-                for expr in exprs {
-                    self.print_expr(expr);
-                }
-                println!(&amp;quot;&amp;quot;);
-            },
-            Block(stmts) =&amp;gt; {
-                for stmt in stmts {
-                    self.run_stmt(stmt);
-                }
-            },
-        }
-
-    }
-
-    fn eval(&amp;amp;self, expr: Expr) -&amp;gt; Expr {
-        use Expr::*;
-        match expr {
-            Var(v) =&amp;gt; self.find_scope(&amp;amp;v),
-            e @ Str(_) |
-            e @ Num(_) =&amp;gt; e
-        }
-    }
-
-    fn print_expr(&amp;amp;self, expr: Expr) {
-        use Expr::*;
-        match self.eval(expr) {
-            Str(ref s) =&amp;gt; print!(&amp;quot;{}&amp;quot;, s),
-            Num(ref n) =&amp;gt; print!(&amp;quot;{}&amp;quot;, n),
-            Var(_) =&amp;gt; panic!(&amp;quot;reference to unknown variable&amp;quot;) ,
-        }
-    }
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;さて、これを走らせてみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo run
-x = 1
-y = 2
---
-x = 3
-y = 2
---
-x = 3
-y = 2
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;スコープを実装していないので最後の&lt;code&gt;x&lt;/code&gt;が3になっていますね。スコープを実装しましょう。&lt;/p&gt;
-
-&lt;p&gt;スコープを実装するには簡単にはハッシュテーブルを複数持てば良さそうです。
-3段にネストしたスコープなら3つのハッシュテーブルを持ちます。
-そしてスコープを抜けた時にそのスコープに対応するハッシュテーブルを消せば（忘れれば）良さそうです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct Interpreter {
-   // スコープに対応したテーブル達。
-   symbol_tables: Vec&amp;lt;HashMap&amp;lt;String, Expr&amp;gt;&amp;gt;,
-   // 今どのスコープを指しているか。
-   // スコープを抜けてもベクトルは縮まないのでこれが必要。
-   pos: usize,
-}
-
-impl Interpreter {
-    pub fn new() -&amp;gt; Self {
-        // 新しいフィールドの初期化
-        Interpreter{
-            symbol_tables: Vec::new(),
-            // ややこしくなるが、0で初期化しているのでpos-1番目のハッシュマップが現スコープのテーブルになる
-            pos: 0,
-        }
-    }
-
-    // スコープに入る処理。
-    fn in_scope(&amp;amp;mut self) {
-        let pos = self.pos;
-        // スコープから抜けてもハッシュマップは消えないので
-        // 入る → 出る → 入るをしたときに既にテーブルがある場合が出てくる。
-        // 必要なテーブルが既にある場合とない場合で条件分岐
-        if self.symbol_tables.len() &amp;lt;= pos {
-            self.symbol_tables.push(HashMap::new())
-        } else {
-            // 既にテーブルがある場合は古い情報を消す
-            self.symbol_tables[pos - 1].clear()
-        }
-        // ポジションは忘れずインクリメント
-        self.pos += 1;
-    }
-
-    // スコープから抜ける処理
-    fn out_scope(&amp;amp;mut self) {
-        // スコープから抜けるのはデクリメントのみでOK
-        self.pos -= 1;
-    }
-
-    pub fn run(&amp;amp;mut self, ast: AST) {
-        // in_scope が増えた
-        self.in_scope();
-        for stmt in ast.0 {
-            self.run_stmt(stmt);
-        }
-        // out_scope が増えた
-        self.out_scope();
-    }
-
-    fn add_to_scope(&amp;amp;mut self, name: String, expr: Expr) {
-        // 現在のスコープに変数を入れる
-        let pos = self.pos - 1;
-        self.symbol_tables[pos].insert(name, expr);
-    }
-
-    fn find_scope(&amp;amp;self, name: &amp;amp;str) -&amp;gt; Expr {
-        let pos = self.pos;
-        // 一番内側(現在)のスコープから外側のスコープの順に調べていく。
-        // `[0..pos]` や `rev()` に注意。
-        for table in self.symbol_tables[0..pos].iter().rev() {
-            if let Some(e) = table.get(name) {
-                return e.clone()
-            }
-        }
-        // どこにもなければ未定義変数
-        panic!(&amp;quot;reference to unknown variable&amp;quot;)
-    }
-
-    fn run_stmt(&amp;amp;mut self, stmt: Stmt) {
-        use Stmt::*;
-
-        match stmt {
-            // ..
-            Block(stmts) =&amp;gt; {
-                // in_scope が増えた
-                self.in_scope();
-                for stmt in stmts {
-                    self.run_stmt(stmt);
-                }
-                // out_scope が増えた
-                self.out_scope();
-            },
-        }
-
-    }
-
-    // ..
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これで走らせてみます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo run
-x = 1
-y = 2
---
-x = 3
-y = 2
---
-x = 1
-y = 2
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;はい。動きました。&lt;/p&gt;
-
-&lt;h1 id=&#34;scope-の導入&#34;&gt;&lt;code&gt;Scope&lt;/code&gt; の導入&lt;/h1&gt;
-
-&lt;p&gt;さて、上のコードでは&lt;code&gt;in_scope&lt;/code&gt;と&lt;code&gt;out_scope&lt;/code&gt;が対で現れました。というか現れないといけません。
-でもプログラミングエラーで&lt;code&gt;out_scope&lt;/code&gt;を忘れるなんてことはよくある話です（現に私はこのサンプルを書いてて間違えかけました）。これをRustのライフタイムの仕組みに乗っけて自動で解決しようというのが今回のお話。&lt;/p&gt;
-
-&lt;p&gt;手法は簡単で、とりあえず&lt;code&gt;Scope&lt;/code&gt;という型を用意します。そして&lt;code&gt;new&lt;/code&gt;する時に&lt;code&gt;in_scope&lt;/code&gt;を呼んであげて、&lt;code&gt;drop&lt;/code&gt;する時に&lt;code&gt;out_scope&lt;/code&gt;を呼んであげます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::ops::Drop;
-struct Scope&amp;lt;&#39;a&amp;gt;(&amp;amp;&#39;a mut Interpreter);
-
-impl &amp;lt;&#39;a&amp;gt;Scope&amp;lt;&#39;a&amp;gt; {
-    fn new(inpr: &amp;amp;&#39;a mut Interpreter) -&amp;gt; Self {
-        inpr.in_scope();
-        Scope(inpr)
-    }
-}
-
-impl &amp;lt;&#39;a&amp;gt;Drop for Scope&amp;lt;&#39;a&amp;gt; {
-    fn drop(&amp;amp;mut self) {
-        self.0.out_scope()
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;さて、この&lt;code&gt;&amp;amp;mut Interpreter&lt;/code&gt;で参照しているというのが丁度良くて、Scopeの分岐というのを防ぐことが出来ます。こういうやつですね。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;let scope1 = Scope::new(&amp;amp;mut intr);
-let scope2 = Scope::new(&amp;amp;mut intr); // error: 既に&amp;amp;mut されている変数は&amp;amp;mut出来ない
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;では、これを使ってみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    pub fn run(&amp;amp;mut self, ast: AST) {
-        // in_scopeをScope::new()に置き換えた
-        let scope = Scope::new(self);
-        for stmt in ast.0 {
-            // scopeに渡してしまったのでselfはsope.0で参照する必要がある
-            scope.0.run_stmt(stmt);
-        }
-        // out_scopeは自動で呼ばれる
-    }
-
-    // run_stmtのBlockも同様に書き換える
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo run
-x = 1
-y = 2
---
-x = 3
-y = 2
---
-x = 1
-y = 2
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;動きました。でも、あまり&lt;code&gt;scope.0&lt;/code&gt;なんて使いたくないですよね。出来れば透過的に扱いたい。
-そんなときのために&lt;code&gt;Deref&lt;/code&gt; と &lt;code&gt;DerefMut&lt;/code&gt; です。Rustは型が合わなければ自動で&lt;code&gt;deref&lt;/code&gt;を呼んでくれます。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;Deref&lt;/code&gt; と &lt;code&gt;DerefMut&lt;/code&gt; を実装しましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::ops::{Deref, DerefMut};
-impl &amp;lt;&#39;a&amp;gt; Deref for Scope&amp;lt;&#39;a&amp;gt; {
-    type Target = Interpreter;
-    fn deref(&amp;amp;self) -&amp;gt; &amp;amp;Interpreter {
-        self.0
-    }
-}
-
-impl &amp;lt;&#39;a&amp;gt; DerefMut for Scope&amp;lt;&#39;a&amp;gt; {
-    fn deref_mut(&amp;amp;mut self) -&amp;gt; &amp;amp;mut Interpreter {
-        self.0
-    }
-}
-
-impl Interpreter {
-    // ..
-
-    pub fn run(&amp;amp;mut self, ast: AST) {
-        // deref_mutするために mutをつける
-        let mut scope = Scope::new(self);
-        for stmt in ast.0 {
-            // scope.0しなくてもInterpreterのメソッドが呼べる
-            scope.run_stmt(stmt);
-        }
-    }
-
-   // ..
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;生成と消滅が対になるものはRustのオブジェクトで管理出来るよ&lt;/li&gt;
-&lt;li&gt;シンプルなラッパー型は&lt;code&gt;Deref&lt;/code&gt;や&lt;code&gt;DerefMut&lt;/code&gt;を実装しておくと便利だよ&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h1 id=&#34;参考&#34;&gt;参考&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/drop.html&#34;&gt;Drop&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/deref-coercions.html&#34;&gt;&lt;code&gt;Deref&lt;/code&gt; による型強制&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h1 id=&#34;付録a&#34;&gt;付録A&lt;/h1&gt;
-
-&lt;p&gt;最終的なソースコード全文を掲載します。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;#[derive(Debug, Clone)]
-struct AST(Vec&amp;lt;Stmt&amp;gt;);
-
-#[derive(Debug, Clone)]
-enum Stmt {
-    Subst(String, Expr),
-    Print(Vec&amp;lt;Expr&amp;gt;),
-    Block(Vec&amp;lt;Stmt&amp;gt;),
-}
-
-
-#[derive(Debug, Clone)]
-enum Expr {
-    Str(String),
-    Num(isize),
-    Var(String),
-}
-
-
-use std::collections::HashMap;
-struct Interpreter {
-   symbol_tables: Vec&amp;lt;HashMap&amp;lt;String, Expr&amp;gt;&amp;gt;,
-   pos: usize,
-}
-
-use std::ops::{Drop, Deref, DerefMut};
-struct Scope&amp;lt;&#39;a&amp;gt;(&amp;amp;&#39;a mut Interpreter);
-
-impl &amp;lt;&#39;a&amp;gt;Scope&amp;lt;&#39;a&amp;gt; {
-    fn new(inpr: &amp;amp;&#39;a mut Interpreter) -&amp;gt; Self {
-        inpr.in_scope();
-        Scope(inpr)
-    }
-}
-
-impl &amp;lt;&#39;a&amp;gt;Drop for Scope&amp;lt;&#39;a&amp;gt; {
-    fn drop(&amp;amp;mut self) {
-        self.0.out_scope()
-    }
-}
-
-impl &amp;lt;&#39;a&amp;gt; Deref for Scope&amp;lt;&#39;a&amp;gt; {
-    type Target = Interpreter;
-    fn deref(&amp;amp;self) -&amp;gt; &amp;amp;Interpreter {
-        self.0
-    }
-}
-
-impl &amp;lt;&#39;a&amp;gt; DerefMut for Scope&amp;lt;&#39;a&amp;gt; {
-    fn deref_mut(&amp;amp;mut self) -&amp;gt; &amp;amp;mut Interpreter {
-        self.0
-    }
-}
-
-impl Interpreter {
-    pub fn new() -&amp;gt; Self {
-        Interpreter{
-            symbol_tables: Vec::new(),
-            pos: 0,
-        }
-    }
-
-    fn in_scope(&amp;amp;mut self) {
-        let pos = self.pos;
-        if self.symbol_tables.len() &amp;lt;= pos {
-            self.symbol_tables.push(HashMap::new())
-        } else {
-            self.symbol_tables[pos - 1].clear()
-        }
-        self.pos += 1;
-    }
-
-    fn out_scope(&amp;amp;mut self) {
-        self.pos -= 1;
-    }
-
-    pub fn run(&amp;amp;mut self, ast: AST) {
-        let mut scope = Scope::new(self);
-        for stmt in ast.0 {
-            scope.run_stmt(stmt);
-        }
-    }
-
-    fn add_to_scope(&amp;amp;mut self, name: String, expr: Expr) {
-        let pos = self.pos - 1;
-        self.symbol_tables[pos].insert(name, expr);
-    }
-
-    fn find_scope(&amp;amp;self, name: &amp;amp;str) -&amp;gt; Expr {
-        let pos = self.pos;
-        for table in self.symbol_tables[0..pos].iter().rev() {
-            if let Some(e) = table.get(name) {
-                return e.clone()
-            }
-        }
-        panic!(&amp;quot;reference to unknown variable&amp;quot;)
-    }
-
-    fn run_stmt(&amp;amp;mut self, stmt: Stmt) {
-        use Stmt::*;
-
-        match stmt {
-            Subst(name, expr) =&amp;gt; {
-                let expr = self.eval(expr);
-                self.add_to_scope(name, expr);
-            },
-            Print(exprs) =&amp;gt; {
-                for expr in exprs {
-                    self.print_expr(expr);
-                }
-                println!(&amp;quot;&amp;quot;);
-            },
-            Block(stmts) =&amp;gt; {
-                let scope = Scope::new(self);
-
-                for stmt in stmts {
-                    scope.0.run_stmt(stmt);
-                }
-            },
-        }
-
-    }
-
-    fn eval(&amp;amp;self, expr: Expr) -&amp;gt; Expr {
-        use Expr::*;
-        match expr {
-            Var(v) =&amp;gt; self.find_scope(&amp;amp;v),
-            e @ Str(_) |
-            e @ Num(_) =&amp;gt; e
-        }
-    }
-
-    fn print_expr(&amp;amp;self, expr: Expr) {
-        use Expr::*;
-        match self.eval(expr) {
-            Str(ref s) =&amp;gt; print!(&amp;quot;{}&amp;quot;, s),
-            Num(ref n) =&amp;gt; print!(&amp;quot;{}&amp;quot;, n),
-            Var(_) =&amp;gt; panic!(&amp;quot;reference to unknown variable&amp;quot;) ,
-        }
-    }
-}
-
-fn main() {
-    let ast = {
-        use Stmt::*;
-        use Expr::*;
-        AST(
-            vec![
-                Subst(&amp;quot;x&amp;quot;.to_string(), Num(1)),
-                Subst(&amp;quot;y&amp;quot;.to_string(), Num(2)),
-                Print(vec![Str(&amp;quot;x = &amp;quot;.to_string()), Var(&amp;quot;x&amp;quot;.to_string())]),
-                Print(vec![Str(&amp;quot;y = &amp;quot;.to_string()), Var(&amp;quot;y&amp;quot;.to_string())]),
-                Print(vec![Str(&amp;quot;--&amp;quot;.to_string())]),
-                Block(vec![
-                    Subst(&amp;quot;x&amp;quot;.to_string(), Num(3)),
-                    Print(vec![Str(&amp;quot;x = &amp;quot;.to_string()), Var(&amp;quot;x&amp;quot;.to_string())]),
-                    Print(vec![Str(&amp;quot;y = &amp;quot;.to_string()), Var(&amp;quot;y&amp;quot;.to_string())]),
-                ]),
-                Print(vec![Str(&amp;quot;--&amp;quot;.to_string())]),
-                Print(vec![Str(&amp;quot;x = &amp;quot;.to_string()), Var(&amp;quot;x&amp;quot;.to_string())]),
-                Print(vec![Str(&amp;quot;y = &amp;quot;.to_string()), Var(&amp;quot;y&amp;quot;.to_string())]),
-            ]
-        )
-    };
-    let mut interpreter = Interpreter::new();
-
-    interpreter.run(ast);
-}
-&lt;/code&gt;&lt;/pre&gt;</description>
+&lt;p&gt;&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>Rustのプロセス</title>
-      <link>/blog/2016/12/02/rustnopurosesu</link>
+      <link>/blog/2016/12/02/rustnopurosesu/</link>
       <pubDate>Fri, 02 Dec 2016 17:52:30 +0900</pubDate>
       
-      <guid>/blog/2016/12/02/rustnopurosesu</guid>
+      <guid>/blog/2016/12/02/rustnopurosesu/</guid>
       <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2016/rust-lang-2&#34;&gt;Rust その2 Advent Calendar 2016 - Qiita&lt;/a&gt;3日目の記事です。&lt;/p&gt;
 
 &lt;p&gt;κeenです。Rustの&lt;a href=&#34;https://doc.rust-lang.org/std/process/index.html&#34;&gt;&lt;code&gt;std::process&lt;/code&gt;&lt;/a&gt;の扱い方を紹介します。&lt;/p&gt;
 
-&lt;p&gt;&lt;/p&gt;
-
-&lt;h1 id=&#34;ビルダー&#34;&gt;ビルダー&lt;/h1&gt;
-
-&lt;p&gt;これはビルダーになっていて、以下のように使えます。公式ドキュメントの例です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let output = Command::new(&amp;quot;sh&amp;quot;)
-    .arg(&amp;quot;-c&amp;quot;)
-    .arg(&amp;quot;echo hello&amp;quot;)
-    .output()
-    .expect(&amp;quot;failed to execute process&amp;quot;);
-
-let hello = output.stdout;
-println!(&amp;quot;{}&amp;quot;, std::str::from_utf8(&amp;amp;hello).unwrap());
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;hello
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;環境変数も渡せます&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let output = Command::new(&amp;quot;sh&amp;quot;)
-    .arg(&amp;quot;-c&amp;quot;)
-    // 環境変数を参照するコマンド
-    .arg(&amp;quot;echo $HELLO&amp;quot;)
-    // 環境変数を設定する
-    .env(&amp;quot;HELLO&amp;quot;, &amp;quot;hello, world&amp;quot;)
-    .output()
-    .expect(&amp;quot;failed to execute process&amp;quot;);
-
-let hello = output.stdout;
-println!(&amp;quot;{}&amp;quot;, std::str::from_utf8(&amp;amp;hello).unwrap());
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;hello, world
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;あるいは実行するディレクトリも指定出来ます&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let output = Command::new(&amp;quot;ls&amp;quot;)
-    // プロセスを実行するディレクトリを指定する
-    .current_dir(&amp;quot;/&amp;quot;)
-    .output()
-    .expect(&amp;quot;failed to execute process&amp;quot;);
-
-let hello = output.stdout;
-println!(&amp;quot;{}&amp;quot;, std::str::from_utf8(&amp;amp;hello).unwrap());
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;bin
-boot
-cdrom
-core
-...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;出力&#34;&gt;出力&lt;/h1&gt;
-
-&lt;p&gt;上の例では &lt;code&gt;output&lt;/code&gt; でstdio,stderr, exitstatus取り出していますが、子プロセスとして実行することも出来ます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let mut child = Command::new(&amp;quot;ls&amp;quot;)
-    .current_dir(&amp;quot;/&amp;quot;)
-    // outputではなくspawnを使う
-    .spawn()
-    .expect(&amp;quot;failed to execute process&amp;quot;);
-let status = child.wait().unwrap();
-println!(&amp;quot;{}&amp;quot;, status);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;bin  boot  cdrom  core  dev  etc  home  initrd.img  initrd.img.old  lib  lib32  lib64  libx32  lost+found  media  mnt  opt  proc  root  run  sbin  snap  srv  sys  tmp  usr  var  vmlinuz  vmlinuz.old
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;この場合、子プロセスはRustへではなく直接stdoutへ出力するのでSIGPIPEが送られません。&lt;/p&gt;
-
-&lt;p&gt;あるいは出力先を手で指定することも出来ます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let child = Command::new(&amp;quot;ls&amp;quot;)
-    .current_dir(&amp;quot;/&amp;quot;)
-    // stdoutをnullにする
-    .stdout(Stdio::null())
-    .spawn()
-    .expect(&amp;quot;failed to execute process&amp;quot;);
-let status = child.wait().unwrap();
-println!(&amp;quot;{}&amp;quot;, status);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ここではstdoutをnull ioに指定しています。他には&lt;code&gt;inherit&lt;/code&gt;で親プロセスのものを引き継ぐか、&lt;code&gt;piped&lt;/code&gt;で次のプロセスに渡すことも出来ます&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;// 1つめのプロセスを作る
-let mut child1 = Command::new(&amp;quot;ls&amp;quot;)
-    .current_dir(&amp;quot;/&amp;quot;)
-    // 出力は親プロセスへパイプする
-    .stdout(Stdio::piped())
-    .spawn()
-    .expect(&amp;quot;failed to execute process&amp;quot;);
-
-// 2つめのプロセスを作る
-let mut child2 = Command::new(&amp;quot;grep&amp;quot;)
-    .arg(&amp;quot;bin&amp;quot;)
-    // 入力は親プロセスへパイプする
-    .stdin(Stdio::piped())
-    .spawn()
-    .expect(&amp;quot;failed to execute process&amp;quot;);
-
-{
-    // Someと分かっているのでunwrapする。
-    // この辺はrustの型システテムの限界。
-    let out = child1.stdout.as_mut().unwrap();
-    let in_ = child2.stdin.as_mut().unwrap();
-    // 1つめのプロセスの出力から2つめのプロセスの入力へデータをコピーする
-    io::copy(out, in_).unwrap();
-}
-
-
-let status1 = child1.wait().unwrap();
-let status2 = child2.wait().unwrap();
-println!(&amp;quot;{}, {}&amp;quot;, status1, status2);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;bin
-sbin
-exit code: 0, exit code: 0
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ちょっと繋ぎ込みが面倒ですし&lt;code&gt;io::copy&lt;/code&gt;を使って手でコピーしてるのが頂けませんね。&lt;/p&gt;
-
-&lt;h1 id=&#34;unix&#34;&gt;Unix&lt;/h1&gt;
-
-&lt;p&gt;Unixに依存することを認めてしまえばもうちょっと色々なことが出来ます。&lt;/p&gt;
-
-&lt;p&gt;1つには&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::os::unix::process::CommandExt;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;するといくつか追加のメソドが生えてくる仕組みになってます。&lt;/p&gt;
-
-&lt;p&gt;例えば、&lt;code&gt;exec&lt;/code&gt; が使えます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let error = Command::new(&amp;quot;ls&amp;quot;)
-    .current_dir(&amp;quot;/&amp;quot;)
-    // execを呼ぶ
-    .exec();
-
-println!(&amp;quot;after exec!!&amp;quot;);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;exec&lt;/code&gt;した後はRustのプロセスを別のものに置き換えてしまうので&lt;code&gt;println!(&amp;quot;after exec!!&amp;quot;);&lt;/code&gt;の行が実行されません。
-されるとしたら何らかの理由で&lt;code&gt;exec&lt;/code&gt;に失敗した場合だけです。なので面白いことに&lt;code&gt;exec&lt;/code&gt;の返り値はエラーのみです。&lt;/p&gt;
-
-&lt;p&gt;あるいは、&lt;code&gt;unsafe&lt;/code&gt;なコードを認めるなら先のプロセスの繋ぎ込みはもうちょっとスマートに書けます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::os::unix::io::{AsRawFd, FromRawFd};
-let mut child1 = Command::new(&amp;quot;ls&amp;quot;)
-    .current_dir(&amp;quot;/&amp;quot;)
-    // 標準出力をパイプする
-    .stdout(Stdio::piped())
-    .spawn()
-    .expect(&amp;quot;failed to spawn a process&amp;quot;);
-
-let mut child2 = Command::new(&amp;quot;grep&amp;quot;)
-    .arg(&amp;quot;bin&amp;quot;)
-    // 標準入力は手で作ったStdioオブジェクトにする。
-    // ここでは1つめのプロセスの標準出力を直接繋ぐ。
-    .stdin(unsafe{Stdio::from_raw_fd(child1.stdout.as_ref().unwrap().as_raw_fd())})
-    .spawn()
-    .expect(&amp;quot;failed to spawn a process&amp;quot;);
-
-// 直接繋いでしまったのでコピーの必要はない
-
-let status1 = child1.wait().unwrap();
-let status2 = child2.wait().unwrap();
-println!(&amp;quot;{}, {}&amp;quot;, status1, status2);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;bin
-sbin
-exit code: 0, exit code: 0
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;Stdio&lt;/code&gt;がfdと行き来出来るのでそれを経由することでパイプを作れます。&lt;/p&gt;
-
-&lt;p&gt;もちろん、ファイルに書き出すことも出来ます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::os::unix::io::{AsRawFd, FromRawFd};
-
-let file = File::create(&amp;quot;test.txt&amp;quot;).unwrap();
-// ファイルからFDを経由してStdioを作る
-let out = unsafe{Stdio::from_raw_fd(file.as_raw_fd())};
-let mut child1 = Command::new(&amp;quot;ls&amp;quot;)
-    .current_dir(&amp;quot;/&amp;quot;)
-    .stdout(out)
-    .spawn()
-    .expect(&amp;quot;failed to spawn a process&amp;quot;);
-
-let status1 = child1.wait().unwrap();
-println!(&amp;quot;{}&amp;quot;, status1);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cat test.txt
-bin
-boot
-cdrom
-core
-dev
-...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;おわりに&#34;&gt;おわりに&lt;/h1&gt;
-
-&lt;p&gt;最初は思ったよりCのプロセス回りのAPIと違って戸惑いますが馴れてしまえば使いやすいAPIでしょう。&lt;/p&gt;</description>
+&lt;p&gt;&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>新しいコンパイラバックエンドcretonne</title>
-      <link>/blog/2016/12/02/atarashiikonpairabakkuendocretonne</link>
+      <link>/blog/2016/12/02/atarashiikonpairabakkuendocretonne/</link>
       <pubDate>Fri, 02 Dec 2016 14:00:11 +0900</pubDate>
       
-      <guid>/blog/2016/12/02/atarashiikonpairabakkuendocretonne</guid>
+      <guid>/blog/2016/12/02/atarashiikonpairabakkuendocretonne/</guid>
       <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2016/lang_dev&#34;&gt;言語実装 Advent Calendar 2016 - Qiita&lt;/a&gt;3日目の記事です。&lt;/p&gt;
 
 &lt;p&gt;κeenです。先日、Rustの開発者フォーラムに新しいバックエンドして&lt;a href=&#34;https://github.com/stoklund/cretonne&#34;&gt;cretonne&lt;/a&gt;が&lt;a href=&#34;https://internals.rust-lang.org/t/possible-alternative-compiler-backend-cretonne/4275&#34;&gt;提案されていました&lt;/a&gt;。&lt;/p&gt;
 
 &lt;p&gt;ちょっと気になったのでそれを紹介します。&lt;/p&gt;
 
-&lt;p&gt;&lt;/p&gt;
-
-&lt;h1 id=&#34;概略&#34;&gt;概略&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;https://github.com/stoklund/cretonne&#34;&gt;GitHub&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;http://cretonne.readthedocs.io/en/latest/index.html&#34;&gt;ドキュメント&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;フォーラムによると、WebAssemblyをエンコードするために作られたコンパイラバックエンドで、FirefoxのJSエンジンであるSpiderMonkeyに載せる予定だそうです。JITが主な目的？&lt;/p&gt;
-
-&lt;p&gt;LLVMのように最適化を頑張る方ではなくてコードを吐くまでのレイテンシを気にして作られているとのこと。なのでcretonne自身は最適化を行いません。&lt;/p&gt;
-
-&lt;p&gt;特徴はドキュメントの&lt;a href=&#34;http://cretonne.readthedocs.io/en/latest/compare-llvm.html&#34;&gt;LLVMとの比較&lt;/a&gt;によくまとまってますが、&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;LLVMは複数種類の中間言語を持つのに対してcretonneは1種類&lt;/li&gt;
-&lt;li&gt;アセンブラもディスアセンブラもない
-
-&lt;ul&gt;
-&lt;li&gt;コードジェネレータが吐く命令だけサポート&lt;/li&gt;
-&lt;/ul&gt;&lt;/li&gt;
-&lt;li&gt;中間言語はISA非依存で、legalization / instruction selectionをするとISA固有のアノテーションが付く&lt;/li&gt;
-&lt;li&gt;最大抽象単位が関数(LLVMはモジュール)。cretonneは関数のインライン化とかもしない。&lt;/li&gt;
-&lt;li&gt;Extended Basic Blockを使う(LLVMはBasic Block)。
-
-&lt;ul&gt;
-&lt;li&gt;ebbは分岐命令のfalse branchを指定せず、fall throughする。よくあるマシン語に近い。&lt;/li&gt;
-&lt;li&gt;分岐の合流はebbに引数を持たせることで行う(LLVMはphi nodeを使う)。&lt;/li&gt;
-&lt;/ul&gt;&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;undefined behaviorが存在しない&lt;/strong&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;なんとなくWebAssemblyを意識した仕様ですね。&lt;/p&gt;
-
-&lt;h1 id=&#34;雰囲気&#34;&gt;雰囲気&lt;/h1&gt;
-
-&lt;p&gt;以下のCのコードは&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-c&#34;&gt;float
-average(const float *array, size_t count)
-{
-    double sum = 0;
-    for (size_t i = 0; i &amp;lt; count; i++)
-        sum += array[i];
-    return sum / count;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;以下のcretonneのIRに落ちるそうです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;function average(i32, i32) -&amp;gt; f32 {
-    ss1 = stack_slot 8, align 4   ; Stack slot for ``sum``.
-
-ebb1(v1: i32, v2: i32):
-    v3 = f64const 0x0.0
-    stack_store v3, ss1
-    brz v2, ebb3                  ; Handle count == 0.
-    v4 = iconst.i32 0
-    br ebb2(v4)
-
-ebb2(v5: i32):
-    v6 = imul_imm v5, 4
-    v7 = iadd v1, v6
-    v8 = heap_load.f32 v7         ; array[i]
-    v9 = fext.f64 v8
-    v10 = stack_load.f64 ss1
-    v11 = fadd v9, v10
-    stack_store v11, ss1
-    v12 = iadd_imm v5, 1
-    v13 = icmp ult v12, v2
-    brnz v13, ebb2(v12)           ; Loop backedge.
-    v14 = stack_load.f64 ss1
-    v15 = cvt_utof.f64 v2
-    v16 = fdiv v14, v15
-    v17 = ftrunc.f32 v16
-    return v17
-
-ebb3:
-    v100 = f32const qNaN
-    return v100
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;まあ、実際はファイルヘッダとかも付きますがこんな感じです。&lt;/p&gt;
-
-&lt;p&gt;ebbに引数があったりebbの途中で平気でブランチしてたり中々やんちゃですね。&lt;/p&gt;
-
-&lt;h1 id=&#34;使ってみる&#34;&gt;使ってみる&lt;/h1&gt;
-
-&lt;p&gt;コードを吐くところまでやりたかったのですがまだ絶賛開発中ということもあってそのような操作が見当りませんでした。&lt;/p&gt;
-
-&lt;p&gt;ということでファイルの方を扱ってると面白みがないのでRust APIの方で関数を構築して正当性を検証してから中間言語を吐き出してみます。&lt;/p&gt;
-
-&lt;h2 id=&#34;一歩&#34;&gt;一歩&lt;/h2&gt;
-
-&lt;p&gt;まずはcretonneをcloneしてきます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo new cretonne-sample --bin
-$ cd cretonne-sample
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;んでCargo.tomlのdependenciesに&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;cretonne = {path = &amp;quot;path/cretonne/lib/cretonne/&amp;quot;}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;を追加します。どうやらトップレベルのプロジェクトはただのユーティリティのようでした。本体は&lt;code&gt;lib/cretonne/&lt;/code&gt;以下にいます。&lt;/p&gt;
-
-&lt;p&gt;そしてmainファイルの中身はこうです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;extern crate cretonne;
-use cretonne::ir::*;
-use cretonne::ir::{types as ty};
-use cretonne::ir::{immediates as imm};
-use cretonne::isa;
-use cretonne::settings::{self, Configurable};
-use cretonne::{write_function, legalize_function, verify_function};
-
-fn main() {
-    let mut func = {
-        let name = FunctionName::new(&amp;quot;average&amp;quot;);
-        let mut sig = Signature::new();
-        sig.argument_types.push(ArgumentType::new(ty::I32));
-        sig.argument_types.push(ArgumentType::new(ty::I32));
-        sig.return_types.push(ArgumentType::new(ty::F32));
-        Function::with_name_signature(name, sig)
-    };
-
-    let isa = {
-        let mut b = settings::builder();
-        b.set(&amp;quot;opt_level&amp;quot;, &amp;quot;fastest&amp;quot;).unwrap();
-        let f = settings::Flags::new(&amp;amp;b);
-        let builder = isa::lookup(&amp;quot;intel&amp;quot;).unwrap();
-        builder.finish(f)
-    };
-    verify_function(&amp;amp;func).unwrap();
-    legalize_function(&amp;amp;mut func, isa.as_ref());
-    let mut o = String::new();
-    write_function(&amp;amp;mut o, &amp;amp;func, Some(isa.as_ref())).unwrap();
-    println!(&amp;quot;{}&amp;quot;, o);
-}
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;function average(i32, i32) -&amp;gt; f32 {
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;おおまかには&lt;code&gt;func&lt;/code&gt;を構築して&lt;code&gt;isa&lt;/code&gt;を決めて&lt;code&gt;verify_function&lt;/code&gt;で検証、さらに&lt;code&gt;legalize_function&lt;/code&gt;で今回のアーキテクチャ向けに微調整、&lt;code&gt;write_function&lt;/code&gt;で書き出しです。&lt;/p&gt;
-
-&lt;h2 id=&#34;スタックスロットの追加&#34;&gt;スタックスロットの追加&lt;/h2&gt;
-
-&lt;p&gt;まあ、スタック領域ですね。8byteの領域を確保します。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;func&lt;/code&gt;にstack_slotsフィールドがあるのでそこにpushします。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
-    let mut func = {
-        ....
-    };
-
-
-    {
-        let k = func.stack_slots.push(StackSlotData::new(8));
-    }
-
-    let isa = {
-        ....
-    };
-    ....
-}
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;function average(i32, i32) -&amp;gt; f32 {
-    ss0 = stack_slot 8
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;push&lt;/code&gt;の返り値はスタック領域を指すキーです。&lt;/p&gt;
-
-&lt;h2 id=&#34;ebbの追加&#34;&gt;EBBの追加&lt;/h2&gt;
-
-&lt;p&gt;&lt;code&gt;func&lt;/code&gt;構造体のフィールドに&lt;code&gt;dfg&lt;/code&gt;がいて、そいつを色々いじります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
-    let mut func = {
-        ....
-    };
-
-
-    {
-        let k = func.stack_slots.push(StackSlotData::new(8));
-        let cur = &amp;amp;mut Cursor::new(&amp;amp;mut func.layout);
-        let ebb0 = func.dfg.make_ebb();
-        let v1 = func.dfg.append_ebb_arg(ebb0, types::I32);
-        let v2 = func.dfg.append_ebb_arg(ebb0, types::I32);
-
-        cur.insert_ebb(ebb0);
-    }
-
-    let isa = {
-        ....
-    };
-    ....
-}
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;function average(i32, i32) -&amp;gt; f32 {
-    ss0 = stack_slot 8
-
-ebb0(vx0: i32, vx1: i32):
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;EBBの追加にはカーソルを決めてあげて、dfgにebbを作ってあげて、カーソルの位置にebbの追加という形になります。&lt;/p&gt;
-
-&lt;p&gt;EBBには任意に引数を追加出来ます。&lt;code&gt;append_ebb_arg&lt;/code&gt;の返り値はSSAの変数です。&lt;/p&gt;
-
-&lt;h2 id=&#34;命令を追加する&#34;&gt;命令を追加する&lt;/h2&gt;
-
-&lt;p&gt;命令はpythonのスクリプトによって生成されるので補完が効かず、中々扱いづらいですが頑張ります。&lt;/p&gt;
-
-&lt;p&gt;さて、今回コードの検証を入れているので以下のようなコードは検証に落ちてしまいます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    ....
-    {
-        let k = func.stack_slots.push(StackSlotData::new(8));
-        let cur = &amp;amp;mut Cursor::new(&amp;amp;mut func.layout);
-        let dfg = &amp;amp;mut func.dfg;
-        let ebb0 = dfg.make_ebb();
-        let v1 = dfg.append_ebb_arg(ebb0, types::I32);
-        let v2 = dfg.append_ebb_arg(ebb0, types::I32);
-        cur.insert_ebb(ebb0);
-
-        let v3 = dfg.ins(cur).f64const(imm::Ieee64::new(0.0));
-    }
-    ....
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;thread &#39;main&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: Error { location: Ebb(Ebb(0)), message: &amp;quot;block does not end in a terminator instruction!&amp;quot; }&#39;, ../src/libcore/result.rs:799
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;最後の命令が定数であるため、正常なブロックと見做されないのです。&lt;/p&gt;
-
-&lt;p&gt;ひとまずv3を返すことで凌ぎます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    ....
-    {
-        ....
-        let mut varg = VariableArgs::new();
-        varg.push(v3);
-        let _ = dfg.ins(cur).return_(varg);
-    }
-    ....
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;function average(i32, i32) -&amp;gt; f32 {
-    ss0 = stack_slot 8
-
-                    ebb0(vx0: i32, vx1: i32):
-[-]                     v0 = f64const 0.0
-[-]                     return v0
-}
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;命令の頭に付いてる &lt;code&gt;[-]&lt;/code&gt;はlegalizeすると付くようです。&lt;/p&gt;
-
-&lt;h2 id=&#34;ブランチ&#34;&gt;ブランチ&lt;/h2&gt;
-
-&lt;p&gt;もう1つebbを追加してあげる必要があります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;    {
-        let k = func.stack_slots.push(StackSlotData::new(8));
-        let cur = &amp;amp;mut Cursor::new(&amp;amp;mut func.layout);
-        let dfg = &amp;amp;mut func.dfg;
-        let ebb0 = dfg.make_ebb();
-        let ebb3 = dfg.make_ebb();  // &amp;lt;- ebb3を作成
-        let v1 = dfg.append_ebb_arg(ebb0, types::I32);
-        let v2 = dfg.append_ebb_arg(ebb0, types::I32);
-        cur.insert_ebb(ebb0);
-        let v3 = dfg.ins(cur).f64const(imm::Ieee64::new(0.0));
-        dfg.ins(cur).brz(v2, ebb3, VariableArgs::new()); // &amp;lt;-ebb3にジャンプ
-
-        let mut varg = VariableArgs::new();
-        varg.push(v3);
-        let _ = dfg.ins(cur).return_(varg);
-
-        cur.insert_ebb(ebb3); // &amp;lt;- ebb3を追加
-    }
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;function average(i32, i32) -&amp;gt; f32 {
-    ss0 = stack_slot 8
-
-                    ebb0(vx0: i32, vx1: i32):
-[-]                     v0 = f64const 0.0
-[-]                     brz vx1, ebb1
-[-]                     return v0
-
-                    ebb1:
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;残り&#34;&gt;残り&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;{
-        let k = func.stack_slots.push(StackSlotData::new(8));
-        let cur = &amp;amp;mut Cursor::new(&amp;amp;mut func.layout);
-        let dfg = &amp;amp;mut func.dfg;
-
-        let ebb0 = dfg.make_ebb();
-        let v1 = dfg.append_ebb_arg(ebb0, types::I32);
-        let v2 = dfg.append_ebb_arg(ebb0, types::I32);
-
-        let ebb2 =  dfg.make_ebb();
-        let v5 = dfg.append_ebb_arg(ebb0, types::I32);
-
-        let ebb3 = dfg.make_ebb();
-
-        cur.insert_ebb(ebb0);
-        let v3 = dfg.ins(cur).f64const(imm::Ieee64::new(0.0));
-        dfg.ins(cur).brz(v2, ebb3, VariableArgs::new());
-        let v4 = dfg.ins(cur).iconst(types::I32, 0);
-        let mut ebb2_arg = VariableArgs::new();
-        ebb2_arg.push(v4);
-        dfg.ins(cur).jump(ebb2, ebb2_arg);
-
-        cur.insert_ebb(ebb2);
-        let v6 = dfg.ins(cur).imul_imm(v5, 4);
-        let v7 = dfg.ins(cur).iadd(v1, v6);
-        dfg.ins(cur).jump(ebb3, VariableArgs::new());
-
-        cur.insert_ebb(ebb3);
-    }
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;こんな感じで進めていこうと思いましたがどうやらまだstack/heapを触る命令がない？？ようなので詰みました。&lt;/p&gt;
-
-&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;コンパイラバックエンドcretonneについて紹介しました&lt;/li&gt;
-&lt;li&gt;cretonneのRust APIを触ってみましたがダメでした。&lt;/li&gt;
-&lt;/ul&gt;</description>
+&lt;p&gt;&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>Rustでバイト列を扱う時のtips</title>
-      <link>/blog/2016/12/01/rustdebaitoretsuwoatsukautokinotips</link>
+      <link>/blog/2016/12/01/rustdebaitoretsuwoatsukautokinotips/</link>
       <pubDate>Thu, 01 Dec 2016 14:29:33 +0900</pubDate>
       
-      <guid>/blog/2016/12/01/rustdebaitoretsuwoatsukautokinotips</guid>
+      <guid>/blog/2016/12/01/rustdebaitoretsuwoatsukautokinotips/</guid>
       <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2016/rust-lang-2&#34;&gt;Rust その2 Advent Calendar 2016 - Qiita&lt;/a&gt;2日目の記事です。&lt;/p&gt;
 
 &lt;p&gt;Rustはシステムプログラミング言語なのでバイト列をあれこれしたいことがあると思います。その時にイテレータでバイト列を舐める以外にも色々方法があるなと気付いたので。&lt;/p&gt;
 
-&lt;p&gt;&lt;/p&gt;
-
-&lt;h1 id=&#34;read-と-write&#34;&gt;&lt;code&gt;Read&lt;/code&gt; と &lt;code&gt;Write&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;私には割と衝撃だったのですが&lt;code&gt;&amp;amp;[u8]&lt;/code&gt;や&lt;code&gt;&amp;amp;mut [u8]&lt;/code&gt;、&lt;code&gt;Vec&amp;lt;u8&amp;gt;&lt;/code&gt;は直接&lt;code&gt;Read&lt;/code&gt;や&lt;code&gt;Write&lt;/code&gt;のインスタンスになってます。
-例えば&lt;code&gt;Read&lt;/code&gt;ならこういう風に使えます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let mut bytes: &amp;amp;[u8] = &amp;amp;[1, 2, 3, 4, 5, 6];
-let mut buf = [0;3];
-bytes.read_exact(&amp;amp;mut buf).unwrap();
-println!(&amp;quot;read: {:?}, rest: {:?}&amp;quot;, buf, bytes);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;read: [1, 2, 3], rest: [4, 5, 6]
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;あるいは &lt;code&gt;.bytes()&lt;/code&gt;でbyteのイテレータを取り出してもいいですし、如何様にも扱えます。&lt;/p&gt;
-
-&lt;p&gt;少し注意が必要なのは&lt;code&gt;Vec&lt;/code&gt;は &lt;code&gt;Read&lt;/code&gt; を実装してないので一旦スライスに変換してあげる必要がありますが、やり方を工夫する必要があります。&lt;/p&gt;
-
-&lt;p&gt;以下は少しびっくりする例。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let bytes: Vec&amp;lt;u8&amp;gt; = vec![1, 2, 3, 4, 5, 6];
-let mut buf = [0;3];
-(&amp;amp;bytes[..]).read_exact(&amp;amp;mut buf).unwrap();
-println!(&amp;quot;read: {:?}, rest: {:?}&amp;quot;, buf, bytes);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;read: [1, 2, 3], rest: [1, 2, 3, 4, 5, 6]
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;一旦スライスを取り出してその場で捨てているので&lt;code&gt;bytes&lt;/code&gt;は消費されません。&lt;/p&gt;
-
-&lt;p&gt;そうやりたいなら&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let bytes: Vec&amp;lt;u8&amp;gt; = vec![1, 2, 3, 4, 5, 6];
-let mut bytes = &amp;amp;bytes[..];
-let mut buf = [0;3];
-bytes.read_exact(&amp;amp;mut buf).unwrap();
-println!(&amp;quot;read: {:?}, rest: {:?}&amp;quot;, buf, bytes);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のように一旦スライスを束縛してから使います。&lt;/p&gt;
-
-&lt;p&gt;Writeの方も似ていて、そのまま&lt;code&gt;write&lt;/code&gt;出来ますし、消費されます。ただ、書き込み領域が空になってもそのままスルーされるので注意です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;let mut bytes: &amp;amp;mut [u8] = &amp;amp;mut [0; 6];
-let data = &amp;amp;[1, 2, 3];
-println!(&amp;quot;data: {:?}, buf: {:?}&amp;quot;, data, bytes);
-bytes.write(data).unwrap();
-println!(&amp;quot;data: {:?}, buf: {:?}&amp;quot;, data, bytes);
-bytes.write(data).unwrap();
-println!(&amp;quot;data: {:?}, buf: {:?}&amp;quot;, data, bytes);
-bytes.write(data).unwrap();
-println!(&amp;quot;data: {:?}, buf: {:?}&amp;quot;, data, bytes);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;data: [1, 2, 3], buf: [0, 0, 0, 0, 0, 0]
-data: [1, 2, 3], buf: [0, 0, 0]
-data: [1, 2, 3], buf: []
-data: [1, 2, 3], buf: []
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;最後、バッファが空になった状態で書き込んでも無言で書き込みが終了しています。そして書き込んだデータへのアクセスは出来てないですね。&lt;/p&gt;
-
-&lt;p&gt;こうすると出来ます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let mut bytes:[u8; 6] =  [0; 6];
-let data = &amp;amp;[1, 2, 3];
-{
-    let mut buf: &amp;amp;mut [u8] = &amp;amp;mut bytes;
-    println!(&amp;quot;data: {:?}, buf: {:?}&amp;quot;, data, buf);
-    buf.write(data).unwrap();
-    println!(&amp;quot;data: {:?}, buf: {:?}&amp;quot;, data, buf);
-    buf.write(data).unwrap();
-    println!(&amp;quot;data: {:?}, buf: {:?}&amp;quot;, data, buf);
-}
-println!(&amp;quot;bytes: {:?}&amp;quot;, bytes);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;data: [1, 2, 3], buf: [0, 0, 0, 0, 0, 0]
-data: [1, 2, 3], buf: [0, 0, 0]
-data: [1, 2, 3], buf: []
-bytes: [1, 2, 3, 1, 2, 3]
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;まあまあ面倒ですね。というかそもそも固定長のバッファに書き込みたいという需要が少ない。&lt;/p&gt;
-
-&lt;p&gt;でもこれは&lt;code&gt;Vec&lt;/code&gt;を使えば解決します。可変長ですし&lt;code&gt;Write&lt;/code&gt; も実装しているので便利です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let mut bytes: Vec&amp;lt;u8&amp;gt; = Vec::new();
-let data = &amp;amp;[1, 2, 3];
-println!(&amp;quot;data: {:?}, buf: {:?}&amp;quot;, data, bytes);
-bytes.write(data).unwrap();
-println!(&amp;quot;data: {:?}, buf: {:?}&amp;quot;, data, bytes);
-bytes.write(data).unwrap();
-println!(&amp;quot;data: {:?}, buf: {:?}&amp;quot;, data, bytes);
-println!(&amp;quot;bytes: {:?}&amp;quot;, bytes);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;data: [1, 2, 3], buf: []
-data: [1, 2, 3], buf: [1, 2, 3]
-data: [1, 2, 3], buf: [1, 2, 3, 1, 2, 3]
-bytes: [1, 2, 3, 1, 2, 3]
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;cursor&#34;&gt;&lt;code&gt;Cursor&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;さて、上で見た通り、なんとなく生のバイト列だと扱いづらそうな場面がありそうですよね。
-そこで &lt;a href=&#34;https://doc.rust-lang.org/stable/std/io/struct.Cursor.html&#34;&gt;&lt;code&gt;std::io::Cursor&lt;/code&gt;&lt;/a&gt;を使うと便利です。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;Cursor&lt;/code&gt;はコンストラクタで引数の所有権を奪うタイプの、ラッパーオブジェクト的構造体です。&lt;/p&gt;
-
-&lt;p&gt;readだとこんな感じです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let bytes: &amp;amp;[u8] = &amp;amp;[1,2,3,4,5,6];
-let data: &amp;amp;mut [u8] = &amp;amp;mut [0;3];
-let mut cur = Cursor::new(bytes);
-println!(&amp;quot;data: {:?}, position {}&amp;quot;, data, cur.position());
-cur.read_exact(data).unwrap();
-println!(&amp;quot;data: {:?}, position {}&amp;quot;, data, cur.position());
-cur.read_exact(data).unwrap();
-println!(&amp;quot;data: {:?}, position {}&amp;quot;, data, cur.position());
-println!(&amp;quot;bytes: {:?}&amp;quot;, cur.into_inner());
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;data: [0, 0, 0], position 0
-data: [1, 2, 3], position 3
-data: [4, 5, 6], position 6
-bytes: [1, 2, 3, 4, 5, 6]
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ポジションが取れるのと元のオブジェクトが無事なのが違いますね。&lt;/p&gt;
-
-&lt;p&gt;Writeも同様です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let bytes: &amp;amp;mut [u8] = &amp;amp;mut [0;6];
-let data: &amp;amp;[u8] = &amp;amp;[1, 2, 3];
-let mut cur = Cursor::new(bytes);
-println!(&amp;quot;bytes: {:?}, position {}&amp;quot;, cur.get_ref(), cur.position());
-cur.write(data).unwrap();
-println!(&amp;quot;bytes: {:?}, position {}&amp;quot;, cur.get_ref(), cur.position());
-cur.write(data).unwrap();
-println!(&amp;quot;bytes: {:?}, position {}&amp;quot;, cur.get_ref(), cur.position());
-println!(&amp;quot;bytes: {:?}&amp;quot;, cur.into_inner());
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;data: [0, 0, 0, 0, 0, 0], position 0
-data: [1, 2, 3, 0, 0, 0], position 3
-data: [1, 2, 3, 1, 2, 3], position 6
-bytes: [1, 2, 3, 1, 2, 3]
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;さて、この&lt;code&gt;Cursor&lt;/code&gt;の面白いのは&lt;code&gt;&amp;amp;[u8]&lt;/code&gt;でなく&lt;code&gt;AsRef&amp;lt;[u8]&amp;gt;&lt;/code&gt;で&lt;code&gt;Read&lt;/code&gt;を実装していますし&lt;code&gt;std::io::Seek&lt;/code&gt;も実装しているのでこういうことが出来ます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let bytes: Vec&amp;lt;u8&amp;gt; = Vec::new();
-let data: &amp;amp;[u8] = &amp;amp;[1, 2, 3];
-let buf: &amp;amp;mut [u8] = &amp;amp;mut [0; 3];
-let mut cur = Cursor::new(bytes);
-println!(&amp;quot;bytes: {:?}, position {}&amp;quot;, cur.get_ref(), cur.position());
-cur.write(data).unwrap();
-println!(&amp;quot;bytes: {:?}, position {}&amp;quot;, cur.get_ref(), cur.position());
-cur.write(data).unwrap();
-println!(&amp;quot;bytes: {:?}, position {}&amp;quot;, cur.get_ref(), cur.position());
-cur.seek(SeekFrom::Start(0)).unwrap();
-println!(&amp;quot;bytes: {:?}, position {}&amp;quot;, cur.get_ref(), cur.position());
-cur.read(buf).unwrap();
-println!(&amp;quot;bytes: {:?}, position {}, buf: {:?}&amp;quot;, cur.get_ref(), cur.position(), buf);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;bytes: [], position 0
-bytes: [1, 2, 3], position 3
-bytes: [1, 2, 3, 1, 2, 3], position 6
-bytes: [1, 2, 3, 1, 2, 3], position 0  // &amp;lt;- 0にシークした
-bytes: [1, 2, 3, 1, 2, 3], position 3, buf: [1, 2, 3] // &amp;lt;- 0からリード出来てる
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;生の&lt;code&gt;Vec&lt;/code&gt;では出来なかったread and writeが実現出来ています。そして好きにカーソルをシーク出来ます。
-ここまでくるとほとんどファイルと変わらなく扱えますね。&lt;/p&gt;
-
-&lt;h1 id=&#34;おりに&#34;&gt;おりに&lt;/h1&gt;
-
-&lt;p&gt;ちょっとしたTipsですが道具箱にこういうのを増やしておくと便利ですよね！！&lt;/p&gt;
-
-&lt;h1 id=&#34;参考&#34;&gt;参考&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;https://doc.rust-lang.org/stable/std/io/trait.Read.html&#34;&gt;std::io::Read - Rust&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://doc.rust-lang.org/stable/std/io/trait.Write.html&#34;&gt;std::io::Write - Rust&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://doc.rust-lang.org/stable/std/io/struct.Cursor.html&#34;&gt;std::io::Cursor - Rust&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://doc.rust-lang.org/stable/std/io/trait.Seek.html&#34;&gt;std::io::Seek - Rust&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://doc.rust-lang.org/stable/std/io/enum.SeekFrom.html&#34;&gt;std::io::SeekFrom - Rust&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;</description>
+&lt;p&gt;&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>マクロやコンパイラプラグインの実装方法色々</title>
-      <link>/blog/2016/12/01/makuroyakonpairapuraguinnojissouhouhou</link>
+      <link>/blog/2016/12/01/makuroyakonpairapuraguinnojissouhouhou/</link>
       <pubDate>Thu, 01 Dec 2016 13:29:52 +0900</pubDate>
       
-      <guid>/blog/2016/12/01/makuroyakonpairapuraguinnojissouhouhou</guid>
+      <guid>/blog/2016/12/01/makuroyakonpairapuraguinnojissouhouhou/</guid>
       <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2016/lang_dev&#34;&gt;言語実装 Advent Calendar 2016 - Qiita&lt;/a&gt;2日目の記事です。&lt;/p&gt;
 
 &lt;p&gt;κeenです。マクロなどのコンパイル時に何か処理をしてコード生成する機構の実現方法が言語によって様々にあるなぁと思ったのでちょっと探ってみます&lt;/p&gt;
 
-&lt;p&gt;&lt;/p&gt;
-
-&lt;p&gt;なんか文字だけ並んでても味気ないのでサンプルマクロも付けときますね。&lt;/p&gt;
-
-&lt;h1 id=&#34;コンパイラにマクロ専用言語のインタプリタ機能を付けるやつ&#34;&gt;コンパイラにマクロ専用言語のインタプリタ機能を付けるやつ&lt;/h1&gt;
-
-&lt;p&gt;Rustの&lt;code&gt;macro_rules&lt;/code&gt;やSchemeの&lt;code&gt;syntax-rules&lt;/code&gt;が該当します。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-scheme&#34;&gt;(define-syntax define-protocol
-  (syntax-rules ()
-    ((define-protocol (name type ...) (method arg ...) ...)
-     (begin
-       (define method
-         (make-generic))
-       ...
-       (define name
-         (lambda (type ...)
-           (lambda methods
-             (add-methods methods (list (list method arg ...) ...)))))))))
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;制限が強い上に無駄にコンパイラの機能が増えるので個人的にはあまり好きじゃないですね…。&lt;/p&gt;
-
-&lt;h1 id=&#34;コンパイラでもホスト言語を動かすやつ&#34;&gt;コンパイラでもホスト言語を動かすやつ&lt;/h1&gt;
-
-&lt;p&gt;コンパイラとランタイムが一緒になっているCommon Lispなんかで使われる方法です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-common-lisp&#34;&gt;(defmacro dotimes-unroll ((i n unroll) &amp;amp;body body)
-  (let ((n_      (gensym &amp;quot;n&amp;quot;)))
-    `(let ((,n_ ,n))
-       (do ((,i 0))
-           ((&amp;lt; ,n_ (the fixnum (+ ,unroll ,i)))
-            (do ((,i ,i (the fixnum (1+ ,i))))
-                ((&amp;lt; ,n_ (the fixnum (1+ ,i))))
-              ,@body
-              ))
-         ,@(loop :repeat unroll :append (append body `((setq ,i (the fixnum (1+ ,i))))))))))
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;マクロがなくなるまで再帰的にマクロ展開をします。
-ユーザが好き勝手書けてしかも手軽に使えるので割と好きです。まあ、でも言語を選びますね。&lt;/p&gt;
-
-&lt;h1 id=&#34;コンパイラプラグインとしてdlopenするやつ&#34;&gt;コンパイラプラグインとしてdlopenするやつ&lt;/h1&gt;
-
-&lt;p&gt;Rustのコンパイラプラグインが相当します。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-toml&#34;&gt;[lib]
-crate-type = [&amp;quot;dylib&amp;quot;]
-plugin = true
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn codegen&amp;lt;&#39;cx&amp;gt;(cx: &amp;amp;&#39;cx mut ExtCtxt, text: String, file: String)
-        -&amp;gt; Box&amp;lt;MacResult + &#39;cx&amp;gt; {
-    let mut output = Vec::new();
-    let doc = Document::parse(&amp;amp;text)
-        .expect(&amp;quot;failed to parse thrift file&amp;quot;)
-        .expect(&amp;quot;EOF while parsing thrift file&amp;quot;);
-    {
-        let ns = find_rust_namespace(&amp;amp;doc).expect(&amp;quot;cannot find namespace&amp;quot;);
-    output.write_all(format!(&amp;quot;mod {} {{&amp;quot;, ns.module).as_ref()).expect(&amp;quot;internal error failed to write the vec&amp;quot;);
-    }
-    compile(doc, &amp;amp;mut output).expect(&amp;quot;failed to generate code&amp;quot;);
-    output.write_all(format!(&amp;quot;}}&amp;quot;).as_ref()).expect(&amp;quot;internal error failed to write the vec&amp;quot;);
-    let output = match std::str::from_utf8(&amp;amp;output) {
-        Ok(s) =&amp;gt; s,
-        Err(_) =&amp;gt; &amp;quot;&amp;quot;,
-    };
-
-    trace!(&amp;quot;{}&amp;quot;, output);
-
-
-    let parser = new_parser_from_source_str(cx.parse_sess(), file, output.to_string());
-
-    struct ExpandResult&amp;lt;&#39;a&amp;gt; {
-        p: parse::parser::Parser&amp;lt;&#39;a&amp;gt;,
-    }
-    impl&amp;lt;&#39;a&amp;gt; base::MacResult for ExpandResult&amp;lt;&#39;a&amp;gt; {
-        fn make_items(mut self: Box&amp;lt;ExpandResult&amp;lt;&#39;a&amp;gt;&amp;gt;)
-                      -&amp;gt; Option&amp;lt;SmallVector&amp;lt;ptr::P&amp;lt;ast::Item&amp;gt;&amp;gt;&amp;gt; {
-            let mut ret = SmallVector::zero();
-            while self.p.token != token::Eof {
-                match panictry!(self.p.parse_item()) {
-                    Some(item) =&amp;gt; ret.push(item),
-                    None =&amp;gt; panic!(self.p.diagnostic().span_fatal(self.p.span,
-                                                                  &amp;amp;format!(&amp;quot;expected item, found `{}`&amp;quot;,
-                                                                           self.p.this_token_to_string())))
-                }
-            }
-            Some(ret)
-        }
-    }
-
-    Box::new(ExpandResult { p: parser })
-
-}
-
-
-fn macro_thrift&amp;lt;&#39;cx&amp;gt;(cx: &amp;amp;&#39;cx mut ExtCtxt, sp: Span, tts: &amp;amp;[TokenTree])
-                     -&amp;gt; Box&amp;lt;MacResult + &#39;cx&amp;gt; {
-
-    let text = match get_single_str_from_tts(cx, sp, tts, &amp;quot;thrift!&amp;quot;) {
-        Some(f) =&amp;gt; f,
-        None =&amp;gt; return DummyResult::expr(sp),
-    };
-
-    codegen(cx, text, &amp;quot;trift!&amp;quot;.to_string())
-}
-
-
-#[plugin_registrar]
-pub fn plugin_registrar(reg: &amp;amp;mut Registry) {
-    reg.register_macro(&amp;quot;thrift&amp;quot;, macro_thrift);
-    reg.register_macro(&amp;quot;thrift_file&amp;quot;, macro_thrift_file);
-}
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;一旦dllを作ってそれをプラグインとしてロードするという手間もありますし、ユーザが触れるASTも複雑なのであまり好きではないです。
-まあ、これは準クオートだとかのユーザインターフェースの問題だったりするんですが。
-ただ表現力はホスト言語が使えるので自由に使えます。&lt;/p&gt;
-
-&lt;h1 id=&#34;言語の仕組みを使ってライブラリをコンパイラにロードする&#34;&gt;言語の仕組みを使ってライブラリをコンパイラにロードする&lt;/h1&gt;
-
-&lt;p&gt;私が地味に好きな言語に&lt;a href=&#34;http://www.mirah.org/&#34;&gt;mirah&lt;/a&gt;というのがあります。その言語での実現方法が少し好きでした。
-mirahはJVMで動くRuby風言語で、コンパイラは既にセルフホストされています。つまりコンパイラもJVMで動く訳です。&lt;/p&gt;
-
-&lt;p&gt;Javaには&lt;a href=&#34;https://docs.oracle.com/javase/tutorial/sound/SPI-intro.html&#34;&gt;SPI&lt;/a&gt;というものがあって明示的にクラスやインスタンスを指定しなくてもJVMが実装を捜してくれる機能があります。
-その機能にのっかることでマクロを.classファイルにコンパイルしてクラスパスに置いておくだけでマクロが使えるようになります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-mirah&#34;&gt;$ExtensionsRegistration[[&#39;java.util.Map&#39;]]
-class MapExtensions
-  macro def [](key)
-    quote { `@call.target`.get(`key`) }
-  end
-end
-
-class Builtins implements ExtensionsProvider
-
-  def register(type_system:ExtensionsService):void
-    type_system.macro_registration(MapExtensions.class)
-  end
-end
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;中々面白いですね。&lt;/p&gt;
-
-&lt;h1 id=&#34;おわりに&#34;&gt;おわりに&lt;/h1&gt;
-
-&lt;p&gt;なんか実装コード1つない雑な記事で申し訳ありませんがmirahのマクロの仕組みがちょっと気に入ったので書こうと思った次第です。&lt;/p&gt;
-
-&lt;p&gt;あとはOCamlのppxやHaskellのTHも気になるのですが調べきれませんでした。はい。&lt;/p&gt;</description>
+&lt;p&gt;&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>4年間続いたShibuya.lispのLispMeetUp</title>
-      <link>/blog/2016/12/01/4nenkantsuzuitashibuya_lispnolispmeetup</link>
+      <link>/blog/2016/12/01/4nenkantsuzuitashibuya_lispnolispmeetup/</link>
       <pubDate>Thu, 01 Dec 2016 12:40:08 +0900</pubDate>
       
-      <guid>/blog/2016/12/01/4nenkantsuzuitashibuya_lispnolispmeetup</guid>
+      <guid>/blog/2016/12/01/4nenkantsuzuitashibuya_lispnolispmeetup/</guid>
       <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2016/event-management&#34;&gt;IT勉強会/コミュニティ運営 Advent Calendar 2016 - Qiita&lt;/a&gt;2日目の記事です。&lt;/p&gt;
 
 &lt;p&gt;Shibuya.lispの開催しているlispmeetupは約4年間毎月開催しました（現46回開催）。
 そこまで長く続いているコミュニティ活動はそんなに多くないのではないでしょうか。
 lispmeetupがどうして続いたのかちょっと考察してみます。&lt;/p&gt;
 
-&lt;p&gt;&lt;/p&gt;
-
-&lt;p&gt;因みにlispmeetupを開催しているのは第2期運営で、Shibuya.lisp自体はそれより前から活動しています。&lt;/p&gt;
-
-&lt;p&gt;私は2期運営に途中から入った人でmeetup第6回から参加し始めて確か19回くらいから運営になったと思います。&lt;/p&gt;
-
-&lt;h1 id=&#34;会場が安定的に確保出来た&#34;&gt;会場が安定的に確保出来た&lt;/h1&gt;
-
-&lt;p&gt;安定してるかは若干怪しいですが毎月会場確保が出来ていたのは事実です。
-最初の頃は天井から木の根が出てくるお粗末な会場だったそうですが、私が参加するころには毎回サイバーエージェントのセミナールームを使ってました。&lt;/p&gt;
-
-&lt;h1 id=&#34;発表者がいなかったら運営が発表した&#34;&gt;発表者がいなかったら運営が発表した&lt;/h1&gt;
-
-&lt;p&gt;勉強会に来たのに発表がなかったら残念ですよね。
-どんな回でも少なくとも運営が発表するので2件くらいは発表がありました。
-時間が余ったらライブコーディングしたりもしてました。&lt;/p&gt;
-
-&lt;p&gt;因みに私も毎月発表してるからという理由で運営になったような気がします。&lt;/p&gt;
-
-&lt;h1 id=&#34;テーマをローテした&#34;&gt;テーマをローテした&lt;/h1&gt;
-
-&lt;p&gt;Lisp固有の事情かもしれませんがメジャーな方言にCommon Lisp、 Clojure、Schemeがあります。
-参加者の中には全部いけるって人もそれなりにいますがClojureにしか興味がないって人もいます。
-なので毎回テーマを決めてある程度発表者、参加者のゾーンニングをした方が満足度が高い訳です。&lt;/p&gt;
-
-&lt;p&gt;ローテションというのもまあまあ重要で、まず運営が考えることが少なくて済む。
-発表者は3ヶ月に1回くらいの頻度で自分の興味のある方言の回がやってくるのでそれなりに準備期間がある。
-参加者も今月はClojureだから無理してでもいこおう、Common Lispだから今月はいいやみたいにメリハリが付けれる。&lt;/p&gt;
-
-&lt;h1 id=&#34;平日開催した&#34;&gt;平日開催した&lt;/h1&gt;
-
-&lt;p&gt;善し悪しだと思いますが平日開催に拘りました。平日にしか来れない人を集めたいという意向です。
-逆に休日にしか来れない人は切り捨てちゃってますね。&lt;/p&gt;
-
-&lt;p&gt;来れる人が渋谷近辺の人に限られてしまいますがまあ、Shibuya.lispなのでご愛嬌。
-参加する人は地球の裏側からでも来ます。これは半分本当で、オランダとかからの参加者も過去にいました。&lt;/p&gt;
-
-&lt;p&gt;仕事帰りに参加する人とか学生とかが多いようでした。&lt;/p&gt;
-
-&lt;h1 id=&#34;運営の負荷を減らした&#34;&gt;運営の負荷を減らした&lt;/h1&gt;
-
-&lt;p&gt;テーマをローテしたのところでも述べましたが、極力運営の負荷は減らした方がいいです。
-運営が動かないと何も進まないので開催が億劫になるくらいなら負荷は減らしましょう。
-lispmeetupでは開催報告やレポートをメーリスに投げていましたがやめてしまいました。
-まあ、connpassが優秀だったのである程度そっちに頼れたというのもあります。&lt;/p&gt;
-
-&lt;p&gt;また、最初のうちは懇親会で余ったお金を予算として持っていましたが、管理コストもかかるので掃き出してしまいました。&lt;/p&gt;
-
-&lt;h1 id=&#34;とにかく毎月開催した&#34;&gt;とにかく毎月開催した&lt;/h1&gt;
-
-&lt;p&gt;最初の頃は参加者が1ケタの時もありました。それでも毎月続けました。
-するとある程度lispmeetupが定着したのかここ1年ほどは会場定員オーバーくらいまで人が集まるようになりました。&lt;/p&gt;
-
-&lt;h1 id=&#34;懇親会を毎回やった&#34;&gt;懇親会を毎回やった&lt;/h1&gt;
-
-&lt;p&gt;地味に重要だと思います。
-発表者に質問にいったりあるいはふとした会話から次の発表のネタが産まれたりします。
-新規参加者も重要ですがリピーターも重要です。&lt;/p&gt;
-
-&lt;h1 id=&#34;最後に&#34;&gt;最後に&lt;/h1&gt;
-
-&lt;p&gt;LispMeetUpは4年の節目で一旦終了します。&lt;/p&gt;
-
-&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;Shibuya.lispの現運営が引退するので &lt;a href=&#34;https://twitter.com/hashtag/lispmeetup?src=hash&#34;&gt;#lispmeetup&lt;/a&gt; がなくなります。引き継いでくれる方を募集しています。残りはClojure回、CL回です。Schemeは今月が最後でした。&lt;a href=&#34;https://t.co/o4vv9DRFal&#34;&gt;https://t.co/o4vv9DRFal&lt;/a&gt;&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/803599706475507716&#34;&gt;2016年11月29日&lt;/a&gt;&lt;/blockquote&gt;
-&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
-
-&lt;p&gt;今の運営が引退した後を引き継いでくれる人も集まりそうなので何らかの形では続くと思いますが、lispmeetupという形をとるのかTech Talkだけになるのかは次の運営次第です。&lt;/p&gt;
-
-&lt;p&gt;お疲れ様でした。&lt;/p&gt;</description>
+&lt;p&gt;&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>サイバーエージェントを退職しました</title>
-      <link>/blog/2016/11/30/saiba_e_jientowotaishokushimashita</link>
+      <link>/blog/2016/11/30/saiba_e_jientowotaishokushimashita/</link>
       <pubDate>Wed, 30 Nov 2016 15:51:38 +0900</pubDate>
       
-      <guid>/blog/2016/11/30/saiba_e_jientowotaishokushimashita</guid>
+      <guid>/blog/2016/11/30/saiba_e_jientowotaishokushimashita/</guid>
       <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://www.adventar.org/calendars/1638&#34;&gt;Ex CyberAgent Developers Advent Calendar 2016 - Adventar&lt;/a&gt;1日目の記事です。
 元サイバーエージェントの人がわいわいやります。&lt;/p&gt;
 
 &lt;p&gt;κeenです。二年弱勤めたサイバーエージェントを退職したのでその旨について。&lt;/p&gt;
 
-&lt;p&gt;&lt;/p&gt;
-
-&lt;h1 id=&#34;サイバーエージェントの思い出&#34;&gt;サイバーエージェントの思い出&lt;/h1&gt;
-
-&lt;p&gt;サイバーエージェントに興味をもつきっかけになったのも入社することになったのも学生の頃からずっと参加し続けていた&lt;a href=&#34;https://lisp.connpass.com&#34;&gt;LispMeetUp&lt;/a&gt;でした。
-LispMeetUpでは長らく会場としてCAのセミナールームを使わせてもらっていました。
-そこでエンジニアに対して気軽に施設を提供するCAや社員の&lt;a href=&#34;https://twitter.com/potix2&#34;&gt;@potix2&lt;/a&gt;さんを知って、そのまま@potix2さんの手引でCAに入社する運びとなりました。
-「面接でLispは口にしない方が良い。100%落ちる。」なんて言ってた割にはLisp繋りで入社しました。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;http://keens.github.io/blog/2015/04/10/cyberagentninyuushashimashita/&#34;&gt;CyberAgentに入社しました | κeenのHappy Hacκing Blog&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;新卒で入社してからは3ヶ月ほど研修でした。
-最初の2週間ほどあるビジネス職も含めた全体研修ではなるほど、ここがCAかと思いました。しかしエンジニア研修からは見慣れた光景に戻って静かに研修を受けてました。
-エンジニア研修は割と長めにあるので同期のエンジニア同士の顔を覚える余地はありました。勉強会なんかもやりました。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;https://keens.github.io/slide/seitekinamemorikanrinohanashi/&#34;&gt;静的なメモリ管理の話。リージョン推論とλ計算からRustまで | κeenのHappy Hacκing Blog&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://keens.github.io/slide/benkyoukaikudoubenkyoudetakeshibenkyou/&#34;&gt;勉強会駆動勉強で猛勉強 | κeenのHappy Hacκing Blog&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://keens.github.io/slide/21seikinoenjinianotamenoHTTP_2nyuumon/&#34;&gt;21世紀のエンジニアのためのHTTP/2入門 | κeenのHappy Hacκing Blog&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;などなど。Linux, C, Python, Go, Java, Web, iOS, フレームワーク, Android, チーム開発なんかをやりました。Python, Go, iOSあたりは自分じゃやらなかったので面白かったです。&lt;/p&gt;
-
-&lt;p&gt;研修中は割と時間があったので他にも色々なことをやってました。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;http://keens.github.io/blog/2015/05/06/tarballbe_sunokeiryoubakkuapputsu_rutsukutta/&#34;&gt;tarballベースの軽量バックアップツール&amp;rsquo;Sheltar&amp;rsquo;を作った | κeenのHappy Hacκing Blog&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;http://keens.github.io/blog/2015/05/26/onigmowosaidai49_kousokukashitahanashi/&#34;&gt;Onigmoを最大49%高速化した話 | κeenのHappy Hacκing Blog&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;http://keens.github.io/blog/2015/05/29/daiikkyuuraberuwomotanaigengoniokerudirect_threaded_vmnojissou/&#34;&gt;第一級ラベルを持たない言語におけるDirect Threaded VMの実装 | κeenのHappy Hacκing Blog&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;この他にも研修期間中にブログエントリ十数本書いていたようです。下の代からは研修の内容が変わって忙しそうでした。&lt;/p&gt;
-
-&lt;p&gt;研修のあとの配属は@potix2さんのいる&lt;a href=&#34;https://adtech.cyberagent.io/&#34;&gt;アドテクスタジオ&lt;/a&gt;のAMoAdでした。トレーナの清水さんを始めとしてチームの皆さんにお世話になりました。
-AMoAdはその昔、外注していたシステムを巻き取ったものなのでやることが一杯あって、JavaやScalaを書いたり自動化をやったりしました。&lt;/p&gt;
-
-&lt;p&gt;Scalaは全然いたことがなかったので練習がてら作ったのがこれでした。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;https://adtech.cyberagent.io/scalablog/2015/12/05/scala-lisp/&#34;&gt;Scala初心者の新卒が頑張ってLispを作ってみた | Scala Tech Blog&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;これのおかげで型クラスがただのimplpcit parameterに見えるようになったのでそれなりに収穫はあったな、と思ってます。&lt;/p&gt;
-
-&lt;p&gt;AMoAdに限らずアドテクスタジオのエンジニアのボリュームゾーンは30代半ばなのでだいたい一回り近く年の離れたエンジニアに暖かく囲まれながら仕事をしていました。
-どんな雰囲気なの？とたまに訊かれますがエンジニアが集う部署なのでだいたい工学部を想像して頂けたらと思います。&lt;/p&gt;
-
-&lt;p&gt;さて、年が明けて2016年の1月になると、@potix2さんが新しいグループを立ち上げることになって別のグループに移動してしまいました。長らくお世話になりました。
-と思いきや自分もそのグループに移動になったので相変わらずお世話になることになりました。基盤開発グループってところでした。仕事と仕事の境目は一瞬仕事がない期間が産まれたりしますが、その隙を使って始めたのがRustのドキュメントの翻訳です。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;http://qiita.com/blackenedgold/items/3b068769736e671805f0&#34;&gt;Rustのドキュメントの翻訳プロジェクトを開始します。 - Qiita&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;あたらしいチームでは社内向けマイクロサービスのようなものを作ることになりました。
-私ともう一人ベテランのエンジニア(&lt;a href=&#34;https://twitter.com/atty303&#34;&gt;@atty303&lt;/a&gt;)でやる筈でしたが私のような雑草と違ってベテランは中々元のチームを抜けられないので1ヶ月ほど私一人でコードを書いてました。
-Scalaにも馴れてない新卒一人で。1ヶ月後に&lt;a href=&#34;https://twitter.com/atty303&#34;&gt;@atty303&lt;/a&gt;さんがジョインすると、コードは書かずにインフラをやるとのことでした。なのでコードを書くのはやっぱり私一人。&lt;/p&gt;
-
-&lt;p&gt;私が苦戦しつつコードを書いている間にconsulやnomad、terraform、dockerなんかでインフラが構築されていき、たまに朝来たら自分のコードが消えていたり（「君のコード書き直しといたよ」）して確か5月頃リリースだったような。&lt;/p&gt;
-
-&lt;p&gt;因みにdockerを多く使うのにdocker-machineだと不便なのでUbuntuマシンが欲しいって言ったら却下されました。セキュリティ的に無理でした。結局VMでUbuntuを使ってました（使ってます）。&lt;/p&gt;
-
-&lt;p&gt;リリースしてからは要求性能も満たしそこまで大きな障害もなく平和に暮らしました。めでたしめでたし。Ubuntuは使えなかったけど。&lt;/p&gt;
-
-&lt;p&gt;まあ、あとは新卒研修を担当したり&lt;a href=&#34;https://www.cyberagent.co.jp/recruit/fresh/program_detail/id=11303&amp;amp;season=2016&#34;&gt;インターン&lt;/a&gt;を担当したり社内ハッカソンをやったりゼミでドローンを飛ばしたり新卒のトレーナーをやったりライブラリの選書をやってコンパイラの本を大量に入荷したりと本業以外も色々やってました。長くなるのでこの辺は省きますね。&lt;/p&gt;
-
-&lt;h1 id=&#34;退職に際して&#34;&gt;退職に際して&lt;/h1&gt;
-
-&lt;p&gt;よく、「合わなかったの？」と言われますがそんなことはないです。（少くとも）アドテクスタジオはエンジニアにとっては非常に働きやすい場所でしたし&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;https://www.cyberagent.co.jp/features/detail/id=12837&#34;&gt;adtech studio - Photo Tour｜FEATURES&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;CAの一般的イメージはそういう部分だけ切り取ってメディアに出してるんだと思います。
-エンジニアから見たら先述の通り工学部のような雰囲気です。Ubuntuは使えないけど。サーバもMacやWindowsで動いてるんですかね。&lt;/p&gt;
-
-&lt;p&gt;むしろCAに入って良かったなと思える部分は一杯あって、ベテランのエンジニアに色々教えて貰ったりだとかVMwareのライセンスを買ってくれたりだとか&lt;a href=&#34;https://adtech.cyberagent.io/techblog?s=icfp&#34;&gt;ICFPに行かせてもらったり&lt;/a&gt;だとか。&lt;/p&gt;
-
-&lt;p&gt;同期エンジニアの繋りというのもすごい良くて、得意分野も部署も（今となっては）会社も色々にある60人ほどいるエンジニアとの人脈が無条件に作れるというのは新卒で入らないと出来ないなと思います。
-困ったことがあったら同期Slackに投げると数分で解決します。&lt;/p&gt;
-
-&lt;p&gt;最後は雑草が枯れるように誰にも気付かれないように消えていくつもりでしたがそうもいかず、大勢の方々に送り出して頂きました。&lt;/p&gt;
-
-&lt;p&gt;&lt;img alt=&#34;集合写真&#34; src=&#34;/images/ca/mall.jpg&#34; style=&#34;width: 100%&#34;&gt;&lt;/p&gt;
-
-&lt;p&gt;私の周りにいるのがお世話になった開発責任者やトレーナー、トレーニーなどですね。&lt;/p&gt;
-
-&lt;p&gt;色紙とプレゼントも頂きました。ありがとうございます。&lt;/p&gt;
-
-&lt;p&gt;&lt;img alt=&#34;プレゼントの写真&#34; src=&#34;/images/ca/presents.jpg&#34; style=&#34;width: 100%&#34;&gt;&lt;/p&gt;
-
-&lt;p&gt;退職の旨は業務上必要な方以外には知らせてなかったのでまさか色紙が来るとは思ってませんでした。
-多分関係しそうな人にDMを送って集めたんだと思います。ありがとうございます。
-プレゼントは麻の模様の風呂敷です。
-私はカバン代わりにPCを入れるにも旅行に行くにも風呂敷を使う人です:)&lt;/p&gt;
-
-&lt;p&gt;そして女性エンジニアの方(&lt;a href=&#34;https://twitter.com/iyunoriue&#34;&gt;@iyunoriue&lt;/a&gt;)からFOUNDRYの詰め合わせも頂きました。&lt;/p&gt;
-
-&lt;p&gt;&lt;img alt=&#34;FOUNDRYの写真&#34; src=&#34;/images/ca/foundry.jpg&#34; style=&#34;width: 100%&#34;&gt;&lt;/p&gt;
-
-&lt;p&gt;スイーツが好きなので非常に嬉しいです。ありがとうございます。抹茶と合いそう。&lt;/p&gt;
-
-&lt;p&gt;また、退職に合わせて色々なものも引退することになりました。&lt;/p&gt;
-
-&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;Shibuya.lispの現運営が引退するので &lt;a href=&#34;https://twitter.com/hashtag/lispmeetup?src=hash&#34;&gt;#lispmeetup&lt;/a&gt; がなくなります。引き継いでくれる方を募集しています。残りはClojure回、CL回です。Schemeは今月が最後でした。&lt;a href=&#34;https://t.co/o4vv9DRFal&#34;&gt;https://t.co/o4vv9DRFal&lt;/a&gt;&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/803599706475507716&#34;&gt;2016年11月29日&lt;/a&gt;&lt;/blockquote&gt;
-
-&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;そろそろ私も野生のLisper引退した方がいい。&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/803601106693521408&#34;&gt;2016年11月29日&lt;/a&gt;&lt;/blockquote&gt;
-
-&lt;p&gt;お世話になった方々本当にありがとうございました。&lt;/p&gt;
-
-&lt;h1 id=&#34;次の話と退職理由&#34;&gt;次の話と退職理由&lt;/h1&gt;
-
-&lt;p&gt;とりあえず12月中は有給消化で、1月から働きます。給料はまあまあ上がります。どうやらコンパイラ関係の仕事をしそうです。
-世の中そんな仕事があるのか自分でも半信半疑ですがあるようです。&lt;/p&gt;
-
-&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;そういえばICFPのときにкeenさんと話して「えっコンパイラが書けるシゴトあると思ってんの!?」と冗談半分で言われたな．&lt;/p&gt;&amp;mdash; gfn (@bd_gfngfn) &lt;a href=&#34;https://twitter.com/bd_gfngfn/status/780057500485681153&#34;&gt;2016年9月25日&lt;/a&gt;&lt;/blockquote&gt;
-
-&lt;p&gt;私のことを知ってる方なら「コンパイラの仕事があるから」で十分退職理由として納得頂けると思います。
-技術的にも人生的にもチャレンジングですがまだ20代前半なので後先考えずに行動してもどうにかなるかな、とか思ってます。
-地味に社内でRustも使われているようなのでそこも狙っていこうと思います。
-あ、こういうのもやってます。興味のある方はお願いします。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;http://qiita.com/advent-calendar/2016/lang_dev&#34;&gt;言語実装 Advent Calendar 2016 - Qiita&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;http://qiita.com/advent-calendar/2016/rust-lang-2&#34;&gt;Rust その2 Advent Calendar 2016 - Qiita&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;次の仕事についてはまた入社してから書こうと思いますが、ひとまずの報告として渋谷からは離れます。本郷キャンパスに近いところに引っ越す予定です。付近の人はなんか誘って下さい。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://amzn.asia/0JcDzIf&#34;&gt;http://amzn.asia/0JcDzIf&lt;/a&gt;&lt;/p&gt;
-
-&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;
-
-&lt;p&gt;お疲れ様でした&lt;/p&gt;</description>
+&lt;p&gt;&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>SML#をUbuntu 16.10で動かす</title>
-      <link>/blog/2016/11/30/sml_woubuntu_16_10deugokasu</link>
+      <link>/blog/2016/11/30/sml_woubuntu_16_10deugokasu/</link>
       <pubDate>Wed, 30 Nov 2016 15:18:58 +0900</pubDate>
       
-      <guid>/blog/2016/11/30/sml_woubuntu_16_10deugokasu</guid>
+      <guid>/blog/2016/11/30/sml_woubuntu_16_10deugokasu/</guid>
       <description>&lt;p&gt;この記事は&lt;a href=&#34;http://qiita.com/advent-calendar/2016/ml&#34;&gt;ML Advent Calendar 2016 - Qiita&lt;/a&gt;の1日目の記事です。&lt;/p&gt;
 
 &lt;p&gt;κeenです。小ネタを。Ubuntu 16.10でSML#を動かそうと思ったら動かなかったので動かします。&lt;/p&gt;
 
-&lt;p&gt;&lt;/p&gt;
-
-&lt;h1 id=&#34;現象&#34;&gt;現象&lt;/h1&gt;
-
-&lt;p&gt;リンカがエラーを吐く。バイナリが正しく作れてなさそう&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;/usr/bin/ld: /usr/lib/x86_64-linux-gnu/smlsharp/runtime/libsmlsharp.a(callback.o): relocation R_X86_64_32 against `.text&#39; can not be used when making a shared object。 -fPIC を付けて再コンパイルしてください。
-/usr/bin/ld: /usr/lib/x86_64-linux-gnu/smlsharp/runtime/libsmlsharp.a(control.o): relocation R_X86_64_32 against `.text&#39; can not be used when making a shared object。 -fPIC を付けて再コンパイルしてください。
-/usr/bin/ld: /usr/lib/x86_64-linux-gnu/smlsharp/runtime/libsmlsharp.a(error.o): relocation R_X86_64_32 against `.bss&#39; can not be used when making a shared object。 -fPIC を付けて再コンパイルしてください。
-/usr/bin/ld: /usr/lib/x86_64-linux-gnu/smlsharp/runtime/libsmlsharp.a(exn.o): relocation R_X86_64_32 against `.rodata.str1.8&#39; can not be used when making a shared object。 -fPIC を付けて再コンパイルしてください 。
-/usr/bin/ld: /usr/lib/x86_64-linux-gnu/smlsharp/runtime/libsmlsharp.a(finalize.o): relocation R_X86_64_32 against `.text&#39; can not be used when making a shared object。 -fPIC を付けて再コンパイルしてください。
-/usr/bin/ld: /usr/lib/x86_64-linux-gnu/smlsharp/runtime/libsmlsharp.a(init.o): relocation R_X86_64_32 against `.rodata.str1.1&#39; can not be used when making a shared object。 -fPIC を付けて再コンパイルしてください。
-/usr/bin/ld: /usr/lib/x86_64-linux-gnu/smlsharp/runtime/libsmlsharp.a(object.o): relocation R_X86_64_32 against `.rodata.str1.1&#39; can not be used when making a shared object。 -fPIC を付けて再コンパイルしてください。
-/usr/bin/ld: /usr/lib/x86_64-linux-gnu/smlsharp/runtime/libsmlsharp.a(xmalloc.o): relocation R_X86_64_32 against `.rodata.str1.1&#39; can not be used when making a shared object。 -fPIC を付けて再コンパイルしてくだ さい。
-/usr/bin/ld: /usr/lib/x86_64-linux-gnu/smlsharp/runtime/libsmlsharp.a(prim.o): relocation R_X86_64_32 against `.rodata&#39; can not be used when making a shared object。 -fPIC を付けて再コンパイルしてください。
-/usr/bin/ld: /usr/lib/x86_64-linux-gnu/smlsharp/runtime/libsmlsharp.a(top.o): relocation R_X86_64_32 against `.text&#39; can not be used when making a shared object。 -fPIC を付けて再コンパイルしてください。
-/usr/bin/ld: /usr/lib/x86_64-linux-gnu/smlsharp/runtime/libsmlsharp.a(dtoa.o): relocation R_X86_64_32 against `.rodata.str1.1&#39; can not be used when making a shared object。 -fPIC を付けて再コンパイルしてください。
-/usr/bin/ld: /usr/lib/x86_64-linux-gnu/smlsharp/runtime/libsmlsharp.a(heap_concurrent.o): relocation R_X86_64_32S against `.bss&#39; can not be used when making a shared object。 -fPIC を付けて再コンパイルしてください。
-/usr/bin/ld: 最終リンクに失敗しました: 出力に対応するセクションがありません
-collect2: error: ld returned 1 exit status
-uncaught exception: CoreUtils.Failed: gcc -Wl,-Bsymbolic-functions -Wl,-z,relro test/Main.o /tmp/tmp.IhaEmV/000/tmp_000.a lib/socket.o lib/inet.o lib/net_host_db.o /usr/lib/x86_64-linux-gnu/smlsharp/runtime/main.o /usr/lib/x86_64-linux-gnu/smlsharp/runtime/libsmlsharp.a -lpthread -lyajl -ldl -lgmp -lm  -o testRunner at src/compiler/toolchain/main/CoreUtils.sml:113
-Makefile:50: ターゲット &#39;testRunner&#39; のレシピで失敗しました
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;原因&#34;&gt;原因&lt;/h1&gt;
-
-&lt;p&gt;私もよく分かってないのですが、Ubuntu 16.10からGCC 6系になりましたが、そこでデフォルトの挙動が変わったらしいのでその辺らしいです。&lt;/p&gt;
-
-&lt;h1 id=&#34;対策&#34;&gt;対策&lt;/h1&gt;
-
-&lt;p&gt;たいていの言語で &lt;code&gt;-no-pie&lt;/code&gt; を付けることで解決しています。 Position Independent Executableだっけ？&lt;/p&gt;
-
-&lt;p&gt;アドホックにやる方法と恒久的に解決する方法とがあります。&lt;/p&gt;
-
-&lt;h2 id=&#34;アドホックな方&#34;&gt;アドホックな方&lt;/h2&gt;
-
-&lt;p&gt;簡単で、SML#で &lt;strong&gt;リンクする時&lt;/strong&gt; に &lt;code&gt;-Xlinker -no-pie&lt;/code&gt; を付けてあげます。&lt;/p&gt;
-
-&lt;h2 id=&#34;恒久的な方&#34;&gt;恒久的な方&lt;/h2&gt;
-
-&lt;p&gt;SML#を自前でビルドします。そのとき &lt;strong&gt;configure時&lt;/strong&gt; に &lt;code&gt;LDFLAGS=-no-pie&lt;/code&gt; を付けてあげます。&lt;/p&gt;
-
-&lt;h1 id=&#34;余談&#34;&gt;余談&lt;/h1&gt;
-
-&lt;p&gt;&lt;code&gt;-no-pie&lt;/code&gt; はGCC 6以降で、それ以前は &lt;code&gt;-nopie&lt;/code&gt; との噂をききましたがGCC 6系しか手元にないので真偽のほどは分かりません。&lt;/p&gt;</description>
+&lt;p&gt;&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>Apache Drillの不自然な挙動</title>
-      <link>/blog/2015/12/20/apache_drillnofushizennakyodou</link>
+      <link>/blog/2015/12/20/apache_drillnofushizennakyodou/</link>
       <pubDate>Sun, 20 Dec 2015 23:04:37 +0900</pubDate>
       
-      <guid>/blog/2015/12/20/apache_drillnofushizennakyodou</guid>
+      <guid>/blog/2015/12/20/apache_drillnofushizennakyodou/</guid>
       <description>&lt;p&gt;この記事は&lt;a href=&#34;http://qiita.com/advent-calendar/2015/drill&#34;&gt;Apache Drill Advent Calendar 2015&lt;/a&gt;21日目のエントリです&lt;/p&gt;
 
 &lt;p&gt;最初は備忘録がてら普段使うMySQL、BigQuery、SQLite、Apache DrillのSQLシンタックスの違いでも書こうかと思ったのですが調査が思ったより大変だったのでやめました。ANSI SQLも色々変わってるということは理解出来ました。&lt;/p&gt;
 
 &lt;p&gt;ということでApache Drillを使ってて「ん？」と思った挙動をいくつか出してみようかと。1.4時点での情報です。&lt;/p&gt;
 
-&lt;p&gt;&lt;/p&gt;
-
-&lt;h1 id=&#34;select-1&#34;&gt;&lt;code&gt;SELECT 1&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;シェルで手持ち無沙汰に&lt;code&gt;ls&lt;/code&gt;や&lt;code&gt;pwd&lt;/code&gt;を打つようにSQLプロンプトで&lt;code&gt;SELECT 1;&lt;/code&gt;を打つ訳ですが、Apache Drillはこれを受け付けてくれません。&lt;/p&gt;
-
-&lt;p&gt;まあ、これは不自然というかそういう仕様なのですが正しくは&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sql&#34;&gt;SELECT 1 FROM (VALUES(1));
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;です。手持ち無沙汰に打つには少し面倒ですね。そうでなくても日付関数の挙動を確かめたい時にも&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sql&#34;&gt;SELECT NOW();
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;などとやりたい訳ですがそれにも&lt;code&gt;FROM (VALUES(1));&lt;/code&gt;とダミーの&lt;code&gt;FROM&lt;/code&gt;句を付けてあげる必要があります。面倒ですね。&lt;/p&gt;
-
-&lt;h1 id=&#34;union-と-union-all&#34;&gt;&lt;code&gt;UNION&lt;/code&gt;と&lt;code&gt;UNION ALL&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;&lt;code&gt;UNION&lt;/code&gt;はテーブル同士のレコード間で重複を取り除いた集合を、&lt;code&gt;UNION ALL&lt;/code&gt;は重複を取り除かない集合を返します。Apache Drillでも試してみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sql&#34;&gt;SELECT * FROM (VALUES (1, 2, 3) UNION VALUES(4, 5, 6) UNION VALUES(7, 8, 9) UNION VALUES(1, 2, 3));
-SELECT * FROM (VALUES (1, 2, 3) UNION ALL VALUES(4, 5, 6) UNION ALL VALUES(7, 8, 9) UNION ALL VALUES(1, 2, 3));
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これらのクエリはどういう結果になるでしょうか。答えはこうです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;0: jdbc:drill:zk=local&amp;gt; SELECT * FROM (VALUES (1, 2, 3) UNION VALUES(4, 5, 6) UNION VALUES(7, 8, 9) UNION VALUES(1, 2, 3));
-+---------+---------+---------+
-| EXPR$0  | EXPR$1  | EXPR$2  |
-+---------+---------+---------+
-| 1       | 2       | 3       |
-+---------+---------+---------+
-1 row selected (0.416 seconds)
-0: jdbc:drill:zk=local&amp;gt; SELECT * FROM (VALUES (1, 2, 3) UNION ALL VALUES(4, 5, 6) UNION ALL VALUES(7, 8, 9) UNION ALL VALUES(1, 2, 3));
-+---------+---------+---------+
-| EXPR$0  | EXPR$1  | EXPR$2  |
-+---------+---------+---------+
-| 7       | 8       | 9       |
-| 7       | 8       | 9       |
-| 7       | 8       | 9       |
-| 7       | 8       | 9       |
-+---------+---------+---------+
-4 rows selected (0.115 seconds)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;うーん。これはバグだと思うんですよね。定数テーブルをキャッシュするようにしてたら全てのレコードで同じ値を参照しちゃって値を書き換えてしまったとか。
-&lt;code&gt;UNION&lt;/code&gt;が&lt;code&gt;UNION ALL&lt;/code&gt;の結果から&lt;code&gt;DISTINCT&lt;/code&gt;相当の処理をするなら2番目の結果を見れば最初の結果が従うのもうなずけますし。&lt;/p&gt;
-
-&lt;h1 id=&#34;ヘッダ付きcsv&#34;&gt;ヘッダ付きCSV&lt;/h1&gt;
-
-&lt;p&gt;Drill 1.4からヘッダ付きCSVの扱いが楽になりましたね。拡張子が&lt;code&gt;csv&lt;/code&gt;のままヘッダ付きCSVにクエリを投げられます。ちょっと試しましょう。&lt;/p&gt;
-
-&lt;p&gt;次のようなCSVファイルを用意します。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cat ~/Csv/test.csv
-foo,bar,baz
-1,1.0,&amp;quot;a&amp;quot;
-2,2.0,&amp;quot;b&amp;quot;
-3,3.0,&amp;quot;c&amp;quot;
-4,4.0,&amp;quot;d&amp;quot;
-5,5.0,&amp;quot;e&amp;quot;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;クエリを投げてみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;0: jdbc:drill:zk=local&amp;gt; SELECT * FROM TABLE(dfs.`/home/kim/Csv/test.csv`(type =&amp;gt; &#39;text&#39;, fieldDelimiter =&amp;gt; &#39;,&#39;, extractHeader =&amp;gt; true));
-+------+------+------+
-| foo  | bar  | baz  |
-+------+------+------+
-| 1    | 1.0  | a    |
-| 2    | 2.0  | b    |
-| 3    | 3.0  | c    |
-| 4    | 4.0  | d    |
-| 5    | 5.0  | e    |
-+------+------+------+
-5 rows selected (0.12 seconds)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;よしよし。じゃあ今度は&lt;code&gt;baz&lt;/code&gt;カラムだけ取り出してみましょう。ここで、会社のMacだと&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;0: jdbc:drill:zk=local&amp;gt; SELECT baz FROM TABLE(dfs.`/home/kim/Csv/test.csv`(type =&amp;gt; &#39;text&#39;, fieldDelimiter =&amp;gt; &#39;,&#39;, extractHeader =&amp;gt; true));
-+------+------+------+
-| foo  | bar  | baz  |
-+------+------+------+
-| 1    | 1.0  | a    |
-| 2    | 2.0  | b    |
-| 3    | 3.0  | c    |
-| 4    | 4.0  | d    |
-| 5    | 5.0  | e    |
-+------+------+------+
-5 rows selected (0.12 seconds)
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のようにカラムを指定しているのにも関らず全てのデータが返ってきていました。その旨を書こうと思ったのですが手元のLinuxマシンだと正しい結果が返ってくるようです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;0: jdbc:drill:zk=local&amp;gt; SELECT `bar` FROM TABLE(dfs.`/home/kim/Csv/test.csv`(type =&amp;gt; &#39;text&#39;, fieldDelimiter =&amp;gt; &#39;,&#39;, extractHeader =&amp;gt; true));
-+------+
-| bar  |
-+------+
-| 1.0  |
-| 2.0  |
-| 3.0  |
-| 4.0  |
-| 5.0  |
-+------+
-5 rows selected (0.088 seconds)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ちょっと会社で見たのが幻覚だったかもしれないので要調査ですね。&lt;/p&gt;
-
-&lt;h1 id=&#34;mysqlへの接続&#34;&gt;MySQLへの接続&lt;/h1&gt;
-
-&lt;p&gt;以下のようなSQLを投げた所、ひどく時間が掛かりました。投げた対象はプロダクションのデータが入ってる分析用のDBで、結構な量のデータが入ってます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sql&#34;&gt;SELECT * FROM mysql.mydb.`test` LIMIT 20;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;Apache Drill自体レスポンスが悪いのでクエリによってはそんなものかな、と思って最初はそのままにしたのですがふと気になって&lt;code&gt;EXPLAIN&lt;/code&gt;してみました。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;0: jdbc:drill:zk=localhost:2181&amp;gt; EXPLAIN PLAN FOR SELECT * FROM mysql.mydb.`test` LIMIT 20;
-+------+------+
-| text | json |
-+------+------+
-| 00-00    Screen
-00-01      Project(columns....)
-00-02        SelectionVectorRemover
-00-03          Limit(fetch=[20])
-00-04            Limit(fetch=[20])
-00-05              Jdbc(sql=[SELECT * FROM `mydb`.`test`])
-| {
-....
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;Jdbc(sql=[SELECT * FROM mydb.test])&lt;/code&gt; とあるのでなんとMySQLに&lt;code&gt;LIMIT&lt;/code&gt;をつけずにクエリを投げてます。そしてさらに何故か&lt;code&gt;Limit(fetch=[20])&lt;/code&gt;を2回やっています。&lt;/p&gt;
-
-&lt;p&gt;まあ、内部でLimitを2回やってるのは良いとしてもMySQLにLimit無しで投げるのはいただけないですね。
-分散モデルのDrillからしたら「分散してる俺らの方が処理が速いから全部俺らでやってやるよ」という気概なのかもしれませんがこちらとしてはDBへの負荷も考えて欲しいものです。
-まあ、かといって&lt;code&gt;WHERE&lt;/code&gt;句にインデックスが付く/付かないだとかその他の句によってMySQLのへの負荷も変わるのでなんとも言えないといえばそうなんですが簡単な場合にpush downしてくれるか
-あるいは手動でpush down出来る仕組みが欲しいですね。&lt;code&gt;FORCE INDEX&lt;/code&gt;みたいに。&lt;/p&gt;
-
-&lt;p&gt;さて、色々気になる点はありましたがApache Drillは面白いプロダクトです。
-主にビッグデータ分析に使われるようですが私は大きなテーブルからアドホックに抽出したCSVとMySQLにあるマスターデータをJOINするなどの目的で使っていきたいなと思っています。&lt;/p&gt;
-
-&lt;p&gt;皆様良いデータ分析ライフを！&lt;/p&gt;</description>
+&lt;p&gt;&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>最近作ってるLispの話</title>
-      <link>/blog/2015/12/20/saikintsukutterulispnohanashi</link>
+      <link>/blog/2015/12/20/saikintsukutterulispnohanashi/</link>
       <pubDate>Sun, 20 Dec 2015 22:40:16 +0900</pubDate>
       
-      <guid>/blog/2015/12/20/saikintsukutterulispnohanashi</guid>
+      <guid>/blog/2015/12/20/saikintsukutterulispnohanashi/</guid>
       <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2015/lisp&#34;&gt;Lisp Advent Calendar 2015&lt;/a&gt;21日目の記事です。&lt;/p&gt;
 
-&lt;p&gt;κeenです。最近あまりLispを書いてなくてネタがないので最近作ってるLispの話でもしようかと。&lt;/p&gt;
-
-&lt;p&gt;
-&lt;a href=&#34;https://github.com/KeenS/kappaLisp&#34;&gt;κLisp&lt;/a&gt;といいます。まだまだ完成には程遠いです。現在、&lt;a href=&#34;https://github.com/KeenS/kappaLisp/blob/master/src/eval.rs#L378&#34;&gt;ここら辺&lt;/a&gt;くらいの式なら評価出来ます。&lt;/p&gt;
-
-&lt;p&gt;このLispはSKK辞書に使われているS式を評価するために作られました。
-SKKは様々な場所に移植されているのでマルチプラットフォームで動いて他の言語と協調が出来る言語で作るのが望ましいのですが、今回はRustを選びました。
-最初はCにしようかと思ったのですがちょいとRustを試してみようかと(当時Rustほとんど書いたことがない初心者)。&lt;/p&gt;
-
-&lt;p&gt;SKKに書かれているS式を処理出来るLisp処理系はあるのですがGPLでライセンスされており、それを使ったiOSアプリをAppStoreに登録出来ないという問題があるそうです。
-なのでMITライセンスで作り始めました。&lt;/p&gt;
-
-&lt;p&gt;さて、Lisp処理系くらい簡単に作れそうなものですが、いくつかの点で詰まっています。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;そもそもRustが難しい&lt;/li&gt;
-&lt;li&gt;関数ポインタが思うように扱えない&lt;/li&gt;
-&lt;li&gt;やろうとした事がborrow checkに引っ掛かって出来なかった&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;この詰まった点はRustが悪い訳ではなくて単に私がRustに合わせた設計が出来なかっただけですね。そろそろRustにも少しづつですが慣れて来たのでどこかのタイミングでリファクタリングして進めていきたいですね。&lt;/p&gt;
-
-&lt;p&gt;一応現状でも進めようと思えば進めれるのですが&lt;a href=&#34;https://github.com/KeenS/kappaLisp/blob/master/src/eval.rs#L232&#34;&gt;ここ&lt;/a&gt;のように明らかにイケてないコードが続くので進めるモチベーション起きませんよね。&lt;/p&gt;
-
-&lt;p&gt;設計とかの話をすると、最終的にはC APIでS式の文字列を受け取ったらそれを評価した結果の文字列を返す関数を晒せばいいかな、と思ってます。
-ちゃんとiOSへのクロスコンパイルも出来ますしObj-C, Swift双方C FFIがあるのでそれで十分でしょう。(CF &lt;a href=&#34;http://qiita.com/moriturus/items/1190614dcbbe31ecfc2f&#34;&gt;http://qiita.com/moriturus/items/1190614dcbbe31ecfc2f&lt;/a&gt; , &lt;a href=&#34;http://safx-dev.blogspot.jp/2014/06/rustios.html&#34;&gt;http://safx-dev.blogspot.jp/2014/06/rustios.html&lt;/a&gt;)&lt;/p&gt;
-
-&lt;p&gt;パーサは手書きで、実行はインタプリタ、Emacs Lispに則ってLisp2のダイナミックスコープです。設計がクソなのでメモリ管理らしいメモリ管理はやってませんがRustのメモリ管理のお陰でメモリリークはしてません。
-ちゃんと設計してReference Countなメモリ管理でもしようかと。フットプリントの軽さ大事。&lt;/p&gt;
-
-&lt;p&gt;全然まとまりませんがいつか使えるようになってAquaSKKやFlickSKKに取り込まれるかもしれないのでその時には裏でこのLispが動いてるかもと思い出してあげて下さい。&lt;/p&gt;</description>
+&lt;p&gt;κeenです。最近あまりLispを書いてなくてネタがないので最近作ってるLispの話でもしようかと。&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>travisとappveyorでクロスプラットフォームなCIする話</title>
-      <link>/blog/2015/12/20/travistoappveyerdekurosupurattofo_munacisuruhanashi</link>
+      <link>/blog/2015/12/20/travistoappveyerdekurosupurattofo_munacisuruhanashi/</link>
       <pubDate>Sun, 20 Dec 2015 22:19:21 +0900</pubDate>
       
-      <guid>/blog/2015/12/20/travistoappveyerdekurosupurattofo_munacisuruhanashi</guid>
+      <guid>/blog/2015/12/20/travistoappveyerdekurosupurattofo_munacisuruhanashi/</guid>
       <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2015/rust-lang&#34;&gt;Rust Advent Calendar 2015&lt;/a&gt;20日目の記事です。
 日付を覚え間違っていて、締切ギリギリに書いてます。&lt;/p&gt;
 
 &lt;p&gt;κeenです。ものすごい小ネタですがRustでCIする話でも。
-&lt;/p&gt;
-
-&lt;p&gt;Rustはクロスプラットフォームな言語なのでLinux, Macそしてあまり聞き慣れませんがWindowsというOSでも動きます。
-とは言っても普段の開発環境がLinux、運悪くMacを使わざるを得ない人はMacで開発をしているとそれらでの動作検証は出来るでしょうが他のOSでの動作検証が難しいでしょう。&lt;/p&gt;
-
-&lt;p&gt;そこでCIしましょう。Travis CIはLinuxと、あまり使われていませんがMacでのCI環境を、AppveyorでWindowsというOSでのCI環境を作ります。&lt;/p&gt;
-
-&lt;p&gt;しかしクロスプラットフォームでしかもテスト方法がCargoで統一されているRustではそこまで難しいこともなく、以下の設定をコピペするだけです。&lt;/p&gt;
-
-&lt;p&gt;travis&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-yaml&#34;&gt;language: rust
-rust:
-  - nightly
-  - beta
-  - stable
-os:
-  - linux
-  - osx
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;appveyor&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-yaml&#34;&gt;branches:
-  except:
-    - gh-pages
-
-platform:
-  - x64
-environment:
-  RUST_INSTALL_DIR: C:\Rust
-  matrix:
-    - RUST_INSTALL_TRIPLE: i686-pc-windows-msvc
-      RUST_VERSION: 1.4.0
-    - RUST_INSTALL_TRIPLE: i686-pc-windows-msvc
-      RUST_VERSION: beta
-    - RUST_INSTALL_TRIPLE: i686-pc-windows-msvc
-      RUST_VERSION: nightly
-    - RUST_INSTALL_TRIPLE: x86_64-pc-windows-msvc
-      RUST_VERSION: 1.4.0
-    - RUST_INSTALL_TRIPLE: x86_64-pc-windows-msvc
-      RUST_VERSION: beta
-    - RUST_INSTALL_TRIPLE: x86_64-pc-windows-msvc
-      RUST_VERSION: nightly
-
-install:
-  - ps: Start-FileDownload &amp;quot;https://static.rust-lang.org/dist/rust-${env:RUST_VERSION}-${env:RUST_INSTALL_TRIPLE}.exe&amp;quot;
-  - cmd: rust-%RUST_VERSION%-%RUST_INSTALL_TRIPLE%.exe /VERYSILENT /NORESTART /DIR=&amp;quot;%RUST_INSTALL_DIR%&amp;quot;
-  - cmd: SET PATH=%PATH%;%RUST_INSTALL_DIR%\bin
-  - rustc --version
-  - cargo --version
-
-build: false
-test_script:
-  - cargo build --verbose
-  - cargo test --verbose
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;バッジとかは適当に持ってきましょう。&lt;/p&gt;
-
-&lt;p&gt;サンプルが欲しければ&lt;a href=&#34;https://github.com/Stebalien/tempfile&#34;&gt;Stebalien/tempfile&lt;/a&gt;あたりを参考にしましょう。&lt;/p&gt;
-
-&lt;p&gt;それではHave Happy Hacκings!&lt;/p&gt;
-
-&lt;p&gt;※OS関連の煽りはただのネタです。また「あまり使われていませんがMacでのCI環境を」は「(travisの中では)あまり使われていません(のでもしかしたら使えることを知らない人がいるかもしれません)が」という意味です。&lt;/p&gt;</description>
+&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>ClojureでReactive Messaging Pattern</title>
-      <link>/blog/2015/12/19/clojuredereactive_messaging_pattern</link>
+      <link>/blog/2015/12/19/clojuredereactive_messaging_pattern/</link>
       <pubDate>Sat, 19 Dec 2015 22:30:19 +0900</pubDate>
       
-      <guid>/blog/2015/12/19/clojuredereactive_messaging_pattern</guid>
+      <guid>/blog/2015/12/19/clojuredereactive_messaging_pattern/</guid>
       <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2015/clojure&#34;&gt;Clojure Advent Calendar 2015&lt;/a&gt;の16日目の記事です（大遅刻）&lt;/p&gt;
 
 &lt;p&gt;κeenです。ここのところ体調優れず、また、特に面白いネタもなくClojure Advent Calendarに遅刻したことをお詫び申し上げます。&lt;/p&gt;
 
-&lt;p&gt;さて、今日はReactive Messaging PatternをClojureのcore.asyncでやってみたいと思います。Reactive Messaging Pattersは、Java/Scala向けActorシステムの&lt;a href=&#34;http://akka.io/&#34;&gt;Akka&lt;/a&gt;の作者が著した本、&lt;a href=&#34;http://www.amazon.co.jp/Reactive-Messaging-Patterns-Actor-Model-ebook/dp/B011S8YC5G&#34;&gt;Amazon.co.jp: Reactive Messaging Patterns with the Actor Model: Applications and Integration in Scala and Akka&lt;/a&gt;で書かれているデザインパターンです。&lt;/p&gt;
-
-&lt;p&gt;非常に興味深い本なのですがScala及びAkka初心者の私には中々辛いので一旦Clojureで試してみようかと。
-
-ところで、AkkaとClojureのcore.asynkには若干のモデルの違いがあります。詳しくは&lt;a href=&#34;http://blog.paralleluniverse.co/2015/05/21/quasar-vs-akka/&#34;&gt;ここ&lt;/a&gt;とかにあるのですが、一番大きくは非同期/同期モデルの違いがあります。
-Akkaの場合はActorにメッセージを送っても届いたという保障はなく(「その瞬間に」届いてないだけでなく、届く前にActorが再起動したらメッセージがロストしてしまう!)、また、メッセージの受信も&lt;code&gt;receive&lt;/code&gt;というコールバック用のメソッドを用意してそこでハンドルすることになります。&lt;/p&gt;
-
-&lt;p&gt;そういう違いがある中でどれだけClojureに翻訳出来るか多少不安ですがチャレンジしてみます。尚、原書には様々なパターンがあるのですが流石に本一冊分全部は紹介し切れないので面白そうでかつClojureでも役立ちそうなものだけ紹介することにします。このコードは原書のものをClojureに翻訳したものではなく、私が勝手に書いたものです。コードを参考にするのは雰囲気程度に留めて、実際を知りたかったら原書を読みましょう。&lt;/p&gt;
-
-&lt;p&gt;今回、&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-clojure&#34;&gt;(defproject reactive-message-patterns &amp;quot;0.1.0-SNAPSHOT&amp;quot;
-  :description &amp;quot;FIXME: write description&amp;quot;
-  :url &amp;quot;http://example.com/FIXME&amp;quot;
-  :license {:name &amp;quot;Eclipse Public License&amp;quot;
-            :url &amp;quot;http://www.eclipse.org/legal/epl-v10.html&amp;quot;}
-  :dependencies [[org.clojure/clojure &amp;quot;1.7.0&amp;quot;]
-                 [org.clojure/core.async &amp;quot;0.2.374&amp;quot;]])
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;というプロジェクト設定で試しました。また、ソースコードは&lt;a href=&#34;https://github.com/KeenS/reactive-message-patterns&#34;&gt;こちら&lt;/a&gt;で公開しています。&lt;/p&gt;
-
-&lt;h1 id=&#34;messaging-with-actors&#34;&gt;Messaging With Actors&lt;/h1&gt;
-
-&lt;h2 id=&#34;pipes-and-filters&#34;&gt;Pipes And Filters&lt;/h2&gt;
-
-&lt;p&gt;メッセージが来る際に、そのまま受け取るのではなく一旦Filter用のActorで変換やvalidationをかけて本処理に入ります。&lt;/p&gt;
-
-&lt;p&gt;&lt;del&gt;Clojureなら&lt;code&gt;filter&amp;lt;&lt;/code&gt;/&lt;code&gt;filter&amp;gt;&lt;/code&gt;/ transducerで瞬殺&lt;/del&gt; Filter処理をActorに分離することで並列性やモジュール性が上がります。原書の例ではまずDecrypt Filterを噛ませてAuthenticate Filterで認証出来たら De-dup Filterで重複を取り除いてメッセージをクリーンにしてから処理を始める、とういうように非常に実用的な例が出ています。&lt;/p&gt;
-
-&lt;p&gt;また、(transformでなく、篩い分けの)Filterを分離することでFilterした後の処理、例えばinvalidなメッセージが来たらログに出すなどの柔軟性を得ることが出来ます。&lt;/p&gt;
-
-&lt;p&gt;これを実装してみましょう。すごい適当ですがメッセージが来たらそれを2倍するfilterを作ってみます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-clojure&#34;&gt;(use &#39;clojure.core.async)
-
-(defn filter-actor
-  ([f]
-   (let [in (chan)
-         out (chan)]
-     (do
-       (filter-actor f in out)
-       [in out])))
-  ([f in out]
-   (go-loop []
-     (if-let [v (&amp;lt;! in)]
-       (if-let [ret (f v)]
-         (if (&amp;gt;! out ret)
-           (recur)))
-       (close! out)))))
-
-(let [[in out] (filter-actor (fn [x] (* x 2)))]
-  (go
-    ;; producer
-    (doseq [v (range 1 10)]
-      (&amp;gt;! in v))
-    (close! in))
-  (go-loop []
-    ;; consumer
-    (if-let [v (&amp;lt;! out)]
-      (do
-        (println v)
-        (recur))
-      (close! out))))
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;簡単ですね。チャネルが終わったかどうか調べるのに一々&lt;code&gt;if-let&lt;/code&gt;を使うのが面倒ですがリストに対する再帰関数もそんな感じなのでまあ、こういうもんなんでしょう。&lt;/p&gt;
-
-&lt;h2 id=&#34;その他&#34;&gt;その他&lt;/h2&gt;
-
-&lt;p&gt;他にもMessaging With ActorsにはMessage Router, Message Translator, Message Endpointsなどのパターンが載っているのですが割愛します。特にMessage Translatorは外部システム(HTTPリクエスト、MQ, SQLなど)とのやりとりの話なので簡単に試すには少し重すぎるようです。&lt;/p&gt;
-
-&lt;h1 id=&#34;messaging-channels&#34;&gt;Messaging Channels&lt;/h1&gt;
-
-&lt;p&gt;この章にはActor同士のメッセージのやりとりの方法が色々書かれています。
-Point-to-Point Channel, Publish-Subscribe Channel, Datatype Channel, Invalid Message Channel, Dead Letter Channel, Guaranteed Delivery, Channel Adapter, Message Bridge, Message Bus。
-中々多くのパターンが載っているのですが一部はAkka固有であったりClojureには必要なかったりしますので、私が興味を持ったものを紹介します。&lt;/p&gt;
-
-&lt;h2 id=&#34;publish-subscribe&#34;&gt;Publish-Subscribe&lt;/h2&gt;
-
-&lt;p&gt;定番ですね。概念自体の説明は不要と思います。core.asyncだとどうなるのかを見てみます。&lt;code&gt;pub&lt;/code&gt;と&lt;code&gt;sub&lt;/code&gt;を使います。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-clojure&#34;&gt;(let [publisher (chan)
-      publication (pub publisher :topic)
-      subscriber1 (chan)
-      subscriber2 (chan)]
-  (sub publication :delete subscriber1)
-  (sub publication :create subscriber1)
-
-  (sub publication :update subscriber2)
-  (sub publication :read subscriber2)
-
-  ;; start subscribers before publish start
-  (go-loop [] (when-let [v (&amp;lt;! subscriber1)] (printf &amp;quot;I&#39;m One, got %s\n&amp;quot; (:type v)) (recur)))
-  (go-loop [] (when-let [v (&amp;lt;! subscriber2)] (printf &amp;quot;I&#39;m Two, got %s\n&amp;quot; (:type v)) (recur)))
-
-  (go (onto-chan publisher [{:topic :update, :type &amp;quot;dog&amp;quot;}
-                            {:topic :create, :type &amp;quot;cat&amp;quot;}
-                            {:topic :read  , :type &amp;quot;fox&amp;quot;}]))
-  )
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;おもちゃのような例ですがこれで動くようです。因みに原書ではここに結構なページ数が割かれていて、分散システムを念頭に、異なるシステムにメッセージを送る話なども扱っています。core.asyncだとそこまでは出来そうにないですね。&lt;/p&gt;
-
-&lt;h2 id=&#34;invalid-message-channel&#34;&gt;Invalid Message Channel&lt;/h2&gt;
-
-&lt;p&gt;とあるActorに予期しないメッセージが届いたらどうしましょうか。そのまま捨てますか？もしかしたらバグを潰せる好機かもしれないのにそのまま捨てるには勿体なすぎます。
-かといって全てのActorにデバッグ用のコードを入れていては埒が明かないどころかコードが複雑化してしまいます。そこでInvalid Massage Channelを使いましょう。&lt;/p&gt;
-
-&lt;p&gt;あるActorに予期しないメッセージが届いた時に、全てを放り投げるチャネルを用意しておいて、その先のActorでログを出すなりするのです。&lt;/p&gt;
-
-&lt;p&gt;今回は&lt;code&gt;:price&lt;/code&gt;タグのついていないメッセージが届いた時にinvalid actorに放り投げ、ログを出すものを作りました。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-clojure&#34;&gt;(defn invalid [data]
-  {:data data
-   :from (Thread/currentThread)})
-
-(let [invalid-chan (chan)
-      in (chan)
-      tax 0.08]
-  ;; invalid message processor
-  (go-loop []
-    (when-let [{data :data from :from} (&amp;lt;! invalid-chan)]
-      (printf &amp;quot;invalid data %s from %s from\n&amp;quot; data from)
-      (recur)))
-
-  ;; main processing actor
-  (go-loop []
-    (when-let [v (&amp;lt;! in)]
-      (if-let [price (:price v)]
-        (printf &amp;quot;price: %f\n&amp;quot; (* price (+ 1 tax)))
-        (&amp;gt;! invalid-chan (invalid v)))
-      (recur)))
-
-  (go (onto-chan in [{:goods &amp;quot;はじめてのClojure&amp;quot;
-                      :price 1900}
-                     {:goods &amp;quot;プログラミングClojure&amp;quot;
-                      :price 3400}
-                     {:goods &amp;quot;へび&amp;quot;
-                      :description &amp;quot;にょろにょろ&amp;quot;}])))
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;from&lt;/code&gt;についてはActorならアクターオブジェクトに対してリフレクションかけて何かしらの情報をとれるのですが&lt;code&gt;go&lt;/code&gt;に対するリフレクションが分からなかったので代わりにスレッド情報を使いました。
-私はこの章を読んだ時にいたく完動しました。ログの扱いを集約出来るし地味にIOして非同期モデルのアクターの邪魔になるログをそれぞれのアクターに持たなくて済む。
-しかしこれのActorが落ちたら、とかこのActor自身にinvalidなメッセージが来たら、とか色々考えたくなります。詳しくは原書を読みましょう。&lt;/p&gt;
-
-&lt;h2 id=&#34;その他-1&#34;&gt;その他&lt;/h2&gt;
-
-&lt;p&gt;この章には他にも外部システムと連携するMessage Adapter、外部のメッセージングシステムと連携するMessage Bridge、複数のシステム間でメッセージをやりとりするMessage Busなどが載っていますが割愛します。&lt;/p&gt;
-
-&lt;h1 id=&#34;message-construction&#34;&gt;Message Construction&lt;/h1&gt;
-
-&lt;p&gt;この章にはCommand Message, Document Message, Event Message, Request-Reply, Return Address, Correlation Identifire, Message Sequence, Message Expiration, Format Indicatorなどのメッセージ自体にまつわる話題が載っています。&lt;/p&gt;
-
-&lt;p&gt;&lt;del&gt;疲れてきたため&lt;/del&gt; AkkaやScala特有の話題が多いので1つだけに絞ります。。まあ、だいたいErlangとかやってたら自然と覚えるやつらです。&lt;/p&gt;
-
-&lt;h2 id=&#34;document-message&#34;&gt;Document Message&lt;/h2&gt;
-
-&lt;p&gt;Command MessageやEvent Messageは良く見ますが、Document Messageとはどのようなものでしょうか。原書にはこう書いてあります&lt;/p&gt;
-
-&lt;blockquote&gt;
-&lt;p&gt;Use a Document Message to convey information to a receiver, but without indicating how the data should be used.&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;p&gt;「受取側に情報を伝えはするが、その情報がどのように扱われるべきかを指示しない時にDocument Messageを使います」Command Messageに付随する情報でもなくEvent Messageに付随する情報でもなくただ単なる情報です。&lt;/p&gt;
-
-&lt;p&gt;これは例えばデータベースアダプタのような所で使うことになります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-clojure&#34;&gt;(let [db [{:id 1 :name &amp;quot;Aho&amp;quot;} {:id 2 :name &amp;quot;Ulman&amp;quot;} {:id 3 :name &amp;quot;Sethi&amp;quot;}]
-      in (chan)]
-  (go-loop []
-    (when-let [[id return] (&amp;lt;! in)]
-      (&amp;gt;! return (some #(when (= id (:id %) ) %) db))
-      (recur)))
-
-  (let [chan-cache (chan)]
-    (go-loop [id 1]
-      (&amp;gt;! in [id chan-cache])
-      (when-let [res (&amp;lt;! chan-cache)]
-        (println res)
-        (recur (+ id 1))))))
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;複数のアクセスがあることを考えると双方向チャネルがあるからといってそれ1つを使うのは良くないでしょう。混線してしまいます。今回は返信用のチャネル自身も一緒に送ってしまってそこにDocumentを貰うことにしました。
-ActorならActor ID(Ref)を送ることになるでしょう。&lt;/p&gt;
-
-&lt;h1 id=&#34;message-routing&#34;&gt;Message Routing&lt;/h1&gt;
-
-&lt;p&gt;この章は主にAkkaのクラスタ、分散実行に関る内容です。それ自体非常に興味深いのですがClojureだと試せないので飛ばします。
-まあ、実際にはクラスタを組まなくてもいくつかのactorを使ってactor群同士でやりとりをすればいいのですが準備が中々面倒ですね。&lt;/p&gt;
-
-&lt;p&gt;一応扱われているトピックを拾うとContent Based Router, Message Filter, Dynamic Router, Recipient List, Splitter,
-Aggregator, Resequencer, Composed Message Processor, Scatter-Gather, Routing-Slip, Process Manager, Message Brokerです。
-見ての通り非常に数が多く、ページ数もかなり割かれています。そして、よく使いそうなパターンが多く載っています。Scatter-Gatherとか重い処理する時に使いそうなんですけどね。&lt;/p&gt;
-
-&lt;h1 id=&#34;などなど&#34;&gt;などなど&lt;/h1&gt;
-
-&lt;p&gt;ここまでで、4~7章を紹介しました。原書は10章まで続きます(1-3章は何故Actorが必要なのかなどを延々語ってます)が私はこの辺で筆を置くことにします。続きが気になる方は原書をお読み下さい。&lt;/p&gt;
-
-&lt;p&gt;Advent Calendar遅刻して大変申し分けありませんでした。&lt;/p&gt;</description>
+&lt;p&gt;さて、今日はReactive Messaging PatternをClojureのcore.asyncでやってみたいと思います。Reactive Messaging Pattersは、Java/Scala向けActorシステムの&lt;a href=&#34;http://akka.io/&#34;&gt;Akka&lt;/a&gt;の作者が著した本、&lt;a href=&#34;http://www.amazon.co.jp/Reactive-Messaging-Patterns-Actor-Model-ebook/dp/B011S8YC5G&#34;&gt;Amazon.co.jp: Reactive Messaging Patterns with the Actor Model: Applications and Integration in Scala and Akka&lt;/a&gt;で書かれているデザインパターンです。&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>Rustでの日本語の扱い</title>
-      <link>/blog/2015/12/13/rustdenonihongonoatsukai</link>
+      <link>/blog/2015/12/13/rustdenonihongonoatsukai/</link>
       <pubDate>Sun, 13 Dec 2015 17:14:18 +0900</pubDate>
       
-      <guid>/blog/2015/12/13/rustdenonihongonoatsukai</guid>
+      <guid>/blog/2015/12/13/rustdenonihongonoatsukai/</guid>
       <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2015/rust-lang&#34;&gt;Rust Advent Calendar&lt;/a&gt; 14日目の記事です&lt;br /&gt;
 前:gifnksmさんの &lt;a href=&#34;http://gifnksm.hatenablog.jp/entry/2015/12/13/204655&#34;&gt;kcovを使ってRustプログラムのカバレッジを測定する - gifnksmの雑多なメモ&lt;/a&gt;&lt;br /&gt;
-後:nacika_insさんのtimeこわい&lt;/p&gt;
-
-&lt;p&gt;κeenです。当初の予定より小ネタになってしまいましたがRustでの日本語の扱いについて書こうかと。
-
-ご存じの通りRustはマルチバイト文字をサポートしていますが、その殆どがUTF-8だけです。しかし日本人にはUTF-8だけでは少し辛いものがありますのでどうにかして対応しようかと。&lt;/p&gt;
-
-&lt;p&gt;ソースコード中でもマルチバイト文字を扱えますが、UTF-8である必要があります。&lt;/p&gt;
-
-&lt;p&gt;例えば&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rs&#34;&gt;fn main() {
-  println!(&amp;quot;あああ&amp;quot;);
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これをISO-2022-JPで保存してrustcに食わせても、&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;error: couldn&#39;t read &amp;quot;src/main.rs&amp;quot;: stream did not contain valid UTF-8
-Could not compile `japanese`.
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;と無下もないエラーが出てしまいます。&lt;/p&gt;
-
-&lt;p&gt;内部エンコーディングにもUTF-8が使われているのでRustの文字列をUTF-8以外で出力するにはなんとなく変換が必要そうなのは理解出来ますが、変に出入力をラップしてる関数を使うとまた意図せぬエラーが出ます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::fs::File;
-use std::io::BufRead;
-use std::io::BufReader;
-
-fn main() {
-  let file = File::open(&amp;quot;japanese.txt&amp;quot;);
-  let br = BufReader::new(&amp;amp;file);
-  for line in br.lines() {
-    matich line {
-      Ok(l) =&amp;gt; println!(&amp;quot;Ok: {}&amp;quot;, l),
-      Err(e) =&amp;gt; println!(&amp;quot;{:?}&amp;quot;, e)
-    };
-  }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これもまた、&lt;code&gt;stream did not contain valid UTF-8&lt;/code&gt;エラーを出します。&lt;/p&gt;
-
-&lt;p&gt;ReadもBufReadもbyte orientedって言ってるのに何故か文字列を扱えるのが若干気になりますがまあ、そういうもんなんでしょう。&lt;/p&gt;
-
-&lt;h1 id=&#34;encoding&#34;&gt;encoding&lt;/h1&gt;
-
-&lt;p&gt;そこで救世主となるライブラリが&lt;a href=&#34;https://github.com/lifthrasiir/rust-encoding&#34;&gt;lifthrasiir/rust-encoding&lt;/a&gt;です。文字列のエンコーディングをサポートします。
-READMEに詳しい使い方が載っているのですが、このライブラリは与えられたスライスに対して指定されたエンコーディングでエンコード/デコードします。&lt;/p&gt;
-
-&lt;p&gt;なので先の例のようにISO-2022-JPで&lt;code&gt;&amp;quot;あああ&amp;quot;&lt;/code&gt;と出力したいなら&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;extern crate encoding;
-use encoding::{Encoding, EncoderTrap};
-use encoding::all::ISO_2022_JP;
-use std::io::Stdout;
-
-fn main() {
-  let bytes = ISO_2022_JP.encode(&amp;quot;あああ&amp;quot;, EncoderTrap::Ignore);
-  Stdout.write_all(&amp;amp;bytes[..]);
-}
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;と出来るでしょう。(即興で書いてコンパイルすらしてないので本当に出来るかは分かりませんが)&lt;/p&gt;
-
-&lt;p&gt;読み取りに関しては…………。そう、このライブラリはバッファに対してしか動作せず、ストリームに使えないのです。提供してくれたら良さそうなのですが、作者の方が忙しいようです。&lt;/p&gt;
-
-&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;&lt;a href=&#34;https://twitter.com/blackenedgold&#34;&gt;@blackenedgold&lt;/a&gt; stream encoding/decodingは計画してはいるのですが、私が忙しくてなかなか作業をすることができません&amp;hellip; orz&lt;/p&gt;&amp;mdash; Kang Seonghoon (@senokay) &lt;a href=&#34;https://twitter.com/senokay/status/666516796942319616&#34;&gt;2015, 11月 17&lt;/a&gt;&lt;/blockquote&gt;
-&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
-
-&lt;p&gt;余談ですがこの方は韓国の方のようですが、日本語もある程度分かるそうです。すごいですね。&lt;/p&gt;
-
-&lt;p&gt;さて、ストリームに対して使えないと分かったなら自分で対応するまで。幸いにも我々が使っているのはRustです。新しいものを既存の仕組みに載せるのは造作もありません。
-ストリームを良い感じにデコードするには&lt;a href=&#34;https://doc.rust-lang.org/std/io/trait.Read.html&#34;&gt;std::io::Read&lt;/a&gt;を実装した何かを作れば十分です。作っていきましょう。&lt;code&gt;Read&lt;/code&gt;トレイトを実装するには最低&lt;code&gt;read&lt;/code&gt;だけ実装してしまえば十分です。&lt;/p&gt;
-
-&lt;p&gt;この&lt;code&gt;read&lt;/code&gt;ですが、ドキュメントを読むと中々制限が緩いようです。&lt;/p&gt;
-
-&lt;blockquote&gt;
-&lt;p&gt;Pull some bytes from this source into the specified buffer, returning how many bytes were read.&lt;/p&gt;
-
-&lt;p&gt;This function does not provide any guarantees about whether it blocks waiting for data, but if an object needs to block for a read but cannot it will typically signal this via an Err return value.&lt;/p&gt;
-
-&lt;p&gt;If the return value of this method is Ok(n), then it must be guaranteed that 0 &amp;lt;= n &amp;lt;= buf.len(). A nonzero n value indicates that the buffer buf has been filled in with n bytes of data from this source. If n is 0, then it can indicate one of two scenarios:&lt;/p&gt;
-
-&lt;p&gt;This reader has reached its &amp;ldquo;end of file&amp;rdquo; and will likely no longer be able to produce bytes. Note that this does not mean that the reader will always no longer be able to produce bytes.
-   The buffer specified was 0 bytes in length.&lt;/p&gt;
-
-&lt;p&gt;No guarantees are provided about the contents of buf when this function is called, implementations cannot rely on any property of the contents of buf being true. It is recommended that implementations only write data to buf instead of reading its contents.&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;p&gt;です。&lt;/p&gt;
-
-&lt;blockquote&gt;
-&lt;p&gt;No guarantees are provided about the contents of buf when this function is called, implementations cannot rely on any property of the contents of buf being true.&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;p&gt;「関数が呼ばれる際に&lt;code&gt;buf&lt;/code&gt;に対しては何如なる保証もなく、呼出側はバッファの内容に対して何如なる不変条件も期待してはいけません」とあります。つまり、4096 byteのバッファが与えられても1呼び出しにつき1バイトしか返さないような実装でも許容されます。
-また、非同期ベースのIOのようにキャッシュにデータがなければIOブロッキングせずにエラーだとかの挙動もありえます。非常にシステムプログラミング言語らしい仕様ですね。&lt;/p&gt;
-
-&lt;p&gt;今から作ろうとしているデコーディングストリームも読み出したバイト列がデコード後に何バイトになるのか予測がつかないのでこの仕様は有難いですね。&lt;/p&gt;
-
-&lt;p&gt;さて、作っていきましょうか。まずは必要そうなライブラリを読み込みます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;extern crate encoding;
-use self::encoding::{EncodingRef, DecoderTrap};
-use std::io::Read;
-use std::io;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;そしてメインとなる構造体です。とある&lt;code&gt;Read&lt;/code&gt;を実装した型をラップする形にしましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub struct DecodingReader&amp;lt;R&amp;gt; {
-    inner: R,
-    encoding: EncodingRef,
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;Read&lt;/code&gt;はトレイトなので&lt;code&gt;inner&lt;/code&gt;のところを&lt;code&gt;&amp;amp;R&lt;/code&gt;としなくて大丈夫です。&lt;code&gt;Read&lt;/code&gt;の実装側が調整します。&lt;/p&gt;
-
-&lt;p&gt;そしてコンストラクタですね。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;impl &amp;lt;R: Read&amp;gt; DecodingReader&amp;lt;R&amp;gt; {
-    pub fn new(coding: EncodingRef, read: R)-&amp;gt; Self {
-        EncodingReader {
-            inner: read,
-            encoding: coding
-        }
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;そのままですね。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;Read&lt;/code&gt;の実装です。まずは&lt;code&gt;inner&lt;/code&gt;の&lt;code&gt;read&lt;/code&gt;を呼んで、その結果を一旦デコードしてからまたバイト列に変換します。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;impl &amp;lt;R: Read&amp;gt; Read for DecodingReader&amp;lt;R&amp;gt; {
-    fn read(&amp;amp;mut self, buf: &amp;amp;mut [u8]) -&amp;gt; io::Result&amp;lt;usize&amp;gt;{
-        // TODO set appropriate buffer size
-        let len = buf.len() / 2;
-        let n = try!(self.inner.read(&amp;amp;mut buf[..len]));
-        // TODO don&#39;t ignore input code
-        let str = self.encoding.decode(&amp;amp;mut buf[..n], DecoderTrap::Ignore).unwrap();
-        let mut i = 0;
-        for (d, s) in buf.iter_mut().zip(str.bytes()) {
-            *d = s;
-            i+=1;
-            if i == 0 {
-                break
-            };
-        }
-        assert!(i &amp;lt;= buf.len());
-        Ok(i)
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;先程も言った通りデコード読み込んだバイト列をUTF-8にした時にどれくらいバイト数が変わるか分からないので山勘で2倍くらいに膨らむだろうとして与えられたバッファ長の半分を使います。
-ここはもう少し調整が必要ですね。エンコーディング毎に適切なバッファ長を設定したい…&lt;/p&gt;
-
-&lt;p&gt;バッファを確保出来たら&lt;code&gt;let n = try!(self.inner.read(&amp;amp;mut buf[..len]));&lt;/code&gt;してそれっぽいサイズ読み込んで、読み込んだサイズをデコードにかけます。&lt;/p&gt;
-
-&lt;p&gt;現在&lt;code&gt;DecoderTrap&lt;/code&gt;を&lt;code&gt;Ignore&lt;/code&gt;にして&lt;code&gt;unwrap&lt;/code&gt;してますが、これは少し雑すぎますね。例えば入力が全てvalidな文字を含んでいたとしても&lt;code&gt;read&lt;/code&gt;が多バイト文字の真ん中までしか読まなかった時にそれが無効なエンコーディングと判定されて無視されるのでユーザからしたら「合ってる筈なのに何故か1文字欠損するバグ」として現れます。今回即席で作ったので勘弁して下さい。&lt;/p&gt;
-
-&lt;p&gt;変換は文字列にしか出来ないようなので一旦文字列に落してからまたバイト列として取り出し、バッファに書き出します。デコード後のバイト列が&lt;code&gt;read&lt;/code&gt;したバイト列より小さかったら一部&lt;code&gt;read&lt;/code&gt;したデータが残ってしまいそうですが、「何如なる不変条件も…」とあるので問題ないでしょう。返り値にデコード後のバイト列の長さを返していれば良い筈です。&lt;/p&gt;
-
-&lt;p&gt;さて、エンコードのエラーハンドリングしてないだとか本当に読み込みのバッファ長が適切なのかとかの疑問はあるものの、一応ストリームのデコーダが出来ました。使ってみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;extern crate encoding;
-extern crate japanese;
-
-use encoding::{Encoding, DecoderTrap};
-use encoding::all::ISO_2022_JP;
-
-use std::fs::File;
-use std::io::BufReader;
-use std::io::BufRead;
-use std::str::from_utf8;
-use japanese::buf::DecodingReader;
-
-
-fn main() {
-    let file = File::open(&amp;quot;src/japanese.txt&amp;quot;).unwrap();
-    let e = DecodingReader::new(ISO_2022_JP, &amp;amp;file);
-    let mut br = BufReader::new(e);
-    for line in br.lines() {
-        println!(&amp;quot;{}&amp;quot;, line.unwrap());
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これでちゃんとISO-2022-JPのファイルを読めます。&lt;/p&gt;
-
-&lt;p&gt;Javaに慣れてる人ならこういうIOに対するデコレータパターンは見覚えがあるでしょう。&lt;/p&gt;
-
-&lt;p&gt;今更ですがiso-2022-jpはいわゆるjisエンコーディングです。rust-encodingはshift_jisの拡張にあたるwindows31jだとかeuc-jpも扱えます(&lt;a href=&#34;https://lifthrasiir.github.io/rust-encoding/encoding/codec/japanese/index.html&#34;&gt;参考&lt;/a&gt;)。&lt;/p&gt;
-
-&lt;h1 id=&#34;今後&#34;&gt;今後&lt;/h1&gt;
-
-&lt;p&gt;ライブラリとして公開するか、あるいは作者の方がやる気はあるようなのでプルリクを送るかが終着点かな、と思っていますが如何せん雑にしか実装してないので微妙ですね。
-例の境界とマルチバイトの問題は&lt;code&gt;Read&lt;/code&gt;じゃなく&lt;code&gt;BufRead&lt;/code&gt;を要求して1文字分読み切るまで来るまで1バイトずつ読むとかになると思います。ダルい。&lt;/p&gt;
-
-&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;Rust標準だけでUTF-8以外の文字列を使うのはつらいよ&lt;/li&gt;
-&lt;li&gt;Rustのエンコーディングライブラリを紹介したよ&lt;/li&gt;
-&lt;li&gt;エンコーディングライブラリを使ってストリームデコーダを実装してみたよ。&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;今回のコードは&lt;a href=&#34;https://github.com/KeenS/japanese&#34;&gt;こちら&lt;/a&gt;にあります&lt;/p&gt;</description>
+後:nacika_insさんのtimeこわい&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>SML#に学ぶコンパイラ言語におけるREPLの実装方法</title>
-      <link>/blog/2015/12/12/sml_nimanabukonpairagengoniokerureplnojissouhouhou</link>
+      <link>/blog/2015/12/12/sml_nimanabukonpairagengoniokerureplnojissouhouhou/</link>
       <pubDate>Sat, 12 Dec 2015 19:42:52 +0900</pubDate>
       
-      <guid>/blog/2015/12/12/sml_nimanabukonpairagengoniokerureplnojissouhouhou</guid>
+      <guid>/blog/2015/12/12/sml_nimanabukonpairagengoniokerureplnojissouhouhou/</guid>
       <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2015/lang_dev&#34;&gt;言語実装 Advent Calendar 2015&lt;/a&gt;16日目の記事です。&lt;/p&gt;
 
 &lt;p&gt;κeenです。かねてより気になっていたREPLの実装方法について、SML#のソースコードを読んだのでその話でもします。
 
-さて、ソースコードを読みながらやっていきましょう。SML# 2.0.0のソースコードです。&lt;/p&gt;
-
-&lt;p&gt;REPLのエントリポイントは&lt;a href=&#34;https://github.com/smlsharp/smlsharp/blob/master/src/compiler/main/main/SimpleMain.sml#L949&#34;&gt;src/compiler/main/main/SimpleMain.smlL949&lt;/a&gt;です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;      | Interactive (options, context) =&amp;gt;
-        let
-          val newContext =
-              Top.loadInteractiveEnv
-                {stopAt = Top.NoStop,
-                 stdPath = [#systemBaseDir options],
-                 loadPath = nil}
-                context
-                (Filename.concatPath
-                   (#systemBaseDir options, Filename.fromString &amp;quot;prelude.smi&amp;quot;))
-          val context =
-              let
-                val context = Top.extendContext (context, newContext)
-                val context = Top.incVersion context
-              in
-                context
-              end
-          val _ = ReifiedTermData.init (#topEnv context)
-                  handle e =&amp;gt; raise e
-        in
-          RunLoop.interactive options context;
-          SUCCESS
-        end
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;いろいろごちゃごちゃやってますがオプションと共に&lt;code&gt;RunLoop.interactive&lt;/code&gt;を呼んでるだけです。&lt;/p&gt;
-
-&lt;p&gt;さて、RunLoop.smlはSimpleMain.smlと同じディレクトリにあります。&lt;code&gt;interactive&lt;/code&gt;関数は次のように定義されています。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;  fun interactive options context =
-      let
-        ...
-        val state = initInteractive ()
-        fun loop context input =
-            if !(#eof state) then ()
-            else
-              (Counter.reset();
-               NameEvalEnv.intExnConList();
-               case run options context input of
-                 SUCCESS newContext =&amp;gt;
-                 ....
-               | FAILED =&amp;gt;
-                 loop (Top.incVersion context) (interactiveInput state)
-              )
-      in
-        loop context (interactiveInput state)
-      end
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;何やら状態を初期化した後は&lt;code&gt;interactiveInput&lt;/code&gt;で得られた結果を&lt;code&gt;run&lt;/code&gt;に渡しているようです。&lt;code&gt;run&lt;/code&gt;を見ましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;  fun run ({stdPath, loadPath, LDFLAGS, LIBS, errorOutput, llvmOptions,
-            ...}:options)
-          context input =
-      let
-        fun puts s = TextIO.output (errorOutput, s ^ &amp;quot;\n&amp;quot;)
-        val options = {stopAt = Top.NoStop,
-                       baseFilename = NONE,
-                       stdPath = stdPath,
-                       loadPath = loadPath}
-        val ({interfaceNameOpt, ...}, result) =
-             Top.compile options context input
-             handle e =&amp;gt;
-             (
-               case e of
-                 UserError.UserErrors errs =&amp;gt;
-                 app (fn e =&amp;gt; puts (userErrorToString e)) errs
-               | UserError.UserErrorsWithoutLoc errs =&amp;gt;
-                 app (fn (k,e) =&amp;gt; puts (userErrorToString (Loc.noloc,k,e))) errs
-               | Bug.Bug s =&amp;gt; puts (&amp;quot;Compiler bug:&amp;quot; ^ s)
-               | exn =&amp;gt; raise exn;
-               raise CompileError
-            )
-        val (newContext, module) =
-            case result of
-              Top.RETURN (newContext, module) =&amp;gt; (newContext, module)
-            | Top.STOPPED =&amp;gt; raise Bug.Bug &amp;quot;run&amp;quot;
-      in
-        let
-          val objfile = TempFile.create (&amp;quot;.&amp;quot; ^ SMLSharp_Config.OBJEXT ())
-          val asmfile = TempFile.create (&amp;quot;.&amp;quot; ^ SMLSharp_Config.ASMEXT ())
-          val _ = #start Counter.llvmOutputTimeCounter()
-          val _ = LLVM.compile llvmOptions (module, LLVM.AssemblyFile,
-                                            Filename.toString asmfile)
-          val _ = LLVM.compile llvmOptions (module, LLVM.ObjectFile,
-                                            Filename.toString objfile)
-          val _ = #stop Counter.llvmOutputTimeCounter()
-          val _ = LLVM.LLVMDisposeModule module
-          val sofile = TempFile.create (SMLSharp_Config.DLLEXT ())
-          val ldflags =
-              case SMLSharp_Config.HOST_OS_TYPE () of
-                SMLSharp_Config.Unix =&amp;gt; nil
-              | SMLSharp_Config.Cygwin =&amp;gt;
-                [&amp;quot;-Wl,-out-implib,&amp;quot;
-                 ^ Filename.toString (Filename.replaceSuffix &amp;quot;lib&amp;quot; sofile)]
-              | SMLSharp_Config.Mingw =&amp;gt;
-                [&amp;quot;-Wl,--out-implib=&amp;quot;
-                 ^ Filename.toString (Filename.replaceSuffix &amp;quot;lib&amp;quot; sofile)]
-          val libfiles =
-              case SMLSharp_Config.HOST_OS_TYPE () of
-                SMLSharp_Config.Unix =&amp;gt; nil
-              | SMLSharp_Config.Cygwin =&amp;gt;
-                map (fn x =&amp;gt; Filename.toString (Filename.replaceSuffix &amp;quot;lib&amp;quot; x))
-                    (!loadedFiles)
-              | SMLSharp_Config.Mingw =&amp;gt;
-                map (fn x =&amp;gt; Filename.toString (Filename.replaceSuffix &amp;quot;lib&amp;quot; x))
-                    (!loadedFiles)
-          val _ = BinUtils.link
-                    {flags = SMLSharp_Config.RUNLOOP_DLDFLAGS () :: LDFLAGS
-                             @ ldflags,
-                     libs = libfiles @ LIBS,
-                     objects = [objfile],
-                     dst = sofile,
-                     useCXX = false,
-                     quiet = not (!Control.printCommand)}
-          val so = DynamicLink.dlopen&#39; (Filename.toString sofile,
-                                        DynamicLink.GLOBAL,
-                                        DynamicLink.NOW)
-                   handle OS.SysErr (msg, _) =&amp;gt; raise DLError msg
-          val {mainSymbol, stackMapSymbol, codeBeginSymbol, ...} =
-              GenerateMain.moduleName (interfaceNameOpt, #version context)
-          val smap = DynamicLink.dlsym&#39; (so, stackMapSymbol)
-                     handle OS.SysErr (msg, _) =&amp;gt; raise DLError msg
-          val base = DynamicLink.dlsym&#39; (so, codeBeginSymbol)
-                     handle OS.SysErr (msg, _) =&amp;gt; raise DLError msg
-          val _ = sml_register_stackmap (smap, base)
-          val ptr = DynamicLink.dlsym (so, mainSymbol)
-                    handle OS.SysErr (msg, _) =&amp;gt; raise DLError msg
-          (*
-           * Note that &amp;quot;ptr&amp;quot; points to an ML toplevel code. This toplevel code
-           * should be called by the calling convention for ML toplevels of
-           * ML object files.  __attribute__((fastcc,no_callback)) is an ad
-           * hoc way of yielding this convention code; no_callback avoids
-           * calling sml_control_suspend.  If we change how to compile
-           * attributes in the future, we should revisit here and update the
-           * __attribute__ annotation.
-           *)
-          val mainFn =
-              ptr : _import __attribute__((fastcc,no_callback)) () -&amp;gt; ()
-        in
-          loadedFiles := sofile :: !loadedFiles;
-          mainFn () handle e =&amp;gt; raise UncaughtException e;
-          SUCCESS newContext
-        end
-        handle e =&amp;gt;
-          (
-            case e of
-              UserError.UserErrors errs =&amp;gt;
-              app (fn e =&amp;gt; puts (userErrorToString e)) errs
-            | UserError.UserErrorsWithoutLoc errs =&amp;gt;
-              app (fn (k,e) =&amp;gt; puts (userErrorToString (Loc.noloc,k,e))) errs
-            | DLError s =&amp;gt;
-              puts (&amp;quot;failed dynamic linking. Perhaps incorrect name in _import declaration: &amp;quot; ^ s)
-            | UncaughtException exn =&amp;gt;
-              puts (&amp;quot;uncaught exception &amp;quot; ^ exnMessage exn)
-            | CoreUtils.Failed {command, message} =&amp;gt;
-              (puts (&amp;quot;command failed: &amp;quot; ^ command); puts message)
-            | _ =&amp;gt; raise e;
-            FAILED
-          )
-      end
-      handle CompileError =&amp;gt; FAILED
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;デカいですね。どうやら&lt;code&gt;run&lt;/code&gt;がREPLの本体のようです。少しずつ見ていきます。&lt;/p&gt;
-
-&lt;p&gt;まずはコンパイルしているようです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;        val ({interfaceNameOpt, ...}, result) =
-             Top.compile options context input
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;そして結果からcontextとmoduleを取り出します。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;        val (newContext, module) =
-            case result of
-              Top.RETURN (newContext, module) =&amp;gt; (newContext, module)
-            | Top.STOPPED =&amp;gt; raise Bug.Bug &amp;quot;run&amp;quot;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;恐らくcontextが変数名とかを持っているのでしょう。
-moduleに関しては&lt;code&gt;Top.compile&lt;/code&gt;が最後にLLVMEmitをしてるのでLLVMのmodule(コンパイルされる最大単位)のことだと思います。だとするとここまではまだコードはメモリ上にあるはずです。&lt;/p&gt;
-
-&lt;p&gt;moduleを取り出した後どうしてるかというとオブジェクトファイルを作っているようです。ここでファイルに書き出されました。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;          val objfile = TempFile.create (&amp;quot;.&amp;quot; ^ SMLSharp_Config.OBJEXT ())
-          val asmfile = TempFile.create (&amp;quot;.&amp;quot; ^ SMLSharp_Config.ASMEXT ())
-          val _ = #start Counter.llvmOutputTimeCounter()
-          val _ = LLVM.compile llvmOptions (module, LLVM.AssemblyFile,
-                                            Filename.toString asmfile)
-          val _ = LLVM.compile llvmOptions (module, LLVM.ObjectFile,
-                                            Filename.toString objfile)
-          val _ = #stop Counter.llvmOutputTimeCounter()
-          val _ = LLVM.LLVMDisposeModule module
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;最後に呼んでるDisposeModuleはデストラクタですかね。ちゃんとお片付けしてます。&lt;/p&gt;
-
-&lt;p&gt;さらに、ダイナミックリンクファイルを作るようです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;          val sofile = TempFile.create (SMLSharp_Config.DLLEXT ())
-          val ldflags =
-              case SMLSharp_Config.HOST_OS_TYPE () of
-                SMLSharp_Config.Unix =&amp;gt; nil
-              | SMLSharp_Config.Cygwin =&amp;gt;
-                [&amp;quot;-Wl,-out-implib,&amp;quot;
-                 ^ Filename.toString (Filename.replaceSuffix &amp;quot;lib&amp;quot; sofile)]
-              | SMLSharp_Config.Mingw =&amp;gt;
-                [&amp;quot;-Wl,--out-implib=&amp;quot;
-                 ^ Filename.toString (Filename.replaceSuffix &amp;quot;lib&amp;quot; sofile)]
-          val libfiles =
-              case SMLSharp_Config.HOST_OS_TYPE () of
-                SMLSharp_Config.Unix =&amp;gt; nil
-              | SMLSharp_Config.Cygwin =&amp;gt;
-                map (fn x =&amp;gt; Filename.toString (Filename.replaceSuffix &amp;quot;lib&amp;quot; x))
-                    (!loadedFiles)
-              | SMLSharp_Config.Mingw =&amp;gt;
-                map (fn x =&amp;gt; Filename.toString (Filename.replaceSuffix &amp;quot;lib&amp;quot; x))
-                    (!loadedFiles)
-          val _ = BinUtils.link
-                    {flags = SMLSharp_Config.RUNLOOP_DLDFLAGS () :: LDFLAGS
-                             @ ldflags,
-                     libs = libfiles @ LIBS,
-                     objects = [objfile],
-                     dst = sofile,
-                     useCXX = false,
-                     quiet = not (!Control.printCommand)}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;この時、Windowsでは何かしらの制約があるのか過去にリンクしたダイナミックリンクファイル(libfiles)も今回作るダイナミックリンクファイルにリンクしているようです。&lt;/p&gt;
-
-&lt;p&gt;さて、ダイナミックリンクファイルを作った後は&lt;code&gt;dlopen&lt;/code&gt;を使ってダイナミックリンクします。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;          val so = DynamicLink.dlopen&#39; (Filename.toString sofile,
-                                        DynamicLink.GLOBAL,
-                                        DynamicLink.NOW)
-                   handle OS.SysErr (msg, _) =&amp;gt; raise DLError msg
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;その後はエントリポイントを捜してインポート、&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;          val {mainSymbol, stackMapSymbol, codeBeginSymbol, ...} =
-              GenerateMain.moduleName (interfaceNameOpt, #version context)
-          val smap = DynamicLink.dlsym&#39; (so, stackMapSymbol)
-                     handle OS.SysErr (msg, _) =&amp;gt; raise DLError msg
-          val base = DynamicLink.dlsym&#39; (so, codeBeginSymbol)
-                     handle OS.SysErr (msg, _) =&amp;gt; raise DLError msg
-          val _ = sml_register_stackmap (smap, base)
-          val ptr = DynamicLink.dlsym (so, mainSymbol)
-                    handle OS.SysErr (msg, _) =&amp;gt; raise DLError msg
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;そして実行します。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;          val mainFn =
-              ptr : _import __attribute__((fastcc,no_callback)) () -&amp;gt; ()
-        in
-          loadedFiles := sofile :: !loadedFiles;
-          mainFn () handle e =&amp;gt; raise UncaughtException e;
-          SUCCESS newContext
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;結果を印字しているところが見当らないのですが吐かれたコードに印字部分も入っているんですかね。&lt;/p&gt;
-
-&lt;p&gt;あとは&lt;code&gt;interactive&lt;/code&gt;に返ってコンテキストを拡張したりバージョンをインクリメントしたりします。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;                   val context = Top.extendContext (context, newContext)
-                   val context = Top.incVersion context
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;バージョンによってシンボル名を変えることで何度もsoファイルをロードしても大丈夫なようにしてるんですかね。&lt;/p&gt;
-
-&lt;p&gt;ということでREPLの実装は入力を一旦ダイナミックリンクとしてコンパイルしてからロードしているようでした。&lt;/p&gt;
-
-&lt;h1 id=&#34;おまけ&#34;&gt;おまけ&lt;/h1&gt;
-
-&lt;p&gt;REPLの入力部分は次のようになっています。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;
-  fun initInteractive () =
-      let
-        val lineCount = ref 1
-        val eof = ref false
-        fun read (isFirst, _:int) =
-            let
-              val prompt = if isFirst then &amp;quot;# &amp;quot; else &amp;quot;&amp;gt; &amp;quot;
-              val _ = TextIO.output (TextIO.stdOut, prompt)
-              val _ = TextIO.flushOut TextIO.stdOut
-              val line = TextIO.inputLine TextIO.stdIn
-              val _ = lineCount := !lineCount + 1
-            in
-              case line of NONE =&amp;gt; (eof := true; &amp;quot;&amp;quot;) | SOME s =&amp;gt; s
-            end
-      in
-        {lineCount = lineCount, eof = eof, read = read}
-      end
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;結構小さいので色々Hack出来ます。例えば&lt;a href=&#34;https://github.com/smlsharp/smlsharp/pull/13&#34;&gt;hskさんのように&lt;/a&gt;REPLを付けることも出来ます。&lt;/p&gt;
-
-&lt;p&gt;このパッチで外部コマンドを呼ぶのが少し嫌な人はさらに&lt;code&gt;ioctl(2)&lt;/code&gt;を使ってrawモードにするパッチを当てるかlibeditなんかを使ってリッチな入力を実現するかをすればいいでしょう。
-個人利用なら(他人に配布しないなら)GPLv3のreadlineも使えるんですかね（ライセンスに詳しくない）。&lt;/p&gt;
-
-&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;REPLの実装にはダイナミックリンクを使う方法があるよ&lt;/li&gt;
-&lt;li&gt;SML#のREPLはHack出来そうだよ&lt;/li&gt;
-&lt;/ul&gt;</description>
+さて、ソースコードを読みながらやっていきましょう。SML# 2.0.0のソースコードです。&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>SML#でJITコンパイラを作る軽い話</title>
-      <link>/blog/2015/12/12/sml_dejitwotsukurukaruihanashi</link>
+      <link>/blog/2015/12/12/sml_dejitwotsukurukaruihanashi/</link>
       <pubDate>Sat, 12 Dec 2015 17:26:24 +0900</pubDate>
       
-      <guid>/blog/2015/12/12/sml_dejitwotsukurukaruihanashi</guid>
+      <guid>/blog/2015/12/12/sml_dejitwotsukurukaruihanashi/</guid>
       <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://www.adventar.org/calendars/848&#34;&gt;ML Advent Calendar 2015&lt;/a&gt;及び&lt;a href=&#34;http://qiita.com/advent-calendar/2015/lang_dev&#34;&gt;言語実装 Advent Calendar 2015&lt;/a&gt;15日目の記事です。&lt;/p&gt;
 
 &lt;p&gt;κeenです。先日流れてきた&lt;a href=&#34;http://www.jonathanturner.org/2015/12/building-a-simple-jit-in-rust.html&#34;&gt;RustでJITコンパイラを作る話&lt;/a&gt;が面白かったのでSML#でもやってみます。&lt;/p&gt;
 
-&lt;p&gt;&lt;/p&gt;
-
-&lt;h1 id=&#34;jitコンパイラってなに&#34;&gt;JITコンパイラってなに？&lt;/h1&gt;
-
-&lt;p&gt;JITはJust In Timeで、日本語にすると「間に合って」になります。誤読されかねませんが「臨時コンパイラ」と訳すのが適当なのでしょうか。&lt;/p&gt;
-
-&lt;p&gt;普通のインタプリタがソースコードを直接評価するのに対してJITコンパイラはソースコードを内部で一旦ネイティブコードにコンパイルして実行します。&lt;/p&gt;
-
-&lt;p&gt;よく、JITコンパイラ/JITコンパイルのことをJITと略して呼びます。&lt;/p&gt;
-
-&lt;h1 id=&#34;どこで使うの&#34;&gt;どこで使うの？&lt;/h1&gt;
-
-&lt;p&gt;主に、インタプリタの高速化の目的で使われるようです。他にはコンパイラをインタプリタ化させる(REPLの実装とか)でも使えそうな気がしますが、詳しくは知りません。&lt;/p&gt;
-
-&lt;h1 id=&#34;jitってどうやって作るの&#34;&gt;JITってどうやって作るの？&lt;/h1&gt;
-
-&lt;p&gt;JIT &lt;strong&gt;でない&lt;/strong&gt; コンパイラが吐いたコードは一旦ディスクからメモリに読まれ、メモリ上で実行されます。&lt;/p&gt;
-
-&lt;p&gt;JITコンパイラが吐くコードは直接メモリに吐かれ、メモリ上で実行されます。なので細かい条件を無視すれば&lt;/p&gt;
-
-&lt;ol&gt;
-&lt;li&gt;吐かれる命令のための(特殊な)メモリ領域を用意する&lt;/li&gt;
-&lt;li&gt;そこに実行したい命令列を書き込む&lt;/li&gt;
-&lt;li&gt;書き込んだ命令列を実行する&lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;p&gt;だけです。
-3.の「書き込んだ命令を実行する」が若干ふわっとしてますが、多くの場合は命令の書かれたメモリを関数ポインタとして扱って、その関数を呼び出す形で実行されます。
-一応直接プログラムカウンタをいじって書き込んだ命令列を実行させることも出来ます。&lt;/p&gt;
-
-&lt;h1 id=&#34;一緒に作ってみよう&#34;&gt;一緒に作ってみよう&lt;/h1&gt;
-
-&lt;p&gt;思ったより簡単そうですね。作ってみましょう。&lt;/p&gt;
-
-&lt;h2 id=&#34;1-メモリ領域を準備する&#34;&gt;1. メモリ領域を準備する&lt;/h2&gt;
-
-&lt;p&gt;先に「特殊な」と付言しましたのでそれについて説明しましょう。プロセス上のメモリは、OSによって保護されています。
-特に、そのままではそのメモリ上の命令列を実行出来ません。その保護を外すために&lt;code&gt;mprotect(2)&lt;/code&gt;システムコールを使います。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-C&#34;&gt;int mprotect(void *addr, size_t len, int prot);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;SML#を使えば簡単に使えるようになります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val mprotect = _import &amp;quot;mprotect&amp;quot;: (unit ptr, word, word) -&amp;gt; int
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;SML#は2.0.0時点では32bitでしか動かないのでsize_tをwordとしてしまって大丈夫です。また、bit演算をやりたいので&lt;code&gt;prot&lt;/code&gt;は本来はintですがwordにしました。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;mprotect(2)&lt;/code&gt;はPOSIX(SUSv4)的には引数の&lt;code&gt;addr&lt;/code&gt;がシステムのページの境界上にあることを要求しても良いことになっています。
-実際、OS Xが要求するらしいです。また、メモリ保護はページ単位で行われるため、&lt;code&gt;len&lt;/code&gt;もページサイズの倍数である必要があります。
-&lt;code&gt;prot&lt;/code&gt;は保護フラグですね。&lt;/p&gt;
-
-&lt;p&gt;メモリの確保、特にページの境界にアラインメントされたメモリ領域を確保するにはSML#では厳しそうなのでこれもCの関数に頼ります。
-Linuxならいくつか方法はありますが、ポータブルには&lt;code&gt;posix_memalign(3)&lt;/code&gt;を使うのが良いようです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-C&#34;&gt;int posix_memalign(void **memptr, size_t alignment, size_t size);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これもSML#から簡単に使えます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val posix_memalign = _import &amp;quot;posix_memalign&amp;quot;: (unit ptr ref, word, word) -&amp;gt; int
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ついでにメモリの解放も必要ですね。&lt;code&gt;free(3)&lt;/code&gt;もインポートしましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val free = _import &amp;quot;free&amp;quot;: unit ptr -&amp;gt; ()
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;さて、メモリを確保するのにいくつかCのマクロで定義された定数を定義しましょう。今のところSML#にCのマクロを使う術はなさそうです。どうにかしてCプリプロセッサを使えれば良いのですが…。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val PROT_READ  = 0wx1
-val PROT_WRITE = 0wx2
-val PROT_EXEC  = 0wx4
-val PROT_NONE  = 0wx0
-
-val PAGE_SIZE = 0w4096
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ページサイズは本当は&lt;code&gt;sysconf(3)&lt;/code&gt;を使って&lt;code&gt;sysconf(PAGESIZE)&lt;/code&gt;として取るのが作法ですが面倒なので4KiB決め打ちにしてしまいました。&lt;/p&gt;
-
-&lt;p&gt;さて、これらを用いてJIT用のメモリは次のように確保します。&lt;code&gt;Pointer&lt;/code&gt;モジュールが必要なのでsmiファイルで&lt;code&gt;require &amp;quot;ffi.smi&amp;quot;&lt;/code&gt;しましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val op orb = Word.orb
-infix 5 orb
-val size = 0wx1
-val msize = size * PAGE_SIZE
-val pageRef: unit ptr ref = ref (Pointer.NULL ())
-val ret = posix_memalign (pageRef, PAGE_SIZE, msize)
-val page = if ret = 0
-           then !pageRef
-           else raise Fail &amp;quot;memory allocation failed&amp;quot;
-val PROT_RWEX = PROT_READ orb PROT_WRITE orb PROT_EXEC
-val ret = mprotect (page, msize, PROT_RWEX)
-val () = if ret = 0
-         then ()
-         else raise Fail &amp;quot;memory protection error&amp;quot;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これで&lt;code&gt;page&lt;/code&gt;に実行可能フラグが立ったメモリが確保出来ました。sizeは書き込みたい命令列に応じて変えます。&lt;/p&gt;
-
-&lt;h1 id=&#34;2-命令列を書き込む&#34;&gt;2. 命令列を書き込む&lt;/h1&gt;
-
-&lt;p&gt;さて、ここらへんからアセンブラの世界になってきます。&lt;/p&gt;
-
-&lt;p&gt;まず、安全のために件のメモリ領域を&lt;code&gt;ret&lt;/code&gt;命令で埋めます。
-&lt;code&gt;ret&lt;/code&gt;命令は関数から戻る時に使われる命令で、変なことをしても&lt;code&gt;ret&lt;/code&gt;で元の場所に戻ればどうにかなる可能性があるのです。&lt;/p&gt;
-
-&lt;p&gt;メモリを一気に埋めるには&lt;code&gt;memset(3)&lt;/code&gt;が便利です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-C&#34;&gt;void *memset(void *s, int c, size_t n);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これをSMLにインポートして使いましょう。&lt;code&gt;ret&lt;/code&gt;命令に対応するマシン語は&lt;code&gt;0xc3&lt;/code&gt;です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val memset = _import &amp;quot;memset&amp;quot;: (unit ptr, word, word) -&amp;gt; unit ptr
-val _ = memset (page, 0wxc3, msize)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;じゃあ、命令を書き込んでいきましょう。最初はただ1を返すだけの関数に相当する命令です。
-64bitマシンを使っていても32bitでコンパイルしたSML#を使っている限りはx86(IA32)のアセンブラを使います。
-x86は値を&lt;code&gt;eax&lt;/code&gt;レジスタに入れることで返り値とします。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-asm&#34;&gt;mov 1 eax
-ret
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;このコードを&lt;a href=&#34;https://defuse.ca/online-x86-assembler.htm#disassembly&#34;&gt;オンラインアセンブラ&lt;/a&gt;でアセンブルしてみると&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;0:  b8 01 00 00 00          mov    eax,0x1
-5:  c3                      ret
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;との結果が返ってきました。これを真心込めて1つづつメモリに書き込んでいきます。
-SML#からメモリに直接書き込むには内部APIっぽいものを触る必要があります。
-タイプ数を減らすためにいくつかエイリアスを定義しておきましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val fromUnitPtr = SMLSharp_Builtin.Pointer.fromUnitPtr
-val store = Pointer.store
-val advance = Pointer.advance
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;メモリにword8の値を書き込むのにキャストが必要になるので&lt;code&gt;fromUnitPtr&lt;/code&gt;を使います。
-さて、書き込んでいきます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val mem: word8 ptr = fromUnitPtr page
-val () = store page 0wxb8
-val mem = advance mem
-val () = store page 0wx01
-val mem = advance mem
-val () = store page 0wx00
-val mem = advance mem
-val () = store mem 0wx00
-val mem = advance mem
-val () = store mem 0wx00
-val mem = advance mem
-val () = store mem 0wxc3
-val _ = advance mem
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これで&lt;code&gt;page&lt;/code&gt;に1を返すだけの命令列が書き込まれした。&lt;/p&gt;
-
-&lt;h2 id=&#34;3-書き込んだ命令列を実行する&#34;&gt;3. 書き込んだ命令列を実行する&lt;/h2&gt;
-
-&lt;p&gt;書き込んだ命令列は関数にキャストして使うことが多いと言いました。今回もそのようにします。&lt;/p&gt;
-
-&lt;p&gt;そのために、また内部APIっぽいものを使います。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val toCodeptr = SMLSharp_Builtin.Pointer.toCodeptr
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;codeptr&lt;/code&gt;型は関数ポインタを表すもののようです。&lt;code&gt;DynamicLink&lt;/code&gt;モジュールなどで使われています。&lt;/p&gt;
-
-&lt;p&gt;さて、今回の1を返すだけの命令列は&lt;code&gt;() -&amp;gt; int&lt;/code&gt;型になりますね。
-それをインポート、実行しましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val freturn1 = toCodePtr page: _import () -&amp;gt; int
-val () = print ((Int.toString (freturn1 ())) ^ &amp;quot;\n&amp;quot;)
-val _ = free page
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これで見事&lt;code&gt;1&lt;/code&gt;が印字されたら成功です。&lt;/p&gt;
-
-&lt;h1 id=&#34;さらに&#34;&gt;さらに&lt;/h1&gt;
-
-&lt;p&gt;先程のコードは繰り返しが多く、整理されていませんでした。もう少し整理しましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;structure Emit = struct
-    val posix_memalign = _import &amp;quot;posix_memalign&amp;quot;: (unit ptr ref, word, word) -&amp;gt; int
-    val mprotect = _import &amp;quot;mprotect&amp;quot;: (unit ptr, word, word) -&amp;gt; int
-    val memset = _import &amp;quot;memset&amp;quot;: (unit ptr, word, word) -&amp;gt; unit ptr
-    val free = _import &amp;quot;free&amp;quot;: unit ptr -&amp;gt; ()
-    val printf = _import &amp;quot;printf&amp;quot;: (string, unit ptr) -&amp;gt; ()
-
-    (* 
-#define PROT_READ	0x1		/* Page can be read.  */
-#define PROT_WRITE	0x2		/* Page can be written.  */
-#define PROT_EXEC	0x4		/* Page can be executed.  */
-#define PROT_NONE	0x0		/* Page can not be accessed.  */
-    *)
-
-    val PROT_READ  = 0wx1
-    val PROT_WRITE = 0wx2
-    val PROT_EXEC  = 0wx4
-    val PROT_NONE  = 0wx0
-
-    val PAGE_SIZE = 0w4096
-
-    type jitptr = word8 ptr
-    val fromUnitPtr = SMLSharp_Builtin.Pointer.fromUnitPtr
-    val toUnitPtr = SMLSharp_Builtin.Pointer.toUnitPtr
-    val toCodeptr = SMLSharp_Builtin.Pointer.toCodeptr
-    val store = Pointer.store
-    val advance = Pointer.advance
-
-
-    fun jitMemory size: jitptr = let
-        val op orb = Word.orb
-        infix 5 orb
-        val msize = size * PAGE_SIZE
-        val pageRef: unit ptr ref = ref (Pointer.NULL ())
-        val ret = posix_memalign (pageRef, PAGE_SIZE, msize)
-        val page = if ret = 0
-                   then !pageRef
-                   else raise Fail &amp;quot;memory allocation failed&amp;quot;
-        val PROT_RWEX = PROT_READ orb PROT_WRITE orb PROT_EXEC
-        val ret = mprotect (page, msize, PROT_RWEX)
-        val () = if ret = 0
-                 then ()
-                 else raise Fail &amp;quot;memory protection error&amp;quot;
-        (* init with ret for safety *)
-        val _ = memset (page, 0wxc3, msize)
-    in
-        fromUnitPtr page
-    end
-
-    fun freeJit (jitMem: jitptr) = free (SMLSharp_Builtin.Pointer.toUnitPtr jitMem)
-
-    fun pushWord page (word: word8) = (store (page, word); advance (page, 1))
-    fun pushWords (page: jitptr) l = List.foldl (fn(w,page) =&amp;gt; pushWord page w) page l
-
-    val import: jitptr -&amp;gt; codeptr = toCodeptr o toUnitPtr
-
-    fun fromMachineCode l = let
-        val len = Word.fromInt(List.length l)
-        val size = (len + PAGE_SIZE) div PAGE_SIZE
-        val page = jitMemory size
-        val _ = pushWords page l
-    in
-        import page
-    end
-end
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;次のように使います。一回importした関数はfreeしないことにしましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;fun println x = print (x ^ &amp;quot;\n&amp;quot;)
-val return1  =
-    (* 0:  b8 01 00 00 00          mov    eax,0x1  *)
-    [
-      0wxb8, 0wx01, 0wx00, 0wx00, 0wx00
-    ] 
-val freturn1 = Emit.fromMachineCode return1 :_import () -&amp;gt; int
-val () = println (Int.toString (freturn1 ()))
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;引数を取る&#34;&gt;引数を取る&lt;/h2&gt;
-
-&lt;p&gt;もうアセンブラの話になります。&lt;/p&gt;
-
-&lt;p&gt;x86では引数は右から順にスタックに積まれます。intを1つ取ってそれに1足して返す関数はこうなります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val add1 = 
-    (* 0:  8b 44 24 04             mov    eax,DWORD PTR [esp+0x4] *)
-    (* 4:  83 c0 01                add    eax,0x1 *)
-    [
-      0wx8b, 0wx44, 0wx24, 0wx04,
-      0wx83, 0wxc0, 0wx01
-    ]
-val fadd1 = Emit.fromMachineCode add1 :_import (int) -&amp;gt; int
-val () = println (Int.toString (fadd1 3))
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;正常に動けば4が印字されます。&lt;/p&gt;
-
-&lt;h1 id=&#34;つらい話&#34;&gt;つらい話&lt;/h1&gt;
-
-&lt;h2 id=&#34;バグ&#34;&gt;バグ&lt;/h2&gt;
-
-&lt;p&gt;最初、&lt;code&gt;Pointer.store&lt;/code&gt;でなく、&lt;code&gt;SMLSharp_Builtin.Pointer.store&lt;/code&gt;を使っていたら&lt;a href=&#34;https://github.com/smlsharp/smlsharp/issues/43&#34;&gt;変なバグ&lt;/a&gt;踏みました。バグというか使い方が悪かった。&lt;/p&gt;
-
-&lt;h2 id=&#34;デバッグ&#34;&gt;デバッグ&lt;/h2&gt;
-
-&lt;p&gt;デバッガがないので非常につらいです。書き出された命令列を見るのに困りました。gdbで見たかったので、&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val printf = _import &amp;quot;printf&amp;quot;: (string, unit ptr) -&amp;gt; int
-val _ = pritnf (&amp;quot;page pointr: %p&amp;quot;, page)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;して&lt;code&gt;printf&lt;/code&gt;にブレークポイントを張り、そこで止めつつページのアドレスを取得、&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-gdb&#34;&gt;(gdb) x/20xh 0x81ca000
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;などとして見ていました。&lt;/p&gt;
-
-&lt;h1 id=&#34;もっと&#34;&gt;もっと&lt;/h1&gt;
-
-&lt;p&gt;JITコンパイラが楽しかったのでアセンブラのDSLを作ってみました。1、2個の命令吐けるだけですがちゃんと動きました。今のところこのように書けます。Intel記法だとしんどそうだったのでAT&amp;amp;T記法っぽく書けるようにしました。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;val freturn1&#39; = Emit.fromInsts [
-        xorl eax eax,
-        addl ($1) eax,
-        ret
-    ]:_import () -&amp;gt; int
-val () = println (Int.toString (freturn1&#39; ()))
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;x86は命令フォーマットが1バイトから15バイトまでの可変長で、内部表現をどのようにするか決めるだけでも一苦労でした。x86つらい。&lt;/p&gt;
-
-&lt;p&gt;アドレッシングが複雑なのも悩みどころで、複数のアドレッシングを統一的に扱えるようにオーバーロードされた関数を用意したのですがあえなくSML#のバグを踏んで死亡しました。本当はこういう記法が出来る筈だった…&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-sml&#34;&gt;addl (%eax) eax
-addl eax (%eax)
-addl eax (%(eax, ebx))
-addl eax (%(eax, ebx, 4))
-addl eax (%(4, eax))
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;$ /usr/local/bin/smlsharp   -c -o main.o main.sml
-uncaught exception: Bug.Bug: InferType: FIXME: user error: invalid instTy at src/compiler/typeinference2/main/InferTypes2.sml:47
-Makefile:11: recipe for target &#39;main.o&#39; failed
-make: *** [main.o] Error 1
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;movl&lt;/code&gt;を実装しようとしたらアドレッシングが動かなかったので萎えてまだ実装してません。&lt;/p&gt;
-
-&lt;p&gt;よく考えたら&lt;code&gt;%&lt;/code&gt;ってミスリーディングだし名前変えよう。&lt;/p&gt;
-
-&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;JITを作るにはメモリ保護をいじれて関数ポインタのインポートが出来ればいいよ&lt;/li&gt;
-&lt;li&gt;SML#でもJIT作れるよ&lt;/li&gt;
-&lt;li&gt;アセンブラっぽいの作ったよ&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;今回のコードは&lt;a href=&#34;https://github.com/KeenS/smljit&#34;&gt;こちら&lt;/a&gt;にあります。&lt;/p&gt;</description>
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>リージョンについて</title>
+      <link>/blog/2015/12/09/ri_jonnitsuite/</link>
+      <pubDate>Wed, 09 Dec 2015 22:16:50 +0900</pubDate>
+      
+      <guid>/blog/2015/12/09/ri_jonnitsuite/</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2015/lang_dev&#34;&gt;言語実装Advent Calendar 2015&lt;/a&gt; 10日目の記事です&lt;/p&gt;
+
+&lt;p&gt;κeenです。今日はある程度gcに頼らずメモリを管理する手法、リージョンについて話そうと思います。
+リージョン推論とそのアルゴリズムまで話せればよかったのですがサーベイが間に合わず…
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>SML#でDBに接続</title>
+      <link>/blog/2015/12/05/sml_dedbnisetsuzoku/</link>
+      <pubDate>Sat, 05 Dec 2015 22:04:25 +0900</pubDate>
+      
+      <guid>/blog/2015/12/05/sml_dedbnisetsuzoku/</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://www.adventar.org/calendars/848&#34;&gt;ML Advent Calendar&lt;/a&gt;6日目の記事です。&lt;br /&gt;
+次はdico_leque先生で、「ML中心にしつつ何か」です。&lt;/p&gt;
+
+&lt;p&gt;κeenです。SMl#はDB接続及びSQLを言語レベルでサポートしていることが大きな特徴ですが詳細な方法についてはあまり情報がなく、
+実際に利用するのは難しい状況にあります。そこで私がなんとかソースコードを読んで得られた知識を少し共有したいと思います。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustで小さなツールを作ってみる(後編)</title>
+      <link>/blog/2015/11/29/rustdechiisanatsu_ruwotsukuttemiru_kouhen_/</link>
+      <pubDate>Sun, 29 Nov 2015 13:54:39 +0900</pubDate>
+      
+      <guid>/blog/2015/11/29/rustdechiisanatsu_ruwotsukuttemiru_kouhen_/</guid>
+      <description>&lt;p&gt;この記事は&lt;a href=&#34;http://qiita.com/advent-calendar/2015/rust-lang&#34;&gt;Rust Advent Calendar 2015&lt;/a&gt; 2日目の記事です。&lt;br /&gt;
+前 &lt;a href=&#34;/blog/2015/11/14/rustdechiisanatsu_ruwotsukuttemiru/&#34;&gt;Rustで小さなツールを作ってみる(前編)&lt;/a&gt;&lt;br /&gt;
+次 &lt;a href=&#34;/blog/2015/11/29/cargonotsukaikata/&#34;&gt;Cargoの使い方&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;κeenです。昨日の記事で作りかけだったIRCの生ログのDBへのインポートの続きです。今日はDBへのインポートをやります。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustで小さなツールを作ってみる(前編)</title>
+      <link>/blog/2015/11/14/rustdechiisanatsu_ruwotsukuttemiru/</link>
+      <pubDate>Sat, 14 Nov 2015 23:57:43 +0900</pubDate>
+      
+      <guid>/blog/2015/11/14/rustdechiisanatsu_ruwotsukuttemiru/</guid>
+      <description>&lt;p&gt;この記事は&lt;a href=&#34;http://qiita.com/advent-calendar/2015/rust-lang&#34;&gt;Rust Advent Calendar 2015&lt;/a&gt; 1日目の記事です。&lt;br /&gt;
+次 &lt;a href=&#34;/blog/2015/11/29/rustdechiisanatsu_ruwotsukuttemiru_kouhen_/&#34;&gt;Rustで小さなツールを作ってみる(後編)&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;κeenです。Rust Advent Calendar初日ということで軽い話から。
+小さなツールって何だよって感じですが手元にIRCの生ログが大量にあるのでそれをDBにインポートしてみましょう。
+あまりRustに向いた仕事じゃなさそうですが手始めとして。&lt;/p&gt;
+
+&lt;p&gt;前編でログのパースを、後編でDBへのインポートをやります。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>mllexを使ってみる。あるいはlexユーザーに対するmllexの解説</title>
+      <link>/blog/2014/12/10/mllexwoshi-tutemiru/</link>
+      <pubDate>Wed, 10 Dec 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/12/10/mllexwoshi-tutemiru/</guid>
+      <description>&lt;p&gt;このエントリーは&lt;a href=&#34;http://qiita.com/advent-calendar/2014/ml&#34;&gt;ML Advent Calendar 10日目&lt;/a&gt;の記事です。&lt;br /&gt;
+前 &lt;a href=&#34;http://h-sakurai.hatenablog.com/entry/2014/12/09/144655&#34;&gt;OCamlで作ったgoma言語 - h_sakurai&amp;rsquo;s diary&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;ふと思い立ってPrologのコンパイラかインタプリタかを作ってみようとして、その第一段でlexerに着手しました。
+
+ちょ、SML分かる人はmllexくらい常識的に知ってるなんて言わないで下さい。私は初めて触りました。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>H2Oにpicrinを溶かす</title>
+      <link>/blog/2014/12/07/h2onipicrinworong-kasu/</link>
+      <pubDate>Sun, 07 Dec 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/12/07/h2onipicrinworong-kasu/</guid>
+      <description>&lt;p&gt;このエントリーは&lt;br /&gt;
+&lt;a href=&#34;http://qiita.com/advent-calendar/2014/lisp&#34;&gt;Lisp Advent Calendar&lt;/a&gt; 7日目&lt;br /&gt;
+兼&lt;br /&gt;
+&lt;a href=&#34;http://qiita.com/advent-calendar/2014/h2o&#34;&gt;H2O Advent Calendar&lt;/a&gt; 7日目&lt;br /&gt;
+の記事です。&lt;/p&gt;
+
+&lt;p&gt;κeenです。タイトルの通りです。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>claspがアップデートされたよ</title>
+      <link>/blog/2014/12/06/claspgaatupudetosaretayo/</link>
+      <pubDate>Sat, 06 Dec 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/12/06/claspgaatupudetosaretayo/</guid>
+      <description>&lt;p&gt;このエントリーは&lt;a href=&#34;http://qiita.com/advent-calendar/2014/lisp&#34;&gt;Lisp Advent Calendar 2014&lt;/a&gt;6日目の記事です。&lt;br /&gt;
+前: nobkzさんで &lt;a href=&#34;http://qiita.com/nobkz/items/2be2b6806237d8ea6e21&#34;&gt;lfe - (lisp (flavored (erlang)))について基本その1 - Qiita&lt;/a&gt;&lt;br /&gt;
+後: 私で &lt;a href=&#34;/blog/2014/12/07/h2onipicrinworong-kasu/&#34;&gt;H2Oにpicrinを溶かす | κeenのHappy Hacκing Blog&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;κeenです。アドベントカレンダーめっちゃ書いてますね。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>mirahについて</title>
+      <link>/blog/2014/12/04/mirahnituite/</link>
+      <pubDate>Thu, 04 Dec 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/12/04/mirahnituite/</guid>
+      <description>&lt;p&gt;このエントリーは&lt;a href=&#34;http://qiita.com/advent-calendar/2014/minor-language&#34;&gt;マイナー言語 Advent Calendar 2014 - Qiita&lt;/a&gt;4日目の記事です。&lt;br /&gt;
+前: ksmakotoさんで&lt;a href=&#34;http://ksmakoto.hatenadiary.com/entry/2014/12/03/002435&#34;&gt;マクロ、拙作のテキストマクロ言語m55について主に - ksmakotoのhatenadiary&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;κeenです。進捗ダメです。マイナー言語Advent Calendarが空いてるようだったのでMirahの話を捩じ込みますね。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>VOPで遊ぶ</title>
+      <link>/blog/2014/12/02/vopdeyou-bu/</link>
+      <pubDate>Tue, 02 Dec 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/12/02/vopdeyou-bu/</guid>
+      <description>&lt;p&gt;(:meta&lt;br /&gt;
+ ((:this &amp;ldquo;&lt;a href=&#34;http://qiita.com/advent-calendar/2014/lisp&#34;&gt;Lisp Advent Calendar 2014&lt;/a&gt;の3日目の記事&amp;rdquo;)&lt;br /&gt;
+  (:prev (:author &amp;ldquo;tk_riple&amp;rdquo; :title &lt;a href=&#34;http://compassoftime.blogspot.jp/2014/12/r7rs.html&#34;&gt;&amp;ldquo;時の羅針盤＠blog: R7RSポータブルライブラリを書く際の落とし穴&amp;rdquo;&lt;/a&gt;))&lt;br /&gt;
+  (:next (:author &amp;ldquo;nobkz&amp;rdquo; :tite &amp;ldquo;&lt;a href=&#34;http://qiita.com/nobkz/items/68ee2adbc13caf3eec6f&#34;&gt;Shenの基礎その1 基本的な型 - Qiita&lt;/a&gt;&amp;rdquo;))))&lt;/p&gt;
+
+&lt;p&gt;κeenです。さっきまでVOPで遊んでたので当初の予定を変更してVOPの話をします。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>ClackのHandlerの書き方</title>
+      <link>/blog/2013/12/06/lisp-advent-calendar-7/</link>
+      <pubDate>Fri, 06 Dec 2013 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2013/12/06/lisp-advent-calendar-7/</guid>
+      <description>&lt;p&gt;(この記事は &lt;a href=&#34;http://qiita.com/advent-calendar/2013/lisp&#34;&gt;Lisp Advent Calendar&lt;/a&gt; 7日目のためのエントリです。&lt;br /&gt;
+ ( &lt;a href=&#34;http://meymao.hatenablog.com/entry/2013/12/06/140029&#34;&gt;6日目&lt;/a&gt; meymaoさんより「Lisperがクリスマスに贈るべきプレゼント三選」)&lt;br /&gt;
+ ( &lt;a href=&#34;http://www.principia-m.com/ts/0081/index-jp.html&#34;&gt;8日目&lt;/a&gt; athos0220さんよりマクロとクロージャで作る並行プログラミング言語))&lt;/p&gt;
+
+&lt;p&gt;ClackのHandlerの書き方についてちゃちゃっと解説します。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
     </item>
     
   </channel>

@@ -2,2755 +2,2098 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>Posts on κeenのHappy Hacκing Blog</title>
-    <link>/post/index.xml</link>
+    <link>/post/</link>
     <description>Recent content in Posts on κeenのHappy Hacκing Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>ja-jp</language>
     <lastBuildDate>Sun, 02 Jul 2017 12:31:07 +0900</lastBuildDate>
-    <atom:link href="/post/index.xml" rel="self" type="application/rss+xml" />
+    
+	<atom:link href="/post/index.xml" rel="self" type="application/rss+xml" />
+    
     
     <item>
       <title>ステートマシン抽象化としてのFuture</title>
-      <link>/blog/2017/07/02/sute_tomashinchuushoukatoshitenofuture</link>
+      <link>/blog/2017/07/02/sute_tomashinchuushoukatoshitenofuture/</link>
       <pubDate>Sun, 02 Jul 2017 12:31:07 +0900</pubDate>
       
-      <guid>/blog/2017/07/02/sute_tomashinchuushoukatoshitenofuture</guid>
+      <guid>/blog/2017/07/02/sute_tomashinchuushoukatoshitenofuture/</guid>
       <description>&lt;p&gt;κeenです。最近Futureと一口にいってもいくつか種類があるなと気付いたのでRustの&lt;a href=&#34;https://github.com/alexcrichton/futures-rs&#34;&gt;&lt;code&gt;futures-rs&lt;/code&gt;&lt;/a&gt;に実装されているFutureの挙動を紐解こうと思います。&lt;/p&gt;
 
-&lt;p&gt;&lt;/p&gt;
-
-&lt;h1 id=&#34;イベント駆動io&#34;&gt;イベント駆動IO&lt;/h1&gt;
-
-&lt;p&gt;TCPサーバをノンブロッキングに書こうとすると、思いの他大変です。
-ブロックせずにIOできるタイミングまで処理を溜めておいて、できるときに読み書きします。ブロックしないタイミングをみつけるのも一苦労なので大抵ライブラリに頼ってライブラリからイベントを通知してもらいます。Rustには&lt;a href=&#34;https://github.com/carllerche/mio&#34;&gt;mio&lt;/a&gt;というライブラリがあります。&lt;/p&gt;
-
-&lt;p&gt;さて、これイベントの発見は書かなくてよくなりましたが、まだつらいです。リクエストがないのにレスポンスを返せる訳もないので処理とイベントに依存関係があって、「read readyイベントでデータを読み取って、足りれば処理開始、足りなければまだ読み取る。処理が終わればwrite readyイベントを待って書き込み。その後は次のリクエストに備えてread readyイベント待ち」などの複雑な条件分岐と処理をしなければなりません。しかもクライアントは1つじゃないのでそれらを複数管理しないといけません。やりきれませんね。私が昔書いた&lt;a href=&#34;https://github.com/KeenS/chat/blob/master/src/handler.rs#L32&#34;&gt;Websocketのechoサーバ&lt;/a&gt;を少し見ると大変そうなことが伝わると思います。（余談ですが、つらそうなコードを書いたのは抽象化ライブラリに頼らないコードを実感するためでした）&lt;/p&gt;
-
-&lt;h1 id=&#34;ステートマシン&#34;&gt;ステートマシン&lt;/h1&gt;
-
-&lt;p&gt;先程の複雑な条件分岐の例は、「ステート」があることに気付きます。「リクエストがまだ来てない」「リクエストの一部が届いたけど全部でない」「リクエストの処理中」「レスポンスの送信待ち」など。これを明確に「ステート」としてプログラムを書いてあげると綺麗に書くことができます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;[リクエストがまだ来てない]&amp;lt;----------------+
-  | read ready                            |
-  +------------------------------------+  |
-  |                                    |  |
-[リクエストの一部がきたが全部でない]&amp;lt;-+  |  |
-  | read ready                      |  |  |
-  +---------------------------------+  |  |
-  |                                    |  |
-[リクエストの処理中]&amp;lt;-------------------+  |
-  |                                       |
-[レスポンスの書き出し待ち]                 |
-  | write ready                           |
-[レスポンスの書き出し完了]-----------------+
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;さて、このステートマシンを図に書く範囲では明瞭なのですが、実際のプログラムに落とすとやや見通しが悪いです。&lt;/p&gt;
-
-&lt;p&gt;ナイーブな実装を疑似コードで書くとこうなるでしょうか。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;enum State = リクエストがまだ来てない
-           | リクエストの一部がきたが全部でない
-           | リクエストの処理中
-           | レスポンスの書き出し待ち
-           | レスポンスの書き出し完了
-
-event arrived
-  case (state, event)
-    when (リクエストがまだ来てない, read ready)
-      ...
-      if request is complete
-        state &amp;lt;- リクエストの処理中
-        wait for write ready
-      else
-        state &amp;lt;- リクエストの一部がきたが全部でない
-        wait for read ready
-    when リクエストの一部がきたが全部でない
-      ...
-      if request is complete
-        state &amp;lt;- リクエストの処理中
-        wait for write ready
-      else
-        state &amp;lt;- リクエストの一部がきたが全部でない
-        wait for read ready
-    ...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;モデリングは上手くいっているものの実際のコードに落とすとみづらいですね。
-ナイーブな実装方法の他に、デザインパターンのステートパターンを使う手もあります。まあ、そのまんまですね。
-疑似コードにするとこうなるでしょうか。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;abstract class State
-  method do returns (State, Event)
-
-class リクエストがまだ来てないState
-  method do returns (State, Event)
-      ...
-      if request is complete
-        return (new リクエストの処理中State, write ready)
-      else
-        return (new リクエストの一部がきたが全部でないState, read ready)
-
-class リクエストの一部がきたが全部でない
-  method do returns (State, Event)
-      ...
-      if request is complete
-        return (new リクエストの処理中State, write ready)
-      else
-        return (new リクエストの一部がきたが全部でないState, read ready)
-
-event arrived
-  if event equals waiting_event
-    (next_state, waiting_event) &amp;lt;- state.do()
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ステートと処理のかたまりで分離することができたのでコードの見通しもよくなりました。&lt;/p&gt;
-
-&lt;p&gt;しかし、Rust的にはまだ問題があります。Stateのサブクラスでモデリングしてますが、それだとメソッドのディスパッチが動的ディスパッチになってしまって遅いです。Zero-cost abstractionできてません。&lt;/p&gt;
-
-&lt;p&gt;もう1つ問題があって、これでもまだ直感的なコードとはかけ離れてます。本来ならこういうコードを書きたい筈です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;request &amp;lt;- empty
-until request is complete
-  request &amp;lt;&amp;lt; input
-response &amp;lt;- // do something with request
-output &amp;lt;&amp;lt; response
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これをどうにかできないでしょうか。&lt;/p&gt;
-
-&lt;h1 id=&#34;future&#34;&gt;Future&lt;/h1&gt;
-
-&lt;p&gt;そこでfutures-rsです。ゼロコストでステートマシンを抽象化してくれます。&lt;a href=&#34;https://aturon.github.io/blog/2016/08/11/futures/&#34;&gt;Zero-cost futures in Rust · Aaron Turon&lt;/a&gt;を読んだことのある人も多いでしょう。&lt;/p&gt;
-
-&lt;p&gt;基本的なアイディアは、1つのステートとその時の処理を表わす&lt;code&gt;Future&lt;/code&gt;の他にステート同士を繋げるコンビネータを用意することで柔軟にプログラムを書けるようにするということです。そしてステートの処理関数が静的ディスパッチされるようにコンビネータを工夫する（基本的には型パラメータに情報を残して静的ディスパッチできるようにする）ことでゼロコスト抽象化を実現しています。&lt;/p&gt;
-
-&lt;p&gt;先程のコードをfuturesを使って書くとこのような雰囲気になるでしょうか。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let f = loop_fn(Vec::new(), |mut buff| {
-    input.read()
-      .and_then(|data| {
-        buff.append(data);
-        match Request::parse(buff) {
-          Ok(request) =&amp;gt; Ok(Loop::Break(request))
-          Err(_) =&amp;gt; Ok(Loop::Continue((buff)))
-        }
-      })
-  }).and_then(|request| {
-    // do something with request
-  }).and_then(|response| {
-    output.write(response)
-  });
-
-run(f)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ダイレクトなコードに比べるとまだノイズが多いですが、ステートマシンを陽に作るコードよりは直感的になったと思います。&lt;/p&gt;
-
-&lt;h1 id=&#34;他のfutureとの違い&#34;&gt;他のFutureとの違い&lt;/h1&gt;
-
-&lt;p&gt;futuers-rsのFutureは1イベント起きる度に(&lt;a href=&#34;https://docs.rs/futures/0.1.14/futures/future/trait.Future.html#tymethod.poll&#34;&gt;&lt;code&gt;poll&lt;/code&gt;&lt;/a&gt;が呼ばれてReadyになる度に)次のステートの処理をし、その次のステートに移るという流れが基本です。
-次のステートに移っても、即座にそののステートの処理が走る訳ではありません。次に&lt;code&gt;poll&lt;/code&gt;が呼ばれるまで処理をしません。つまりマルチスレッドの文脈で語ると、イベントが発火したスレッド &lt;em&gt;ではなく&lt;/em&gt; &lt;code&gt;poll&lt;/code&gt;を呼んだスレッド、おおむね &lt;strong&gt;Futureを所有しているスレッドで処理が走ります&lt;/strong&gt; 。Futureの処理がスレッドを飛び越えたりはしません。ある1つのFutureを別スレッドで計算したければ&lt;a href=&#34;https://github.com/alexcrichton/futures-rs/tree/master/futures-cpupool&#34;&gt;CPU Pool&lt;/a&gt;などが使えますが、その後（&lt;a href=&#34;https://docs.rs/futures-cpupool/0.1.5/futures_cpupool/struct.CpuPool.html#method.spawn&#34;&gt;spawn&lt;/a&gt;の返り値の新たなFuture）に続けた処理は今のスレッドで実行されます。&lt;/p&gt;
-
-&lt;p&gt;一方他のFutureはほぼマルチスレッドと密結合したプロミスのようになっていて、&lt;/p&gt;
-
-&lt;p&gt;1 Future = 別スレッドで実行される計算への先物。
-コンビネータ(callback) = 別スレッドで実行される計算が終わったあとに同じスレッドで実行されるべき計算&lt;/p&gt;
-
-&lt;p&gt;のようなものが多い印象です。要は1つ処理が終わるとそのまま次の処理、その次の処理と自動で発火していく。もちろん、ライブラリの作りによってスレッドとの関係性などにバリエーションはあるでしょうが、Rustのように&lt;a href=&#34;https://docs.rs/futures/0.1.14/futures/future/trait.Future.html#tymethod.poll&#34;&gt;&lt;code&gt;poll&lt;/code&gt;&lt;/a&gt;を基本とした設計はあまりみません。&lt;/p&gt;
-
-&lt;p&gt;このようにFutureにも色々あるうち、Rustでメジャーに使われているfutures-rsの&lt;code&gt;Future&lt;/code&gt;はステートマシンの抽象化になっているよ、というお話でした。&lt;/p&gt;</description>
+&lt;p&gt;&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>ジェネリクス勉強会補足</title>
-      <link>/blog/2017/06/24/jienerikusubenkyoukaihosoku</link>
+      <link>/blog/2017/06/24/jienerikusubenkyoukaihosoku/</link>
       <pubDate>Sat, 24 Jun 2017 23:22:16 +0900</pubDate>
       
-      <guid>/blog/2017/06/24/jienerikusubenkyoukaihosoku</guid>
+      <guid>/blog/2017/06/24/jienerikusubenkyoukaihosoku/</guid>
       <description>&lt;p&gt;κeenです。本日&lt;a href=&#34;https://connpass.com/event/56773/?utm_campaign=event_participate_to_owner&amp;amp;utm_source=notifications&amp;amp;utm_medium=email&amp;amp;utm_content=title_link&#34;&gt;ジェネリクス勉強会&lt;/a&gt;で発表したのですがいくつか拾いきれないコメントがあったのでここでお返事書きます&lt;/p&gt;
 
 &lt;p&gt;発表スライドは&lt;a href=&#34;https://keens.github.io/slide/jienerikusu_disupatchi_omoteura/&#34;&gt;こちら&lt;/a&gt;&lt;/p&gt;
 
-&lt;p&gt;&lt;/p&gt;
-
-&lt;h1 id=&#34;ジェネリクスの実装はポインタ方式とテンプレート方式だけじゃないよ&#34;&gt;ジェネリクスの実装はポインタ方式とテンプレート方式だけじゃないよ&lt;/h1&gt;
-
-&lt;p&gt;もちろんです。
-基本的な手法を大別しただけで、私の発表中にもポインタ方式でも最適化がありえるとの指摘がありましたし、ジェネリクス勉強会中でも.NETの実装の話も出てました。
-勉強会全体を見ているならここで私がフォローするまでもないかと思いますが、念のため拾っておきます。&lt;/p&gt;
-
-&lt;h1 id=&#34;クロージャの件が分からない&#34;&gt;クロージャの件が分からない&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;クロージャの型は関数型じゃないの？&lt;/li&gt;
-&lt;li&gt;無名関数は関数に名前がないだけで型はあるんじゃないの？&lt;/li&gt;
-&lt;li&gt;なんで(Iteratorのmapとかの)返り値に関数型がでてくるの&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;Rustの挙動を知らないとちょっと分かりづらかったですね。それとあとで見返したら私も発表中一箇所嘘いってました。
-詳しいことをコード例を出しながら説明していきます&lt;/p&gt;
-
-&lt;h2 id=&#34;rustのクロージャの型は匿名化された型&#34;&gt;Rustのクロージャの型は匿名化された型&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://keens.github.io/blog/2016/10/10/rustnokuro_ja3tanewotsukutterikaisuru/&#34;&gt;Rustのクロージャ3種を作って理解する | κeenのHappy Hacκing Blog&lt;/a&gt;や&lt;a href=&#34;http://keens.github.io/blog/2016/03/01/rustnozerokosutochuushouka/&#34;&gt;Rustのゼロコスト抽象化 | κeenのHappy Hacκing Blog&lt;/a&gt;
-で若干説明しましたが、Rustではクロージャリテラル毎に型が作られます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;let mut x = 0;
-let mut counter = || { x += 1; x}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;こう書いたときにコンパイラは裏で以下のようなコードを生成します。（Rustを知らない人への説明のため、FnOnceの存在や実際は参照でキャプチャするなどを無視した疑似コードです）&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct AnonymousClosure{x: i32}
-impl FnMut&amp;lt;()&amp;gt; for AnonymousClosure {
-    extern &amp;quot;rust-call&amp;quot; fn call_mut(&amp;amp;mut self, (): ()) -&amp;gt; i32 {
-        self.x += 1;
-        x
-    }
-}
-let mut x = 0;
-let mut counter = AnnonymousClosure{x: x}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;要点は&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;クロージャ自体はただのキャプチャしたデータの集まり&lt;/li&gt;
-&lt;li&gt;関数本体は、メソッドとして定義される。 &lt;strong&gt;Rustは静的ディスパッチをする&lt;/strong&gt; ので &lt;strong&gt;関数ポインタはデータには含まれない&lt;/strong&gt;。コンパイラが解決する。
-
-&lt;ul&gt;
-&lt;li&gt;私が1つ嘘を言っていたというのはここです。関数ポインタもデータに含まれるって言っちゃってました。&lt;/li&gt;
-&lt;li&gt;クロージャだけど関数ポインタを使わないんですね&lt;/li&gt;
-&lt;/ul&gt;&lt;/li&gt;
-&lt;li&gt;1クロージャリテラルにつき1型を生成することでクロージャリテラル毎の関数本体を出し分けている&lt;/li&gt;
-&lt;li&gt;キャプチャした変数をまとめた構造体自体はポインタ型になっていない&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;ということで&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;クロージャ自体の型は関数型ではなくて、関数っぽい振舞いをするトレイト(ここでは&lt;code&gt;FnMut&lt;/code&gt;)を実装しているだけのただの無名型です。&lt;/li&gt;
-&lt;li&gt;無名関数だから型が無名という説明は確かにちょっとおかしかったですね。&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h2 id=&#34;クロージャを返したい&#34;&gt;クロージャを返したい&lt;/h2&gt;
-
-&lt;p&gt;ここから「なんで(Iteratorのmapとかの)返り値に関数型がでてくるの」へのお返事。&lt;/p&gt;
-
-&lt;p&gt;説明の例として遅延評価するイテレータへのマップを書きたいと思います。
-引数にはイテレータとクロージャを取ります。
-実際には適用する訳ではないのでマップするイテレータとクロージャの組を返せばよさそうですね。
-ここで思い出して欲しいのはクロージャはただの&lt;code&gt;FnMut&lt;/code&gt;を実装している構造体なのでした。
-なのでこう書くのですが、&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn map&amp;lt;I, B, F&amp;gt;(i: I, f: F) -&amp;gt; (I, F)
-where
-  I: Iterator,
-  F: FnMut(I::Item) -&amp;gt; B,
-{
-  (I, F)
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;実際にクロージャを渡したときには&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn map(i: SomeIter, f: AnnonymousClosure) -&amp;gt; (SomeIter, AnnonymousClosure)
-{
-  (i, f)
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のようになります。ここでも、クロージャデータにはポインタが挟まってないことに注意して下さい。そして型名が分かるのでクロージャを呼び出すときにはその関数が &lt;strong&gt;静的ディスパッチされます&lt;/strong&gt;&lt;/p&gt;
-
-&lt;p&gt;返り値にクロージャの型を書く = クロージャの関数本体が静的ディスパッチされる = 速い&lt;/p&gt;
-
-&lt;p&gt;ということが伝わりますでしょうか。なのでRustではできるかぎり返り値にクロージャの型を書きたいのです。&lt;/p&gt;
-
-&lt;p&gt;で、このパターンだと引数で受け取ったものを返り値で返すだけなので関数を呼んだときに得られた名前を書くだけです。たとえクロージャが匿名型であっても書くことができます。&lt;/p&gt;
-
-&lt;h2 id=&#34;返り値にだけ書きたい&#34;&gt;返り値にだけ書きたい&lt;/h2&gt;
-
-&lt;p&gt;ところが返り値にだけクロージャの型を書こうとすると、ダメです。先程の&lt;code&gt;map&lt;/code&gt;関数を関数の中で使ってみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn inc&amp;lt;I&amp;gt;(i: I) -&amp;gt; ???
-where
-  I: Iterator&amp;lt;Item = i32&amp;gt;,
-{
-  map(i, |x| x + 1)
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;こうすると型はこう解決されます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;sturct AnnonymousClosure;
-impl FnMut&amp;lt;(i32,)&amp;gt; for AnonymousClosure {
-    extern &amp;quot;rust-call&amp;quot; fn call_mut(&amp;amp;mut self, (x,): (i32,)) -&amp;gt; i32 {
-        x + 1
-    }
-}
-
-fn inc(i: SomeItr) -&amp;gt; (SomeItr, AnnonymousClosure)
-{
-  map(i, AnnonymousClosure::new())
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;返り値にだけ匿名型が出てきました。
-先程のようにパラメータで受け取ってそのまま返すということができません。
-なのでここで、返り値も匿名化する存在型が必要になるのです。&lt;/p&gt;
-
-&lt;p&gt;ここまでくれば以下のコードにも存在型が必要な理由が分かりますでしょうか。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn do_later() -&amp;gt; impl Future&amp;lt;Item = (), Err = Error&amp;gt; {
-    do_something()
-        // ここでクロージャが出てきた
-        .and_then(|()| do_another_thing())
-        // 本来の`and_then`の返り値は
-        // `AndThen&amp;lt;Self, B, F&amp;gt;`だが
-        // `F`の型が匿名化されていて書けない
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;存在型って-forallでできるよ&#34;&gt;存在型って、forallでできるよ&lt;/h1&gt;
-
-&lt;p&gt;マジレスなのかただ知識を披露してるのかよく分からなかったのですが、いちおうお返事書いておきます。&lt;/p&gt;
-
-&lt;p&gt;どの意味で「forall」でできるよと言っているのかよく分からなかったのですが、Coqの実装を見ていっているのなら見当違いです。
-Coqの実装はこの辺が参考になりますかね。 &lt;a href=&#34;http://inkar-us-i.hatenablog.com/entry/2016/11/16/175844&#34;&gt;Coqで「任意のxについて…」「あるxが存在して…」を扱う - きくらげ観察日記&lt;/a&gt;。&lt;/p&gt;
-
-&lt;p&gt;これをRustで書くとこうなるでしょうか。Rustにはトレイトをパラメータで受け取る手段がないのでひとまず量化する一階の述語を&lt;code&gt;Fn() -&amp;gt; ()&lt;/code&gt;トレイトにしておきます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct FnExists&amp;lt;F: Fn() -&amp;gt; ()&amp;gt;(f: F)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これは命題論理としては正しいのですが、型パラメータを取るので目的である匿名化を実現できていません。&lt;/p&gt;
-
-&lt;p&gt;2017-06-25 追記:
-よく考えたらCoqの実装とは異なりました。Coqに忠実にするならこうでしょうか。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct FnExists(for&amp;lt;F: Fn() -&amp;gt; ()&amp;gt; f: F)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これもダメです。Fの実際のサイズが分からないのでコンパイルできません。
-これを実現できている言語ではポインタを使って実現しているのかと思います。
-Rustでも説明の通りトレイトオブジェクトがあれば可能です。しかしながらオーバーヘッドがかかるので避けたいという話でした。
-「型システムに表現能力がある」と「値レベルでのパフォーマンスを犠牲にしない表現能力がある」は別の話です。&lt;/p&gt;
-
-&lt;p&gt;/追記&lt;/p&gt;
-
-&lt;p&gt;もう1つは、CPS変換の可能性もあります。
-この辺が参考になりますかね。&lt;a href=&#34;http://myuon-myon.hatenablog.com/entry/2016/05/11/215734&#34;&gt;データ型のCPS変換について - Just $ A sandbox&lt;/a&gt;。&lt;/p&gt;
-
-&lt;p&gt;直観論理でも以下が成り立ちます。&lt;/p&gt;
-
-&lt;p&gt;\[
-{}^\exists x P(x) \to \lnot ^\forall x \lnot P(x)
-\]&lt;/p&gt;
-
-&lt;p&gt;因みに逆は直観論理では成り立ちません（直感的な説明をすると存在しないことを否定しても実際の値を構成できないからです）。&lt;/p&gt;
-
-&lt;p&gt;これは確かに正しいです。「&lt;code&gt;Tr&lt;/code&gt;トレイトを実装した型」という存在型は以下の疑似コードで書けるでしょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Tr{}
-fn exists() -&amp;gt; FnOnce&amp;lt;A&amp;gt;(FnOnce&amp;lt;T: Tr&amp;gt;(t: T) -&amp;gt; A) -&amp;gt; A {
-  let tr = SomeTr::new();
-  forall &amp;lt;A&amp;gt; move |cont: FnOnce&amp;lt;T: Tr&amp;gt;(t: T) -&amp;gt; A| -&amp;gt; A { cont(tr) }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ですがまあ、これは実際には無理です。
-1つにはRustには型の高ランク多相がありません。ジェネリクスだけです。
-もしランクの概念を知らずにforallで書けると主張しているならそれは的外れです。
-ランクの概念を知った上で高ランク多相を入れろという主張なら理解はできますが、無理です。
-引数に渡す関数や返り値で返す関数、要はデータとして扱う関数はジェネリクスにできません。
-スライドの中でRustはテンプレート方式と説明しましたが、ジェネリクスはテンプレートであって実際のデータではないので値として扱えないのです。
-なのでRustのコンパイル方式を大きく変えるなどしないと実現できないでしょう。&lt;/p&gt;
-
-&lt;p&gt;それにもう1つ、ランクとは関係なしにクリティカルな理由があります。
-上で説明した通り、クロージャの実際の型は匿名データ型になります。なので返り値に型として書くことができません。
-冷静になって考えれば返り値のクロージャの型を書かないようにするための存在型のために返り値にクロージャの型を書くのは土台無理です。&lt;/p&gt;
-
-&lt;p&gt;さて、私の知識では全称型で存在型を構成する手法はこれくらいですがもし上記以外の構成方法が存在して、私が明後日な返事をしているなら連絡下さい。&lt;/p&gt;</description>
+&lt;p&gt;&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>Rustでエラーが出てないのにファイルに書き出せないときは</title>
-      <link>/blog/2017/06/13/rustdeera_gadetenainonifairunikakidasenaitokiha</link>
+      <link>/blog/2017/06/13/rustdeera_gadetenainonifairunikakidasenaitokiha/</link>
       <pubDate>Tue, 13 Jun 2017 22:53:46 +0900</pubDate>
       
-      <guid>/blog/2017/06/13/rustdeera_gadetenainonifairunikakidasenaitokiha</guid>
+      <guid>/blog/2017/06/13/rustdeera_gadetenainonifairunikakidasenaitokiha/</guid>
       <description>&lt;p&gt;κeenです。随分前から書こうと思いつつ先送りになっていた小ネタです。
-&lt;/p&gt;
-
-&lt;p&gt;例えばカレントディレクトリにある&lt;code&gt;some_file.txt&lt;/code&gt;に適当なデータを書き込もうとして、以下のようなコードを書いたとします。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::fs::File;
-use std::io::prelude::*;
-use std::io::BufWriter;
-
-fn main() {
-    let file = File::open(&amp;quot;some_file.txt&amp;quot;).unwrap();
-    let mut w = BufWriter::new(file);
-    // unwrapを呼んで書き込みエラーを検知
-    write!(w, &amp;quot;hello&amp;quot;).unwrap();
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これを実行してみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;$ rustc write_file.rs
-$ ./write_file
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;特段エラーは出ません。しかしながら&lt;code&gt;some_file.txt&lt;/code&gt;の中身は特に書き変わっていません。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;$ cat some_file.txt
-$
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これ、パッと原因分かりますか？&lt;/p&gt;
-
-&lt;p&gt;直接の原因は&lt;a href=&#34;https://doc.rust-lang.org/std/fs/struct.File.html#method.open&#34;&gt;&lt;code&gt;File::open&lt;/code&gt;&lt;/a&gt;です。&lt;code&gt;File::open&lt;/code&gt;はリードオンリーでファイルを開くので&lt;code&gt;File::open&lt;/code&gt;で開いたファイルに書き込もうとしても書き込めません（書き込みたいなら&lt;a href=&#34;https://doc.rust-lang.org/std/fs/struct.File.html#method.create&#34;&gt;&lt;code&gt;File::create&lt;/code&gt;&lt;/a&gt;を使います）。
-じゃあなぜエラーが出ないかというと&lt;code&gt;BufWriter&lt;/code&gt;のせいです。
-書き込んだ文字列&lt;code&gt;&amp;quot;hello&amp;quot;&lt;/code&gt;は短いので&lt;code&gt;write!&lt;/code&gt;を発効した時点ではまだデータはバッファに書き込まれるだけです。
-このときにはまだエラーは出ません。
-そして&lt;code&gt;main&lt;/code&gt;の末尾で&lt;code&gt;w&lt;/code&gt;のライフタイムが終わるときに&lt;code&gt;BufWrite&lt;/code&gt;の&lt;a href=&#34;https://doc.rust-lang.org/src/std/io/buffered.rs.html#511-518&#34;&gt;&lt;code&gt;drop&lt;/code&gt;&lt;/a&gt;が呼ばれますが、ここではエラーが無視されるのでユーザにはエラーが起きてないように見える訳です。&lt;/p&gt;
-
-&lt;p&gt;このような事故を防ぐために以下のように&lt;code&gt;flush&lt;/code&gt;を呼びましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::fs::File;
-use std::io::prelude::*;
-use std::io::BufWriter;
-
-fn main() {
-    let file = File::open(&amp;quot;some_file.txt&amp;quot;).unwrap();
-    let mut w = BufWriter::new(file);
-    // unwrapを呼んで書き込みエラーを検知
-    write!(w, &amp;quot;hello&amp;quot;).unwrap();
-    // flushを呼ぶことで書き込みエラーを全て拾える
-    w.flush().unwrap();
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;$ rustc write_file.rs
-$ ./write_file
-thread &#39;main&#39; panicked at &#39;called `Result::unwrap()` on an `Err` value: Error { repr: Os { code: 9, message: &amp;quot;Bad file descriptor&amp;quot; } }&#39;, /checkout/src/libcore/result.rs:859
-note: Run with `RUST_BACKTRACE=1` for a backtrace.
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;参考: &lt;a href=&#34;http://keens.github.io/blog/2016/01/08/rusttoiedoriso_sunokaihouhachuui/&#34;&gt;Rustといえどリソースの解放は注意 | κeenのHappy Hacκing Blog&lt;/a&gt;&lt;/p&gt;</description>
+&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>Rustのトランザクション抽象化ライブラリ作った</title>
-      <link>/blog/2017/06/06/rustnotoranzakushonchuushoukaraiburaritsukutta</link>
+      <link>/blog/2017/06/06/rustnotoranzakushonchuushoukaraiburaritsukutta/</link>
       <pubDate>Tue, 06 Jun 2017 18:20:52 +0900</pubDate>
       
-      <guid>/blog/2017/06/06/rustnotoranzakushonchuushoukaraiburaritsukutta</guid>
+      <guid>/blog/2017/06/06/rustnotoranzakushonchuushoukaraiburaritsukutta/</guid>
       <description>&lt;p&gt;κeenです。最近&lt;a href=&#34;https://github.com/KeenS/transaction-rs&#34;&gt;KeenS/transaction-rs: The transaction abstraction library and its executors for rust&lt;/a&gt;というライブラリをリリースしたのでそれについて。&lt;/p&gt;
 
-&lt;p&gt;&lt;/p&gt;
-
-&lt;h1 id=&#34;モチベーション&#34;&gt;モチベーション&lt;/h1&gt;
-
-&lt;p&gt;Rustでドメインロジックを書いていると以下のようなコードが出てきました。
-(実際はもうちょっと複雑ですが本質ではないので簡略化します)&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct GroupPgDao(r2d2::Pool&amp;lt;ConnectionManager&amp;lt;PgConnection&amp;gt;&amp;gt;);
-impl GroupPgDao {
-  fn get_conn(&amp;amp;self) -&amp;gt; &amp;amp;PgConnection { /*... */ }
-  fn delete_user(&amp;amp;self, user: &amp;amp;User, group: &amp;amp;Group) -&amp;gt; Result&amp;lt;()&amp;gt; {
-      let cn = self.get_conn();
-      //...
-  }
-  fn add_user(&amp;amp;self, user: &amp;amp;User, group: &amp;amp;Group) -&amp;gt; Result&amp;lt;()&amp;gt; {
-      let cn = self.get_conn();
-      //...
-  }
-}
-
-trait GroupService: HaveGroupDao {
-  fn change_group(&amp;amp;self, user: &amp;amp;User, from: &amp;amp;Group, to: &amp;amp;Group) -&amp;gt; Result&amp;lt;()&amp;gt; {
-     let service = self.group_dao();
-     dao.delete_user(user, from)?;
-     dao.add_user(user, to)
-  }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;この&lt;code&gt;change_group&lt;/code&gt;はDBのトランザクション内で実行しないと困ります。&lt;code&gt;delete_user&lt;/code&gt;が成功して&lt;code&gt;add_user&lt;/code&gt;が失敗するとuserがどちらにも所属しなくなるからです。じゃあ&lt;code&gt;change_group&lt;/code&gt;の中でトランザクションを作って実行すればいいかというとそうでもなく、いくつか問題があります。&lt;/p&gt;
-
-&lt;ol&gt;
-&lt;li&gt;もっと外側でトランザクションが必要な操作が発生するかもしれない&lt;/li&gt;
-&lt;li&gt;同一トランザクション内で実行するにはコネクションを共有しないといけないが、関数個々でプールからコネクションを取得している&lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;p&gt;1に関しては誰がトランザクションを実行するのかという責任問題と、どの操作がトランザクションを必要とするのかという契約問題の2つが複合しています。
-dieselのトランザクションはネストをサポートしているので必要そうな部分至るところトランザクションを作るというのも考えられますが、プログラマが目で責任と契約を追うことになりバグりかねません&lt;/p&gt;
-
-&lt;p&gt;2つ目はインジェクションの問題ですね。これについてはシンプルに引数にコネクションを渡すというのも考えられますが持ち回るのは非常に大変です。&lt;/p&gt;
-
-&lt;p&gt;これらを解決するために作ったのが冒頭に挙げたtransaction-rsです。&lt;/p&gt;
-
-&lt;h1 id=&#34;transaction-rs&#34;&gt;transaction-rs&lt;/h1&gt;
-
-&lt;p&gt;transaction-rsは非常に&lt;a href=&#34;https://github.com/alexcrichton/futures-rs&#34;&gt;future-rs&lt;/a&gt;に似ています。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub trait Transaction&amp;lt;Ctx&amp;gt; {
-    type Item;
-    type Err;
-    fn run(&amp;amp;self, ctx: &amp;amp;mut Ctx) -&amp;gt; Result&amp;lt;Self::Item, Self::Err&amp;gt;;
-
-    fn map&amp;lt;F, B&amp;gt;(self, f: F) -&amp;gt; Map&amp;lt;Self, F&amp;gt;
-    where
-        F: Fn(Self::Item) -&amp;gt; B,
-        Self: Sized,
-    { ... }
-    fn and_then&amp;lt;F, B&amp;gt;(self, f: F) -&amp;gt; AndThen&amp;lt;Self, F, B&amp;gt;
-    where
-        B: Transaction&amp;lt;Ctx, Err = Self::Err&amp;gt;,
-        F: Fn(Self::Item) -&amp;gt; B,
-        Self: Sized,
-    { ... }
-    fn map_err&amp;lt;F, B&amp;gt;(self, f: F) -&amp;gt; MapErr&amp;lt;Self, F&amp;gt;
-    where
-        F: Fn(Self::Err) -&amp;gt; B,
-        Self: Sized,
-    { ... }
-    fn or_else&amp;lt;F, B&amp;gt;(self, f: F) -&amp;gt; OrElse&amp;lt;Self, F, B&amp;gt;
-    where
-        B: Transaction&amp;lt;Ctx, Item = Self::Item&amp;gt;,
-        F: Fn(Self::Err) -&amp;gt; B,
-        Self: Sized,
-    { ... }
-
-    // ...
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;map&lt;/code&gt;や&lt;code&gt;and_then&lt;/code&gt;のある「よくあるパターン」です。&lt;code&gt;futures&lt;/code&gt;の他&lt;code&gt;Result&lt;/code&gt;や&lt;code&gt;Option&lt;/code&gt;にもありますね。
-&lt;code&gt;Transaction&lt;/code&gt;を作った時点ではまだ計算は実行されません。DBへのクエリも実行されてません。&lt;code&gt;run&lt;/code&gt;が呼ばれた時点でようやく計算が実行され、結果を取り出すことができます。&lt;code&gt;future-rs&lt;/code&gt;と同じくこれは &lt;em&gt;ゼロコスト抽象化&lt;/em&gt; をしていて、トランザクションの関数を積んでいくと実行時にはオートマトンにまで落ちます。 詳しくはこちらをどうぞ&lt;a href=&#34;https://aturon.github.io/blog/2016/08/11/futures/&#34;&gt;Zero-cost futures in Rust · Aaron Turon&lt;/a&gt;。&lt;/p&gt;
-
-&lt;h1 id=&#34;トランザクションの合成と要求&#34;&gt;トランザクションの合成と要求&lt;/h1&gt;
-
-&lt;p&gt;話を冒頭のコードに戻しすと、transaction-rsを使うとDAOはこう書けるでしょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct GroupPgDao;
-impl GroupPgDao {
-  fn delete_user(&amp;amp;self, user: &amp;amp;User, group: &amp;amp;Group) -&amp;gt; Box&amp;lt;Transaction&amp;lt;... ()&amp;gt; {
-      with_conn(|cn| {
-          //...
-      })
-      .boxed()
-  }
-  fn add_user(&amp;amp;self, user: &amp;amp;User, group: &amp;amp;Group) -&amp;gt; Box&amp;lt;Transaction&amp;lt;... ()&amp;gt; {
-      with_conn(|cn| {
-          //...
-      })
-      .boxed()
-  }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;返り値の型がやや残念になるものの、中身はそれほど変わらないです。
-&lt;code&gt;Transaction&lt;/code&gt;を返しているのでこのコードはトランザクション下で実行されることを要求しているのが分かりますね。&lt;/p&gt;
-
-&lt;p&gt;そして自分で持っていたコネクションプールと&lt;code&gt;self.get_conn()&lt;/code&gt;が消え、変わりに&lt;code&gt;with_conn&lt;/code&gt;関数でコネクションを取得しています。この関数は付属の&lt;code&gt;transaction-diesel&lt;/code&gt;にて定義されています。何やら虚空からコネクションが沸いてるようにも見えますがちゃんと正規のルートで渡ってきています。これについては後で説明します。&lt;/p&gt;
-
-&lt;p&gt;さらにサービスの方も書き換えてみます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait GroupService&amp;lt;Ctx&amp;gt;: HaveGroupDao&amp;lt;Ctx {
-  fn change_group(&amp;amp;self, user: &amp;amp;User, from: &amp;amp;Group, to: &amp;amp;Group) -&amp;gt; Box&amp;lt;Transaction&amp;lt;Ctx, ... ()&amp;gt;&amp;gt;&amp;gt; {
-     let service = self.group_dao();
-     dao.delete_user(user, from)
-         .and_then(move|()| dao.add_user(user, to))
-         .boxed()
-  }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;疑似コードなのでコンパイルが通るか分かりませんがまあ、こんなところになるでしょう。
-このコードで分かるように、トランザクション同士の合成も可能なのです。
-そして、&lt;code&gt;Transaction&lt;/code&gt;を返しているのでこのコード自身もまたトランザクションを要求していることが分かります。&lt;/p&gt;
-
-&lt;p&gt;さて、気付いたでしょうか。これで上記の契約問題、責任問題、インジェクション問題が解決しています。&lt;/p&gt;
-
-&lt;p&gt;契約問題については&lt;code&gt;Transaction&lt;/code&gt;を返す関数はトランザクションを要求するというシグナルですね。非常に分かりやすいです。
-責任問題についても&lt;code&gt;Transaction&lt;/code&gt;を&lt;code&gt;run&lt;/code&gt;する関数にトランザクションの責任があります。&lt;code&gt;run&lt;/code&gt;しないと結果を取り出せないので結果が欲しい人がそのまま責任を持つ形になります。&lt;/p&gt;
-
-&lt;p&gt;なんとなく、&lt;code&gt;unsafe&lt;/code&gt;に似ているのが分かりますか？&lt;code&gt;unsafe fn&lt;/code&gt;は内部でアンセーフなことをやるし、呼び出す関数に契約を満たすことを要求します。&lt;code&gt;unsafe&lt;/code&gt;ブロックはアンセーフな処理の契約に責任を持ちます。同じく&lt;code&gt;Transaction&lt;/code&gt;を返す関数は内部でトランザクションを要求する処理をするし、呼び出し側に契約を満たすことを要求します。&lt;code&gt;run&lt;/code&gt;がトランザクションという契約に責任を持ちます。&lt;/p&gt;
-
-&lt;h1 id=&#34;インジェクションの仕組み&#34;&gt;インジェクションの仕組み&lt;/h1&gt;
-
-&lt;p&gt;先のコードでマジカルにコネクションが外からやってきていました。この仕組みについて説明します。とはいっても複雑ではないです。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;Transaction&lt;/code&gt;のコードを思い出してみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub trait Transaction&amp;lt;Ctx&amp;gt; {
-    fn run(&amp;amp;self, ctx: &amp;amp;mut Ctx) -&amp;gt; Result&amp;lt;Self::Item, Self::Err&amp;gt;;
-    // ...
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;run&lt;/code&gt;すると結果が取り出せるのでした。そして&lt;code&gt;run&lt;/code&gt;は引数&lt;code&gt;Ctx&lt;/code&gt;をとります。
-これは抽象的なトランザクションなので抽象的な「コンテキスト」ですが、&lt;a href=&#34;https://github.com/Marthog/rust-stm&#34;&gt;STM&lt;/a&gt;ならSTM、データベースならコネクションがコンテキストです。
-コンテキストを受け取って計算を実行するということは、&lt;code&gt;Transaction&lt;/code&gt;は見方を変えると&lt;code&gt;Ctx&lt;/code&gt;を引数にとる関数になっています。&lt;/p&gt;
-
-&lt;p&gt;なので&lt;code&gt;with_conn&lt;/code&gt;関数は&lt;code&gt;run&lt;/code&gt;で受け取った引数を取り出しているだけです。&lt;/p&gt;
-
-&lt;h1 id=&#34;小まとめ&#34;&gt;小まとめ&lt;/h1&gt;
-
-&lt;p&gt;このtransaction-rsは&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;トランザクションの契約と責任を型で表現している&lt;/li&gt;
-&lt;li&gt;コネクションをインジェクトしている&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;さらに、&lt;code&gt;run&lt;/code&gt;するまでは実際にはトランザクションは実行されていないので&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;「トランザクションを必要とする計算とその合成」と「トランザクションの実行」を分離している&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;というのが特徴です。大筋はこれがメインなのですが、実用の話をいくつか。&lt;/p&gt;
-
-&lt;h1 id=&#34;つらい話と救いの話&#34;&gt;つらい話と救いの話&lt;/h1&gt;
-
-&lt;p&gt;&lt;code&gt;Transaction&lt;/code&gt;で契約と責任は明確になりました。
-では、便利になったかというとそうでもありません。例えばUserをCRUDしてみましょう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn crud_user(dao: UserDao, ctx: Ctx) -&amp;gt; Result&amp;lt;()&amp;gt; {
-    let tx = dao.create(&amp;quot;name&amp;quot;, 24)
-      .and_then(move |id|
-          dao.find(id)
-              .and_then(move |user|
-                  dao.update(None, user.age + 1)
-                      .and_then(move |()|
-                          dao.delete(user))));
-    tx.run(ctx)
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;このように、&lt;code&gt;and_then&lt;/code&gt;がネストしてしまいます。コードが不要に複雑になっただけですね。つらい。&lt;/p&gt;
-
-&lt;p&gt;しかしながら救いはあって、&lt;a href=&#34;https://github.com/TeXitoi/rust-mdo&#34;&gt;&lt;code&gt;mdo&lt;/code&gt;&lt;/a&gt;というライブラリがあります。
-mがなんなのかやdoがどこからきたのかは気にしてはいけません。
-&lt;code&gt;transaction-rs&lt;/code&gt;もこれをサポートしていて、マクロを使うことで以下のように書き換えられます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn crud_user(dao: UserDao, ctx: Ctx) -&amp;gt; Result&amp;lt;()&amp;gt; {
-    let tx = mdo! {
-        id =&amp;lt;&amp;lt; dao.create(&amp;quot;name&amp;quot;, 24);
-        user =&amp;lt;&amp;lt; dao.find(id);
-        () =&amp;lt;&amp;lt; dao.update(None, user.age + 1);
-        ret dao.delete(user)
-    };
-
-    tx.run(ctx)
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;本質的にはネストを代入っぽく書き換えただけですが、絶大な可読性の向上があります。
-なので実際に&lt;code&gt;transaction&lt;/code&gt;を使うときは&lt;code&gt;mdo&lt;/code&gt;を併用することになるでしょう。&lt;/p&gt;
-
-&lt;h1 id=&#34;futures-との違い&#34;&gt;&lt;code&gt;futures&lt;/code&gt;との違い&lt;/h1&gt;
-
-&lt;p&gt;&lt;code&gt;futures&lt;/code&gt;に非常によく似ていると言いましたが、逆に何が違うのかという話です。大きな違いは2つあります。&lt;/p&gt;
-
-&lt;p&gt;1つには結果を取り出すメソッドの違いです。&lt;code&gt;Future&lt;/code&gt;の&lt;code&gt;poll&lt;/code&gt;は引数を取りませんが、&lt;code&gt;Transaction&lt;/code&gt;の&lt;code&gt;run&lt;/code&gt;は取ります。また、それに合わせてトレイトがジェネリクスになっています。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub trait Future {
-    fn poll(&amp;amp;mut self) -&amp;gt; Poll&amp;lt;Self::Item, Self::Error&amp;gt;;
-}
-
-pub trait Transaction&amp;lt;Ctx&amp;gt; {
-    fn run(&amp;amp;self, ctx: &amp;amp;mut Ctx) -&amp;gt; Result&amp;lt;Self::Item, Self::Err&amp;gt;;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;もう1つはクロージャを取るメソッドの違いで、&lt;code&gt;Future&lt;/code&gt;は&lt;code&gt;FnOnce&lt;/code&gt;を取るのに対して&lt;code&gt;Transaction&lt;/code&gt;は&lt;code&gt;Fn&lt;/code&gt;を取ります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub trait Future {
-    fn map&amp;lt;F, U&amp;gt;(self, f: F) -&amp;gt; Map&amp;lt;Self, F&amp;gt;
-        where
-            F: FnOnce(Self::Item) -&amp;gt; U,
-            Self: Sized,
-}
-
-pub trait Transaction&amp;lt;Ctx&amp;gt; {
-    fn map&amp;lt;F, B&amp;gt;(self, f: F) -&amp;gt; Map&amp;lt;Self, F&amp;gt;
-    where
-        F: Fn(Self::Item) -&amp;gt; B,
-        Self: Sized,
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;Future&lt;/code&gt;は単純に計算の合成と実行を分離しているのに対して&lt;code&gt;Transaction&lt;/code&gt;はSTMのように失敗した計算のリトライにまで責任を持つことがあるので再実行可能でないといけません。さらに、再実行するということは羃等性の確保も必要です。羃等性を保つためコンテキスト以外への副作用も禁止する必要があって、&lt;code&gt;FnOnce&lt;/code&gt;でも&lt;code&gt;FnMut&lt;/code&gt;でもなく &lt;del&gt;&lt;code&gt;FnOnce&lt;/code&gt;を&lt;/del&gt; &lt;code&gt;Fn&lt;/code&gt; を要求します。（間違いを&lt;a href=&#34;https://twitter.com/so_zaneli/status/872271289636986880&#34;&gt;指摘された&lt;/a&gt;ので修正しました。）&lt;/p&gt;
-
-&lt;p&gt;実はこのことが若干問題になるケースもあります。データベースのトランザクションなら別に再実行せずにロールバックするだけなので&lt;code&gt;FnOnce&lt;/code&gt;で十分なケースもあります。&lt;code&gt;FnOnce&lt;/code&gt;の方が所有権に寛容なので&lt;code&gt;FnOnce&lt;/code&gt;なら書けるのに&lt;code&gt;Fn&lt;/code&gt;が要求されて、実際には&lt;code&gt;FnOnce&lt;/code&gt;しか必要ない、というケースに何度か直面しました。いくつかのハックで乗り越えられましたが本質的ではない問題なので今後何か変更があるかもしれません。&lt;/p&gt;
-
-&lt;h1 id=&#34;他の問題点&#34;&gt;他の問題点&lt;/h1&gt;
-
-&lt;p&gt;ちょっと説明するのが面倒なのでコードを出さないのですが、計算の合成と実行を分離すると合成の時点では生きているけど実行するときに生きてるか分からないオブジェクトが出てきたりします。
-概ねライフタイム境界を明示的に書いてあげると解決するのですが、一部&lt;code&gt;join&lt;/code&gt;などを駆使してハックしないとコンパイルが通らないことがあり面倒です。&lt;/p&gt;
-
-&lt;p&gt;返り値型が複雑なのも問題で、ひとまず&lt;a href=&#34;https://github.com/rust-lang/rust/issues/34511&#34;&gt;&lt;code&gt;impl Trait&lt;/code&gt;&lt;/a&gt;がstableに降ってくるまではそもそも型を書けません（クロージャが匿名なせい）。
-&lt;code&gt;Box&lt;/code&gt;に包むにしても少なくとも&lt;code&gt;Ctx&lt;/code&gt;が型引数に増えますし、&lt;code&gt;diesel&lt;/code&gt;と一緒に使うならコネクションのライフタイムも型に入れる必要があったりと&lt;code&gt;Result&lt;/code&gt;や&lt;code&gt;BoxFuture&lt;/code&gt;に比べてやや重くなっています。&lt;/p&gt;
-
-&lt;p&gt;記法についても問題があります。&lt;code&gt;mdo&lt;/code&gt;を使うとある程度は解決しますが、早期リターンがしづらく、頑張って分岐のネストを書かないといけません。これは&lt;code&gt;futures&lt;/code&gt;も抱える問題です。
-&lt;code&gt;futures&lt;/code&gt;についてはのジェネレータのパッチを当てることで&lt;a href=&#34;https://github.com/alexcrichton/futures-await&#34;&gt;&lt;code&gt;Result&lt;/code&gt;のように書けるデモ&lt;/a&gt;があるのですが、先述の通り&lt;code&gt;transaction&lt;/code&gt;では&lt;code&gt;FnOnce&lt;/code&gt;ではなく&lt;code&gt;Fn&lt;/code&gt;を取っているのでジェネレータにはエンコードできないのではないかと思っています（あまり調査してないです）。&lt;/p&gt;
-
-&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;code&gt;transaction-rs&lt;/code&gt;を作ったよ&lt;/li&gt;
-&lt;li&gt;トランザクションの契約と責任を型で明示するよ&lt;/li&gt;
-&lt;li&gt;コネクションをインジェクトするよ&lt;/li&gt;
-&lt;li&gt;コードは複雑になるかもね&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;mdo&lt;/code&gt;を使うと複雑さを抑えられるよ&lt;/li&gt;
-&lt;li&gt;でもライフタイムとかの問題もあるよ&lt;/li&gt;
-&lt;li&gt;将来どうにかするかもね&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h1 id=&#34;零れ話&#34;&gt;零れ話&lt;/h1&gt;
-
-&lt;p&gt;これを作ったあとに&lt;a href=&#34;http://qiita.com/pab_tech/items/86e4c31d052c678f6fa6&#34;&gt;【ScalaMatsuriセッション当選御礼】ドワンゴ秘伝のトランザクションモナドを解説！ - Qiita&lt;/a&gt;を思い出して読んでみたらほぼ同じものを作ってましたね。
-Scalaのpoor-man&amp;rsquo;s type classだと読み辛いですがほぼ同じです。&lt;/p&gt;
-
-&lt;p&gt;相違点は1つには返り値が&lt;code&gt;Result&lt;/code&gt;か&lt;code&gt;Future&lt;/code&gt;か。実際、トランザクションモナドは成功と失敗両方に対してモナドになっている型であれば（こういうの名前ついてないのかな、重モナドとかそんなの）何にでも定義できます。要はトランスフォーマーとして定義可能です。
-しかしながらRustには高階多相がなくてトランスフォーマーは書けないのでどちらかを選ぶ必要があり、&lt;code&gt;transaction-rs&lt;/code&gt;では&lt;code&gt;Result&lt;/code&gt;を選びました。外部ライブラリへの依存を減らしたいだとかウェブアプリケーションフレームワークにFutureを受け付けてくれるものがなくてあまり意味がないとかその辺です。
-需要が発生したらトランスフォーマーマクロとか作るかもしれません。&lt;/p&gt;
-
-&lt;p&gt;もう1つ相違点があって、fujitaskの方はRead/Writeを型で判別するようになっていますが&lt;code&gt;transaction-rs&lt;/code&gt;にはそういう機能はありません。
-fujitaskを読み返すまではそれには思い至りませんでした。
-で、存在を知った後に実装したかというと別にしてません。
-Rustでも&lt;code&gt;Ctx&lt;/code&gt;に幽霊型を付ければ実装自体は可能なのですがデータベースライブラリがトランザクションの分離レベルの変更をサポートしていないのであまり意味がないからです。
-データベース側でサポートされたらやるかもしれません。&lt;/p&gt;
-
-&lt;p&gt;Scalaのfujitaskは便利そうで、概ねこちらもそのようなものなのですが、Rust特有の所有権/ライフタイムによる問題とScalaの&lt;code&gt;for&lt;/code&gt;式相当のものがないという理由でちょっとつらい感じになってます。つらい。&lt;/p&gt;
-
-&lt;h1 id=&#34;追記&#34;&gt;追記&lt;/h1&gt;
-
-&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-conversation=&#34;none&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;ノリでジェネリクスにしたけど関連型の方が良かったのでは？&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/872093400417189888&#34;&gt;2017年6月6日&lt;/a&gt;&lt;/blockquote&gt;
-&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
-
-&lt;p&gt;ひとまずmasterはそう書き直しました。&lt;/p&gt;</description>
+&lt;p&gt;&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>非同期とノンブロッキングとあと何か</title>
-      <link>/blog/2017/05/19/hidoukitononburokkingutoatonanika</link>
+      <link>/blog/2017/05/19/hidoukitononburokkingutoatonanika/</link>
       <pubDate>Fri, 19 May 2017 20:51:46 +0900</pubDate>
       
-      <guid>/blog/2017/05/19/hidoukitononburokkingutoatonanika</guid>
+      <guid>/blog/2017/05/19/hidoukitononburokkingutoatonanika/</guid>
       <description>&lt;p&gt;κeenです。最近同期/非同期、ブロッキング/ノンブロッキング、直接形式/継続渡し形式あたりが混乱してきたので個人的に整理します。
 あくまで私個人の理解を纏めただけなので誤謬などに注意して下さい。&lt;/p&gt;
 
 &lt;p&gt;追記: &lt;a href=&#34;https://twitter.com/tanaka_akr&#34;&gt;@tanaka_akr&lt;/a&gt;さんから&lt;a href=&#34;https://twitter.com/tanaka_akr/status/865722507281580032&#34;&gt;指摘&lt;/a&gt;されたのですが、用語の説明が間違っていそうだったので書き直しました。
 diffは&lt;a href=&#34;https://github.com/KeenS/KeenS.github.io/commit/d46dad5282436eeaa615f31c160f892e6c724403&#34;&gt;こちら&lt;/a&gt;&lt;/p&gt;
 
-&lt;p&gt;&lt;/p&gt;
-
-&lt;p&gt;非同期とノンブロッキングはよく混同されます。また、非同期処理の記述形式として直接形式や継続渡し形式などがあります。
-私自身違う言葉だなとは思いつつも混同したり違いを忘れたりしています。
-非同期もノンブロッキングもナイーブなIOに比べると速い方式だな程度の理解でいてそんなに困らないと思ってますし混同や誤用に目くじらを立てるつもりもありません。
-しかしながら3者を区別しないと意味を成さない文脈で3者を混同している技術を何度か見掛けたので（自分の中で）整理しようと思ったのがこの記事を書こうと思ったきっかけです。&lt;/p&gt;
-
-&lt;h1 id=&#34;用語&#34;&gt;用語&lt;/h1&gt;
-
-&lt;p&gt;色々と調べましたが、&lt;a href=&#34;http://pubs.opengroup.org/onlinepubs/009695399/basedefs/xbd_chap03.html&#34;&gt;The Open Group Base Specifications Issue 6 IEEE Std 1003.1, 2004 Edition&lt;/a&gt;の定義を使います。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;http://pubs.opengroup.org/onlinepubs/009695399/basedefs/xbd_chap03.html#tag_03_77&#34;&gt;ブロッキング&lt;/a&gt;:
-IO操作で、操作する前に待ちが発生するという性質&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;http://pubs.opengroup.org/onlinepubs/009695399/basedefs/xbd_chap03.html#tag_03_240&#34;&gt;ノンブロッキング&lt;/a&gt;:
-IO操作で、操作する前に待ちが発生しそうなら即座に関数から返るという性質&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;http://pubs.opengroup.org/onlinepubs/009695399/basedefs/xbd_chap03.html#tag_03_378&#34;&gt;同期&lt;/a&gt;:
-IO操作で、操作が終わるまでブロックするという性質&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;http://pubs.opengroup.org/onlinepubs/009695399/basedefs/xbd_chap03.html#tag_03_29&#34;&gt;非同期&lt;/a&gt;:
-IO操作で、IO操作を発効したスレッド自体がブロックせずに別のCPU処理を行えるという性質&lt;/li&gt;
-&lt;li&gt;IOの多重化: 複数のfdに対して監視を行ない、ブロックせずに操作可能なfdを通知する仕組み。
-調べると「複数のfdに対してブロックできる」という記述があるのですがノンブロッキングなオプションもありますよね&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;これらはどのようにIOを行うかの問題で、 &lt;strong&gt;実行時&lt;/strong&gt; に関係する話題です。&lt;/p&gt;
-
-&lt;p&gt;次に、直接形式と継続渡し形式について。非同期やノンブロッキングなIOをしようと思うと後続の処理、すなわち（限定）継続が必要になる。この（限定）継続をプログラマがどのように渡すかの問題。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://en.wikipedia.org/wiki/Direct_style&#34;&gt;直接形式&lt;/a&gt;は（限定）継続がプログラムには陽には現れず、コンパイラが頑張るかコルーチンなどの言語機能、&lt;code&gt;async&lt;/code&gt;/&lt;code&gt;await&lt;/code&gt;、&lt;code&gt;do&lt;/code&gt;、&lt;code&gt;for&lt;/code&gt;などの構文を用いて実現されます。
-&lt;a href=&#34;https://en.wikipedia.org/wiki/Continuation-passing_style&#34;&gt;継続渡し形式&lt;/a&gt;(CPS)はプログラマが陽に（限定）継続を渡すスタイルで、コールバック形式などとも呼ばれます。&lt;/p&gt;
-
-&lt;p&gt;これらは主に言語の問題で、 &lt;strong&gt;コンパイル時&lt;/strong&gt; に関係する話題です。
-よく直接形式と同期処理が混同されて「同期プログラミングをすることで非同期プログラミングができます」などの矛盾した一文が書かれがちですが区別しましょう。&lt;/p&gt;
-
-&lt;h2 id=&#34;誰が何を&#34;&gt;誰が何を&lt;/h2&gt;
-
-&lt;p&gt;IO処理の話題はスレッドとカーネルとのやりとりに関することが多い気がしますが、Goのようにユーザランドで実行単位を持つと「ブロックする」といったときにスレッドがブロックするのかgoroutineがブロックするのか分かりづらいですね。
-なのでこれ以後は誰が何をブロックするのかを出来る限り明示しながら書きたいと思います。例えば「カーネルがgoroutine Aを実行しているスレッドをブロックする」など。&lt;/p&gt;
-
-&lt;h1 id=&#34;scala&#34;&gt;Scala&lt;/h1&gt;
-
-&lt;p&gt;前職でScalaを書いていました。
-Scalaの&lt;code&gt;Future&lt;/code&gt;そのものは&lt;code&gt;flatMap&lt;/code&gt;が関数をとるので継続渡し形式ですが、そのシンタックスシュガーの&lt;code&gt;for&lt;/code&gt;式は直接形式でプログラミングができます。
-IOの実体についてはFutureで抽象化されているのでexecutorによります。&lt;/p&gt;
-
-&lt;h1 id=&#34;go&#34;&gt;Go&lt;/h1&gt;
-
-&lt;p&gt;前職の新卒研修で5日ほどGoを書いたことがあります。
-多くの言語は比較的シンプルなIOモデルを持つので用語を意識しなくても問題ありませんが、Goは実行時に色々工夫しているので用語をちゃんと区別しないと齟齬が出るようです。
-なのでGoを例に理解を深めようと思います。&lt;/p&gt;
-
-&lt;p&gt;まず、Goは実行時に動作するコンポーネントが多いので整理します。
-&lt;a href=&#34;https://www.quora.com/How-does-the-Go-runtime-work&#34;&gt;ここの質問&lt;/a&gt;への回答によるとgoroutine実行用のスレッド、スケジューラ、GCに大別してよさそうです。
-このうち、IOに関連するのはgoroutine実行用のスレッドとスケジューラなのでGCについては触れません。
-あまりよく分かってないのですがスケジューラはgoroutine実行用のスレッド上で呼ばれるための関数（群）なんですかね。&lt;/p&gt;
-
-&lt;p&gt;普段は1スレッドが複数のgoroutineの実行を受け持ち、goroutineが何かしらの理由でブロックしそうなタイミングで別のgoroutineにコンテキストスイッチするようです。
-ブロックしそうなタイミングというのはやや古いですが&lt;a href=&#34;http://stackoverflow.com/questions/17953269/go-routine-blocking-the-others-one&#34;&gt;ここ&lt;/a&gt;に書かれてます。
-直接形式で書きつつコンテキストスイッチをするということはどうにかして(限定)継続を取り出す必要がありますが、それこそgoroutineですね。goroutine自身でスタックを持つようですし。
-C関数を呼ぶときなどはコンパイラが裏で呼び出す前と後に分割しているようです。&lt;/p&gt;
-
-&lt;p&gt;さて、IOについてはファイルIOとネットワークIOで操作が異なるようです。&lt;/p&gt;
-
-&lt;p&gt;ファイルIOでは普通に同期/ブロッキングなシステムコールを発効し、OSがスレッドをブロックする時間が長いようなら別スレッドで元スレッドの持っていたgoroutineを実行するようです。
-信頼できる情報が出てこなかったのですが自身で長くなりそうと思っているシステムコールの場合はgoroutineの実行権限（プロセス）を手放してあとは他のプロセスがstealするに任せてる？
-ファイルIOは、スレッドがシステムコールでブロックし同期的で、goroutineもシステムコールでブロックし同期的です。ただスケジューラのお陰で他のgoroutineに迷惑がかからないだけです。&lt;/p&gt;
-
-&lt;p&gt;ネットワークIOはポーリングを行なうようです。
-スケジューラがfinbrunnableする中でブロックしない方のpoll(Linuxだとepollにノンブロッキングオプションつけたやつかな？)を呼んで、操作可能なfdがあればそれを待っているgoroutineを起こしている模様。
-であれば上の分類に従うとネットワークIOはスレッドはブロックせず同期的でIOを多重化し、goroutineはスケジューラからブロックされ同期的で（特別に関数を呼ばなければ）IOの多重化もしません。ただ、操作可能なfdに操作しているのでgoroutineはカーネルからはブロックされません。&lt;/p&gt;
-
-&lt;p&gt;この他にもgoroutine同士のコミュニケーションにチャネルがあります。そこまで重要じゃないかなと思って詳しく調べてないので間違いがあるかもしれないです。
-チャネルへの操作は同期的ですね。チャネルへのread/writeはバッファがempty/fullだったらブロックするようなのでgoroutineはチャネルへの操作でブロックします。調べてないですが普通スレッドはブロックしないでしょう。&lt;/p&gt;
-
-&lt;p&gt;チャネルへのselectはあまり情報が出てこなかったのですが恐らくスケジューラがIO可能なチャネルを調べて1つでもあればそれからランダムに選ぶ、1つもなくdefaultもなければスケジューラがgoroutineをブロックするんだと思います。
-同期的でIOの多重化をしていますね。&lt;/p&gt;
-
-&lt;p&gt;Goroutineやスレッドレベルでは同期的ですが、Goのプロセス全体でみるとGOMAXPROC分のスレッドは常にCPUを使っているので非同期なんですかね。&lt;/p&gt;
-
-&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
-
-&lt;p&gt;Goの件について表にするとこうですかね。非同期処理をやろうと思ったら大抵処理単位を分ける必要がありますが、Goの最小処理単位がgoroutineなのでよく考えたらgoroutineが全て同期するのはあたりまえですね。&lt;/p&gt;
-
-&lt;table&gt;
-&lt;thead&gt;
-&lt;tr&gt;
-&lt;th&gt;&lt;/th&gt;
-&lt;th&gt;スレッド&lt;/th&gt;
-&lt;th&gt;goroutine&lt;/th&gt;
-&lt;th&gt;Goプロセス&lt;/th&gt;
-&lt;/tr&gt;
-&lt;/thead&gt;
-
-&lt;tbody&gt;
-&lt;tr&gt;
-&lt;td&gt;ファイル&lt;/td&gt;
-&lt;td&gt;ブロック/同期/&lt;/td&gt;
-&lt;td&gt;ブロック/同期/&lt;/td&gt;
-&lt;td&gt;非同期&lt;/td&gt;
-&lt;/tr&gt;
-
-&lt;tr&gt;
-&lt;td&gt;ネットワーク&lt;/td&gt;
-&lt;td&gt;ノンブロック/同期/多重化&lt;/td&gt;
-&lt;td&gt;ノンブロック/同期/&lt;/td&gt;
-&lt;td&gt;非同期&lt;/td&gt;
-&lt;/tr&gt;
-
-&lt;tr&gt;
-&lt;td&gt;チャネルRW&lt;/td&gt;
-&lt;td&gt;-&lt;/td&gt;
-&lt;td&gt;ブロック/同期/&lt;/td&gt;
-&lt;td&gt;-&lt;/td&gt;
-&lt;/tr&gt;
-
-&lt;tr&gt;
-&lt;td&gt;チャネルselect&lt;/td&gt;
-&lt;td&gt;-&lt;/td&gt;
-&lt;td&gt;ブロック/同期/多重化&lt;/td&gt;
-&lt;td&gt;-&lt;/td&gt;
-&lt;/tr&gt;
-&lt;/tbody&gt;
-&lt;/table&gt;
-
-&lt;p&gt;ということでGoのIOについては「goroutineを直接形式で同期的な書き方をしても裏でスケジューラが動いているからCPUを効率的に使えてGoプロセス全体でみれば非同期」になるんですかね。&lt;/p&gt;
-
-&lt;p&gt;Goに詳しい人、コメントや誤り訂正お願いします。&lt;a href=&#34;https://github.com/KeenS/KeenS.github.io/issues&#34;&gt;GitHubのイシュー&lt;/a&gt;とか使えば良い気がします。&lt;/p&gt;
-
-&lt;h1 id=&#34;参考&#34;&gt;参考&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;http://stackoverflow.com/questions/36112445/golang-blocking-and-non-blocking&#34;&gt;multithreading - Golang blocking and non blocking - Stack Overflow&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://golang.org/src/os/file_unix.go?s=#L224&#34;&gt;src/os/file_unix.go - The Go Programming Language&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://golang.org/src/runtime/proc.go?s=#L1795&#34;&gt;src/runtime/proc.go - The Go Programming Language&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://golang.org/doc/faq#goroutines&#34;&gt;Frequently Asked Questions (FAQ) - The Go Programming Language&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;http://stackoverflow.com/questions/17953269/go-routine-blocking-the-others-one&#34;&gt;channel - go routine blocking the others one - Stack Overflow&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://golang.org/src/runtime/cgocall.go&#34;&gt;src/runtime/cgocall.go - The Go Programming Language&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;http://stackoverflow.com/questions/32538438/how-does-channel-blocking-work-in-go&#34;&gt;select - How does channel blocking work in Go? - Stack Overflow&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://golang.org/ref/spec#Select_statements&#34;&gt;The Go Programming Language Specification - The Go Programming Language&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://www.quora.com/How-does-the-Go-runtime-work&#34;&gt;How does the Go runtime work? - Quora&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;</description>
+&lt;p&gt;&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>Rust風にデザインパターン23種</title>
-      <link>/blog/2017/05/06/rustkazenidezainpata_n23tane</link>
+      <link>/blog/2017/05/06/rustkazenidezainpata_n23tane/</link>
       <pubDate>Sat, 06 May 2017 21:59:30 +0900</pubDate>
       
-      <guid>/blog/2017/05/06/rustkazenidezainpata_n23tane</guid>
+      <guid>/blog/2017/05/06/rustkazenidezainpata_n23tane/</guid>
       <description>&lt;p&gt;κeenです。
 GoFのデザインパターンは有名ですが、言語機能によっては単純化できたりあるいは不要だったりするのでRust風に書き換えたらどうなるか試してみます。
 
-発端はこのツイート。&lt;/p&gt;
-
-&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;デザインパターン、古いJavaの機能の足りなさのワークアラウンド的なテクニックも含まれてるからあまり宜しくないんだよね。enumやクロージャで十分なのもいくつかある。&lt;br&gt;&lt;br&gt;Rustで写経、デザインパターン23種 - Qiita&lt;a href=&#34;https://t.co/MhpS3Z2OlF&#34;&gt;https://t.co/MhpS3Z2OlF&lt;/a&gt;&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/860635079600513024&#34;&gt;2017年5月5日&lt;/a&gt;&lt;/blockquote&gt;
-&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
-
-&lt;p&gt;一応誤解のないように説明しておくと、該当のQiitaの記事に不満がある訳ではなくてGoFのデザインパターンついての言及です。&lt;/p&gt;
-
-&lt;p&gt;リンク先のコードで十分な時にはここでは流すのでリンク先も同時に参照下さい。
-また、比較しやすいようにサンプルコードはリンク先のものに則って書きます。&lt;/p&gt;
-
-&lt;p&gt;一応デザインパターンの教科書として結城先生の本を参照しつつ書いていきます。&lt;/p&gt;
-
-&lt;h1 id=&#34;command-パターン&#34;&gt;Command パターン&lt;/h1&gt;
-
-&lt;p&gt;列挙型を使うところです。
-Javaにまともなenumがないのでクラスが使われていますが、列挙型があるならそちらの方がデータとコードの分離ができて見通しがいいです。また、コマンドが1つの型に収まるのでトレイトオブジェクトを作る必要がなくなります。&lt;/p&gt;
-
-&lt;p&gt;比較的マイナーな変更です。&lt;/p&gt;
-
-&lt;p&gt;Lispだとクロージャで解決したりしますが、Rustだと列挙型の方がしっくりくるかなと思います。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Command&amp;lt;T&amp;gt; {
-    fn execute(&amp;amp;self, &amp;amp;mut T);
-    fn undo(&amp;amp;self, &amp;amp;mut T);
-}
-
-
-
-struct Invoker&amp;lt;&#39;a, Cmd, T: &#39;a&amp;gt; {
-    commands: Vec&amp;lt;Cmd&amp;gt;,
-    target: &amp;amp;&#39;a mut T,
-    current_index: usize,
-}
-
-
-impl&amp;lt;&#39;a, Cmd, T&amp;gt; Invoker&amp;lt;&#39;a, Cmd, T&amp;gt; {
-    fn new(t: &amp;amp;&#39;a mut T) -&amp;gt; Self {
-        Invoker {
-            commands: Vec::new(),
-            target: t,
-            current_index: 0,
-        }
-    }
-
-
-    fn target(&amp;amp;self) -&amp;gt; &amp;amp;T {
-        self.target
-    }
-
-    fn append_command(&amp;amp;mut self, c: Cmd) {
-        self.commands.push(c);
-    }
-}
-
-impl&amp;lt;&#39;a, Cmd, T&amp;gt; Invoker&amp;lt;&#39;a, Cmd, T&amp;gt;
-    where Cmd: Command&amp;lt;T&amp;gt;
-{
-    fn execute_command(&amp;amp;mut self) {
-        if self.commands.len() &amp;lt;= self.current_index {
-            // Nothing to do.
-            return;
-        }
-
-        let c = &amp;amp;self.commands[self.current_index];
-        let t = &amp;amp;mut *self.target;
-        c.execute(t);
-
-        self.current_index += 1;
-    }
-
-    fn execute_all_commands(&amp;amp;mut self) {
-        for _ in self.current_index..self.commands.len() {
-            self.execute_command();
-        }
-    }
-
-    fn undo(&amp;amp;mut self) {
-        if 0 == self.current_index {
-            return;
-        }
-
-        self.current_index -= 1;
-
-        let c = &amp;amp;self.commands[self.current_index];
-        let t = &amp;amp;mut *self.target;
-        c.undo(t);
-    }
-}
-
-
-#[derive(Debug, Eq, PartialEq)]
-struct Robot {
-    x: i32,
-    y: i32,
-    dx: i32,
-    dy: i32,
-}
-
-
-impl Robot {
-    fn new() -&amp;gt; Robot {
-        Robot {
-            x: 0,
-            y: 0,
-            dx: 0,
-            dy: 1,
-        }
-    }
-
-    fn move_forward(&amp;amp;mut self) {
-        self.x += self.dx;
-        self.y += self.dy;
-    }
-
-    fn set_direction(&amp;amp;mut self, d: (i32, i32)) {
-        self.dx = d.0;
-        self.dy = d.1;
-    }
-
-    fn get_direction(&amp;amp;self) -&amp;gt; (i32, i32) {
-        (self.dx, self.dy)
-    }
-}
-
-enum RoboCommand {
-    MoveForward,
-    TurnRight,
-    TurnLeft,
-}
-
-impl Command&amp;lt;Robot&amp;gt; for RoboCommand {
-    fn execute(&amp;amp;self, r: &amp;amp;mut Robot) {
-        use RoboCommand::*;
-        match *self {
-            MoveForward =&amp;gt; r.move_forward(),
-            TurnRight =&amp;gt; {
-                let (dx, dy) = r.get_direction();
-                r.set_direction((dy, -dx))
-            }
-            TurnLeft =&amp;gt; {
-                let (dx, dy) = r.get_direction();
-                r.set_direction((-dy, dx));
-            }
-
-        }
-    }
-    fn undo(&amp;amp;self, r: &amp;amp;mut Robot) {
-        use RoboCommand::*;
-        match *self {
-            MoveForward =&amp;gt; {
-                let c1 = TurnRight;
-                c1.execute(r);
-                c1.execute(r);
-                self.execute(r);
-                c1.execute(r);
-                c1.execute(r);
-            }
-            TurnRight =&amp;gt; {
-                let c = TurnLeft;
-                c.execute(r);
-            }
-            TurnLeft =&amp;gt; {
-                let c = TurnRight;
-                c.execute(r);
-
-            }
-
-        }
-    }
-}
-
-
-
-fn main() {
-    let mut r = Robot::new();
-
-    let mut invoker = Invoker::new(&amp;amp;mut r);
-    assert_eq!(*invoker.target(),
-               Robot {
-                   x: 0,
-                   y: 0,
-                   dx: 0,
-                   dy: 1,
-               });
-
-    {
-        use RoboCommand::*;
-        invoker.append_command(TurnRight);
-        invoker.append_command(TurnLeft);
-        invoker.append_command(MoveForward);
-    }
-
-    invoker.execute_all_commands();
-    assert_eq!(*invoker.target(),
-               Robot {
-                   x: 0,
-                   y: 1,
-                   dx: 0,
-                   dy: 1,
-               });
-
-    invoker.undo();
-    assert_eq!(*invoker.target(),
-               Robot {
-                   x: 0,
-                   y: 0,
-                   dx: 0,
-                   dy: 1,
-               });
-
-    invoker.undo();
-    assert_eq!(*invoker.target(),
-               Robot {
-                   x: 0,
-                   y: 0,
-                   dx: 1,
-                   dy: 0,
-               });
-}
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;stateパターン&#34;&gt;Stateパターン&lt;/h1&gt;
-
-&lt;p&gt;参照先のままです。トレイトオブジェクトを使う代表的なケースだと思います。。
-あるいは列挙型を使う可能性もあります。&lt;/p&gt;
-
-&lt;h1 id=&#34;strategyパターン&#34;&gt;Strategyパターン&lt;/h1&gt;
-
-&lt;p&gt;参照先でも説明されていますが、Rustにはクロージャがあるので不要です。&lt;/p&gt;
-
-&lt;h1 id=&#34;template-methodパターン&#34;&gt;Template Methodパターン&lt;/h1&gt;
-
-&lt;p&gt;そもそもトレイトを使った普通のプログラミングなのでRustでわざわざ名前をつけるほどかな？と個人的には思いますがあえて書くなら参照先のままです。
-あるいはものによっては高階関数でも。&lt;/p&gt;
-
-&lt;p&gt;個人的にはトレイトオブジェクトを作るより関連型を使った方が好みです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait AbstractFactory&amp;lt;&#39;a&amp;gt; {
-    type ProdX: ProductX;
-    type ProdY: ProductY;
-    fn create_product_x(&amp;amp;self) -&amp;gt; Box&amp;lt;ProdX + &#39;a&amp;gt;;
-    fn create_product_y(&amp;amp;self) -&amp;gt; Box&amp;lt;ProdY + &#39;a&amp;gt;;
-}
-
-// ...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;mementoパターン&#34;&gt;Mementoパターン&lt;/h1&gt;
-
-&lt;p&gt;参照先のままです&lt;/p&gt;
-
-&lt;h1 id=&#34;observerパターン&#34;&gt;Observerパターン&lt;/h1&gt;
-
-&lt;p&gt;参照先のままです&lt;/p&gt;
-
-&lt;h1 id=&#34;visitorパターン&#34;&gt;Visitorパターン&lt;/h1&gt;
-
-&lt;p&gt;参照先では簡単な例なので分かりづらいのですが、列挙型を使うところです。
-まともな列挙型がない+シングルディスパッチしかなく引数はオーバーロードという二重苦によって生まれたパターンであり、まともな列挙型か多重ディスパッチがあれば複雑怪奇なプログラムは書かなくて済みます。&lt;/p&gt;
-
-&lt;p&gt;ここでは参照先とは違ってもう少し複雑な例を出します。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Visitor&amp;lt;T&amp;gt; {
-    fn visit(&amp;amp;mut self, &amp;amp;T);
-}
-
-enum Entity {
-    File(String),
-    Dir(String, Vec&amp;lt;Entity&amp;gt;),
-}
-
-struct ConcreteFileVisitor;
-
-impl Visitor&amp;lt;Entity&amp;gt; for ConcreteFileVisitor {
-    fn visit(&amp;amp;mut self, e: &amp;amp;Entity) {
-        use Entity::*;
-        match *e {
-            File(ref name) =&amp;gt; println!(&amp;quot;file: {}&amp;quot;, name),
-            Dir(ref name, ref files) =&amp;gt; {
-                println!(&amp;quot;dir: {}&amp;quot;, name);
-                for file in files {
-                    self.visit(file)
-                }
-            }
-        }
-    }
-}
-
-fn main() {
-    use Entity::*;
-    let e = Dir(&amp;quot;/&amp;quot;.to_string(),
-                vec![File(&amp;quot;etc&amp;quot;.to_string()), File(&amp;quot;usr&amp;quot;.to_string())]);
-    let mut visitor = ConcreteFileVisitor;
-    visitor.visit(&amp;amp;e);
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;特段パターンというほどの処理をしている感じがしませんね。&lt;/p&gt;
-
-&lt;h1 id=&#34;iteratorパターン&#34;&gt;Iteratorパターン&lt;/h1&gt;
-
-&lt;p&gt;参照先のままです。&lt;/p&gt;
-
-&lt;h1 id=&#34;mediatorパターン&#34;&gt;Mediatorパターン&lt;/h1&gt;
-
-&lt;p&gt;だいたい参照先のままです。複雑なことをしようと思うと&lt;code&gt;Colleague&lt;/code&gt;が複数種類出てきて列挙型かトレイトオブジェクトが必要になりそうな気がします。&lt;/p&gt;
-
-&lt;h1 id=&#34;interpreterパターン&#34;&gt;Interpreterパターン&lt;/h1&gt;
-
-&lt;p&gt;略&lt;/p&gt;
-
-&lt;h1 id=&#34;builderパターン&#34;&gt;Builderパターン&lt;/h1&gt;
-
-&lt;p&gt;あまりここまで抽象化してるのは見たことありませんがやるとしたら参照先のままです。
-そもそもRustには継承がないので抽象化する意義があまりなく、型固有のBuilderパターンで十分です。&lt;/p&gt;
-
-&lt;h1 id=&#34;prototypeパターン&#34;&gt;Prototypeパターン&lt;/h1&gt;
-
-&lt;p&gt;参照先のままです。&lt;/p&gt;
-
-&lt;h1 id=&#34;factoryパターン&#34;&gt;Factoryパターン&lt;/h1&gt;
-
-&lt;p&gt;クロージャで十分です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;trait Product {
-    fn convert(&amp;amp;self, String) -&amp;gt; String;
-}
-
-
-struct Factory;
-
-impl Factory {
-    fn convert&amp;lt;P, F&amp;gt;(&amp;amp;self, s: String, create_product: F) -&amp;gt; String
-        where P: Product,
-              F: FnOnce() -&amp;gt; P
-    {
-        create_product().convert(s)
-    }
-}
-
-
-struct ConcreteProductX;
-impl Product for ConcreteProductX {
-    fn convert(&amp;amp;self, s: String) -&amp;gt; String {
-        s.to_uppercase()
-    }
-}
-
-
-fn main() {
-    let f = Factory;
-    println!(&amp;quot;{}&amp;quot;,
-             f.convert(&amp;quot;hogehoge piyopiyo&amp;quot;.to_string(), || ConcreteProductX))
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;abstractfactoryパターン&#34;&gt;AbstractFactoryパターン&lt;/h1&gt;
-
-&lt;p&gt;そもそもここまでやる？というのは置いといてやるとしたら参照先のままかなぁと思います。&lt;/p&gt;
-
-&lt;p&gt;TemplateMethodパターンでも述べた通り個人的には関連型を使う方が好みです。&lt;/p&gt;
-
-&lt;h1 id=&#34;chain-of-responsibility-cor-パターン&#34;&gt;Chain of Responsibility/CoR パターン&lt;/h1&gt;
-
-&lt;p&gt;参照先のままです。&lt;/p&gt;
-
-&lt;h1 id=&#34;singletonパターン&#34;&gt;Singletonパターン&lt;/h1&gt;
-
-&lt;p&gt;そもそもアンチパターンです。分かりづらいグローバル変数なだけです。あえてRustでやるとしたら&lt;a href=&#34;https://github.com/rust-lang-nursery/lazy-static.rs&#34;&gt;lazy_static&lt;/a&gt;かなと思います。&lt;/p&gt;
-
-&lt;h1 id=&#34;adapterパターン&#34;&gt;Adapterパターン&lt;/h1&gt;
-
-&lt;p&gt;これは捉え方が2種類あるかなーと思います。。&lt;/p&gt;
-
-&lt;p&gt;1つにはクラスの定義時にしかインターフェースを実装できない窮屈な言語仕様へのワークアラウンドとして。
-この捉え方では参照先のコードようにただトレイトを実装してしまえば終わりです。&lt;/p&gt;
-
-&lt;p&gt;もう1つにはラッパーオブジェクトとして。&lt;code&gt;std::fs::File&lt;/code&gt;の実装とかがそれっぽいと思います。。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub struct File {
-    inner: fs_imp::File,
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;bridgeパターン&#34;&gt;Bridgeパターン&lt;/h1&gt;
-
-&lt;p&gt;そもそも機能の追加とAPIの抽象化をどちらも継承に押し込める言語仕様が悪い。
-それにRustでは継承しないので関係ないです。&lt;/p&gt;
-
-&lt;h1 id=&#34;proxyパターン&#34;&gt;Proxyパターン&lt;/h1&gt;
-
-&lt;p&gt;参照先のままです。&lt;/p&gt;
-
-&lt;h1 id=&#34;facadeパターン&#34;&gt;Facadeパターン&lt;/h1&gt;
-
-&lt;p&gt;参照先のままです。Rustにはモジュールや可視性の制御があって特別意識することなく普段からやっていることなのであまり名前をつけるほどのことではないと思ってます。&lt;/p&gt;
-
-&lt;h1 id=&#34;flyweightパターン&#34;&gt;Flyweightパターン&lt;/h1&gt;
-
-&lt;p&gt;所有権があるのでRustだとちょっと難しいパターンです。
-参照だけなら参照先のように&lt;code&gt;HashMap&lt;/code&gt;にいれるか、オブジェクトを区別しないなら&lt;code&gt;Vec&lt;/code&gt;にいれるかなと思います。&lt;/p&gt;
-
-&lt;p&gt;因みにLispとかでは&lt;code&gt;intern&lt;/code&gt;という名前で呼ばれてると思います。&lt;/p&gt;
-
-&lt;h1 id=&#34;compositeパターン&#34;&gt;Compositeパターン&lt;/h1&gt;
-
-&lt;p&gt;ただの列挙型の再実装です。&lt;/p&gt;
-
-&lt;h1 id=&#34;decoratorパターン&#34;&gt;Decoratorパターン&lt;/h1&gt;
-
-&lt;p&gt;よくあるやつです。参照先のコードの他、&lt;code&gt;std::io::WriteBuf&lt;/code&gt;のようなものが代表的です。&lt;/p&gt;
-
-&lt;h1 id=&#34;おわりに&#34;&gt;おわりに&lt;/h1&gt;
-
-&lt;p&gt;デザインパターンをdisろうと思って書いたのですが案外多くのケースで便利でした。Rustで不要なものは10本指で数えられる程度でしたね。すごい。&lt;/p&gt;
-
-&lt;p&gt;因みにLisperでAIの研究者（確か今GoogleのAI研究所の所長）のPeter Norvigは&lt;a href=&#34;http://www.norvig.com/design-patterns/design-patterns.pdf&#34;&gt;Design Patterns in Dynamic Languages&lt;/a&gt;で16個はLispの機能を使えばパターンという程のものではなくなると言ってます。
-それぞれどの機能でどれが不要になるかを解説しているのですが、Rustは高階関数とモジュールの分に加えて列挙型の分で不要になってるかなと思います。&lt;/p&gt;</description>
+発端はこのツイート。&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>メモリとスタックとヒープとプログラミング言語</title>
-      <link>/blog/2017/04/30/memoritosutakkutohi_puto</link>
+      <link>/blog/2017/04/30/memoritosutakkutohi_puto/</link>
       <pubDate>Sun, 30 Apr 2017 09:09:50 +0900</pubDate>
       
-      <guid>/blog/2017/04/30/memoritosutakkutohi_puto</guid>
+      <guid>/blog/2017/04/30/memoritosutakkutohi_puto/</guid>
       <description>&lt;p&gt;κeenです。
 今回の話は別にRustに限ったものではないのですが、よくRustを始めたばかりの人がスタックとヒープが分からないと言っているのをみかけるので少しメモリの話をしますね。
 厳密な話というよりは雰囲気を掴んで欲しいという感じです。
-&lt;/p&gt;
-
-&lt;h1 id=&#34;メモリは配列&#34;&gt;メモリは配列&lt;/h1&gt;
-
-&lt;p&gt;プログラム（プロセス）のメモリには実行するプログラム（機械語）やグローバル変数/定数、関数の引数やローカル変数、その他プログラムで使うデータ領域などを置きます。
-プロセスに割り当てられるメモリというのは、1つの巨大なのっぺらな配列みたいなものです。サイズも決まってます。64bit OSなら2^64 byteです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;0                        2^64
-+---------------     ----+
-|  |  |  |  |    ~~   |  |
-+---------------     ----+
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これは仮想的なメモリなので実際の物理メモリに2^64 byteの配列がドンと確保される訳ではなくて、使った(使いたい)分だけ占有します。OSが賢いですね。&lt;/p&gt;
-
-&lt;p&gt;ただまあこれだけだと使いづらいのである程度区切って「この辺にこれ系のデータを置く」みたいな使われ方をします。
-プログラムを置く &lt;em&gt;text領域&lt;/em&gt; 、初期化されたグローバル変数を置く &lt;em&gt;data領域&lt;/em&gt; 、初期化されていない（データ領域だけ確保された）グローバル変数を置く &lt;em&gt;bss領域&lt;/em&gt; 、関数の引数やローカル変数を置く &lt;em&gt;stack領域&lt;/em&gt; 、プログラムのデータを置く &lt;em&gt;heap領域&lt;/em&gt; です。
-グローバル変数って言っちゃいましたけど実はそれに限らなくて、例えばRustの文字列リテラルなんかもdata領域に置かれます。&lt;/p&gt;
-
-&lt;p&gt;text、 data、 bssは実行する前からサイズが分かっているので問題ないのですが、heapとstackはプログラムの実行中にサイズが変わるものなのでどこにどう置いたら上手く配分できるか分かりませんね。
-そこで以下のようにstackとheapを両端に配置して使いたい分だけ使用領域を伸ばせるようになってます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;// 簡略化するために嘘ついてたりしますがまあ、だいたい合ってます
-+-------+ 2^64
-| stack |
-|   |   |
-|   V   |
-|       |
-|   ^   |
-|   |   |
-| heap  |
-+-------+
-| bss   |
-+-------+
-| data  |
-+-------+
-| text  |
-+-------+ 0
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;text、data、bssはそのままなのでstackとヒープについて話します。&lt;/p&gt;
-
-&lt;h1 id=&#34;stackと関数&#34;&gt;Stackと関数&lt;/h1&gt;
-
-&lt;p&gt;Stackは関数呼び出しのために使われます。
-ネストした関数の呼び出しの系譜を関数の「コールスタック」と呼んだりするように、関数呼び出しはスタック構造になってますね。
-なのでスタックを用いて管理すると具合が良いのです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;+--------+
-| func 1 |
-+--------+
-| func 2 |
-+--------+
-| func 3 |
-+--------+
-| func 4 |
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;さて、折角特別に用意したこのstackにはただの関数の呼び出し履歴だけではなく他のデータも入れたいですよね？
-例えば関数ローカルな変数だとか。データの次にまた別のデータが置かれるのでサイズを変えたりはできませんが。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;+--------+
-| func 1 |
-|--------|
-| data 1 |
-|--------|
-| data 2 |
-+--------+
-| func 2 |
-|--------|
-| data   |
-| ...    |
-+--------+
-| func 3 |
-|--------|
-| data   |
-| ...    |
-+--------+
-| func 4 |
-|--------|
-| data   |
-| ...    |
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;データの解放は簡単です。スタックを巻き戻せば自動的に消えます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;+--------+
-| func 1 |
-|--------|
-| data 1 |
-|--------|
-| data 2 |
-+--------+
-| func 2 |
-|--------|
-| data   |
-| ...    |
-+--------+
-|        |
-|        |
-|        |
-|        |
-|        |
-|        |
-|        |
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;逆にいうと関数から抜けたら消えてしまうということでもありますが。&lt;/p&gt;
-
-&lt;p&gt;という訳で、 「条件が限られるけど高速に扱えるデータ領域」がstackです。&lt;/p&gt;
-
-&lt;p&gt;因みに、メモリは使った分だけしか確保されないと言いましたが、スタックを伸ばしすぎると確保されていない領域に到達してエラーが出ます。スタックオーバーフローです。&lt;/p&gt;
-
-&lt;h1 id=&#34;heapとデータ&#34;&gt;Heapとデータ&lt;/h1&gt;
-
-&lt;p&gt;heapにはstackに置けないデータが置かれます。
-これの扱いは少し面倒です。何故ならデータの確保や解放の順番がバラバラなので、歯抜けな状態になってしまうからです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;|        |
-| data 4 |
-+--------+
-| data 3 |
-+--------+
-|        |
-+--------+
-| data 1 |
-+--------+
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;そこで「どかが使われていてどこが空いているか」を管理するシステムを導入します。
-C言語では&lt;code&gt;malloc&lt;/code&gt;という関数をインターフェースとして管理しているので管理システム自体もmallocと呼ぶことが多いようです。
-この実装方法はフリーリストを使った単純なものからサイズ毎のバケツを用意して〜といった方法まで様々にあるので気になる人は調べてみて下さい。
-大抵、「メモリがこのくらい欲しい」と言われたら今管理している中からそれっぽい空きを捜してそこを渡してあげるような作りになっています。&lt;/p&gt;
-
-&lt;p&gt;ちなみにこの領域管理には(mallocの場合)そこそこのコストが掛かります。でもその代わり自由に確保/解放できる他、サイズの変更もできるので自由度が高いです。&lt;/p&gt;
-
-&lt;p&gt;という訳で「自由度が高いが少しコストがかかるデータ領域」がheapです。&lt;/p&gt;
-
-&lt;h1 id=&#34;プログラミング言語とメモリ&#34;&gt;プログラミング言語とメモリ&lt;/h1&gt;
-
-&lt;p&gt;では、具体的な言語がどのようにメモリを使っているかを簡単に紹介します。&lt;/p&gt;
-
-&lt;p&gt;1つ注意しないといけないのが、ガーベジコレクション（GC）のある言語ではheapの上に構築した自前のメモリ管理システムのことをヒープと呼んでいたりするので両者をちゃんと区別しましょう。
-同じく、スタックの使い方も言語独自でコールスタックと引数のスタックを分けたりもするので気をつけましょう。&lt;/p&gt;
-
-&lt;h2 id=&#34;c言語&#34;&gt;C言語&lt;/h2&gt;
-
-&lt;p&gt;先程説明したとおり、データ領域にheapを、関数呼び出しや関数ローカルなデータにstackを使っています。&lt;/p&gt;
-
-&lt;p&gt;メモリの領域管理は先述の&lt;code&gt;malloc&lt;/code&gt;, &lt;code&gt;free&lt;/code&gt;などをプログラマが手で書きます。手で管理するのでバグります。&lt;/p&gt;
-
-&lt;h2 id=&#34;ruby&#34;&gt;Ruby&lt;/h2&gt;
-
-&lt;p&gt;データ領域にはheapにmallocで確保した領域にヒープを確保し、その上にメモリ管理システム(GC)を構築して管理しています。&lt;/p&gt;
-
-&lt;p&gt;関数呼び出しにはstackではなくheapに確保した自前のスタックを用意しています。
-stackを使わないのはどうしてもC言語がstackを使うのでRubyも交ぜて使ってしまうと(Ruby自体C言語の上で動いていますね)問題が起こるだとかデータ構造として扱いづらいだとかGCとの兼ね合いだとかの理由だと思います。
-また、そもそもRubyのメソッドとC言語の関数は別物という話もあります。&lt;/p&gt;
-
-&lt;p&gt;また、実行用にスタックはありますが、データの実体はRubyのヒープに置かれます。Rubyのプログラムから高速なスタック領域を使うことができないのです。残念ですね。&lt;/p&gt;
-
-&lt;p&gt;メモリの領域管理にはGCシステムを採用し、メモリ管理をユーザがすることはありません。
-GCはmallocに少しデータを足したようなMark and Sweepです。メモリ確保はほぼmallocと同じで、気が向いたときに使っているデータにマークを付けていって、マークの付いていないデータを一括でfreeしてくれます。
-メモリ確保（やポインタの扱い）がmallocに似ているのでC言語と協調するときに楽です。RubyはNative Extentionが作りやすいように設計されていますね。&lt;/p&gt;
-
-&lt;p&gt;1つ注意しておくと、Rubyを実行するときにもメモリにtextやbss、dataなどの領域がありますが、それは「Rubyを実行するVMのための領域」であって「実行しているRubyスクリプトのための領域」ではありません。&lt;/p&gt;
-
-&lt;h2 id=&#34;pythonやphp&#34;&gt;PythonやPHP&lt;/h2&gt;
-
-&lt;p&gt;Rubyと同じようにヒープもスタックもheapに確保していると思います（面倒なのでソースを追っていない）。
-メモリ管理システムはGCを使いますが、Rubyとは違って参照カウント方式を採用しています。&lt;/p&gt;
-
-&lt;p&gt;参照カウントは、メモリ確保はmallocに似ていますが、確保した後の扱いが異なります。
-値を参照する度にカウントを増やし、使わなくなったら参照を減らし、参照が0になったらfreeされます。
-言語レベルでは意識するすることはありませんが、C言語のレイヤーでは一々参照の操作をしてあげないといけないので手間がかかります（たまに扱いを間違ってバグります）。
-また、循環参照という問題もあって、たまに解放されないメモリがあったりします。（そのために結局たまにMark and Sweepのようなものが必要だったりします）&lt;/p&gt;
-
-&lt;h2 id=&#34;java&#34;&gt;Java&lt;/h2&gt;
-
-&lt;p&gt;Rubyと同じようにヒープもスタックもheapに確保しています(JVMのメモリについて調べてみると色々出てきます)。
-30億のデバイスで走らせるための工夫ですね。&lt;/p&gt;
-
-&lt;p&gt;同じくGCを使いますが、今度はCopy GC方式を採用しています（厳密にいうとHotSpot VMでの複数種類ある方式のうちの1つですが）。
-Copy GCは面白くて、ヒープを2つに分割します。同時に使うのは1つだけです。メモリを確保するときは、使われていない領域などは無視して新たなスペースを確保します。
-これはわざわざ空き領域を捜す必要がないので非常に高速です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;+---------------------------------+
-| data1 | data 2 | data 3 | -&amp;gt;    |
-+---------------------------------+
-+---------------------------------+
-|                                 |
-+---------------------------------+
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;そしてメモリが一杯になったら使っているデータだけもう1つの領域にコピーします。このとき、使っていなかった分は詰めます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;+---------------------------------+
-|       | data 2 |                |
-+---------------------------------+
-+---------------------------------+
-| data1 | data 3 | -&amp;gt;             |
-+---------------------------------+
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;使っていなかったdata 2の存在を忘れて、2つを入れ替えたらメモリの回収完了です。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;+---------------------------------+
-| data1 | data 3 | -&amp;gt;             |
-+---------------------------------+
-+---------------------------------+
-|                                 |
-+---------------------------------+
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ヒープが半分しか使えないだとかデータが移動してしまうので扱いが難しいだとかの問題はあるのですが、確保が非常に高速で解放もかなり速い方式です。&lt;/p&gt;
-
-&lt;p&gt;この方式はJavaの他にOCamlやHaskellなどの関数型言語でよく使われます。
-データを頻繁にアロケートするのでメモリ確保が高速なこの方式が好まれるようです。&lt;/p&gt;
-
-&lt;h2 id=&#34;rust&#34;&gt;Rust&lt;/h2&gt;
-
-&lt;p&gt;RustはC言語と同じくデータ領域にheapを、関数呼び出しや関数ローカルなデータにstackを使っています。&lt;/p&gt;
-
-&lt;p&gt;メモリの領域管理は&lt;code&gt;malloc&lt;/code&gt;, &lt;code&gt;free&lt;/code&gt;などをコンパイラが自動で発効してくれます。なのでプログラマが自分で管理する必要はありません。&lt;/p&gt;
-
-&lt;h1 id=&#34;高速なメモリの使い方&#34;&gt;高速なメモリの使い方&lt;/h1&gt;
-
-&lt;p&gt;まず、一番速い方法は「そもそもメモリを確保しない」です。
-これはコストが掛からないので高速です。
-「何をふざけたことを」と思うかもしれませんが、プログラミングする上で「余計に確保しない」を意識するという意味で重要です。&lt;/p&gt;
-
-&lt;p&gt;次はstackを使うと高速です。これはそもそもstackを意識して使える言語でないと選べない方法ですね。&lt;/p&gt;
-
-&lt;p&gt;最後の手段としてheapを使います。&lt;/p&gt;
-
-&lt;p&gt;GCのある言語ではGCの特性によってヒープの使い方も考える必要があります。
-Mark and Sweepは生死に関らず確保したオブジェクトの数に比例してメモリ解放コストが掛かりますが、Copy GCでは生きているオブジェクトに比例してコストが掛かりますので、生きているオブジェクトを減らすと速くなります。
-例えば使わないけど変数に束縛されているものがあるなら変数のスコープを狭めるだとか変数にnullを代入するだとか。
-よほどメモリのせいで遅くなっていない限りあまりやりませんが（ゲームの人はよくやるらしい？）。&lt;/p&gt;
-
-&lt;p&gt;また、最近の多くのGC（RubyもJavaも）には世代別GCといって、新しいデータと古いデータを分けて管理する方式が採用されているので作ったデータをすぐさま使ってすぐさま不要にすると速くなったりします。
-例えばデータ列に対して個々のデータに処理1、2、3を適用したいなら処理1のループ、2のループ、3のループ、とするよりもループの中で処理1、2、3と適用した方が速くなります。
-最近Scalaの次期コンパイラが高速化のためにそのような構成（phase fusioning）にしたらしいですね。
-使っている言語でOld領域、New領域などの単語を聞いたことがあるなら多分世代別GCが使われています。&lt;/p&gt;
-
-&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
-
-&lt;p&gt;スタックとヒープの話、そしてなぜスタックとヒープを意識したいかを説明しました。
-ついでに、比較のためにGCのある言語についても少しだけ紹介しました。
-けっこうふわふわとした説明なので「分かった気分」になりたいだけならこの記事で十分かと思いますが、もう少し踏み込んだことが知りたければ個別に調べてみて下さい。
-また、メモリレイアウトについてはおおまかには合っているものの、結構嘘ついているのであまり鵜呑みにしないで下さい。&lt;/p&gt;
-
-&lt;h1 id=&#34;参考&#34;&gt;参考&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;http://th0x4c.github.io/blog/2012/10/10/os-virtual-memory-map/&#34;&gt;仮想メモリ空間のメモリマップを調べる - th0x4c 備忘録&lt;/a&gt;。&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;http://www.valinux.co.jp/technologylibrary/document/linux/malloc0001/&#34;&gt;malloc(3)のメモリ管理構造 | VA Linux Systems Japan株式会社&lt;/a&gt;。&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://github.com/ruby/ruby/blob/trunk/gc.c#L7649&#34;&gt;rubyのメモリ確保にmallocを使っている部分&lt;/a&gt;。&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://github.com/ruby/ruby/blob/trunk/vm_core.h#L705&#34;&gt;rubyのスタックの定義部分&lt;/a&gt;。これは引数スタックかな？コールスタックどこだろう…&lt;/li&gt;
-&lt;/ul&gt;</description>
+&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>Cargoのサブプロジェクトとreplace</title>
-      <link>/blog/2017/04/05/cargonosabupurojiekutotoreplace</link>
+      <link>/blog/2017/04/05/cargonosabupurojiekutotoreplace/</link>
       <pubDate>Wed, 05 Apr 2017 20:46:26 +0900</pubDate>
       
-      <guid>/blog/2017/04/05/cargonosabupurojiekutotoreplace</guid>
-      <description>&lt;p&gt;κeenです。最近Cargoのreplace機能を使おうとしてハマったのでメモを残しておきます。&lt;/p&gt;
-
-&lt;p&gt;
-最近何箇所かで喋ったのでご存知の方もいらっしゃるかと思いますが、Cargoにはワークスペース機能があります。
-fat repositoryスタイルに便利な機能で、1つのディレクトリ下に複数のサブプロジェクトを配置しつつ&lt;code&gt;target/&lt;/code&gt;は共有するのでマイクロプロジェクトのモジュール性とモノリシックプロジェクトのコンパイルの速さを実現することが出来ます。&lt;/p&gt;
-
-&lt;p&gt;さて、問題になるのはクレートを公開するときの依存関係の記述です。
-サブプロジェクト同士で依存し合っているので&lt;code&gt;Cargo.toml&lt;/code&gt;には&lt;code&gt;my-project-lib = {path = &amp;quot;../my-project-lib&amp;quot;}&lt;/code&gt; のような依存の記述がある筈です。
-しかしながらローカルのクレートに依存していると&lt;code&gt;crates.io&lt;/code&gt;に公開は出来ません。
-そこで今回はそれをどうにかするお話。&lt;/p&gt;
-
-&lt;h1 id=&#34;replace&#34;&gt;replace&lt;/h1&gt;
-
-&lt;p&gt;Cargoには&lt;a href=&#34;http://doc.crates.io/manifest.html#the-replace-section&#34;&gt;replace&lt;/a&gt;という機能があります。
-特定のライブラリの特定のバージョンを、crates.ioにあるものではなくてユーザが指定した場所にあるものを使うように指示します。
-&lt;a href=&#34;http://doc.crates.io/specifying-dependencies.html#overriding-dependencies&#34;&gt;Specifying Dependencies&lt;/a&gt;のドキュメントによると、以下のように使えます。&lt;/p&gt;
-
-&lt;p&gt;例えば&lt;code&gt;uuid&lt;/code&gt;クレートを使っているときにそれが依存している&lt;code&gt;rand&lt;/code&gt;クレートにバグを見付けて修正し、修正した結果を試したいとします。
-その時にreplaceは以下のように使えます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-toml&#34;&gt;# ワークスペースの親プロジェクト
-...
-
-[replace]
-&amp;quot;rand:0.3.14&amp;quot; = { path = &amp;quot;./rand&amp;quot; }
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-toml&#34;&gt;# ワークスペースの子プロジェクト
-
-[package]
-name = &amp;quot;my-awesome-crate&amp;quot;
-version = &amp;quot;0.2.0&amp;quot;
-authors = [&amp;quot;The Rust Project Developers&amp;quot;]
-
-[dependencies]
-uuid = &amp;quot;0.2&amp;quot;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;間接的に依存してる&lt;code&gt;rand:0.3.14&lt;/code&gt;を、crates.ioにあるものではなく指定したパスにあるものを使うように指示しています。&lt;/p&gt;
-
-&lt;p&gt;この仕組みを使って先のローカルパス問題を解決出来ないでしょうか。すなわち、&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-toml&#34;&gt;# 子プロジェクト
-[dependencies]
-my-project-lib = &amp;quot;0.1.0&amp;quot;
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のように、見た目上はcrates.ioにあるものに依存しておきつつ実際は&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-toml&#34;&gt;# 親プロジェクト
-[replace]
-&amp;quot;my-project-lib:0.1.0&amp;quot; = { path = &amp;quot;./my-project-lib&amp;quot; }
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のように実際の依存先をローカルのパスに向ければ問題を解決できないでしょうか。&lt;/p&gt;
-
-&lt;p&gt;この答えは、半分no、半分yesになります。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;replace&lt;/code&gt;はあくまでcrates.ioにあるものを置き換えるのでまだ公開していないプロジェクトに対しては使えません。
-一方、一度crates.ioに公開してしまえば上記のテクニックは可能になります。&lt;/p&gt;
-
-&lt;p&gt;なので一番最初にcrates.ioに公開する時の手順はやや煩雑になります。&lt;/p&gt;
-
-&lt;ol&gt;
-&lt;li&gt;(ローカルサブプロジェクトへの依存の記述は&lt;code&gt;path = &amp;quot;...&amp;quot;&lt;/code&gt;のまま)&lt;/li&gt;
-&lt;li&gt;どのプロジェクトにも依存しないローカルサブプロジェクトを公開する&lt;/li&gt;
-&lt;li&gt;既に公開されたローカルサブプロジェクトへの依存は順次&lt;code&gt;replace&lt;/code&gt;に書き換える&lt;/li&gt;
-&lt;li&gt;ローカルパスへの依存のなくなったローカルプロジェクトから順に公開していく&lt;/li&gt;
-&lt;li&gt;全てのサブプロジェクトのローカルサブプロジェクトへの依存が&lt;code&gt;replace&lt;/code&gt;に置き換わったら以後はそのまま使える。&lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;p&gt;このようなテクニックは例えばdieselなどで&lt;a href=&#34;https://github.com/diesel-rs/diesel/blob/master/Cargo.toml#L21&#34;&gt;使われています&lt;/a&gt;。
-この辺、改善あるといいですね。&lt;/p&gt;</description>
+      <guid>/blog/2017/04/05/cargonosabupurojiekutotoreplace/</guid>
+      <description>&lt;p&gt;κeenです。最近Cargoのreplace機能を使おうとしてハマったのでメモを残しておきます。&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>関数型プログラマからみたRust</title>
-      <link>/blog/2017/04/04/kansuugatapuroguramakaramitarust</link>
+      <link>/blog/2017/04/04/kansuugatapuroguramakaramitarust/</link>
       <pubDate>Tue, 04 Apr 2017 21:38:57 +0900</pubDate>
       
-      <guid>/blog/2017/04/04/kansuugatapuroguramakaramitarust</guid>
+      <guid>/blog/2017/04/04/kansuugatapuroguramakaramitarust/</guid>
       <description>&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;C++からRustに入った人あたりから「関数型言語から来た人のRustの感想を知りたい」とたまに言われるのでいつかブログ書こうか。&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/848900720573075458&#34;&gt;2017年4月3日&lt;/a&gt;&lt;/blockquote&gt;
 &lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
 
-&lt;p&gt;&lt;/p&gt;
-
-&lt;h1 id=&#34;イントロ&#34;&gt;イントロ&lt;/h1&gt;
-
-&lt;p&gt;私はRustをやる前にはCommon LispやSMLを主に使っていましたが、仕事ではScalaを使っていましたし他にもOCamlやSchemeやClojureやATS2やHaskellなどを書くこともありました。&lt;/p&gt;
-
-&lt;p&gt;私を含めた多くの関数型言語経験者人が一度は &lt;a href=&#34;http://science.raphael.poss.name/rust-for-functional-programmers.html&#34;&gt;Rust for functional programmers&lt;/a&gt; を読んだことがあるかと思います。
-このように関数型言語と比較して書かれるといかにも似た言語に見えるので私は興味を持ちました。そこで私は実際にRustに触れ始めたのです。&lt;/p&gt;
-
-&lt;h1 id=&#34;構文&#34;&gt;構文&lt;/h1&gt;
-
-&lt;p&gt;&lt;code&gt;let&lt;/code&gt; があるのでおよそOCamlなどに似ているという印象を受けました。
-デフォルトでイミュータブルですしパターンマッチやシャドイングなもどするのでまさにMLの&lt;code&gt;let&lt;/code&gt;そのものです。
-行末にセミコロンが要求されますが、&lt;code&gt;in&lt;/code&gt;の代わりだと思うことにして自分をなだめました。
-式指向で&lt;code&gt;return&lt;/code&gt;を書かなくて済むのも関数型言語らしさを感じました。&lt;/p&gt;
-
-&lt;p&gt;関数定義の構文は手続型言語風ですが手続き型言語に馴れた人に寄り添うために必要なんだと思って深くは気にしないことにしました。&lt;/p&gt;
-
-&lt;p&gt;一方、ジェネリクスの構文については憤りすら感じました。
-どうして &lt;code&gt;&amp;lt;&amp;gt;&lt;/code&gt; を採用したのか、そもそも比較演算子の &lt;code&gt;&amp;lt;&lt;/code&gt;, &lt;code&gt;&amp;gt;&lt;/code&gt;と紛らわしい上に&lt;code&gt;&amp;lt;&amp;lt;&lt;/code&gt;の扱いでも困ることは目に見えていました。
-私はML風に前置、あるいは少なくともHaskellのように関数と引数のように書くべきだと思いましたし、少なくともScalaのように型と値でカッコを分けるくらいはできるはずです。
-しかしながら、不平を言っても始まらないので我慢して次に進むことにしました。&lt;/p&gt;
-
-&lt;h1 id=&#34;言語機能&#34;&gt;言語機能&lt;/h1&gt;
-
-&lt;p&gt;トレイト、タプル、代数的データ型とマッチ式、高階関数、型推論。
-これらは明らかに関数型言語から輸入されたものです。
-これはとても喜ばしいことです、なぜなら今までしていた通りのプログラミングを新しい言語でもできるからです！
-関数の引数と返り値に型宣言が必要なのはMLプログラマとしては少し残念でしたがHaskellやIdrisも同じようなスタイルなのでそういうものと自分で納得しました。
-そして私はさっそく、倉庫番のゲームを作り始めました。あの、十分にシンプルで、コンソールで動かせて、楽しいゲームです。&lt;/p&gt;
-
-&lt;p&gt;しかしすぐにそううまい話はないと気付きます。
-再帰的データ型を定義するとすぐにエラーになりますし（&lt;code&gt;Box&lt;/code&gt;が必要と気付くまでしばらくかかりました）、ハッシュテーブルを使うとすぐミュータブルが必要になります（ハッシュテーブルの操作が破壊的ということをすっかり忘れていました）。
-そして何より所有権のせいで思うようにプログラムが書けませんでした。
-関数型プログラミングではメモリは無尽蔵にあると思ってプログラミングするのでRustのパラダイムとはとてつもない隔りがありました。
-最初は、所有権についてはCleanやGHCにある一意型、あるいはATS2の線形型のようなものだと思えばそう難しくないと踏んでいましたが、実際のところ何もかも思い通りにいきませんでした。
-プログラム全てで所有権を意識するのが思いの外難しかったのです。
-それでもコンパイル時にコードの安全性を検査出来るのは喜ばしいことだと思って、&amp;rdquo;ボローチェッカとの戦い&amp;rdquo;を数日続けました。&lt;/p&gt;
-
-&lt;p&gt;&amp;ldquo;ボローチェッカとの戦い&amp;rdquo;をしばらく続けて気付いたのは、コンパイラは理不尽な理由で怒ったりしていないということでした。
-関数型言語ではデータほとんどイミュータブルなのでデータをコピーしたいのか参照したいのかあまり区別する必要がありませんでしたがRustでは厳密に区別しているだけのことでした。
-むしろ、所有権の概念は、一度コンパイラの気持ちを理解してしまえば所有権や参照を意識せずにプログラミングするのが気持ち悪いとさえ感じるほどに自然でした。&lt;/p&gt;
-
-&lt;p&gt;それ以外の点ではトレイトや導出はMLプログラマからすると羨望の的でしたし（余談ですがRustの導出は昔はHaskell風に&lt;code&gt;#[deriving(Show)]&lt;/code&gt;と書いていましたが、いつからか&lt;code&gt;#[derive(Debug)]&lt;/code&gt;と書くようになったようです。）、
-オブジェクト指向についても上手くやっていると感じました（関数型プログラミング言語でもオブジェクト指向はします！）。&lt;/p&gt;
-
-&lt;p&gt;Lispプログラマから一言あるとすれば、マクロです。RustのマクロはSchemeの&lt;code&gt;syntax-rules&lt;/code&gt;相当の機能しかなく、Common Lispプログラマの私にはもの足りませんでした。
-&lt;code&gt;macro_rules&lt;/code&gt;でも無いよりはましですし、C言語のマクロよりは素晴らしいものです。
-それでもどうしても伝統的なマクロが欲しくなりますが、不安定なコンパイラプラグインの機能しか選択肢がありません（訳注: 現在のRustにはproc_macroが入ったので伝統的なマクロも書けます）。&lt;/p&gt;
-
-&lt;h1 id=&#34;ツール&#34;&gt;ツール&lt;/h1&gt;
-
-&lt;p&gt;私の好きなEmacsのサポートはしっかりしていましたし、大きな不満はありませんでした。
-REPLこそありませんがむしろSMLに比べると補完や定義ジャンプなどリッチな機能さえありました。&lt;/p&gt;
-
-&lt;p&gt;それよりも、ビルドツールについてです。
-Rustは関数型プログラムで永遠のテーマだった分割コンパイルをするとインライン化が妨げられるが全プログラムコンパイルをするとコンパイル時間が掛かりすぎるという問題にモジュールより上位のクレートという単位を設けることで解決を見出したのです。
-それに素晴らしきCargo。依存関係の地獄はありませんし、Makefileを書く必要もありません。パッケージインストーラがランタイムにまで侵入してくることもありません。
-私達がプログラムを書くことに集中させてくれます。&lt;/p&gt;
-
-&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
-
-&lt;p&gt;関数型プログラマがRustを使うと、所有権やミュータビリティ、メモリへの厳しさに最初は面くらうもののすぐに馴れて普段通りにプログラムを書けるようになります。
-もちろん、Rustはむしろ手続き型な言語なので関数型プログラムそのまま、とはいきませんが普段使っている道具がそのまま使えるのでハードルは低いですし、むしろ手続き型プログラムに馴れた人が戸惑わないか心配にすらなります（初めてC++プログラマがRustをスラスラ書けると聞いたときには大変驚きました）。
-Rustは関数型プログラマ、手続き型プログラマ問わず良い言語なのでみなさんも最初の一歩を踏み出しましょう！&lt;/p&gt;
-
-&lt;h1 id=&#34;メタ&#34;&gt;メタ&lt;/h1&gt;
-
-&lt;p&gt;私のブログは記事によって意識的に文体を変えているのですが、今回は新たな試みとして「海外でちょっと流行った記事の野良和訳」風に書いてみました。
-なので海外風に「明らかに」などの強いワードを用いたり誤訳っぽいワードを埋めたいあまつさえ（訳注:〜）なんてものが出現しますが特に原文はないです。
-案外疲れました。&lt;/p&gt;</description>
+&lt;p&gt;&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>オーディナルの話とカーディナルの話</title>
-      <link>/blog/2017/03/02/o_dinarunohanashitoka_dinarunohanashi</link>
+      <link>/blog/2017/03/02/o_dinarunohanashitoka_dinarunohanashi/</link>
       <pubDate>Thu, 02 Mar 2017 21:15:44 +0900</pubDate>
       
-      <guid>/blog/2017/03/02/o_dinarunohanashitoka_dinarunohanashi</guid>
+      <guid>/blog/2017/03/02/o_dinarunohanashitoka_dinarunohanashi/</guid>
       <description>&lt;p&gt;ちょっとオーディナルの話をしよう。ついでにカーディナルの話もしよう。
 特に何も知らなくても分かる内容。だけど文脈を知ってると伝えたいことが伝わる筈。&lt;/p&gt;
 
-&lt;p&gt;&lt;/p&gt;
-
-&lt;p&gt;まずは何もないところから始めよう。机もスマホもパソコンンもない。空気もないし数字もない、自然数もない。&lt;/p&gt;
-
-&lt;p&gt;何もない。&lt;/p&gt;
-
-&lt;p&gt;「何もない」、もうちょっと正確にいうと「何も要素がない集合」のことを覚えているだろうか。中学校で習った気もする。&lt;/p&gt;
-
-&lt;p&gt;\[
-\emptyset
-\]&lt;/p&gt;
-
-&lt;p&gt;と書く。
-さて、ここから始める。何もないところから何か作れるだろうか。まずは $\emptyset$ を要素に持つ集合、&lt;/p&gt;
-
-&lt;p&gt;\[
-\{\emptyset\}
-\]&lt;/p&gt;
-
-&lt;p&gt;がある。これは要素を1つだけ持つので $\emptyset$ とは異なる集合だ。これをさらに進められないだろうか。例えば&lt;/p&gt;
-
-&lt;p&gt;\[
-\{\emptyset, \emptyset\}
-\]&lt;/p&gt;
-
-&lt;p&gt;とか。これではダメだ。結局2つの要素が同じ $\emptyset$ なので要素を取り出してみても $\{\emptyset\}$ から取り出したときと区別がつかない。
-何か $\emptyset$ とは別のものが必要だ。 $\emptyset$ とは別のもの。既に出てきた。 $\{\emptyset\}$ だ。&lt;/p&gt;
-
-&lt;p&gt;\[
-\{\emptyset, \{\emptyset\}\}
-\]&lt;/p&gt;
-
-&lt;p&gt;これで $\emptyset$ とも $\{\emptyset\}$ とも異なる集合が作れた。ここまできたらあとはもうパターンだ。「次」が欲しければ今までに出てきた集合を全部$\{\}$に放り込めばいい。&lt;/p&gt;
-
-&lt;p&gt;\[
-\{\emptyset, \{\emptyset\}, \{\emptyset, \{\emptyset\}\}\}
-\]&lt;/p&gt;
-
-&lt;p&gt;「次(Successor)」を求める手続を $\mathbf{succ}$ と書くとすると、集合の合併 $\cup$ を用いて&lt;/p&gt;
-
-&lt;p&gt;\[
-\mathbf{succ} (x) = x \cup \{x\}
-\]&lt;/p&gt;
-
-&lt;p&gt;と書ける。この $\mathbf{succ}$ 、必ず新たな集合を生み出している。これはつまり、任意の $x$ に対して $\mathbf{succ}(x)$ は $\emptyset$ にはならないし、 $x \not= y$ のとき $\mathbf{succ}(x) \not=\mathbf{succ}(y)$ でもある。
-このようなものをご存知ないだろうか(細かいことを言うと帰納法の原理も必要だが飛ばす)。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://ja.wikipedia.org/wiki/%E3%83%9A%E3%82%A2%E3%83%8E%E3%81%AE%E5%85%AC%E7%90%86&#34;&gt;自然数&lt;/a&gt;だ。&lt;/p&gt;
-
-&lt;ol&gt;
-&lt;li&gt;$\emptyset$ がある&lt;/li&gt;
-&lt;li&gt;任意の自然数 $x$ に $\mathbf{succ}(x)$ がある&lt;/li&gt;
-&lt;li&gt;$\emptyset$ はいかなる自然数 $x$ の $\mathbf{succ}$ でもない&lt;/li&gt;
-&lt;li&gt;$x \not= y$ のとき $\mathbf{succ}(x) \not=\mathbf{succ}(y)$&lt;/li&gt;
-&lt;li&gt;(帰納法の原理が成り立つ)&lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;p&gt;これは、こういうことだ。&lt;/p&gt;
-
-&lt;p&gt;\[
-\begin{eqnarray}
-0 &amp;amp; = &amp;amp; \emptyset \\\&lt;br /&gt;
-1 &amp;amp; = &amp;amp; \{\emptyset\} \\\&lt;br /&gt;
-2 &amp;amp; = &amp;amp; \{\emptyset, \{\emptyset\}\} \\\&lt;br /&gt;
-3 &amp;amp; = &amp;amp; \{\emptyset, \{\emptyset\}, \{\emptyset, \{\emptyset\}\}\} \\\&lt;br /&gt;
-  &amp;amp; \vdots &amp;amp;
-\end{eqnarray}
-\]&lt;/p&gt;
-
-&lt;p&gt;ここでは &lt;a href=&#34;https://twitter.com/search?q=%230%E3%81%AF%E8%87%AA%E7%84%B6%E6%95%B0&amp;amp;src=typd&#34;&gt;#0は自然数&lt;/a&gt; としてある。
-さて、今我々は何もないところから出発してDASH村のように自然数を作り上げた。&lt;/p&gt;
-
-&lt;p&gt;この自然数、面白い性質がある。 0 は 1の要素( $0 \in 1$) だ。 1 は 2 の要素 ( $1 \in 2$ )だし、0も2の要素 $0 \in 2$ だ。もうちょっというと、 $x \in y$ かつ $y \in z$ のとき、 $x \in z$も成り立つ。
-この関係で自然数には順序がつく。つまり、自然数は&lt;a href=&#34;https://ja.wikipedia.org/wiki/%E9%A0%86%E5%BA%8F%E6%95%B0&#34;&gt;順序数&lt;/a&gt;(オーディナルナンバー)だ。再度、オーディナルナンバーであるところの自然数を列挙するとこうなる。&lt;/p&gt;
-
-&lt;p&gt;\[
-\emptyset, \{\emptyset\}, \{\emptyset, \{\emptyset\}\}, \{\emptyset, \{\emptyset\}, \{\emptyset, \{\emptyset\}\}\}, &amp;hellip;
-\]&lt;/p&gt;
-
-&lt;p&gt;これに見覚えがあるならオーディナルの話はこれで十分。&lt;/p&gt;
-
-&lt;p&gt;さて、カーディナルの話をしよう。 $\emptyset$ は要素が0個。 $\{\emptyset\}$ は要素が1つ。 $\{\emptyset, \{\emptyset\}\}$ は要素が2つ。
-要素数の話だ。これは別に自然数だけでなくて、 $\{2, 4\}$ のように自然数ではない集合でも要素数という概念はある。要素数をどう数えようか。一応要素数に&lt;a href=&#34;https://ja.wikipedia.org/wiki/%E6%BF%83%E5%BA%A6_(%E6%95%B0%E5%AD%A6)&#34;&gt;濃度&lt;/a&gt;という名前もついている。
-これにも自然数が使える。2と $\{2, 4\}$ を $\{2, 4\}$ を $2 -\emptyset$ と $4 - \{\emptyset\}$ と1対1に対応づければ、「$\{2, 4\}$と 2は同じ濃度を持つ」といえる。
-このように濃度を数えるための数を&lt;a href=&#34;https://ja.wikipedia.org/wiki/%E5%9F%BA%E6%95%B0&#34;&gt;基数&lt;/a&gt;（カーディナルナンバー）という。&lt;/p&gt;
-
-&lt;p&gt;手で数えられる（有限な）ものは面白みがない。無限なものについて考えよう。例えば今我々が作った自然数は常に $\mathbf{succ}$ がとれるので無限の要素がある。
-まだ作ってないが、自然数だけでなく整数にも有理数にも実数にも無限の要素がある。これらの「無限」は全て同じ大きさなのだろうか、つまり同じ濃度なのだろうか。
-結論からいうと自然数と整数と有理数は同じ濃度を持つ。全て自然数と1対1の対応が取れるということだ。一方&lt;a href=&#34;https://ja.wikipedia.org/wiki/%E3%82%AB%E3%83%B3%E3%83%88%E3%83%BC%E3%83%AB%E3%81%AE%E5%AF%BE%E8%A7%92%E7%B7%9A%E8%AB%96%E6%B3%95&#34;&gt;実数は対応が作れない&lt;/a&gt;。実数の濃度の方がずっと大きい訳だ。つまり、無限の間にも大小関係がある。実は自然数は無限の中でも一番小さい。この一番小さい基数のことをヘブライ文字からとって&lt;/p&gt;
-
-&lt;p&gt;\[
-\aleph_0
-\]&lt;/p&gt;
-
-&lt;p&gt;と書く。これも見覚えがあればカーディナルの話はこれにて重畳。&lt;/p&gt;
-
-&lt;p&gt;そういえばこういう「紙の上でDASH村」を気に入ったならこの本がお勧め。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://www.amazon.co.jp/dp/4791768515&#34;&gt;コンピュータは数学者になれるのか? -数学基礎論から証明とプログラムの理論へ- | 照井一成 |本 | 通販 | Amazon&lt;/a&gt;&lt;/p&gt;</description>
+&lt;p&gt;&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>RustのちょっとやりすぎなBuilderパターン</title>
-      <link>/blog/2017/02/09/rustnochottoyarisuginabuilderpata_n</link>
+      <link>/blog/2017/02/09/rustnochottoyarisuginabuilderpata_n/</link>
       <pubDate>Thu, 09 Feb 2017 23:03:45 +0900</pubDate>
       
-      <guid>/blog/2017/02/09/rustnochottoyarisuginabuilderpata_n</guid>
+      <guid>/blog/2017/02/09/rustnochottoyarisuginabuilderpata_n/</guid>
       <description>&lt;p&gt;κeenです。Rustでちょっとやりすぎだけど使う側の自由度が高くて安全なBuilderパターンを思い付いたので紹介しますね。&lt;/p&gt;
 
 &lt;p&gt;※2017-02-11T13:18:58Z+09:00 最下部に追記しました
-&lt;/p&gt;
-
-&lt;h1 id=&#34;目的コード&#34;&gt;目的コード&lt;/h1&gt;
-
-&lt;p&gt;以下のような構造体のビルダーを作りたいとします。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-struct&#34;&gt;#[derive(Debug)]
-struct Person {
-    id: u32,
-    name: String,
-    age: u32,
-    address: Option&amp;lt;String&amp;gt;,
-    zipcode: Option&amp;lt;String&amp;gt;,
-}
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;雑にやると&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct PersonBuilder {
-    id: Option&amp;lt;u32&amp;gt;,
-    name: Option&amp;lt;String&amp;gt;,
-    age: Option&amp;lt;u32&amp;gt;,
-    address: Option&amp;lt;String&amp;gt;,
-    zipcode: Option&amp;lt;String&amp;gt;,
-}
-
-impl PersonBuilder {
-  pub fn new() -&amp;gt; Self { ... }
-  pub fn id(self, id: u32) -&amp;gt; Self { ... }
-  pub fn name(self, name: String) -&amp;gt; Self { ... }
-  pub fn age(self, id: u32) -&amp;gt; Self { ... }
-  pub fn address(self, address: String) -&amp;gt; Self { ... }
-  pub fn zipcode(self, zipcode: String) -&amp;gt; Self { ... }
-  // 返り値がOption型になってしまう
-  pub fn build(self) -&amp;gt; Option&amp;lt;Person&amp;gt; {
-    // try_opt!は標準ライブラリには存在しませんが各所で使われてるので動きは分かると思います
-    Person {
-       id: try_opt!(self.id),
-       name: try_opt!(self.name),
-       age: try_opt!(self.age),
-       address: self.address,
-       zipcode: self.zipcode,
-    }
-  }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;とbuildの返り値が&lt;code&gt;Option&lt;/code&gt;型になってしまい、あまりうれしくありません。
-さらには例えば&lt;code&gt;id&lt;/code&gt;を2回呼んだらどうなるんだとかツッコミどころが数多くあります。&lt;/p&gt;
-
-&lt;p&gt;ということで色々な回避策を先人達は考えてきました。&lt;/p&gt;
-
-&lt;h1 id=&#34;不自由なコード&#34;&gt;不自由なコード&lt;/h1&gt;
-
-&lt;p&gt;普通にやるなら&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct PersonBuilder {
-    id: u32,
-    name: String,
-    age: u32,
-    address: Option&amp;lt;String&amp;gt;,
-    zipcode: Option&amp;lt;String&amp;gt;,
-}
-
-impl PersonBuilder {
-  fn new(id: u32, name: String, age: String) -&amp;gt; Self { ... }
-  fn address(self, address: String) -&amp;gt; Self { ... }
-  fn zipcode(self, zipcode: String) -&amp;gt; Self { ... }
-  // 返り値がOptionじゃない
-  fn build(self) -&amp;gt; Person { ... }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のように&lt;code&gt;Option&lt;/code&gt;でないフィールドをコンストラクタで受け取れば安全に作れますが、コンストラクタを呼ぶ時点でいくつかフィールドが揃っている必要がある、そもそも元の構造体と何が違うんだ、など色々問題があります。&lt;/p&gt;
-
-&lt;h1 id=&#34;少しマシなコード&#34;&gt;少しマシなコード&lt;/h1&gt;
-
-&lt;p&gt;オートマトンのようにビルダーが状態遷移するコードを使うと、1つ1つの引数をビルドしつつ安全なコードが出来ます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;struct PersonBuilderId;
-struct PersonBuilderName{id: u32}
-struct PersonBuilderAge{id: u32, name: String}
-struct PersonBuilder {
-    id: u32,
-    name: String,
-    age: u32,
-    address: Option&amp;lt;String&amp;gt;,
-    zipcode: Option&amp;lt;String&amp;gt;,
-}
-
-impl PersonBuilderId {
-  pub fn new() -&amp;gt; Self { ... }
-  // idの次はname
-  pub fn id(self, id: u32) -&amp;gt; PersonBuilderName {
-    PersonBuilderName { id: id }
-  }
-}
-
-impl PersonBuilderName {
-  // nameの次はage
-  pub name(self, name: String) -&amp;gt; PersonBuilderAge {
-    PersonBuilderAge {
-      id: self.id,
-      name: name,
-    }
-  }
-}
-impl PersonBuilderAge {
-  // ageは最後
-  pub name(self, age: u32) -&amp;gt; PersonBuilder {
-    PersonBuilder {
-      id: self.id,
-      name: self.name,
-      age: age,
-      address: None,
-      zipcode: None,
-    }
-  }
-}
-
-impl PersonBuilder {
-  // 気持ち悪いけど PersonBuilderIdを返す
-  pub fn new -&amp;gt; PersonBuilderId { ... }
-  pub fn address(self, address: String) -&amp;gt; Self { ... }
-  pub fn zipcode(self, zipcode: String) -&amp;gt; Self { ... }
-  // これまたOptionじゃなくなってる
-  pub fn build(self) -&amp;gt; Person { ... }
-}
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これは以下のように&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;fn main() {
-  let person = PersonBuilder::new()
-         .id(1)
-         .name(&amp;quot;κeen&amp;quot;.to_string())
-         .age(24)
-         .address(&amp;quot;Tokyo&amp;quot;.to_string())
-         .build();
-  println!(&amp;quot;{:?}&amp;quot;, person)
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;と使えます(即興で書いたので試してないけど)。&lt;/p&gt;
-
-&lt;p&gt;とりあえず使えそうな気がしますが、型レベルで状態遷移をハードコードしているのでメソッドを呼び出す順番が固定されてしまいます。
-なので以下はエラーです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;fn main() {
-  let person = PersonBuilder::new()
-         // nameとidを逆順に呼び出してみる
-         .name(&amp;quot;κeen&amp;quot;.to_string())
-         .id(1)
-         .age(24)
-         .address(&amp;quot;Tokyo&amp;quot;.to_string())
-         .build();
-  println!(&amp;quot;{:?}&amp;quot;, person)
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;あとは単純に&lt;code&gt;struct PersonBuilderId&lt;/code&gt;、&lt;code&gt;struct PersonBuilderName{id: u32}&lt;/code&gt;、&lt;code&gt;struct PersonBuilderAge{id: u32, name: String}&lt;/code&gt;と作っていくのが面倒という話もあります。&lt;/p&gt;
-
-&lt;p&gt;今回はそれを改善したいという話&lt;/p&gt;
-
-&lt;h1 id=&#34;幽霊型を使ったフィールド状態&#34;&gt;幽霊型を使ったフィールド状態&lt;/h1&gt;
-
-&lt;p&gt;今回提案するビルダー型はこれです。提案するといってもどうせ既に誰かが考えてるでしょうが。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::marker::PhantomData;
-struct Empty;
-struct Filled;
-
-struct PersonBuilder&amp;lt;Id, Name, Age&amp;gt; {
-    id: Option&amp;lt;u32&amp;gt;,
-    id_state: PhantomData&amp;lt;Id&amp;gt;,
-    name: Option&amp;lt;String&amp;gt;,
-    name_state: PhantomData&amp;lt;Name&amp;gt;,
-    age: Option&amp;lt;u32&amp;gt;,
-    age_state: PhantomData&amp;lt;Age&amp;gt;,
-    address: Option&amp;lt;String&amp;gt;,
-    zipcode: Option&amp;lt;String&amp;gt;,
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://doc.rust-lang.org/std/marker/struct.PhantomData.html&#34;&gt;PhantomData&lt;/a&gt;という特殊な型を使ってビルダーに余計な型を付けています。&lt;/p&gt;
-
-&lt;p&gt;この型、最初は&lt;code&gt;Empty&lt;/code&gt;から出発します。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;impl PersonBuilder&amp;lt;Empty, Empty, Empty&amp;gt; {
-    pub fn new() -&amp;gt; Self {
-        PersonBuilder {
-            id: None,
-            id_state: PhantomData,
-            name: None,
-            name_state: PhantomData,
-            age: None,
-            age_state: PhantomData,
-            address: None,
-            zipcode: None,
-        }
-
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;そしてフィールドが埋められると対応する型がEmptyからFilledになります。&lt;/p&gt;
-
-&lt;p&gt;フィールドに&lt;code&gt;Some&lt;/code&gt;が埋められるのと同時に対応する&lt;code&gt;_state&lt;/code&gt;フィールドを&lt;code&gt;Empty&lt;/code&gt;から&lt;code&gt;Filled&lt;/code&gt;にすると整合性が崩れません。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;// Id以外、つまりNameとAgeはいじらないのでジェネリクスに
-impl&amp;lt;Name, Age&amp;gt; PersonBuilder&amp;lt;Empty, Name, Age&amp;gt; {
-    pub fn id(self, id: u32) -&amp;gt; PersonBuilder&amp;lt;Filled, Name, Age&amp;gt; {
-        PersonBuilder {
-            id: Some(id),
-            id_state: PhantomData,
-            name: self.name,
-            name_state: self.name_state,
-            age: self.age,
-            age_state: self.age_state,
-            address: self.address,
-            zipcode: self.zipcode,
-        }
-    }
-}
-impl&amp;lt;Id, Age&amp;gt; PersonBuilder&amp;lt;Id, Empty, Age&amp;gt; {
-    // 地味なテクニックとして、SringではなくてInto&amp;lt;String&amp;gt;で受けることでリテラルのStringとかも受け取れる。
-    pub fn name&amp;lt;S: Into&amp;lt;String&amp;gt;&amp;gt;(self, name: S) -&amp;gt; PersonBuilder&amp;lt;Id, Filled, Age&amp;gt; {
-        PersonBuilder {
-            id: self.id,
-            id_state: self.id_state,
-            name: Some(name.into()),
-            name_state: PhantomData,
-            age: self.age,
-            age_state: self.age_state,
-            address: self.address,
-            zipcode: self.zipcode,
-        }
-    }
-}
-
-impl&amp;lt;Id, Name&amp;gt; PersonBuilder&amp;lt;Id, Name, Empty&amp;gt; {
-    pub fn age(self, age: u32) -&amp;gt; PersonBuilder&amp;lt;Id, Name, Filled&amp;gt; {
-        PersonBuilder {
-            id: self.id,
-            id_state: self.id_state,
-            name: self.name,
-            name_state: self.name_state,
-            age: Some(age),
-            age_state: PhantomData,
-            address: self.address,
-            zipcode: self.zipcode,
-        }
-    }
-}
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;Option&lt;/code&gt;のままで構わないフィールドについては雑で構いません。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;impl&amp;lt;Id, Name, Age&amp;gt; PersonBuilder&amp;lt;Id, Name, Age&amp;gt; {
-    pub fn address&amp;lt;S: Into&amp;lt;String&amp;gt;&amp;gt;(mut self, address: S) -&amp;gt; Self {
-        self.address = Some(address.into());
-        self
-    }
-
-    pub fn zipcode&amp;lt;S: Into&amp;lt;String&amp;gt;&amp;gt;(mut self, zipcode: S) -&amp;gt; Self {
-        self.zipcode = Some(zipcode.into());
-        self
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;そして必須フィールド全てが満たされた時にだけ&lt;code&gt;build&lt;/code&gt;が呼べます。&lt;code&gt;unwrap&lt;/code&gt;を呼んでますが安全であることに注意して下さい。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;impl PersonBuilder&amp;lt;Filled, Filled, Filled&amp;gt; {
-    pub fn build(self) -&amp;gt; Person {
-        Person {
-            id: self.id.unwrap(),
-            name: self.name.unwrap(),
-            age: self.age.unwrap(),
-            address: self.address,
-            zipcode: self.zipcode,
-        }
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;こうすることで、呼び出しが非常に自由になります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;fn main() {
-    let person = PersonBuilder::new()
-        .age(24)
-        .id(1)
-        .address(&amp;quot;Tokyo&amp;quot;)
-        .name(&amp;quot;κeen&amp;quot;)
-        .build();
-    println!(&amp;quot;{:?}&amp;quot;, person);
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;メソッドは自由に組み換えられますが、必須フィールドがなかったら&lt;code&gt;build&lt;/code&gt;が呼べません（コンパイルエラー）になります。&lt;/p&gt;
-
-&lt;p&gt;これは応用も出来て、それぞれの状態が独立しているので例えば「2つのVector合計3つ以上要素が入っていたら」、とか「R、G、BあるいはH、S、Vの3つが揃っていたら」とかオートマトンではエンコードしづらいものでも比較的楽に書けます。&lt;/p&gt;
-
-&lt;p&gt;ということで便利なbuilderが出来ました。めでたしめでたし。といいたいところですが、ちょっとコードが冗長ですよね。マクロで生成なんかも出来るのですがあまりやりたくありません。ということで「ちょっとやりすぎな」Builderパターンでした。&lt;/p&gt;
-
-&lt;h1 id=&#34;some-like-it-unsafe&#34;&gt;Some like it unsafe&lt;/h1&gt;
-
-&lt;p&gt;上のコード、実はもうちょっと短く書けます。ただし&lt;code&gt;unsafe&lt;/code&gt;な機能を使いますが。&lt;/p&gt;
-
-&lt;p&gt;こう書いていたものが&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;impl&amp;lt;Name, Age&amp;gt; PersonBuilder&amp;lt;Empty, Name, Age&amp;gt; {
-    pub fn id(self, id: u32) -&amp;gt; PersonBuilder&amp;lt;Filled, Name, Age&amp;gt; {
-        PersonBuilder {
-            id: Some(id),
-            id_state: PhantomData,
-            name: self.name,
-            name_state: self.name_state,
-            age: self.age,
-            age_state: self.age_state,
-            address: self.address,
-            zipcode: self.zipcode,
-        }
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://doc.rust-lang.org/std/mem/fn.transmute.html&#34;&gt;&lt;code&gt;std::mem::transmute&lt;/code&gt;&lt;/a&gt;を使うことで2行になります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use std::mem::transmute;
-
-impl&amp;lt;Name, Age&amp;gt; PersonBuilder&amp;lt;Empty, Name, Age&amp;gt; {
-    pub fn id(mut self, id: u32) -&amp;gt; PersonBuilder&amp;lt;Filled, Name, Age&amp;gt; {
-        self.id = Some(id);
-        unsafe { transmute(self) }
-    }
-}
-
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;すごいですね。
-しかし、案外しょっちゅうtransmuteはミスなどで間違った変換をしてしまう（上記で言えばidフィールドを更新したのにname_stateの型を変更してしまう）上に型検査で弾けないので個人的にはあまりおすすめ出来ません。
-これも「ちょっとやりすぎ」なTipsでした。&lt;/p&gt;
-
-&lt;h1 id=&#34;2017-02-11t13-18-58z-09-00-追記&#34;&gt;2017-02-11T13:18:58Z+09:00 追記&lt;/h1&gt;
-
-&lt;p&gt;qnighyさんからもっと便利な方法の提案がありました。&lt;/p&gt;
-
-&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;こう &lt;a href=&#34;https://t.co/undNgEM2IQ&#34;&gt;https://t.co/undNgEM2IQ&lt;/a&gt; やったらunwrapしなくてすみそう？ / “RustのちょっとやりすぎなBuilderパターン | κeenのHappy Hacκing Blog” &lt;a href=&#34;https://t.co/ogDOpYifjh&#34;&gt;https://t.co/ogDOpYifjh&lt;/a&gt;&lt;/p&gt;&amp;mdash; Masaki⊣Hara (@qnighy) &lt;a href=&#34;https://twitter.com/qnighy/status/830053476096843776&#34;&gt;2017年2月10日&lt;/a&gt;&lt;/blockquote&gt;
-&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
-
-&lt;p&gt;実際のコードはこちら。&lt;/p&gt;
-
-&lt;script src=&#34;https://gist.github.com/qnighy/e7a833eebd57ef778eaff3a8ab3649d7.js&#34;&gt;&lt;/script&gt;
-
-&lt;p&gt;transmuteを使ったサボった実装は出来なくなるけどそもそも余計なフィールドを使う必要がなくなるので手軽ですね。&lt;/p&gt;
-
-&lt;p&gt;qnighyさんありがとうございました。&lt;/p&gt;</description>
+&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>Deprecating CIM</title>
-      <link>/blog/2017/01/29/deprecating_cim</link>
+      <link>/blog/2017/01/29/deprecating_cim/</link>
       <pubDate>Sun, 29 Jan 2017 22:18:24 +0900</pubDate>
       
-      <guid>/blog/2017/01/29/deprecating_cim</guid>
-      <description>&lt;p&gt;I&amp;rsquo;m κeen. I have a sad news, I&amp;rsquo;ll stop the development of &lt;a href=&#34;https://github.com/KeenS/CIM&#34;&gt;CIM&lt;/a&gt; and no more updates for new lisp impls will be provided.
-
-It has been months from when I stopped developping CIM and only providing updates for new lisp impl versions.
-From that point, CIM is a half-dead product. I know there are still someone using CIM though, so I kept updating.
-For present CIM users, I recomend to migrate to &lt;a href=&#34;https://github.com/roswell/roswell&#34;&gt;roswell&lt;/a&gt;, also a lisp installer and manager, which is well-maintained.&lt;/p&gt;
-
-&lt;p&gt;CIM has been developed in my studenthood for my practice in shell scripts. This is my first OSS.
-The reason why I wrote CIM in shell script other than for practice is that shell scripts are the most portable and available script language on Unix-like systems.
-The original purpose of writing a new manager is to provide a consistent way of launching CLs from CLI.
-To realize that, managing lisp impls, including installing is needed so CIM has started to manage impls.
-At some point, CIM was used such products like &lt;a href=&#34;https://github.com/luismbo/cl-travis&#34;&gt;cl-travis&lt;/a&gt;.
-But CIM lacked flexibility of development as it is written in ugly shell script, and lacked Windows support.
-As I got a job and got interests other than lisp such as Rust, I have no more time to spend for maintaining CIM.&lt;/p&gt;
-
-&lt;p&gt;Thus &lt;a href=&#34;https://github.com/snmsts&#34;&gt;@snmsts&lt;/a&gt;, the author of roswell, started to develop roswell to support Windows.
-Roswell is written mainly in Lisp though booting from C, so many of Lispers may be able to hack it.
-Roswell is well-maintained because stmsts is, unlike me, a hobby Lisper, professional lisper and he uses roswell in daily work.
-Besides roswell is well-maintained, roswell is more feature-rich than CIM.
-It searchs for new lisp versions for itself so there is no need to update manager itself to update your local lisp impls.
-It is distributed from package managers such like homebrew and AUR so you don&amp;rsquo;t need to care about updating it.
-Using &lt;code&gt;dump&lt;/code&gt; feature of roswell, you can create an executable binary from a lisp script in a command.
-And so on. There are many reasons to use roswell even if CIM would be kept maintained.&lt;/p&gt;
-
-&lt;p&gt;Anyway I wish CIM users to keep using lisp via roswell. Thank you for staying with me for a long time.&lt;/p&gt;</description>
+      <guid>/blog/2017/01/29/deprecating_cim/</guid>
+      <description></description>
     </item>
     
     <item>
       <title>Rustのモジュールの使い方</title>
-      <link>/blog/2017/01/15/rustnomoju_runokirikata</link>
+      <link>/blog/2017/01/15/rustnomoju_runokirikata/</link>
       <pubDate>Sun, 15 Jan 2017 20:52:14 +0900</pubDate>
       
-      <guid>/blog/2017/01/15/rustnomoju_runokirikata</guid>
-      <description>&lt;p&gt;κeenです。たまにRustのモジュールが分かりづらいとの声を聞くので解説しますね。&lt;/p&gt;
-
-&lt;p&gt;
-とりあえずサンプルプロジェクトを作ります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo new module
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;エラいのは-lib-rs-と-main-rs&#34;&gt;エラいのは &lt;code&gt;lib.rs&lt;/code&gt; と &lt;code&gt;main.rs&lt;/code&gt;&lt;/h1&gt;
-
-&lt;p&gt;モジュールの話をする前にクレートの話をしないといけません。
-クレートはRustのプログラムの一番大きな単位です。
-大きく分けてライブラリを作るlibクレートと実行可能ファイルを作るbinクレートがあります。&lt;/p&gt;
-
-&lt;p&gt;libクレートならば&lt;code&gt;lib.rs&lt;/code&gt;が、binクレートならば&lt;code&gt;main.rs&lt;/code&gt;がルートにあたるファイルです。ここから辿れるモジュールが全てです。プロジェクトにファイルが存在していてもこれらから辿れなかったらコンパイルされません。&lt;/p&gt;
-
-&lt;h1 id=&#34;モジュールの作り方は3種類&#34;&gt;モジュールの作り方は3種類&lt;/h1&gt;
-
-&lt;ol&gt;
-&lt;li&gt;ファイルの中にインラインで作る&lt;/li&gt;
-&lt;li&gt;1ファイルで作る&lt;/li&gt;
-&lt;li&gt;1ディレクトリで作る&lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;p&gt;のやり方があります。 1.はそんなに使われなくて、説明のために1ファイルにまとめたい時や、可視性でアレコレする時のテクニックなんかに使われます。&lt;/p&gt;
-
-&lt;p&gt;2.と3.の境界はサブモジュールを持つかどうかです。&lt;/p&gt;
-
-&lt;p&gt;2.のファイルで作る時は&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ find src
-src
-src/lib.rs
-src/new_module.rs
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のように作っておいて、lib.rsの中を&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;mod new_module;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のように&lt;code&gt;mod&lt;/code&gt;で参照してあげれば使えます。&lt;/p&gt;
-
-&lt;p&gt;3.のディレクトリの時もそんなに変わらなくて、&lt;code&gt;lib.rs&lt;/code&gt;は変わらず、ファイルを&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ find src
-src
-src/lib.rs
-src/new_module
-src/new_module/mod.rs
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のようにしてあげます。&lt;code&gt;mod.rs&lt;/code&gt;の名前はこれでないといけません。丁度サブモジュールの&lt;code&gt;new_module&lt;/code&gt;にとっての&lt;code&gt;lib.rs&lt;/code&gt;のような存在が&lt;code&gt;mod.rs&lt;/code&gt;な訳です。&lt;/p&gt;
-
-&lt;h1 id=&#34;兄弟モジュール同士の可視性&#34;&gt;兄弟モジュール同士の可視性&lt;/h1&gt;
-
-&lt;h2 id=&#34;モジュールの身分&#34;&gt;モジュールの身分&lt;/h2&gt;
-
-&lt;p&gt;さて、次のように2つのモジュールを作ってみましょう。lib.rsには&lt;code&gt;module_a&lt;/code&gt;のみ&lt;code&gt;mod&lt;/code&gt;宣言しておきます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ find src
-src
-src/lib.rs
-src/module_a.rs
-src/module_b.rs
-$ cat src/lib.rs
-mod module_a;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これで&lt;code&gt;module_a.rs&lt;/code&gt;に&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;mod module_b;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;と書くと&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cargo build
-   Compiling module v0.1.0 (file:///home/kim/Rust/module)
-error[E0432]: unresolved import `module_a`
- --&amp;gt; src/lib.rs:1:5
-  |
-1 | use module_a;
-  |     ^^^^^^^^ no `module_a` in the root
-
-error: aborting due to previous error
-
-error: Could not compile `module`.
-
-To learn more, run the command again with --verbose.
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;と怒られます。一番エラいのは&lt;code&gt;lib.rs&lt;/code&gt;ですから、身分の低い &lt;code&gt;module_a&lt;/code&gt;では&lt;code&gt;mod&lt;/code&gt;宣言出来ません。&lt;/p&gt;
-
-&lt;h2 id=&#34;君の名は&#34;&gt;君の名は&lt;/h2&gt;
-
-&lt;p&gt;同じ設定で、&lt;code&gt;lib.rs&lt;/code&gt;に&lt;code&gt;module_a&lt;/code&gt;と&lt;code&gt;module_b&lt;/code&gt;両方を&lt;code&gt;mod&lt;/code&gt;宣言しておきます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ find src
-src
-src/lib.rs
-src/module_a.rs
-src/module_b.rs
-$ cat src/lib.rs
-mod module_a;
-mod module_b;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;この時、&lt;code&gt;module_b&lt;/code&gt;が&lt;code&gt;lib.rs&lt;/code&gt;から見た時と&lt;code&gt;module_a.rs&lt;/code&gt;から見た時で名前が変わります。&lt;/p&gt;
-
-&lt;p&gt;lib.rsから見た時は、以下の3つが使えます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;use ::module_a;     // 絶対パス
-use module_a;       // 省略絶対パス
-use self::module_a; // 相対パス
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;self&lt;/code&gt;というのは予約語で、ディレクトリでいうところの&lt;code&gt;.&lt;/code&gt;に相当します。&lt;/p&gt;
-
-&lt;p&gt;module_a.rsからは同じく3つが使えますが、相対パスが変わります。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;use ::module_a;     // 絶対パス
-use module_a;       // 省略絶対パス
-use super::module_a; // 相対パス
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;super&lt;/code&gt;も予約語で、&lt;code&gt;..&lt;/code&gt;に相当します。
-ファイルが同じディレクトリにいるので分かりづらいですが、libが1つ上の階層で、その下にmodule_aとmodule_bがぶら下がってる感じですね。&lt;/p&gt;
-
-&lt;h1 id=&#34;おじさんと隠し子&#34;&gt;おじさんと隠し子&lt;/h1&gt;
-
-&lt;p&gt;次のように、サブモジュールを作ってみます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$src
-src/lib.rs
-src/module_a
-src/module_a/mod.rs
-src/module_a/submodule.rs
-src/module_b.rs
-$ cat src/lib.rs
-mod module_a;
-mod module_b;
-$ cat src/module_a/mod.rs
-mod submodule;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;さて、この時&lt;code&gt;sumbmodule&lt;/code&gt;から見た&lt;code&gt;module_b&lt;/code&gt;の名前はどうなるでしょうか。もうお分かりかと思いますが、以下の3つです。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use ::module_a;     // 絶対パス
-use module_a;       // 省略絶対パス
-use super::super::module_a; // 相対パス
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;じゃ、逆に&lt;code&gt;module_b&lt;/code&gt;から見た&lt;code&gt;submodule&lt;/code&gt;はどうなるでしょうか。実は、&lt;code&gt;module_b&lt;/code&gt;から&lt;code&gt;submodule&lt;/code&gt;は見えません（lib.rsからも見えません）。&lt;code&gt;module_a&lt;/code&gt;1つで所帯を持っているので子である&lt;code&gt;submodule&lt;/code&gt;を外に出すかは&lt;code&gt;module_a&lt;/code&gt;の一存で決まります。今回は隠し子にしている訳ですね。いくら兄弟モジュールとはいえ家庭にまでは入り込めないのです。&lt;/p&gt;
-
-&lt;p&gt;子供をちゃんと公開するには&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cat src/module_a/mod.rs
-mod submodule;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;となっていたモジュール宣言を&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cat src/module_a/mod.rs
-pub mod submodule;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;としてあげればOKです。そうすると&lt;code&gt;module_b&lt;/code&gt;からも見えて、以下の3種類で参照出来ます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use ::module_a::submodule;
-use module_a::submodule;
-use super::module_a::submodule;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h1 id=&#34;木箱の外から&#34;&gt;木箱の外から&lt;/h1&gt;
-
-&lt;p&gt;さて、今までは1クレート内での話でした。クレートの外から見るとどうなるでしょうか。&lt;/p&gt;
-
-&lt;p&gt;新たに&lt;code&gt;main.rs&lt;/code&gt;を追加しましょう。先程 &lt;code&gt;lib.rs&lt;/code&gt;と&lt;code&gt;main.rs&lt;/code&gt;がエラいと話しましたが、どちらも別々のクレートを作るので&lt;code&gt;main.rs&lt;/code&gt;は完全にクレートの外です。&lt;/p&gt;
-
-&lt;p&gt;こんな感じですね。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ find src
-src
-src/lib.rs
-src/main.rs
-src/module_a
-src/module_a/mod.rs
-src/module_a/submodule.rs
-src/module_b.rs
-$ cat src/lib.rs
-mod module_a;
-mod module_b;
-$ cat src/module_a/mod.rs
-pub mod submodule;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;まず、外部のクレートを参照するには&lt;code&gt;extern crate&lt;/code&gt;を書く必要があります。あとまあ、binクレートなので&lt;code&gt;main&lt;/code&gt;関数も必要ですね。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cat src/main.rs
-extern carte module;
-fn main() {}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;では、&lt;code&gt;module_b&lt;/code&gt;はどういう名前で見えるでしょうか。見えません。一番エラい&lt;code&gt;lib.rs&lt;/code&gt;が&lt;code&gt;module_b&lt;/code&gt;を&lt;code&gt;pub&lt;/code&gt;にしていないのでクレートの外からは見えなくなっています。見たければ、&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cat src/lib.rs
-mod module_a;
-pub mod module_b;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のようにします。&lt;/p&gt;
-
-&lt;p&gt;さて、これでmain.rsからどのように見えるかというと。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;use ::module::module_b;
-use module::module_b;
-use self::module::module_b;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のように気持的にルート直下にクレートがモジュールとして配置されたように見えます。&lt;/p&gt;
-
-&lt;h1 id=&#34;家出&#34;&gt;家出&lt;/h1&gt;
-
-&lt;p&gt;さて、同じように&lt;code&gt;lib.rs&lt;/code&gt;で&lt;code&gt;module_a&lt;/code&gt;を&lt;code&gt;pub mod&lt;/code&gt;すれば&lt;code&gt;module::module_a::submodule&lt;/code&gt;も参照出来るようになります。ところで、例えば&lt;code&gt;module_a&lt;/code&gt;は外に出さずに&lt;code&gt;submodule&lt;/code&gt;だけを公開したい時にはどうしたらいいでしょうか。そんなケースあるのかと疑問に思うかもしれませんが、あります。同じクレートであっても&lt;code&gt;pub&lt;/code&gt;にしないとサブモジュールにアクセス出来ないことを思い出して下さい。そうすると&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;pub mod submodule;
-pub mod internal_submodule_a;
-pub mod internal_submodule_b;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;みたいなケースが発生するのは想像出来ると思います。そういう時は、&lt;code&gt;lib.rs&lt;/code&gt;側でどうにかいじれます。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cat src/lib.rs
-mod module_a;
-pub mod module_b;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;となっていると思いますが、&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;$ cat src/lib.rs
-mod module_a;
-pub mod module_b;
-
-pub use module_a::submodule;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;と、&lt;code&gt;pub use&lt;/code&gt; を加えてあげることで&lt;code&gt;module_a&lt;/code&gt;の下から出すことが出来ます。&lt;/p&gt;
-
-&lt;p&gt;これを&lt;code&gt;main.rs&lt;/code&gt;から使う時は&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use module::submodule;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のように名字の&lt;code&gt;module_a&lt;/code&gt;が取れます。&lt;/p&gt;
-
-&lt;p&gt;さらに踏み込めば、&lt;code&gt;use&lt;/code&gt;は&lt;code&gt;as&lt;/code&gt;を使ってリネーム出来るので&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;$ cat src/lib.rs
-mod module_a;
-pub mod module_b;
-
-pub use module_a::submodule as module_c;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のようにリネーム&lt;code&gt;use&lt;/code&gt;してあげれば&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class=&#34;language-rust&#34;&gt;use module::module_c;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;のように参照することも出来ます。完全に籍を外れて名前の上では別人ですね。&lt;/p&gt;
-
-&lt;p&gt;実装する時の都合とAPIとして公開する時の都合が違うので公開用にいじれる作りになってるんですね。&lt;/p&gt;
-
-&lt;h1 id=&#34;lib-rsとmain-rs&#34;&gt;lib.rsとmain.rs&lt;/h1&gt;
-
-&lt;p&gt;上では&lt;code&gt;lib.rs&lt;/code&gt;を使って説明しましたが、&lt;code&gt;main.rs&lt;/code&gt;でも同じことが出来ます。&lt;/p&gt;
-
-&lt;p&gt;さて、ここからはスタイルの話ですが、私がRustを書く時は&lt;code&gt;main.rs&lt;/code&gt;の中に&lt;code&gt;mod&lt;/code&gt;を書くことはないです。必ず&lt;code&gt;lib.rs&lt;/code&gt;を作って、そこでライブラリとしてまとめてから&lt;code&gt;main.rs&lt;/code&gt;で使います。「アプリケーションはアプリケーションを記述するための巨大なDSLとそれを使った小さな実装からなる」という思想ですね。明示的に境界を作ることで自然とAPIを設計出来るのでコードが整理しやすくなります。&lt;/p&gt;
-
-&lt;h1 id=&#34;まとめ&#34;&gt;まとめ&lt;/h1&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;code&gt;lib.rs&lt;/code&gt;と&lt;code&gt;main.rs&lt;/code&gt;が一番エラい。&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;mod&lt;/code&gt; で「モジュールがある」宣言&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;pub mod&lt;/code&gt; で加えて上位のモジュールにも公開&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;self&lt;/code&gt;と&lt;code&gt;super&lt;/code&gt;の予約語&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;pub use&lt;/code&gt; で改名&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;力尽きてテストのためのモジュールの話が出来なかったので&lt;a href=&#34;https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/testing.html#tests-%E3%83%A2%E3%82%B8%E3%83%A5%E3%83%BC%E3%83%AB&#34;&gt;ドキュメント&lt;/a&gt;を読んでみて下さい。&lt;/p&gt;
-
-&lt;p&gt;因みに&lt;a href=&#34;https://github.com/BurntSushi/fst/blob/master/src/lib.rs&#34;&gt;これ&lt;/a&gt;のようにテクニックが詰まった&lt;code&gt;lib.rs&lt;/code&gt;ファイルなんかも存在するので参考にどうぞ。&lt;/p&gt;</description>
+      <guid>/blog/2017/01/15/rustnomoju_runokirikata/</guid>
+      <description>&lt;p&gt;κeenです。たまにRustのモジュールが分かりづらいとの声を聞くので解説しますね。&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>頑張らないLinuxデスクトップ環境</title>
-      <link>/blog/2017/01/10/linuxdesukutoppukankyou</link>
+      <link>/blog/2017/01/10/linuxdesukutoppukankyou/</link>
       <pubDate>Tue, 10 Jan 2017 22:07:31 +0900</pubDate>
       
-      <guid>/blog/2017/01/10/linuxdesukutoppukankyou</guid>
+      <guid>/blog/2017/01/10/linuxdesukutoppukankyou/</guid>
       <description>&lt;p&gt;κeenです。みんなカスタマイズしてLinux使っているようなのであまりカスタマイズしてない私のものも紹介しますね。&lt;/p&gt;
 
 &lt;p&gt;因みに私は会社でMac使ってたら使いにくすぎてVMに逃げたくらいのLinuxユーザです。家では勿論Linuxしか使ってないです。
-&lt;/p&gt;
-
-&lt;h1 id=&#34;ディストリ&#34;&gt;ディストリ&lt;/h1&gt;
-
-&lt;p&gt;Ubuntu。定番。色々言う人がいるけど何も不満はない。&lt;/p&gt;
-
-&lt;h1 id=&#34;ウィンドウマネージャ-統合デスクトップ環境&#34;&gt;ウィンドウマネージャ（統合デスクトップ環境）&lt;/h1&gt;
-
-&lt;p&gt;Unity。デフォルト。&lt;/p&gt;
-
-&lt;h1 id=&#34;im&#34;&gt;IM&lt;/h1&gt;
-
-&lt;p&gt;uim-skk。何故uim-かというと最初にたまたまそれを使ったから。&lt;/p&gt;
-
-&lt;h1 id=&#34;ブラウザ&#34;&gt;ブラウザ&lt;/h1&gt;
-
-&lt;p&gt;FireFox。確かデフォルト。入れてる拡張はkeysnailのみ。&lt;/p&gt;
-
-&lt;h1 id=&#34;twitterクライアント&#34;&gt;Twitterクライアント&lt;/h1&gt;
-
-&lt;p&gt;公式Web。新機能の追加が一番早くて便利。&lt;/p&gt;
-
-&lt;h1 id=&#34;ターミナルエミュレータ&#34;&gt;ターミナルエミュレータ&lt;/h1&gt;
-
-&lt;p&gt;gnome-terminal。デフォルト。速いし簡単に背景半透明に出来るし何も不満はない。tmuxと一緒に使ってる。&lt;/p&gt;
-
-&lt;h1 id=&#34;エディタ&#34;&gt;エディタ&lt;/h1&gt;
-
-&lt;p&gt;Emacs。デフォルトではない。毎日masterをコンパイルして使う。&lt;/p&gt;
-
-&lt;h1 id=&#34;キーバインド変更&#34;&gt;キーバインド変更&lt;/h1&gt;
-
-&lt;p&gt;xmodmap + &lt;a href=&#34;https://github.com/k0kubun/xremap&#34;&gt;xremap&lt;/a&gt;。これ CF &lt;a href=&#34;http://k0kubun.hatenablog.com/entry/xkremap&#34;&gt;Linux向けの最強のキーリマッパーを作った - k0kubun&amp;rsquo;s blog&lt;/a&gt;。
-CapsLockとctrlのスワップにxmodmapを、Emacs風バインドを作るためにxremapを使ってる。xremapは別になくてもどうにかなる。&lt;/p&gt;
-
-&lt;h1 id=&#34;メーラ&#34;&gt;メーラ&lt;/h1&gt;
-
-&lt;p&gt;Thunderbird。確かデフォルト。でもUbuntuのパッケージは更新が遅いので手でインストールしてる。&lt;/p&gt;
-
-&lt;h1 id=&#34;カレンダー&#34;&gt;カレンダー&lt;/h1&gt;
-
-&lt;p&gt;Thunderbird + Lightening拡張。Googlカレンダーと同期出来るし便利。&lt;/p&gt;
-
-&lt;hr /&gt;
-
-&lt;p&gt;このくらいかな？フォントもデフォルト。あとはSlackに公式クライアントだとか偶に音楽再生にrythmbox（デフォルト）だとか画像表示にeog（デフォルト）だとかPDF表示にevice（デフォルト）だとかファイラにnautilus（デフォルト）スクリーンショットにgnome-screenshot（デフォルト）だとかを使うけどこの辺は当たり前なので書かなくていいかな。&lt;/p&gt;
-
-&lt;p&gt;ということでそんなにカスタマイズしなくてもLinuxは便利なのでみなさん使いましょう。&lt;/p&gt;</description>
+&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>Idein Incに入社しました</title>
-      <link>/blog/2017/01/06/idein_incninyuushashimashita</link>
+      <link>/blog/2017/01/06/idein_incninyuushashimashita/</link>
       <pubDate>Fri, 06 Jan 2017 20:53:12 +0900</pubDate>
       
-      <guid>/blog/2017/01/06/idein_incninyuushashimashita</guid>
+      <guid>/blog/2017/01/06/idein_incninyuushashimashita/</guid>
       <description>&lt;p&gt;κeenです。本日を以ちまして&lt;a href=&#34;http://idein.jp/&#34;&gt;Idein Inc.&lt;/a&gt;に入社したので報告します。&lt;/p&gt;
 
 &lt;p&gt;退職エントリは&lt;a href=&#34;http://keens.github.io/blog/2016/11/30/saiba_e_jientowotaishokushimashita/&#34;&gt;こちら&lt;/a&gt;&lt;/p&gt;
 
-&lt;p&gt;&lt;/p&gt;
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>QUICの中身が分からないから仕様読んでみた</title>
+      <link>/blog/2017/01/02/quicnonakamigawakaranaikarashiyouyondemita/</link>
+      <pubDate>Mon, 02 Jan 2017 10:46:39 +0900</pubDate>
+      
+      <guid>/blog/2017/01/02/quicnonakamigawakaranaikarashiyouyondemita/</guid>
+      <description>&lt;p&gt;κeenです。先日同期と話しててQUICの中身ってあまり知らないよねってことでQUICの仕様（ドラフト）を読んだのでまとめますね。あまりまとめきれてませんが。&lt;/p&gt;
 
-&lt;h1 id=&#34;経緯&#34;&gt;経緯&lt;/h1&gt;
+&lt;p&gt;&lt;del&gt;&lt;strong&gt;※ドラフトは既に古くなっているのでこのブログの内容は現行では正しくない可能性があります。というか一部既に正しくないことが判明しています。ご注意下さい&lt;/strong&gt;&lt;/del&gt;&lt;/p&gt;
 
-&lt;ul&gt;
-&lt;li&gt;Lisp Meet Upで社長の&lt;a href=&#34;https://twitter.com/9_ties&#34;&gt;@9_ties&lt;/a&gt;さんと知り合う&lt;/li&gt;
-&lt;li&gt;その他勉強会で何度か一緒になってよく喋るようになる&lt;/li&gt;
-&lt;li&gt;オフィス訪問に誘われて行ったら入社を誘われる（7月末）&lt;/li&gt;
-&lt;li&gt;入社することにする（9月半ば）&lt;/li&gt;
-&lt;li&gt;入社（現在）&lt;/li&gt;
-&lt;/ul&gt;
+&lt;p&gt;後で新しいドラフトを発見したので内容を書き換えました。とりあえずリンクを貼ってあるドラフトの内容までは反映出来ています。&lt;/p&gt;
 
-&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;わさびずとideinに遊びに来たよ。噂のpi zero&lt;br&gt;クラスタとかPEZYとかあった。熱い。 &lt;a href=&#34;https://t.co/MEc7qdosrk&#34;&gt;pic.twitter.com/MEc7qdosrk&lt;/a&gt;&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/759655196628615168&#34;&gt;2016年7月31日&lt;/a&gt;&lt;/blockquote&gt;
-&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>2017年注目していきたい技術</title>
+      <link>/blog/2017/01/01/2017nenchuumokushiteikitaigijutsu/</link>
+      <pubDate>Sun, 01 Jan 2017 22:12:01 +0900</pubDate>
+      
+      <guid>/blog/2017/01/01/2017nenchuumokushiteikitaigijutsu/</guid>
+      <description>&lt;p&gt;κeenです。毎年これやっていく。個人的に注目していきたい技術と飛び込んでみたい技術書いく。&lt;/p&gt;
 
-&lt;p&gt;結構前から水面下で話は進んでました。&lt;/p&gt;
+&lt;p&gt;あくまで個人的な内容。&lt;/p&gt;
 
-&lt;p&gt;割と「PEZYに行くの？」という質問が多かったのですが中らずとも遠からずといったところでしょうか。PEZY Computingとも取引があったりする会社です。&lt;/p&gt;
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>2016年注目していきたかった技術の振り返りと個人的振り返り</title>
+      <link>/blog/2016/12/31/2016nenchuumokushiteikitakattagijutsunofurikaeritokojintekifurikaeri/</link>
+      <pubDate>Sat, 31 Dec 2016 16:57:48 +0900</pubDate>
+      
+      <guid>/blog/2016/12/31/2016nenchuumokushiteikitakattagijutsunofurikaeritokojintekifurikaeri/</guid>
+      <description>&lt;p&gt;κeenです。年始に&lt;a href=&#34;http://keens.github.io/blog/2016/01/01/2016nenchuumokushiteikitaigijutsu/&#34;&gt;2016年注目していきたい技術 | κeenのHappy Hacκing Blog&lt;/a&gt;ってのを書いたので雑に振り返ります。あと個人的な一年の総括を。&lt;/p&gt;
 
-&lt;h1 id=&#34;どんな会社&#34;&gt;どんな会社？&lt;/h1&gt;
+&lt;p&gt;※個人メモなので雑多な記述が多いです。&lt;/p&gt;
 
-&lt;p&gt;私が7人目（バイトを抜いたら6人目）の社員になる、少数精鋭なスタートアップです。全社員に1つのチャットで連絡が取れます。
-この規模ながらフルタイムのリサーチャがいるなど、かなり技術寄りな会社です。創業者も全員技術者です。社員の中ではクソザコクラスになるので明日から人権があるか心配ですがどうにか上手くやっていきます。&lt;/p&gt;
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>気付いたらRustの環境構築がかなり楽になってた</title>
+      <link>/blog/2016/12/29/kizuitararustnokankyoukouchikugakanarirakuninatteta/</link>
+      <pubDate>Thu, 29 Dec 2016 11:52:55 +0900</pubDate>
+      
+      <guid>/blog/2016/12/29/kizuitararustnokankyoukouchikugakanarirakuninatteta/</guid>
+      <description>&lt;p&gt;κeenです。ここのところRustの開発ツール回りでリリースが続いてセットアップが楽になってるようだったので最新の情報をお届けします。&lt;/p&gt;
 
-&lt;p&gt;今3期目とのことです。&lt;/p&gt;
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustのライフタイムを使ったスコープ解析</title>
+      <link>/blog/2016/12/24/rustnoraifutaimuwotsukattasuko_pukaiseki/</link>
+      <pubDate>Sat, 24 Dec 2016 22:51:46 +0900</pubDate>
+      
+      <guid>/blog/2016/12/24/rustnoraifutaimuwotsukattasuko_pukaiseki/</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2016/rust-lang-2&#34;&gt;Rust その2 Advent Calendar 2016 - Qiita&lt;/a&gt;の25日目の記事です。&lt;/p&gt;
 
-&lt;p&gt;社長に「なんて紹介したらいいですか」って言ったら「うーん、困るなぁ」と言われました（苦笑。
-Big Pictureとしてはコンピュテーショナルセンサーを使って世の中に起きているあらゆる事象をソフトウェアで扱えるようにしたい、というもの。ざっくり言ってしまえばIoTの会社になるんですかね。
-でもじゃあ電子工作ばっかやってるのかというとそういう訳でもなくて、例えばカメラから得られた画像から色々な情報を抜き出すために機械学習やらディープラーニングやらをやっていたり、さらにそれをセンサーデバイス（Rasp Piとか）上で走らせるために効率化したりとソフトウェア技術のウェイトがかなり大きいです。&lt;/p&gt;
+&lt;p&gt;κeenです。大トリに小ネタで申し訳ないのですが最近書いたコードでちょっと便利だなと思ったテクニックを紹介します。&lt;/p&gt;
 
-&lt;p&gt;例えばニューラルネットワークの学習済みデータを最適化（軽量化）してさらにコンパイル（！！）して組込みデバイス上でも満足な速度で動かすための技術開発なんかをやっています。&lt;/p&gt;
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustの所有権、ライフタイム、参照、型、しがらみ</title>
+      <link>/blog/2016/12/14/rustnoshoyuuken_raifutaimu_sanshou_kata_shigarami/</link>
+      <pubDate>Wed, 14 Dec 2016 11:19:12 +0900</pubDate>
+      
+      <guid>/blog/2016/12/14/rustnoshoyuuken_raifutaimu_sanshou_kata_shigarami/</guid>
+      <description>&lt;p&gt;κeenです。Rustには所有権やらライフタイムやら参照やらがあって型システムが面倒ですよね。線形（アフィン）と言われてるのに「あれ？」と思う部分もあるので詳しく探っていこうと思います。&lt;/p&gt;
 
-&lt;p&gt;あるいはセンサーから取得したデータを使えるプラットフォームなんかも。&lt;/p&gt;
+&lt;p&gt;尚、この記事は型システムに興味のある人向けです。単にRustを書きたい方に有用な情報があるかは分かりません。&lt;/p&gt;
 
-&lt;h1 id=&#34;どんな仕事するの&#34;&gt;どんな仕事するの？&lt;/h1&gt;
+&lt;p&gt;2016-212-14T15:28Z09:00 加筆訂正しました。diffは&lt;a href=&#34;https://github.com/KeenS/KeenS.github.io/commit/f86c03a3793fde1787a9c0eb47f8efda305c2be4&#34;&gt;こちら&lt;/a&gt;&lt;/p&gt;
 
-&lt;p&gt;私の仕事もそういう文脈からきていて、例えばニューラルネットをコンパイルしてRasp PiのGPUで動かすだとか、あるいはもうちょっと特化したデバイス（ぼかしてる）のためのコンパイラを作るだとかの仕事になります。
-自分で書いておきながらやっぱり「ニューラルネットをコンパイルする」っていう字面がパワーある。
-今、（学習ではなくて予測に）使われているのはほとんどがモデルと実行器が分けらています。要はインタプリタなのでそれをコンパイルしてあげて高速に実行するというのが可能なんですね。
-ニューラルネットの圧縮のために数学が必要そうな雰囲気で、数学出来ない私は震え上がってます。&lt;/p&gt;
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustのstructとtraitって似てるよね</title>
+      <link>/blog/2016/12/03/rustnostructtotraittteniteruyone/</link>
+      <pubDate>Sat, 03 Dec 2016 22:06:18 +0900</pubDate>
+      
+      <guid>/blog/2016/12/03/rustnostructtotraittteniteruyone/</guid>
+      <description>&lt;p&gt;κeenです。関連型について考えてたらtraitがstructに見えてきたので一筆。小ネタです。&lt;/p&gt;
 
-&lt;p&gt;会社全体としてはデバイスの開発も一応やりつつ、データを処理するための技術開発、共同研究、技術開発も含めた受託案件、あるいは開発した技術を使った受託案件なんかもやっています。
-かなり技術開発への投資が強いイメージですが、今期は黒字予定と案外バランスの取れた運営をしているようです（結構色々な会社が興味を持ってくれているようです。
-センサーだとかの文脈になるのでお客さんはハードウェアの会社が多いようです。&lt;/p&gt;
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustのプロセス</title>
+      <link>/blog/2016/12/02/rustnopurosesu/</link>
+      <pubDate>Fri, 02 Dec 2016 17:52:30 +0900</pubDate>
+      
+      <guid>/blog/2016/12/02/rustnopurosesu/</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2016/rust-lang-2&#34;&gt;Rust その2 Advent Calendar 2016 - Qiita&lt;/a&gt;3日目の記事です。&lt;/p&gt;
 
-&lt;h1 id=&#34;初日の感想は&#34;&gt;初日の感想は？&lt;/h1&gt;
+&lt;p&gt;κeenです。Rustの&lt;a href=&#34;https://doc.rust-lang.org/std/process/index.html&#34;&gt;&lt;code&gt;std::process&lt;/code&gt;&lt;/a&gt;の扱い方を紹介します。&lt;/p&gt;
 
-&lt;p&gt;会社が移転した（前のオフィスだと私のスペースがなかった）のでほとんど環境構築でした。&lt;/p&gt;
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>新しいコンパイラバックエンドcretonne</title>
+      <link>/blog/2016/12/02/atarashiikonpairabakkuendocretonne/</link>
+      <pubDate>Fri, 02 Dec 2016 14:00:11 +0900</pubDate>
+      
+      <guid>/blog/2016/12/02/atarashiikonpairabakkuendocretonne/</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2016/lang_dev&#34;&gt;言語実装 Advent Calendar 2016 - Qiita&lt;/a&gt;3日目の記事です。&lt;/p&gt;
 
-&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;環境構築してる &lt;a href=&#34;https://t.co/6HLHbnOmi6&#34;&gt;pic.twitter.com/6HLHbnOmi6&lt;/a&gt;&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/817252587703414789&#34;&gt;2017年1月6日&lt;/a&gt;&lt;/blockquote&gt;
-&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
+&lt;p&gt;κeenです。先日、Rustの開発者フォーラムに新しいバックエンドして&lt;a href=&#34;https://github.com/stoklund/cretonne&#34;&gt;cretonne&lt;/a&gt;が&lt;a href=&#34;https://internals.rust-lang.org/t/possible-alternative-compiler-backend-cretonne/4275&#34;&gt;提案されていました&lt;/a&gt;。&lt;/p&gt;
 
-&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;オフィス引っ越し中 &lt;a href=&#34;https://t.co/MnrNUxxUP7&#34;&gt;pic.twitter.com/MnrNUxxUP7&lt;/a&gt;&lt;/p&gt;&amp;mdash; y͛amaday͛ (@yamaday) &lt;a href=&#34;https://twitter.com/yamaday/status/817203674036305921&#34;&gt;2017年1月6日&lt;/a&gt;&lt;/blockquote&gt;
-&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;
+&lt;p&gt;ちょっと気になったのでそれを紹介します。&lt;/p&gt;
 
-&lt;p&gt;落ち着いたあとはQiita::Teamを全部読んでました。社長も技術者なので事業プランや資金計画（売り上げ）なんかもQiita::Teamに上がってるのが新鮮でした。&lt;/p&gt;
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustでバイト列を扱う時のtips</title>
+      <link>/blog/2016/12/01/rustdebaitoretsuwoatsukautokinotips/</link>
+      <pubDate>Thu, 01 Dec 2016 14:29:33 +0900</pubDate>
+      
+      <guid>/blog/2016/12/01/rustdebaitoretsuwoatsukautokinotips/</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2016/rust-lang-2&#34;&gt;Rust その2 Advent Calendar 2016 - Qiita&lt;/a&gt;2日目の記事です。&lt;/p&gt;
 
-&lt;p&gt;社員に2名ほどRustをやってる人がいて「κeen君来たし仕事でRust使っていくかー」みたいな感じになりました。使えそうな案件があったら積極的に使っていきたいですね。&lt;/p&gt;
+&lt;p&gt;Rustはシステムプログラミング言語なのでバイト列をあれこれしたいことがあると思います。その時にイテレータでバイト列を舐める以外にも色々方法があるなと気付いたので。&lt;/p&gt;
 
-&lt;h1 id=&#34;結びに&#34;&gt;結びに&lt;/h1&gt;
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>マクロやコンパイラプラグインの実装方法色々</title>
+      <link>/blog/2016/12/01/makuroyakonpairapuraguinnojissouhouhou/</link>
+      <pubDate>Thu, 01 Dec 2016 13:29:52 +0900</pubDate>
+      
+      <guid>/blog/2016/12/01/makuroyakonpairapuraguinnojissouhouhou/</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2016/lang_dev&#34;&gt;言語実装 Advent Calendar 2016 - Qiita&lt;/a&gt;2日目の記事です。&lt;/p&gt;
 
-&lt;p&gt;前回転職祝いを沢山頂いたので今回は例のURLは控えさせて頂きます。
-前回送りそびれたのでどうしてもという方は&lt;a href=&#34;http://keens.github.io/blog/2016/11/30/saiba_e_jientowotaishokushimashita/&#34;&gt;退職エントリ&lt;/a&gt;の方から辿って頂けると幸いです。&lt;/p&gt;
+&lt;p&gt;κeenです。マクロなどのコンパイル時に何か処理をしてコード生成する機構の実現方法が言語によって様々にあるなぁと思ったのでちょっと探ってみます&lt;/p&gt;
 
-&lt;p&gt;また、Ideinではエンジニアを募集しています&lt;/p&gt;
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>4年間続いたShibuya.lispのLispMeetUp</title>
+      <link>/blog/2016/12/01/4nenkantsuzuitashibuya_lispnolispmeetup/</link>
+      <pubDate>Thu, 01 Dec 2016 12:40:08 +0900</pubDate>
+      
+      <guid>/blog/2016/12/01/4nenkantsuzuitashibuya_lispnolispmeetup/</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2016/event-management&#34;&gt;IT勉強会/コミュニティ運営 Advent Calendar 2016 - Qiita&lt;/a&gt;2日目の記事です。&lt;/p&gt;
 
-&lt;blockquote&gt;
-&lt;h1 id=&#34;募集職種&#34;&gt;募集職種&lt;/h1&gt;
+&lt;p&gt;Shibuya.lispの開催しているlispmeetupは約4年間毎月開催しました（現46回開催）。
+そこまで長く続いているコミュニティ活動はそんなに多くないのではないでしょうか。
+lispmeetupがどうして続いたのかちょっと考察してみます。&lt;/p&gt;
 
-&lt;ul&gt;
-&lt;li&gt;ソフトウェアエンジニア（画像処理）
-画像処理に関する基本的な知識を持っている方（画像処理の実装経験がある方歓迎）&lt;/li&gt;
-&lt;li&gt;ソフトウェアエンジニア（バックエンド）
-分散システムの構築やDevOpsに興味があり、最新の技術の動向を追っている方。場合によっては自ら実装が出来る方&lt;/li&gt;
-&lt;li&gt;ソフトウェアエンジニア（フロントエンド）
-最新の技術動向に明るく、移り変わりの激しい技術のコンテキストを理解して吸収でき、UXを考慮した実装が出来る方&lt;/li&gt;
-&lt;li&gt;ソフトウェアエンジニア（組み込み）
-計算機を低いレイヤーまで理解し、ハードウェアの仕様を読み解いて必要機能の実装が出来る方&lt;/li&gt;
-&lt;li&gt;ソフトウェアエンジニア（言語処理系）
-計算機アーキテクチャや数値計算アルゴリズムに精通しており、最適化コンパイラやプログラミング環境をフルスクラッチで実装出来る方&lt;/li&gt;
-&lt;/ul&gt;
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>サイバーエージェントを退職しました</title>
+      <link>/blog/2016/11/30/saiba_e_jientowotaishokushimashita/</link>
+      <pubDate>Wed, 30 Nov 2016 15:51:38 +0900</pubDate>
+      
+      <guid>/blog/2016/11/30/saiba_e_jientowotaishokushimashita/</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://www.adventar.org/calendars/1638&#34;&gt;Ex CyberAgent Developers Advent Calendar 2016 - Adventar&lt;/a&gt;1日目の記事です。
+元サイバーエージェントの人がわいわいやります。&lt;/p&gt;
 
-&lt;p&gt;以下のスキルセットを持っている方を歓迎します。&lt;/p&gt;
+&lt;p&gt;κeenです。二年弱勤めたサイバーエージェントを退職したのでその旨について。&lt;/p&gt;
 
-&lt;ul&gt;
-&lt;li&gt;C++, Python, Haskell,Rust, etc&amp;hellip;&lt;/li&gt;
-&lt;li&gt;Git（分散VCS）&lt;/li&gt;
-&lt;li&gt;DevOps関連技術(Docker,Ansible,etc&amp;hellip;)&lt;/li&gt;
-&lt;li&gt;GPU&lt;/li&gt;
-&lt;/ul&gt;
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>SML#をUbuntu 16.10で動かす</title>
+      <link>/blog/2016/11/30/sml_woubuntu_16_10deugokasu/</link>
+      <pubDate>Wed, 30 Nov 2016 15:18:58 +0900</pubDate>
+      
+      <guid>/blog/2016/11/30/sml_woubuntu_16_10deugokasu/</guid>
+      <description>&lt;p&gt;この記事は&lt;a href=&#34;http://qiita.com/advent-calendar/2016/ml&#34;&gt;ML Advent Calendar 2016 - Qiita&lt;/a&gt;の1日目の記事です。&lt;/p&gt;
 
-&lt;p&gt;すべての職種に一貫して、現在のスキルセットよりは以下に挙げるような事柄への知識や興味を優先します。&lt;/p&gt;
+&lt;p&gt;κeenです。小ネタを。Ubuntu 16.10でSML#を動かそうと思ったら動かなかったので動かします。&lt;/p&gt;
 
-&lt;ul&gt;
-&lt;li&gt;アルゴリズムとデータ構造&lt;/li&gt;
-&lt;li&gt;計算機&lt;/li&gt;
-&lt;li&gt;プログラミング言語&lt;/li&gt;
-&lt;li&gt;ソフトウェア工学&lt;/li&gt;
-&lt;/ul&gt;
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustの関連型の使いどころ</title>
+      <link>/blog/2016/11/22/rustnokanrenkatanotsukaidokoro/</link>
+      <pubDate>Tue, 22 Nov 2016 18:26:47 +0900</pubDate>
+      
+      <guid>/blog/2016/11/22/rustnokanrenkatanotsukaidokoro/</guid>
+      <description>&lt;p&gt;κeenです。昨日は&lt;a href=&#34;https://rust.connpass.com/event/41467/&#34;&gt;RustのLT会！ Rust入門者の集い - connpass&lt;/a&gt;に参加してきました。
+そこで&lt;a href=&#34;http://qiita.com/tacke_jp/items/9c7617971dc341146c0f&#34;&gt;関連型に関する発表&lt;/a&gt;があったので感化されて私も一筆。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustの型レベルLispっぽいの作った</title>
+      <link>/blog/2016/11/06/rustnokatareberulispppoinotsukutta/</link>
+      <pubDate>Sun, 06 Nov 2016 11:49:43 +0900</pubDate>
+      
+      <guid>/blog/2016/11/06/rustnokatareberulispppoinotsukutta/</guid>
+      <description>&lt;p&gt;κeenです。ふとした気紛れでRustの型レベルLispっぽいの作りました。&lt;/p&gt;
 
-&lt;h1 id=&#34;待遇-給与&#34;&gt;待遇・給与&lt;/h1&gt;
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>VMwareのUbuntuを16.10にしたら起動しなくなった</title>
+      <link>/blog/2016/10/31/vmwarenoubuntuwo16_10nishitarakidoushinakunatta/</link>
+      <pubDate>Mon, 31 Oct 2016 22:06:17 +0900</pubDate>
+      
+      <guid>/blog/2016/10/31/vmwarenoubuntuwo16_10nishitarakidoushinakunatta/</guid>
+      <description>&lt;p&gt;κeenです。普段はネイティブのUbuntuを使ってますが会社では使えないのでVMwareにUbuntuを入れて使っています。
+今日そのUbuntuを16.04から16.10にアップグレードしたら起動しなくなったので対策メモ。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustのクロージャ3種を作って理解する</title>
+      <link>/blog/2016/10/10/rustnokuro_ja3tanewotsukutterikaisuru/</link>
+      <pubDate>Mon, 10 Oct 2016 16:48:43 +0900</pubDate>
+      
+      <guid>/blog/2016/10/10/rustnokuro_ja3tanewotsukutterikaisuru/</guid>
+      <description>&lt;p&gt;κeenです。Rustのクロージャ、3種類もあって複雑ですよね。
+こういう複雑なものはRustの気持になって考えれば理解出来たりします。ということで手でクロージャを作って理解してみましょう。&lt;/p&gt;
 
-&lt;p&gt;社保完備 月収60万円〜（正社員）&lt;/p&gt;
-&lt;/blockquote&gt;
+&lt;p&gt;尚、これはRustの1.12.0-stableと1.14.0-nightly (6e8f92f11 2016-10-07)で実験しています。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>SMLでモナド</title>
+      <link>/blog/2016/10/10/smldemonado/</link>
+      <pubDate>Mon, 10 Oct 2016 11:05:38 +0900</pubDate>
+      
+      <guid>/blog/2016/10/10/smldemonado/</guid>
+      <description>&lt;p&gt;κeenです。ML Workshop 2016でなんかSMLで型クラスする発表があったらしいので追ってみます。&lt;/p&gt;
 
-&lt;p&gt;因みに私はポテンシャル採用されたタイプで「壁に当たっても自分で調べて乗り越えていけそう」だとか「コンパイラを書いてると心が折れそうになる瞬間があるけどそこで折れないような人が大事だ」とか言われました。頑張ります。&lt;/p&gt;
+&lt;p&gt;implicit parameterをexplicitに渡すのではなく、モジュールとファンクタを使った実装です。&lt;/p&gt;
 
-&lt;p&gt;ということで皆様の応募お待ちしております！！&lt;/p&gt;</description>
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Pijulのインストールが難易度高いので解説する</title>
+      <link>/blog/2016/09/29/pijulnoinsuto_ruganan_idotakainodekaisetsusuru/</link>
+      <pubDate>Thu, 29 Sep 2016 22:15:51 +0900</pubDate>
+      
+      <guid>/blog/2016/09/29/pijulnoinsuto_ruganan_idotakainodekaisetsusuru/</guid>
+      <description>&lt;p&gt;κeenです。ふとTwitterで&lt;a href=&#34;http://pijul.org&#34;&gt;Pijul&lt;/a&gt;の話題を見掛けたついでにインストールしようと思ったら難易度が高かったので解説します。
+Pijulそのものについては&lt;a href=&#34;/blog/2016/02/14/dvcsnomoderu_aruihapijulnitsuite/&#34;&gt;過去のエントリ&lt;/a&gt;を参照して下さい。&lt;/p&gt;
+
+&lt;p&gt;因みにPijulは「ピーフール」みたいに発音するそうです。「フー」は喉の奥から出す破擦音ですね。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustでシェル作った</title>
+      <link>/blog/2016/09/04/rustdeshierutsukutta/</link>
+      <pubDate>Sun, 04 Sep 2016 16:26:20 +0900</pubDate>
+      
+      <guid>/blog/2016/09/04/rustdeshierutsukutta/</guid>
+      <description>&lt;p&gt;κeenです。
+先日、先輩社員と話してるとシェルを作る話になりました。
+だいたいのコンピュータサイエンスの学生なら学部生の頃に課題でシェルを作りますが数学科にいた私は作ったことありませんでした。
+でも、その時「今ならシェルなんて作ろうと思えばすぐに作れますよ」なんて言っちゃったのでなんか作りました。
+まあ、習作程度の雑なものです。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>mirah 0.2がリリースされました。</title>
+      <link>/blog/2016/08/11/mirah_0_2gariri_susaremashita/</link>
+      <pubDate>Thu, 11 Aug 2016 15:32:39 +0900</pubDate>
+      
+      <guid>/blog/2016/08/11/mirah_0_2gariri_susaremashita/</guid>
+      <description>&lt;p&gt;κeenです。久しぶりに&lt;a href=&#34;mirah.org&#34;&gt;mirah&lt;/a&gt;のリリースが出ましたので新機能の紹介をしたいと思います。&lt;/p&gt;
+
+&lt;p&gt;リリース版のダウンロードは &lt;a href=&#34;https://github.com/mirah/mirah/releases/tag/0.2.0&#34;&gt;こちら&lt;/a&gt;から。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>私がコードを書くときテストは書かない</title>
+      <link>/blog/2016/08/02/watashigako_dowokakutokitesutohakakanai/</link>
+      <pubDate>Tue, 02 Aug 2016 00:12:22 +0900</pubDate>
+      
+      <guid>/blog/2016/08/02/watashigako_dowokakutokitesutohakakanai/</guid>
+      <description></description>
+    </item>
+    
+    <item>
+      <title>シェル芸十八般</title>
+      <link>/blog/2016/07/13/shierugeijuuhachihan/</link>
+      <pubDate>Wed, 13 Jul 2016 23:34:03 +0900</pubDate>
+      
+      <guid>/blog/2016/07/13/shierugeijuuhachihan/</guid>
+      <description>&lt;p&gt;&lt;blockquote class=&#34;twitter-tweet&#34; data-lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;武芸十八般のひとつシェル芸ってワードがふと湧いてきたけどどちらかというとシェル芸十八般とかの方がよさそう。grep, cut, xargs,&amp;hellip;&lt;/p&gt;&amp;mdash; κeen (@blackenedgold) &lt;a href=&#34;https://twitter.com/blackenedgold/status/753211663927513088&#34;&gt;2016年7月13日&lt;/a&gt;&lt;/blockquote&gt;
+&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Container Desgin Patterns</title>
+      <link>/blog/2016/07/02/container_desgin_patterns/</link>
+      <pubDate>Sat, 02 Jul 2016 22:26:10 +0900</pubDate>
+      
+      <guid>/blog/2016/07/02/container_desgin_patterns/</guid>
+      <description>&lt;p&gt;κeenです。先日、Kubernetesの開発者が書いた&lt;a href=&#34;http://blog.kubernetes.io/2016/06/container-design-patterns.html&#34;&gt;Kubernetes: Container Design Patterns&lt;/a&gt;というのを教えてもらって、面白かったのでそれを紹介します。
+ただ漫然とコンテナを使っているだけでは気付かない使い方があったのでコンテナに興味のある方は是非一読下さい。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustの所有権/ミュータビリティの分割</title>
+      <link>/blog/2016/06/19/rustnoshoyuuken_myu_tabiriteinobunkatsu/</link>
+      <pubDate>Sun, 19 Jun 2016 20:42:14 +0900</pubDate>
+      
+      <guid>/blog/2016/06/19/rustnoshoyuuken_myu_tabiriteinobunkatsu/</guid>
+      <description>&lt;p&gt;κeenです。昔所有権/ミュータビリティを分割したくなったけどぱっと方法が思いつかなくて困ったことがあるので今更ながら備忘録として残しておきます。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>multirustが非推奨になったようなのでrustupに移行する</title>
+      <link>/blog/2016/06/12/multirustgahisuishouninattayounanoderustupniikousuru/</link>
+      <pubDate>Sun, 12 Jun 2016 15:23:06 +0900</pubDate>
+      
+      <guid>/blog/2016/06/12/multirustgahisuishouninattayounanoderustupniikousuru/</guid>
+      <description>&lt;p&gt;κeenです。どうやらもうそろそろRustのツールチェーン管理はmultirustじゃなくてrustupを使った方が良さそうなので移行しようと思います。
+
+きっかけはmultirustにそういうコミットがされたから。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>cargo-profilerを試す</title>
+      <link>/blog/2016/05/14/cargo_profilerwotamesu/</link>
+      <pubDate>Sat, 14 May 2016 20:59:13 +0900</pubDate>
+      
+      <guid>/blog/2016/05/14/cargo_profilerwotamesu/</guid>
+      <description>&lt;p&gt;κeenです。先日Rustのニュースに流れてきたcargo profilerを試してみます。
+元の紹介記事はこちら&lt;a href=&#34;http://www.suchin.co/2016/05/11/Introducing-Cargo-Profiler/&#34;&gt;Introducing Cargo Profiler · suchin&lt;/a&gt;。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>RustでベアメタルRaspberry PiのLチカ</title>
+      <link>/blog/2016/05/04/rustdebeametaruraspberry_pinolchika/</link>
+      <pubDate>Wed, 04 May 2016 11:43:26 +0900</pubDate>
+      
+      <guid>/blog/2016/05/04/rustdebeametaruraspberry_pinolchika/</guid>
+      <description>&lt;p&gt;κeenです。GWもくもく会で机の片隅で埃被ってたRSPiのベアメタルを触ってみたのでその成果報告を。
+ベアメタルについて知らない人でも読めるように書きます。そしてアセンブラもCも出てきませんし、半田付けも必要ありません。
+Rustしか使いません。&lt;/p&gt;
+
+&lt;p&gt;Rustは分かるけどLチカは全く知らない、けど興味のある方は是非読んでみて下さい。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>LXDがリリースされたらしい</title>
+      <link>/blog/2016/04/14/lxc_2_0_0gariri_susaretarashii/</link>
+      <pubDate>Thu, 14 Apr 2016 22:51:20 +0900</pubDate>
+      
+      <guid>/blog/2016/04/14/lxc_2_0_0gariri_susaretarashii/</guid>
+      <description>&lt;p&gt;κeenです。頭痛い。LXDがリリースされたようなので1つ記事をば。
+LXDはLinuxで動く軽量仮想化コンテナ、LXCのラッパでREST APIとCLIが提供されています。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Mirah関連ツールまとめ</title>
+      <link>/blog/2016/04/04/mirahkanrentsu_rumatome/</link>
+      <pubDate>Mon, 04 Apr 2016 01:16:31 +0900</pubDate>
+      
+      <guid>/blog/2016/04/04/mirahkanrentsu_rumatome/</guid>
+      <description>&lt;p&gt;κeenです。寝付けないのでMirah関連ツールについてまとめようかと。
+とはいってもそんなにないのですが。Mirahについて知らない人は適当にググって下さい。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>リージョンとRustの返り値</title>
+      <link>/blog/2016/03/02/ri_jontorustnokaerichi/</link>
+      <pubDate>Wed, 02 Mar 2016 00:05:03 +0900</pubDate>
+      
+      <guid>/blog/2016/03/02/ri_jontorustnokaerichi/</guid>
+      <description>&lt;p&gt;Rustにおいては返り値ポインタで返すよりもそのまま返して、受け取る側でポインタで受け取るかそのまま受け取るかを指定するのが良い選択肢だ、といっています。
+しかし初めて見る時にはどうしてそんなことが出来るのかわからず、びっくりしますよね。
+それをRustがリージョンを使ってメモリ管理をしていると分かればどうなっているのか分かったのですこしばかり。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustのゼロコスト抽象化</title>
+      <link>/blog/2016/03/01/rustnozerokosutochuushouka/</link>
+      <pubDate>Tue, 01 Mar 2016 23:32:12 +0900</pubDate>
+      
+      <guid>/blog/2016/03/01/rustnozerokosutochuushouka/</guid>
+      <description>&lt;p&gt;κeenです。今日Twitter上でのやりとりから少し面白いことが分かったのでそれについて。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>テストについて考えてみた</title>
+      <link>/blog/2016/03/01/tesutonitsuitekangaetemita/</link>
+      <pubDate>Tue, 01 Mar 2016 22:49:23 +0900</pubDate>
+      
+      <guid>/blog/2016/03/01/tesutonitsuitekangaetemita/</guid>
+      <description>&lt;p&gt;κeenです。
+普段はテストをあまり書かない人なのですが業務では流石に書く必要があって、馴れないことをしていると色々と考えることがあったのでまとめます。
+まだ私はテストのセオリーとかには詳しくないので勝手気儘に考えたことです。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>RustのHigher-Kinded type Trait</title>
+      <link>/blog/2016/02/28/rustnohigherkinded_type_trait/</link>
+      <pubDate>Sun, 28 Feb 2016 14:40:59 +0900</pubDate>
+      
+      <guid>/blog/2016/02/28/rustnohigherkinded_type_trait/</guid>
+      <description>&lt;p&gt;κeenです。少し前の話になりますがRustの関連型を駆使してHigher Kinded type Trait（高階型トレイト）を実現してしまったものが出回ってたのでそれについて。
+本来RustはHKTをサポートしていませんが不思議なことに実装出来てしまっているのです。&lt;/p&gt;
+
+&lt;p&gt;HKTについて微塵も知らない方にも分かるように解説していきます。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>druidというリアルタイムデータ分析ツールを知った</title>
+      <link>/blog/2016/02/27/druidtoiuriarutaimude_tabunsekitsu_ruwoshitta/</link>
+      <pubDate>Sat, 27 Feb 2016 21:28:16 +0900</pubDate>
+      
+      <guid>/blog/2016/02/27/druidtoiuriarutaimude_tabunsekitsu_ruwoshitta/</guid>
+      <description></description>
+    </item>
+    
+    <item>
+      <title>Bind Addressの意味がようやく分かった</title>
+      <link>/blog/2016/02/24/bind_addressnoimigayouyakuwakatta/</link>
+      <pubDate>Wed, 24 Feb 2016 23:57:31 +0900</pubDate>
+      
+      <guid>/blog/2016/02/24/bind_addressnoimigayouyakuwakatta/</guid>
+      <description></description>
+    </item>
+    
+    <item>
+      <title>readlineの作り方</title>
+      <link>/blog/2016/02/14/readlinenotsukurikata/</link>
+      <pubDate>Sun, 14 Feb 2016 22:37:35 +0900</pubDate>
+      
+      <guid>/blog/2016/02/14/readlinenotsukurikata/</guid>
+      <description>&lt;p&gt;κeenです。なんか伏線っぽいもの回収しといた方が良いかなと思ってLinuxっぽい話でも。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>分散VCSのモデル、あるいはPijulについて</title>
+      <link>/blog/2016/02/14/dvcsnomoderu_aruihapijulnitsuite/</link>
+      <pubDate>Sun, 14 Feb 2016 17:12:01 +0900</pubDate>
+      
+      <guid>/blog/2016/02/14/dvcsnomoderu_aruihapijulnitsuite/</guid>
+      <description></description>
+    </item>
+    
+    <item>
+      <title>Nexus 5にUbuntu Touchのインストール</title>
+      <link>/blog/2016/02/10/nexus_5niubuntu_touchnoinsuto_ru/</link>
+      <pubDate>Wed, 10 Feb 2016 23:09:09 +0900</pubDate>
+      
+      <guid>/blog/2016/02/10/nexus_5niubuntu_touchnoinsuto_ru/</guid>
+      <description></description>
+    </item>
+    
+    <item>
+      <title>Common Lispで高速行列演算</title>
+      <link>/blog/2016/02/04/common_lispdekousokugyouretsuenzan/</link>
+      <pubDate>Thu, 04 Feb 2016 23:47:34 +0900</pubDate>
+      
+      <guid>/blog/2016/02/04/common_lispdekousokugyouretsuenzan/</guid>
+      <description>&lt;p&gt;κeenです。Common Lispから線形代数ライブラリを使うポストで比較にCommon Lispのコードが出されていたのですがもう少し改良出来そうだったので少しばかり高速化してみました。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustのパッケージをcrates.ioに登録する</title>
+      <link>/blog/2016/01/31/rustnopakke_jiwocrates_ionitourokusuru/</link>
+      <pubDate>Sun, 31 Jan 2016 14:43:14 +0900</pubDate>
+      
+      <guid>/blog/2016/01/31/rustnopakke_jiwocrates_ionitourokusuru/</guid>
+      <description>&lt;p&gt;κeenです。技術の話題を書くのは久し振りですね。今日初めてRustのパッケージのセントラルレポジトリ、&lt;a href=&#34;crates.io&#34;&gt;crates.io&lt;/a&gt;にパッケージを登録したのでその流れを共有します。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Lisp Meetup3周年に寄せて</title>
+      <link>/blog/2016/01/27/lisp_meetup3shuunenniyosete/</link>
+      <pubDate>Wed, 27 Jan 2016 23:40:11 +0900</pubDate>
+      
+      <guid>/blog/2016/01/27/lisp_meetup3shuunenniyosete/</guid>
+      <description>&lt;p&gt;κeenです。昨日、&lt;a href=&#34;http://lisp.connpass.com/event/25546/&#34;&gt;Lisp Meetup #36&lt;/a&gt;が行なわれました。1回テックトークを挟んでるのでこれでちょうど丸3年、毎月Lisp Meetupが行われたことになります。
+
+Lisp Meetupは&lt;a href=&#34;http://shibuya.lisp-users.org/&#34;&gt;Shibuya.lisp&lt;/a&gt;が基本、毎月開催している草の根活動で、Lisper同士の交流を目的として主に希望者によるトークをメインとした会です。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>独学でプログラミングをやってきた中で良かった技術書50選</title>
+      <link>/blog/2016/01/17/dokugakudepuroguraminguwoyattekitanakadeyokattagijutsushowoageteiku/</link>
+      <pubDate>Sun, 17 Jan 2016 16:48:28 +0900</pubDate>
+      
+      <guid>/blog/2016/01/17/dokugakudepuroguraminguwoyattekitanakadeyokattagijutsushowoageteiku/</guid>
+      <description>&lt;p&gt;今まで読んできた技術書の中で良かったものを挙げていく。
+そろそろ本棚が溢れるので捨てる前に書き留めておく。
+あとはGitHub PagesがアフィOKとのことなので試してみようかと。50冊分（以上）アフィがあるのでページが重いがご容赦を。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>プログラミングを独学する時こそインプットを増やした方がいい</title>
+      <link>/blog/2016/01/17/puroguraminguwodokugakusurutokikosoinputtowofuyashitahougaii/</link>
+      <pubDate>Sun, 17 Jan 2016 13:38:03 +0900</pubDate>
+      
+      <guid>/blog/2016/01/17/puroguraminguwodokugakusurutokikosoinputtowofuyashitahougaii/</guid>
+      <description></description>
+    </item>
+    
+    <item>
+      <title>Isabelleに入門した</title>
+      <link>/blog/2016/01/12/isabelleninyuumonshita/</link>
+      <pubDate>Tue, 12 Jan 2016 22:23:45 +0900</pubDate>
+      
+      <guid>/blog/2016/01/12/isabelleninyuumonshita/</guid>
+      <description>&lt;p&gt;κeenです。連休中にIsabelleを少しばかり触ったのでその時のまとめを。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>SML#のpthreadバインディング作った</title>
+      <link>/blog/2016/01/11/sml_nopthreadbaindingutsukutta/</link>
+      <pubDate>Mon, 11 Jan 2016 00:57:20 +0900</pubDate>
+      
+      <guid>/blog/2016/01/11/sml_nopthreadbaindingutsukutta/</guid>
+      <description>&lt;p&gt;κeenです。またしても深夜になってしまいましたがSML#のpthreadバインディングを作ったのでその報告を。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustといえどリソースの解放は注意</title>
+      <link>/blog/2016/01/08/rusttoiedoriso_sunokaihouhachuui/</link>
+      <pubDate>Fri, 08 Jan 2016 00:50:31 +0900</pubDate>
+      
+      <guid>/blog/2016/01/08/rusttoiedoriso_sunokaihouhachuui/</guid>
+      <description>&lt;p&gt;κeenです。深夜にですが小ネタを。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>2016年注目していきたい技術</title>
+      <link>/blog/2016/01/01/2016nenchuumokushiteikitaigijutsu/</link>
+      <pubDate>Fri, 01 Jan 2016 20:09:36 +0900</pubDate>
+      
+      <guid>/blog/2016/01/01/2016nenchuumokushiteikitaigijutsu/</guid>
+      <description>&lt;p&gt;2016年個人的に注目したいというか力を入れたいというか成行を見守りたいというか、そんな技術達を書き連ねていく。ものによっては「何を今更」と思うかもしれないがあくまで私にとって、だ。&lt;/p&gt;
+
+&lt;p&gt;順不同。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>ATS2の観が整理出来た</title>
+      <link>/blog/2016/01/01/ats2nokangaseiridekita/</link>
+      <pubDate>Fri, 01 Jan 2016 18:52:56 +0900</pubDate>
+      
+      <guid>/blog/2016/01/01/ats2nokangaseiridekita/</guid>
+      <description>&lt;p&gt;κeenです。ATS2には3つの世界があります。動的な世界、静的な世界、証明の世界。
+&lt;a href=&#34;//KeenS.github.io/blog/2015/12/29/ats2noizongatawotsukatteavlki/&#34;&gt;前回&lt;/a&gt;の記事では静的な世界を色々扱ってみました。
+今回は証明の世界である観について少し。
+
+2016-1-2: いくつか誤植を直しました(用語で言えば、 注観→駐観 が正解でした)。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>ATS2の依存型を使ってAVL木</title>
+      <link>/blog/2015/12/29/ats2noizongatawotsukatteavlki/</link>
+      <pubDate>Tue, 29 Dec 2015 23:40:45 +0900</pubDate>
+      
+      <guid>/blog/2015/12/29/ats2noizongatawotsukatteavlki/</guid>
+      <description>&lt;p&gt;κeenです。少しばかりATS2を触ってみたので成果報告でも。&lt;/p&gt;
+
+&lt;p&gt;AVL木は左右のノードの高さが高々1しか違わない平衡二分木です。OCamlやSMLでナイーブに実装すると本当に1しか違わないことを保証するのは難しく、精々テストなどで部分的に検査するだけです。&lt;/p&gt;
+
+&lt;p&gt;ところがSMLに似た文法を持つATS2には依存型があり、左右のノードの高さが高々1しか違わないことを型で保証出来ます。
+つまり、左右のノードの高さが2以上違う木を作ろうとしてもコンパイルエラーになるのでコンパイルが通れば高さについてはバグがないこと保証されます。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>SML#とCプリプロセッサの連携</title>
+      <link>/blog/2015/12/26/sml_tocpuripurosessanorenkei/</link>
+      <pubDate>Sat, 26 Dec 2015 20:09:24 +0900</pubDate>
+      
+      <guid>/blog/2015/12/26/sml_tocpuripurosessanorenkei/</guid>
+      <description>&lt;p&gt;κeenです。Advent Calendarのためにネタやアイディアを用意したものの時間/場所的都合でAdvent Calendarとして出せなかったボツネタでも供養しようかと。
+Advent Calendarが終わってしまったので投げやり気味ですね。
+第3段はSML#とCプリプロセッサで連携する話。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>SML#のオレオレREPLを作る話 初級</title>
+      <link>/blog/2015/12/26/sml_nooreorereplwotsukuruhanashi_shokyuu/</link>
+      <pubDate>Sat, 26 Dec 2015 19:48:30 +0900</pubDate>
+      
+      <guid>/blog/2015/12/26/sml_nooreorereplwotsukuruhanashi_shokyuu/</guid>
+      <description>&lt;p&gt;κeenです。Advent Calendarのためにネタやアイディアを用意したものの時間/場所的都合でAdvent Calendarとして出せなかったボツネタでも供養しようかと。
+Advent Calendarが終わってしまったので投げやり気味ですね。
+第2段はSML#のオレオレREPLを作る話の初級。&lt;/p&gt;
+
+&lt;p&gt;SML#にはFFIがあり、任意のオブジェクトファイル/ライブラリをリンクしてC関数を呼び出すことが出来ますが、REPLで試そうとしてもREPLにリンクされていないので呼び出せません。
+そこで呼び出したいオブジェクトファイルをリンクしたREPLを作れば捗るよね、という発想です。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustのロガーを作る</title>
+      <link>/blog/2015/12/26/rustnoroga_wotsukuru/</link>
+      <pubDate>Sat, 26 Dec 2015 19:18:31 +0900</pubDate>
+      
+      <guid>/blog/2015/12/26/rustnoroga_wotsukuru/</guid>
+      <description>&lt;p&gt;κeenです。Advent Calendarのためにネタやアイディアを用意したものの時間/場所的都合でAdvent Calendarとして出せなかったボツネタでも供養しようかと。
+Advent Calendarが終わってしまったので投げやり気味ですね。
+第1段はRustのロガーを作る話。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://qiita.com/advent-calendar/2015/rust-lang&#34;&gt;Rust Advent Calendar&lt;/a&gt;の&lt;a href=&#34;//KeenS.github.io/blog/2015/11/14/rustdechiisanatsu_ruwotsukuttemiru/&#34;&gt;初日&lt;/a&gt;でロガーはfacadと実装に分かれてると書きましたが、実装を作る話ですね。
+
+&lt;a href=&#34;https://doc.rust-lang.org/log/log/index.html&#34;&gt;ドキュメント&lt;/a&gt;を見てもらえば分かる通り、logは&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Apache Drillの不自然な挙動</title>
+      <link>/blog/2015/12/20/apache_drillnofushizennakyodou/</link>
+      <pubDate>Sun, 20 Dec 2015 23:04:37 +0900</pubDate>
+      
+      <guid>/blog/2015/12/20/apache_drillnofushizennakyodou/</guid>
+      <description>&lt;p&gt;この記事は&lt;a href=&#34;http://qiita.com/advent-calendar/2015/drill&#34;&gt;Apache Drill Advent Calendar 2015&lt;/a&gt;21日目のエントリです&lt;/p&gt;
+
+&lt;p&gt;最初は備忘録がてら普段使うMySQL、BigQuery、SQLite、Apache DrillのSQLシンタックスの違いでも書こうかと思ったのですが調査が思ったより大変だったのでやめました。ANSI SQLも色々変わってるということは理解出来ました。&lt;/p&gt;
+
+&lt;p&gt;ということでApache Drillを使ってて「ん？」と思った挙動をいくつか出してみようかと。1.4時点での情報です。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>最近作ってるLispの話</title>
+      <link>/blog/2015/12/20/saikintsukutterulispnohanashi/</link>
+      <pubDate>Sun, 20 Dec 2015 22:40:16 +0900</pubDate>
+      
+      <guid>/blog/2015/12/20/saikintsukutterulispnohanashi/</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2015/lisp&#34;&gt;Lisp Advent Calendar 2015&lt;/a&gt;21日目の記事です。&lt;/p&gt;
+
+&lt;p&gt;κeenです。最近あまりLispを書いてなくてネタがないので最近作ってるLispの話でもしようかと。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>travisとappveyorでクロスプラットフォームなCIする話</title>
+      <link>/blog/2015/12/20/travistoappveyerdekurosupurattofo_munacisuruhanashi/</link>
+      <pubDate>Sun, 20 Dec 2015 22:19:21 +0900</pubDate>
+      
+      <guid>/blog/2015/12/20/travistoappveyerdekurosupurattofo_munacisuruhanashi/</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2015/rust-lang&#34;&gt;Rust Advent Calendar 2015&lt;/a&gt;20日目の記事です。
+日付を覚え間違っていて、締切ギリギリに書いてます。&lt;/p&gt;
+
+&lt;p&gt;κeenです。ものすごい小ネタですがRustでCIする話でも。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>ClojureでReactive Messaging Pattern</title>
+      <link>/blog/2015/12/19/clojuredereactive_messaging_pattern/</link>
+      <pubDate>Sat, 19 Dec 2015 22:30:19 +0900</pubDate>
+      
+      <guid>/blog/2015/12/19/clojuredereactive_messaging_pattern/</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2015/clojure&#34;&gt;Clojure Advent Calendar 2015&lt;/a&gt;の16日目の記事です（大遅刻）&lt;/p&gt;
+
+&lt;p&gt;κeenです。ここのところ体調優れず、また、特に面白いネタもなくClojure Advent Calendarに遅刻したことをお詫び申し上げます。&lt;/p&gt;
+
+&lt;p&gt;さて、今日はReactive Messaging PatternをClojureのcore.asyncでやってみたいと思います。Reactive Messaging Pattersは、Java/Scala向けActorシステムの&lt;a href=&#34;http://akka.io/&#34;&gt;Akka&lt;/a&gt;の作者が著した本、&lt;a href=&#34;http://www.amazon.co.jp/Reactive-Messaging-Patterns-Actor-Model-ebook/dp/B011S8YC5G&#34;&gt;Amazon.co.jp: Reactive Messaging Patterns with the Actor Model: Applications and Integration in Scala and Akka&lt;/a&gt;で書かれているデザインパターンです。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustでの日本語の扱い</title>
+      <link>/blog/2015/12/13/rustdenonihongonoatsukai/</link>
+      <pubDate>Sun, 13 Dec 2015 17:14:18 +0900</pubDate>
+      
+      <guid>/blog/2015/12/13/rustdenonihongonoatsukai/</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2015/rust-lang&#34;&gt;Rust Advent Calendar&lt;/a&gt; 14日目の記事です&lt;br /&gt;
+前:gifnksmさんの &lt;a href=&#34;http://gifnksm.hatenablog.jp/entry/2015/12/13/204655&#34;&gt;kcovを使ってRustプログラムのカバレッジを測定する - gifnksmの雑多なメモ&lt;/a&gt;&lt;br /&gt;
+後:nacika_insさんのtimeこわい&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>SML#に学ぶコンパイラ言語におけるREPLの実装方法</title>
+      <link>/blog/2015/12/12/sml_nimanabukonpairagengoniokerureplnojissouhouhou/</link>
+      <pubDate>Sat, 12 Dec 2015 19:42:52 +0900</pubDate>
+      
+      <guid>/blog/2015/12/12/sml_nimanabukonpairagengoniokerureplnojissouhouhou/</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2015/lang_dev&#34;&gt;言語実装 Advent Calendar 2015&lt;/a&gt;16日目の記事です。&lt;/p&gt;
+
+&lt;p&gt;κeenです。かねてより気になっていたREPLの実装方法について、SML#のソースコードを読んだのでその話でもします。
+
+さて、ソースコードを読みながらやっていきましょう。SML# 2.0.0のソースコードです。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>SML#でJITコンパイラを作る軽い話</title>
+      <link>/blog/2015/12/12/sml_dejitwotsukurukaruihanashi/</link>
+      <pubDate>Sat, 12 Dec 2015 17:26:24 +0900</pubDate>
+      
+      <guid>/blog/2015/12/12/sml_dejitwotsukurukaruihanashi/</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://www.adventar.org/calendars/848&#34;&gt;ML Advent Calendar 2015&lt;/a&gt;及び&lt;a href=&#34;http://qiita.com/advent-calendar/2015/lang_dev&#34;&gt;言語実装 Advent Calendar 2015&lt;/a&gt;15日目の記事です。&lt;/p&gt;
+
+&lt;p&gt;κeenです。先日流れてきた&lt;a href=&#34;http://www.jonathanturner.org/2015/12/building-a-simple-jit-in-rust.html&#34;&gt;RustでJITコンパイラを作る話&lt;/a&gt;が面白かったのでSML#でもやってみます。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>リージョンについて</title>
+      <link>/blog/2015/12/09/ri_jonnitsuite/</link>
+      <pubDate>Wed, 09 Dec 2015 22:16:50 +0900</pubDate>
+      
+      <guid>/blog/2015/12/09/ri_jonnitsuite/</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://qiita.com/advent-calendar/2015/lang_dev&#34;&gt;言語実装Advent Calendar 2015&lt;/a&gt; 10日目の記事です&lt;/p&gt;
+
+&lt;p&gt;κeenです。今日はある程度gcに頼らずメモリを管理する手法、リージョンについて話そうと思います。
+リージョン推論とそのアルゴリズムまで話せればよかったのですがサーベイが間に合わず…
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>SML#でDBに接続</title>
+      <link>/blog/2015/12/05/sml_dedbnisetsuzoku/</link>
+      <pubDate>Sat, 05 Dec 2015 22:04:25 +0900</pubDate>
+      
+      <guid>/blog/2015/12/05/sml_dedbnisetsuzoku/</guid>
+      <description>&lt;p&gt;このエントリは&lt;a href=&#34;http://www.adventar.org/calendars/848&#34;&gt;ML Advent Calendar&lt;/a&gt;6日目の記事です。&lt;br /&gt;
+次はdico_leque先生で、「ML中心にしつつ何か」です。&lt;/p&gt;
+
+&lt;p&gt;κeenです。SMl#はDB接続及びSQLを言語レベルでサポートしていることが大きな特徴ですが詳細な方法についてはあまり情報がなく、
+実際に利用するのは難しい状況にあります。そこで私がなんとかソースコードを読んで得られた知識を少し共有したいと思います。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Cargoの使い方</title>
+      <link>/blog/2015/11/29/cargonotsukaikata/</link>
+      <pubDate>Sun, 29 Nov 2015 23:25:54 +0900</pubDate>
+      
+      <guid>/blog/2015/11/29/cargonotsukaikata/</guid>
+      <description>&lt;p&gt;この記事は&lt;a href=&#34;http://qiita.com/advent-calendar/2015/rust-lang&#34;&gt;Rust Advent Calendar 2015&lt;/a&gt; 3日目の記事です。&lt;br /&gt;
+前 &lt;a href=&#34;/blog/2015/11/29/rustdechiisanatsu_ruwotsukuttemiru_kouhen_/&#34;&gt;Rustで小さなツールを作ってみる(後編)&lt;/a&gt;&lt;br /&gt;
+次  szkttyさん インデックス構文によるアクセスを実装する&lt;/p&gt;
+
+&lt;p&gt;κeenです。Rustを使うにはCargoを使う必要がありますが、&lt;code&gt;cargo help&lt;/code&gt;を見てもあまり情報が載っていないので少しばかり書きましょう。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustで小さなツールを作ってみる(後編)</title>
+      <link>/blog/2015/11/29/rustdechiisanatsu_ruwotsukuttemiru_kouhen_/</link>
+      <pubDate>Sun, 29 Nov 2015 13:54:39 +0900</pubDate>
+      
+      <guid>/blog/2015/11/29/rustdechiisanatsu_ruwotsukuttemiru_kouhen_/</guid>
+      <description>&lt;p&gt;この記事は&lt;a href=&#34;http://qiita.com/advent-calendar/2015/rust-lang&#34;&gt;Rust Advent Calendar 2015&lt;/a&gt; 2日目の記事です。&lt;br /&gt;
+前 &lt;a href=&#34;/blog/2015/11/14/rustdechiisanatsu_ruwotsukuttemiru/&#34;&gt;Rustで小さなツールを作ってみる(前編)&lt;/a&gt;&lt;br /&gt;
+次 &lt;a href=&#34;/blog/2015/11/29/cargonotsukaikata/&#34;&gt;Cargoの使い方&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;κeenです。昨日の記事で作りかけだったIRCの生ログのDBへのインポートの続きです。今日はDBへのインポートをやります。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustで小さなツールを作ってみる(前編)</title>
+      <link>/blog/2015/11/14/rustdechiisanatsu_ruwotsukuttemiru/</link>
+      <pubDate>Sat, 14 Nov 2015 23:57:43 +0900</pubDate>
+      
+      <guid>/blog/2015/11/14/rustdechiisanatsu_ruwotsukuttemiru/</guid>
+      <description>&lt;p&gt;この記事は&lt;a href=&#34;http://qiita.com/advent-calendar/2015/rust-lang&#34;&gt;Rust Advent Calendar 2015&lt;/a&gt; 1日目の記事です。&lt;br /&gt;
+次 &lt;a href=&#34;/blog/2015/11/29/rustdechiisanatsu_ruwotsukuttemiru_kouhen_/&#34;&gt;Rustで小さなツールを作ってみる(後編)&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;κeenです。Rust Advent Calendar初日ということで軽い話から。
+小さなツールって何だよって感じですが手元にIRCの生ログが大量にあるのでそれをDBにインポートしてみましょう。
+あまりRustに向いた仕事じゃなさそうですが手始めとして。&lt;/p&gt;
+
+&lt;p&gt;前編でログのパースを、後編でDBへのインポートをやります。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>一時ファイルの作り方</title>
+      <link>/blog/2015/11/08/ichijifairunotsukurikata/</link>
+      <pubDate>Sun, 08 Nov 2015 21:40:14 +0900</pubDate>
+      
+      <guid>/blog/2015/11/08/ichijifairunotsukurikata/</guid>
+      <description>&lt;p&gt;Rustに&lt;a href=&#34;https://github.com/Stebalien/tempfile&#34;&gt;tempfile&lt;/a&gt;というライブラリがある。その名の通りテンポラリファイルを作るライブラリだ。
+必要に迫られてそのライブラリにPRを送ろうとして実装を読んだのだが普段あまり意識しなかったテンポラリファイルの作り方を知ったのでちょっと解説してみる。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>REST APIのテストにはwgetが便利かもしれない</title>
+      <link>/blog/2015/10/20/apinotesutonihawgetgabenrikamoshirenai/</link>
+      <pubDate>Tue, 20 Oct 2015 00:30:42 +0900</pubDate>
+      
+      <guid>/blog/2015/10/20/apinotesutonihawgetgabenrikamoshirenai/</guid>
+      <description></description>
+    </item>
+    
+    <item>
+      <title>ddでPCの引っ越しをしたら起動しなかった</title>
+      <link>/blog/2015/10/05/dd_depcnohikkoshiwoshitarakidoushinakatta/</link>
+      <pubDate>Mon, 05 Oct 2015 21:30:06 +0900</pubDate>
+      
+      <guid>/blog/2015/10/05/dd_depcnohikkoshiwoshitarakidoushinakatta/</guid>
+      <description>&lt;p&gt;κeenです。この間長年使ってたDynabookからThink Padに乗り換えました。引っ越しの時に困ったのでメモ。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>isucon にCommon Lispチームで出た</title>
+      <link>/blog/2015/09/27/isucon_nicommon_lispchi_mudedeta/</link>
+      <pubDate>Sun, 27 Sep 2015 23:58:24 +0900</pubDate>
+      
+      <guid>/blog/2015/09/27/isucon_nicommon_lispchi_mudedeta/</guid>
+      <description>&lt;p&gt;κeenです。 &lt;a href=&#34;isucon.net&#34;&gt;isucon&lt;/a&gt; に&lt;a href=&#34;https://twitter.com/i/notifications?lang=ja&#34;&gt;@nitro_idiot&lt;/a&gt;(深町さん)と&lt;a href=&#34;https://twitter.com/Rudolph_Miller?lang=ja&#34;&gt;@Rudolph_Miller&lt;/a&gt;のCommon Lispチームで出てきました。チーム名clfreaks。勿論Common Lispで再実装しました。
+
+因みに深町さんは今回使ったWebサーバーのwooを含めCommon Lispのライブラリを多数公開している&lt;a href=&#34;http://github-awards.com/users/search?login=fukamachi&#34;&gt;世界一のCommon Lisper&lt;/a&gt;、ルドルフさんは元Common Lispの会社のCTO。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>rust初心者へのガイド</title>
+      <link>/blog/2015/09/23/rustwokakutokinochiken/</link>
+      <pubDate>Wed, 23 Sep 2015 22:43:14 +0900</pubDate>
+      
+      <guid>/blog/2015/09/23/rustwokakutokinochiken/</guid>
+      <description>&lt;p&gt;シルバーウィークの進捗が芳しくなかったので雑な記事書いてお茶を濁しとく。rustをそれなりに（といっても1000行くらい）書いて溜まった知見をとりあえず出す。rust1.3時点。&lt;/p&gt;
+
+&lt;p&gt;最初の方で熱く語ってるが多くの人にとって欲しい情報は下の方にあると思う。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>xhyveでFreeBSD guestを動かす</title>
+      <link>/blog/2015/09/16/xhyvedefreebsd_guestwougokasu/</link>
+      <pubDate>Wed, 16 Sep 2015 21:55:25 +0900</pubDate>
+      
+      <guid>/blog/2015/09/16/xhyvedefreebsd_guestwougokasu/</guid>
+      <description>&lt;p&gt;久しぶりですね。κeenです。最近はMacでもまともな仮想環境が整ってきたのでFreeBSDでも動かすかーといって試したやつを共有します。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>ファイル削除コマンド色々</title>
+      <link>/blog/2015/07/05/fairusakujokomandoiroiro/</link>
+      <pubDate>Sun, 05 Jul 2015 14:18:37 +0900</pubDate>
+      
+      <guid>/blog/2015/07/05/fairusakujokomandoiroiro/</guid>
+      <description>&lt;p&gt;ファイル生成/削除コマンドについて覚え書き。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>マクロについて整理してみる</title>
+      <link>/blog/2015/07/04/makuronitsuiteseirishitemiru/</link>
+      <pubDate>Sat, 04 Jul 2015 15:34:46 +0900</pubDate>
+      
+      <guid>/blog/2015/07/04/makuronitsuiteseirishitemiru/</guid>
+      <description>&lt;p&gt;何故Lisperがマクロについて語るのか。Lisperと議論してみても満足のいく答を得た人はそんなにいないと思う。
+それはLisper自身便利とは思っていても何が便利なのかを意識してなくて他人に上手く説明出来ないからじゃないかと思った。
+ちょっと思いついた範囲でまとめてみる。
+
+最近ではマクロシステムを持つ言語は珍しくない。Rust, Scala, Template Haskell, Mirahなどなど。最初にCommon Lispのマクロと他の言語のマクロとの違いを少し考えてみたい。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>あなたの知らないShebang</title>
+      <link>/blog/2015/06/26/anatanoshiranaishebang/</link>
+      <pubDate>Fri, 26 Jun 2015 23:24:44 +0900</pubDate>
+      
+      <guid>/blog/2015/06/26/anatanoshiranaishebang/</guid>
+      <description>&lt;p&gt;κeenです。最近は何故かBlack君って呼ばれます。Shebangの書き方にはいくつかあって、それを利用したふと面白い方法を思い付いたので共有を。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Shell Scriptを書くときのテクニック10選</title>
+      <link>/blog/2015/06/17/shell_scriptwokakutokinikiwotsuketaikoto/</link>
+      <pubDate>Wed, 17 Jun 2015 22:12:25 +0900</pubDate>
+      
+      <guid>/blog/2015/06/17/shell_scriptwokakutokinikiwotsuketaikoto/</guid>
+      <description>&lt;p&gt;κeenです。LLで書かれた動作のもっさりしてるコマンドラインツールよりシェルスクリプトが好きです。&lt;/p&gt;
+
+&lt;p&gt;しかしシェルスクリプトを書く時にはハマり所も多いです。ということでハマりそうなところと対処法を共有しますね。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rustでstructのmutableなfieldあれこれ</title>
+      <link>/blog/2015/06/14/rustdestructnomutablenafieldarekore/</link>
+      <pubDate>Sun, 14 Jun 2015 17:53:11 +0900</pubDate>
+      
+      <guid>/blog/2015/06/14/rustdestructnomutablenafieldarekore/</guid>
+      <description>&lt;p&gt;κeenです。人々にRustを薦めておきながら本人は昨日ようやく入門しました。その時に困ったことをメモ。タイトルがルー語になってますが気にしない。&lt;/p&gt;
+
+&lt;p&gt;因みにこれはRust 1.0の情報です。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>ClojureでOpenCV 3.0と戯れる</title>
+      <link>/blog/2015/06/07/clojuredeopencv3_0totawamureru/</link>
+      <pubDate>Sun, 07 Jun 2015 16:56:51 +0900</pubDate>
+      
+      <guid>/blog/2015/06/07/clojuredeopencv3_0totawamureru/</guid>
+      <description>&lt;p&gt;κeenです。先日OpenCV 3.0がリリースされましたね。
+ちょっと触ってみようと思ったのですが公式バインディングがC++、C、Java、Pythonと中々つらい言語ばっかりなので扱いやすいClojureから触った時のメモです。&lt;/p&gt;
+
+&lt;p&gt;2系とはAPIが変わってる部分もあるらしく、苦労しました。
+UbuntuでやってるのでMacの人は適当に読み替えて下さい。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>TCOと例外ハンドル</title>
+      <link>/blog/2015/05/31/tcotoreigaihandoru/</link>
+      <pubDate>Sun, 31 May 2015 21:02:08 +0900</pubDate>
+      
+      <guid>/blog/2015/05/31/tcotoreigaihandoru/</guid>
+      <description>&lt;p&gt;κeenです。&lt;a href=&#34;/blog/2015/05/29/daiikkyuuraberuwomotanaigengoniokerudirect_threaded_vmnojissou&#34;&gt;先日のエントリー&lt;/a&gt;の最後でループ内で例外ハンドルをすると極端に遅くなるということを書きましたが、それについて。
+
+&lt;blockquote class=&#34;twitter-tweet&#34; lang=&#34;ja&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;ループ内でExceptionをhandleしてる所為だった。ループの外に出したら超速になってインタプリタの方が20倍遅くなった。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>第一級ラベルを持たない言語におけるDirect Threaded VMの実装</title>
+      <link>/blog/2015/05/29/daiikkyuuraberuwomotanaigengoniokerudirect_threaded_vmnojissou/</link>
+      <pubDate>Fri, 29 May 2015 20:26:41 +0900</pubDate>
+      
+      <guid>/blog/2015/05/29/daiikkyuuraberuwomotanaigengoniokerudirect_threaded_vmnojissou/</guid>
+      <description>&lt;p&gt;こんにちは。κeenです。このブログでちょくちょく出てくるDirect Threaded VMについて。
+SMLのようにgotoがない言語だとDT VMの実装出来ないよなー、と思ってた所、ふとアイディアが浮かんだのでそれについて。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Onigmoを最大49%高速化した話</title>
+      <link>/blog/2015/05/26/onigmowosaidai49_kousokukashitahanashi/</link>
+      <pubDate>Tue, 26 May 2015 01:14:54 +0900</pubDate>
+      
+      <guid>/blog/2015/05/26/onigmowosaidai49_kousokukashitahanashi/</guid>
+      <description></description>
+    </item>
+    
+    <item>
+      <title>幽霊型を知った</title>
+      <link>/blog/2015/05/24/yuureikatawoshitta/</link>
+      <pubDate>Sun, 24 May 2015 22:38:47 +0900</pubDate>
+      
+      <guid>/blog/2015/05/24/yuureikatawoshitta/</guid>
+      <description>&lt;p&gt;κeenです。かねてより気になっていた幽霊型(Phantom Type)について知ったのでアウトプット。
+&lt;a href=&#34;http://www.cs.rit.edu/~mtf/research/phantom-subtyping/jfp06/jfp06.pdf&#34;&gt;このPDF&lt;/a&gt;がベースになって
+ます。&lt;/p&gt;
+
+&lt;p&gt;余談ですが英語がファントム・タイプと中々中二な名前なので和訳も幻影型とかそういう方向に走って欲かったな。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>正規表現技術入門を読んだ</title>
+      <link>/blog/2015/05/10/seikihyougengijutsunyuumonwoyonda/</link>
+      <pubDate>Sun, 10 May 2015 20:32:45 +0900</pubDate>
+      
+      <guid>/blog/2015/05/10/seikihyougengijutsunyuumonwoyonda/</guid>
+      <description>&lt;p&gt;κeenです。&lt;a href=&#34;http://gihyo.jp/book/2015/978-4-7741-7270-5&#34;&gt;正規表現技術入門&lt;/a&gt;という本の書評が望まれているようなので今日買ってきて読みました。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>tarballベースの軽量バックアップツール&#39;Sheltar&#39;を作った</title>
+      <link>/blog/2015/05/06/tarballbe_sunokeiryoubakkuapputsu_rutsukutta/</link>
+      <pubDate>Wed, 06 May 2015 20:45:53 +0900</pubDate>
+      
+      <guid>/blog/2015/05/06/tarballbe_sunokeiryoubakkuapputsu_rutsukutta/</guid>
+      <description>&lt;p&gt;κeenです。みなさんバックアップは何使ってますか？大抵のOSには標準でバックアップツールが付いてますがそれ使ってます？私も使ってます。
+しかしやつらはそのOSでしか動かない/動かす方法があまり知られていないのでマシンがクラッシュしたりマシンを失くした時に困ります。&lt;/p&gt;
+
+&lt;p&gt;そこで候補に上がるのが安心と信頼のtarballですが今度は増分バックアップが取りづらいという問題があります。なのでtarballベースの差分バックアップツールを作りました。
+
+まあ、捜せば同じようなものが色々あるでしょうが捜し回るのが面倒だし色々インストールするのも嫌なのでえいやと作ってしまいました。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>SMLを書くLisperの悩み</title>
+      <link>/blog/2015/05/03/smlwokakulispernonayami/</link>
+      <pubDate>Sun, 03 May 2015 13:23:17 +0900</pubDate>
+      
+      <guid>/blog/2015/05/03/smlwokakulispernonayami/</guid>
+      <description>&lt;p&gt;SMLばっかり書いてたら「お前Lisperじゃないだろ」って怒られたとかそういう話ではなく。&lt;/p&gt;
+
+&lt;p&gt;ML系の言語は関数は1つの引数しかとれません。じゃあ複数の値を受け取りたい時はどうするかというと 1. 値を組(タプル)にして受け取る 2. 関数を返す関数((を返す関数)*)にして1つづつ受け取る の2種類の方法があります。
+それに纏わる話。
+
+それぞれの記法を例示すると&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>SML#をMacでビルドする</title>
+      <link>/blog/2015/04/29/smlsharpwomacdebirudosuru/</link>
+      <pubDate>Wed, 29 Apr 2015 16:09:08 +0900</pubDate>
+      
+      <guid>/blog/2015/04/29/smlsharpwomacdebirudosuru/</guid>
+      <description>&lt;p&gt;κeenです。SML#2.0.0を文鎮と化していたMBAにインストールしたのでメモをば。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>SMLSharpを使ってSMLのon-the-flyエラーチェック</title>
+      <link>/blog/2015/04/23/smlsharpwotsukattesmlnoon-the-flyerrorchekkingu/</link>
+      <pubDate>Thu, 23 Apr 2015 23:01:17 +0900</pubDate>
+      
+      <guid>/blog/2015/04/23/smlsharpwotsukattesmlnoon-the-flyerrorchekkingu/</guid>
+      <description>&lt;p&gt;κeenです。最近SMLを結構書いてるのですが中置演算子が乱立する言語はLisperにはつらくて、しょっちゅうコンパイルエラーを出します。
+そこでSML#をflymakeで動かしてOn The Flyにエラーチェックをします。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>SMLSharpでFFIバインディングを書く時の知見</title>
+      <link>/blog/2015/04/19/smlsharpdeffibaindinguwokakutokinochiken/</link>
+      <pubDate>Sun, 19 Apr 2015 13:51:33 +0900</pubDate>
+      
+      <guid>/blog/2015/04/19/smlsharpdeffibaindinguwokakutokinochiken/</guid>
+      <description>&lt;p&gt;κeenです。最近頻繁にSML#を使ってます。SML#のメイン機能の1つであるC連携ですが、ちょっと複雑なことをやろうとするとテクニックが必要になるので共有します。&lt;/p&gt;
+
+&lt;p&gt;Twitterとかにコメントや突っ込みお願いします。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>SMLのファンクタに少し踏み込んだ</title>
+      <link>/blog/2015/04/12/smlnofankutanisukoshifumikonda/</link>
+      <pubDate>Sun, 12 Apr 2015 19:49:41 +0900</pubDate>
+      
+      <guid>/blog/2015/04/12/smlnofankutanisukoshifumikonda/</guid>
+      <description>&lt;p&gt;κeenです。&lt;a href=&#34;https://github.com/bleis-tift/SmlSharpContrib&#34;&gt;SmlSharpContrib&lt;/a&gt;にコントリビュートしてます。そこでファンクタを使う用事があったのですが少し踏み込んだ使い方をしようとしたらハマったのでメモ。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>CyberAgentに入社しました</title>
+      <link>/blog/2015/04/10/cyberagentninyuushashimashita/</link>
+      <pubDate>Fri, 10 Apr 2015 19:55:59 +0900</pubDate>
+      
+      <guid>/blog/2015/04/10/cyberagentninyuushashimashita/</guid>
+      <description></description>
+    </item>
+    
+    <item>
+      <title>誰がUTF-32が使われてないなんて言ったんだ</title>
+      <link>/blog/2015/03/31/daregautf-32gatsukawaretenainanteitsuttanda/</link>
+      <pubDate>Tue, 31 Mar 2015 19:41:05 +0900</pubDate>
+      
+      <guid>/blog/2015/03/31/daregautf-32gatsukawaretenainanteitsuttanda/</guid>
+      <description>&lt;p&gt;最近ではUTF-8でソースコードを書いてUTF-8で出入力をする。それ以外のエンコーディングは使われていない。…だと？誰がそんなこと言ったんだ
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Lispエイリアンの矢印作った</title>
+      <link>/blog/2015/03/03/lispeiriannoyajirushitsukutta/</link>
+      <pubDate>Tue, 03 Mar 2015 21:30:13 +0900</pubDate>
+      
+      <guid>/blog/2015/03/03/lispeiriannoyajirushitsukutta/</guid>
+      <description></description>
+    </item>
+    
+    <item>
+      <title>面接でLispを口にして落ちない企業、私気になります！</title>
+      <link>/blog/2015/02/10/mensetsudelispwokuchinishiteochinaikigyouwatashikininarimasu/</link>
+      <pubDate>Tue, 10 Feb 2015 08:01:35 +0000</pubDate>
+      
+      <guid>/blog/2015/02/10/mensetsudelispwokuchinishiteochinaikigyouwatashikininarimasu/</guid>
+      <description>&lt;p&gt;κeenです。先日の記事がやたら拡散しました。その中で&lt;/p&gt;
+
+&lt;p&gt;「面接でLispは口にしない方が良い。100%落ちる。」&lt;/p&gt;
+
+&lt;p&gt;の一文がえらく気に入られたようです。Lispの風評被害を防ぐために1つアンケートにご協力下さい。
+
+このスプレッドシートです。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>就活について思ったことをここに書き記す</title>
+      <link>/blog/2015/02/07/shuukatsunitsuiteomottakotowokokonikakishirusu/</link>
+      <pubDate>Sat, 07 Feb 2015 14:27:58 +0000</pubDate>
+      
+      <guid>/blog/2015/02/07/shuukatsunitsuiteomottakotowokokonikakishirusu/</guid>
+      <description>&lt;p&gt;私は今4年生なので去年の今頃は就活なんてものをしていた。下の代から若干日程が変わっているがそろそろ就活ムードが出てきているのでなんか吐いておく。思い出かもしれないし愚痴かもしれないし毒かもしれない。経験かもしれないし他人の代弁かもしれない。後輩の役に立つかもしれないし人事の方に向けたメッセージかもしれない。&lt;/p&gt;
+
+&lt;p&gt;念のために書いておくが私はIT系の会社のプログラマ、エンジニア職ばかり応募していた。他の業界、職種に当て嵌まるとは限らない。
+
+注意&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>mlyaccを使ってみてハマったところ</title>
+      <link>/blog/2015/01/31/mlyaccwotsukattemitehamattatokoro/</link>
+      <pubDate>Sat, 31 Jan 2015 11:55:51 +0000</pubDate>
+      
+      <guid>/blog/2015/01/31/mlyaccwotsukattemitehamattatokoro/</guid>
+      <description>&lt;p&gt;κeenです。前回の&lt;a href=&#34;//KeenS.github.io/blog/2014/12/10/mllexwoshi-tutemiru/&#34;&gt;mllexの記事&lt;/a&gt;の続きです。今回はmlyaccを使ってみました。
+
+&lt;script async src=&#34;//platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>AsciiDocを使ってお手軽manページ生成</title>
+      <link>/blog/2015/01/24/generate-manpage/</link>
+      <pubDate>Sat, 24 Jan 2015 10:58:29 +0000</pubDate>
+      
+      <guid>/blog/2015/01/24/generate-manpage/</guid>
+      <description>&lt;p&gt;コマンドラインツールを作ってるみなさん、man書いてますか？コマンドラインツールを使う人は時代の変化に取り残された遺物なのでWebにドキュメント置いても読んでくれませんよ。&lt;/p&gt;
+
+&lt;p&gt;いや、私のようにmanだけを頼りにツールを使う人もいるのでちゃんと書いて下さいね。面倒だって?AsciiDocを使えば簡単に書けますよ!
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>印刷フォマット済みのテキストファイルをPDF化する</title>
+      <link>/blog/2015/01/24/a2pdf/</link>
+      <pubDate>Sat, 24 Jan 2015 10:23:00 +0000</pubDate>
+      
+      <guid>/blog/2015/01/24/a2pdf/</guid>
+      <description>&lt;p&gt;小ネタ。古いドキュメントやらポータブルな仕様を落としてくると中身が印刷フォーマット済み(ページネーションやヘッダ、フッタをアスキーアートで表現してる)であることがあります。
+それらを普通のテキスト形式だと読みづらいのでPDF化する話。
+
+結論から言うと&lt;a href=&#34;http://search.cpan.org/~jonallen/a2pdf-1.11/lib/Script/a2pdf.pm&#34;&gt;a2pdf - search.cpan.org&lt;/a&gt;を使いました。選んだ理由は&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Common Lispのポータビリティとユニバーサリティ</title>
+      <link>/blog/2015/01/22/common-lisp-portability-and-univesality/</link>
+      <pubDate>Thu, 22 Jan 2015 07:51:02 +0000</pubDate>
+      
+      <guid>/blog/2015/01/22/common-lisp-portability-and-univesality/</guid>
+      <description>&lt;p&gt;&lt;a href=&#34;http://clfreaks.org/post/108341635899/1-cim-vs-roswell&#34;&gt;clfreaks&lt;/a&gt;の収録時に他のLisperと話してて価値観というか目標を共有出来てないなと思ったのでここで心情を語る次第。今のCommon Lispの使われ方には問題がある。
+
+Common Lispにはポータビリティというかユニバーサリティというか、そういうものがない。いや、処理系の作者達はしっかり作ってるのだけどLisperがそういう使い方をしていない。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>picrinのcodegenプロセスを説明してみる</title>
+      <link>/blog/2015/01/10/picrin-codegen-explanation/</link>
+      <pubDate>Sat, 10 Jan 2015 09:40:51 +0000</pubDate>
+      
+      <guid>/blog/2015/01/10/picrin-codegen-explanation/</guid>
+      <description>&lt;p&gt;今、picrinのcodegenプロセスに手を入れる機運が高まってます。picrinはバイトコードインタプリタなのでS式を渡されたらそれをバイトコードに変換する作業が必要です。それがcodegen。本当はcompileなんだけどpicrinのCのソースコードのコンパイルと紛らわしいからcodegen。私も完全にはプロセスを理解してないので説明して理解度を試しつつ問題点を洗い出します。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>FreeBSDの環境構築</title>
+      <link>/blog/2015/01/08/freebsd-environment-setups/</link>
+      <pubDate>Thu, 08 Jan 2015 14:37:36 +0000</pubDate>
+      
+      <guid>/blog/2015/01/08/freebsd-environment-setups/</guid>
+      <description>&lt;p&gt;&lt;a href=&#34;/blog/2014/12/27/freebsd/&#34;&gt;以前の記事&lt;/a&gt;の続編。FreeBSDで普通の(Ubuntuで使っていたのと同程度の)環境を整えようとしたときの話。普通ならPC BSDを使えば苦労しないんだろうけど私のラップトップは少し古いのか癖があるのかGPTパーティションに対応してなくてPC BSDのインストーラが使えなかったのでFreeBSDを入れてデスクトップ環境を一から構築した。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>OSお引っ越しの時のデータ移行の自分用注意点</title>
+      <link>/blog/2015/01/04/migration-memo/</link>
+      <pubDate>Sun, 04 Jan 2015 05:26:25 +0000</pubDate>
+      
+      <guid>/blog/2015/01/04/migration-memo/</guid>
+      <description>&lt;p&gt;自分用。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>新年の挨拶及び内部実装変更のお知らせ</title>
+      <link>/blog/2015/01/01/new-year-greeting/</link>
+      <pubDate>Thu, 01 Jan 2015 06:44:31 +0000</pubDate>
+      
+      <guid>/blog/2015/01/01/new-year-greeting/</guid>
+      <description></description>
+    </item>
+    
+    <item>
+      <title>OctopressからHugoに移行した</title>
+      <link>/blog/2014/12/30/migration-from-octopress-to-hugo/</link>
+      <pubDate>Tue, 30 Dec 2014 03:26:58 +0000</pubDate>
+      
+      <guid>/blog/2014/12/30/migration-from-octopress-to-hugo/</guid>
+      <description>&lt;p&gt;κeenです。年末ですね。&lt;a href=&#34;http://deeeet.com/writing/2014/12/25/hugo/&#34;&gt;こちらのブログ&lt;/a&gt;にもあるようにOctopressの生成の遅さに閉口してたのでHugoに移行しました。
+出来るだけブログのURLは変えないようにしました。でもどっかでリンク切れちゃってるかも。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>FreeBSDに移行した</title>
+      <link>/blog/2014/12/27/freebsd/</link>
+      <pubDate>Sat, 27 Dec 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/12/27/freebsd/</guid>
+      <description></description>
+    </item>
+    
+    <item>
+      <title>独学のプログラミング</title>
+      <link>/blog/2014/12/18/du-xue-falsepuroguramingu/</link>
+      <pubDate>Thu, 18 Dec 2014 23:51:27 +0000</pubDate>
+      
+      <guid>/blog/2014/12/18/du-xue-falsepuroguramingu/</guid>
+      <description>&lt;p&gt;誰向けなのか分からない。多分5年後くらの初心を忘れた自分が読めば良いと思う。あるいは、独学でプログラミングを始めようとしてる人が参考にするのかもしれない。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>サイエンスかエンジニアリングか</title>
+      <link>/blog/2014/12/18/saiensugaenziniaringu/</link>
+      <pubDate>Thu, 18 Dec 2014 23:03:41 +0000</pubDate>
+      
+      <guid>/blog/2014/12/18/saiensugaenziniaringu/</guid>
+      <description>&lt;p&gt;最近、エンジニアリングかサイエンスかという分類を教えてもらった。それが出てきたのはGoがエンジニアリングから出た言語だと言われた時だった。
+
+その時私はRustを推していたのでRustはサイエンスから出た言語だと言った。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>実用Common Lispを読んだ</title>
+      <link>/blog/2014/12/14/shi-yong-common-lispwodu-nda/</link>
+      <pubDate>Sun, 14 Dec 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/12/14/shi-yong-common-lispwodu-nda/</guid>
+      <description>&lt;p&gt;以前&lt;a href=&#34;/blog/2014/10/20/lisp-ja/&#34;&gt;Common Lispの勉強の手引の記事&lt;/a&gt;を書いたときに実用Common Lispの名を挙げたが読んだことはなかった。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>mllexを使ってみる。あるいはlexユーザーに対するmllexの解説</title>
+      <link>/blog/2014/12/10/mllexwoshi-tutemiru/</link>
+      <pubDate>Wed, 10 Dec 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/12/10/mllexwoshi-tutemiru/</guid>
+      <description>&lt;p&gt;このエントリーは&lt;a href=&#34;http://qiita.com/advent-calendar/2014/ml&#34;&gt;ML Advent Calendar 10日目&lt;/a&gt;の記事です。&lt;br /&gt;
+前 &lt;a href=&#34;http://h-sakurai.hatenablog.com/entry/2014/12/09/144655&#34;&gt;OCamlで作ったgoma言語 - h_sakurai&amp;rsquo;s diary&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;ふと思い立ってPrologのコンパイラかインタプリタかを作ってみようとして、その第一段でlexerに着手しました。
+
+ちょ、SML分かる人はmllexくらい常識的に知ってるなんて言わないで下さい。私は初めて触りました。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>割と処理系ポータブルなCommon Lisp実行可能ファイルを作る</title>
+      <link>/blog/2014/12/08/ge-tochu-li-xi-potaburunacommon-lispshi-xing-ke-neng-huairuwozuo-ru/</link>
+      <pubDate>Mon, 08 Dec 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/12/08/ge-tochu-li-xi-potaburunacommon-lispshi-xing-ke-neng-huairuwozuo-ru/</guid>
+      <description>&lt;p&gt;κeenです。Lisp Advent Calendarはもう枠埋まっちゃったので普通にブログで。&lt;/p&gt;
+
+&lt;p&gt;コマンドラインから実行可能なLispファイルをそれなりに多くの処理系で動くように作る話。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>H2Oにpicrinを溶かす</title>
+      <link>/blog/2014/12/07/h2onipicrinworong-kasu/</link>
+      <pubDate>Sun, 07 Dec 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/12/07/h2onipicrinworong-kasu/</guid>
+      <description>&lt;p&gt;このエントリーは&lt;br /&gt;
+&lt;a href=&#34;http://qiita.com/advent-calendar/2014/lisp&#34;&gt;Lisp Advent Calendar&lt;/a&gt; 7日目&lt;br /&gt;
+兼&lt;br /&gt;
+&lt;a href=&#34;http://qiita.com/advent-calendar/2014/h2o&#34;&gt;H2O Advent Calendar&lt;/a&gt; 7日目&lt;br /&gt;
+の記事です。&lt;/p&gt;
+
+&lt;p&gt;κeenです。タイトルの通りです。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>claspがアップデートされたよ</title>
+      <link>/blog/2014/12/06/claspgaatupudetosaretayo/</link>
+      <pubDate>Sat, 06 Dec 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/12/06/claspgaatupudetosaretayo/</guid>
+      <description>&lt;p&gt;このエントリーは&lt;a href=&#34;http://qiita.com/advent-calendar/2014/lisp&#34;&gt;Lisp Advent Calendar 2014&lt;/a&gt;6日目の記事です。&lt;br /&gt;
+前: nobkzさんで &lt;a href=&#34;http://qiita.com/nobkz/items/2be2b6806237d8ea6e21&#34;&gt;lfe - (lisp (flavored (erlang)))について基本その1 - Qiita&lt;/a&gt;&lt;br /&gt;
+後: 私で &lt;a href=&#34;/blog/2014/12/07/h2onipicrinworong-kasu/&#34;&gt;H2Oにpicrinを溶かす | κeenのHappy Hacκing Blog&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;κeenです。アドベントカレンダーめっちゃ書いてますね。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>mirahについて</title>
+      <link>/blog/2014/12/04/mirahnituite/</link>
+      <pubDate>Thu, 04 Dec 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/12/04/mirahnituite/</guid>
+      <description>&lt;p&gt;このエントリーは&lt;a href=&#34;http://qiita.com/advent-calendar/2014/minor-language&#34;&gt;マイナー言語 Advent Calendar 2014 - Qiita&lt;/a&gt;4日目の記事です。&lt;br /&gt;
+前: ksmakotoさんで&lt;a href=&#34;http://ksmakoto.hatenadiary.com/entry/2014/12/03/002435&#34;&gt;マクロ、拙作のテキストマクロ言語m55について主に - ksmakotoのhatenadiary&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;κeenです。進捗ダメです。マイナー言語Advent Calendarが空いてるようだったのでMirahの話を捩じ込みますね。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>VOPで遊ぶ</title>
+      <link>/blog/2014/12/02/vopdeyou-bu/</link>
+      <pubDate>Tue, 02 Dec 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/12/02/vopdeyou-bu/</guid>
+      <description>&lt;p&gt;(:meta&lt;br /&gt;
+ ((:this &amp;ldquo;&lt;a href=&#34;http://qiita.com/advent-calendar/2014/lisp&#34;&gt;Lisp Advent Calendar 2014&lt;/a&gt;の3日目の記事&amp;rdquo;)&lt;br /&gt;
+  (:prev (:author &amp;ldquo;tk_riple&amp;rdquo; :title &lt;a href=&#34;http://compassoftime.blogspot.jp/2014/12/r7rs.html&#34;&gt;&amp;ldquo;時の羅針盤＠blog: R7RSポータブルライブラリを書く際の落とし穴&amp;rdquo;&lt;/a&gt;))&lt;br /&gt;
+  (:next (:author &amp;ldquo;nobkz&amp;rdquo; :tite &amp;ldquo;&lt;a href=&#34;http://qiita.com/nobkz/items/68ee2adbc13caf3eec6f&#34;&gt;Shenの基礎その1 基本的な型 - Qiita&lt;/a&gt;&amp;rdquo;))))&lt;/p&gt;
+
+&lt;p&gt;κeenです。さっきまでVOPで遊んでたので当初の予定を変更してVOPの話をします。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>require, ASDF, quicklispを正しく使う</title>
+      <link>/blog/2014/11/30/quicklisp/</link>
+      <pubDate>Sun, 30 Nov 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/11/30/quicklisp/</guid>
+      <description>&lt;p&gt;κeenです。最近のCommon Lispのパッケージ管理は&lt;code&gt;ql:quickload&lt;/code&gt;しか知らないという方も多いのではないでしょうか。しかしそれだけでは機能が足りないこともあります。Common Lispには様々な管理システムがあるので整理しましょう。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>lisp meet up #22でLTしてきた</title>
+      <link>/blog/2014/11/28/lisp-meet-up-number-22deltsitekita/</link>
+      <pubDate>Fri, 28 Nov 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/11/28/lisp-meet-up-number-22deltsitekita/</guid>
+      <description>&lt;p&gt;κeenです。先日 Lisp Meet Up #22 でLTしてきたので報告です。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>#isucon で学生賞二連覇してきた</title>
+      <link>/blog/2014/11/09/isucondexue-sheng-shang-er-lian-ba-sitekita/</link>
+      <pubDate>Sun, 09 Nov 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/11/09/isucondexue-sheng-shang-er-lian-ba-sitekita/</guid>
+      <description>&lt;p&gt;κeenです。@nemunemu3desuさん（ねむさん）、@cocodripsさん（くーむさん）とチーム「(ρ_-)/超銀杏バスターズ&amp;#92;(･ω･ o)」で&lt;a href=&#34;http://isucon.net/&#34;&gt;ISUCON4&lt;/a&gt;で学生賞とってきた。二連覇わーい。
+
+※2014-11-09 16:50 ちょっと加筆修正しました&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>GCの話</title>
+      <link>/blog/2014/10/26/gcfalsehua/</link>
+      <pubDate>Sun, 26 Oct 2014 19:13:45 +0000</pubDate>
+      
+      <guid>/blog/2014/10/26/gcfalsehua/</guid>
+      <description>&lt;p&gt;#関数型なんたら でGCの話を聴いて、&lt;a href=&#34;http://www.pllab.riec.tohoku.ac.jp/papers/icfp2011UenoOhoriOtomoAuthorVersion.pdf&#34;&gt;SML#のGCの論文&lt;/a&gt;を読んで色々感じたのでエントリー。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>#関数型なんたら で喋ってきた</title>
+      <link>/blog/2014/10/26/number-guan-shu-xing-nantara-nican-jia-sitekita/</link>
+      <pubDate>Sun, 26 Oct 2014 17:14:10 +0000</pubDate>
+      
+      <guid>/blog/2014/10/26/number-guan-shu-xing-nantara-nican-jia-sitekita/</guid>
+      <description></description>
+    </item>
+    
+    <item>
+      <title>Common Lispの勉強をするには、あるいは情報を得るには</title>
+      <link>/blog/2014/10/20/lisp-ja/</link>
+      <pubDate>Mon, 20 Oct 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/10/20/lisp-ja/</guid>
+      <description>&lt;p&gt;&lt;a href=&#34;http://blog.8arrow.org/entry/2014/09/05/062028&#34;&gt;深町さんのブログ&lt;/a&gt;で日本語でCommon Lispの質問をする方法が載ってましたが質問じゃなくて単に情報を得たい、勉強をしたいという場合が書かれてなかったので勝手に補遺。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Lisp Meet Up #20でLTしてきました</title>
+      <link>/blog/2014/09/30/lisp-meet-up-number-20/</link>
+      <pubDate>Tue, 30 Sep 2014 09:35:05 +0000</pubDate>
+      
+      <guid>/blog/2014/09/30/lisp-meet-up-number-20/</guid>
+      <description></description>
+    </item>
+    
+    <item>
+      <title>#ISUCON 4 予選に学生枠で参加してきました</title>
+      <link>/blog/2014/09/30/isucon4-q/</link>
+      <pubDate>Tue, 30 Sep 2014 00:51:30 +0000</pubDate>
+      
+      <guid>/blog/2014/09/30/isucon4-q/</guid>
+      <description>&lt;p&gt;κeenです。ISUCON 4 予選に学生枠で参加してきたのでレポートです。日曜、2日目の方に参加です。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>低レベルなことがしたい</title>
+      <link>/blog/2014/09/18/low-level-languages/</link>
+      <pubDate>Thu, 18 Sep 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/09/18/low-level-languages/</guid>
+      <description>&lt;p&gt;低レベルなことがしたい。もうちょっと具体的に言うと、DBMを書きたい。コンパイラを書きたい。ただ動くだけじゃなくて効率的な実装がしたい。CPUの歓声が聞きたい。そのためにもバイナリを簡単に扱える言語が良い。マシン語が透けて見える言語が良い。いっそインラインアセンブラが欲しい。システムコールがスムーズに出来る(≒ C をスムーズに呼べる)言語が良い。どんな言語が適任か。
+
+因みにコンパイラはLLVMをバックエンドに使う予定。何の言語のコンパイラかは決めてない。SMLのサブセットかmini Camlかその辺？&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Shibuya.lisp Tech Talk #8を運営&amp;LTしてきました</title>
+      <link>/blog/2014/09/16/lisp-tech-talk-8/</link>
+      <pubDate>Tue, 16 Sep 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/09/16/lisp-tech-talk-8/</guid>
+      <description>&lt;p&gt;κeenです。レポートに追われ試験があり合宿に行きで2週間以上空きましたが8/30にShibuya.lisp TT #8の運営をしつつLT枠での参加もしてきたので報告です。何かそこそこ大きなイベントの運営をされる方の参考になれば。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Common LispでSIGINTを捉える</title>
+      <link>/blog/2014/08/27/sigint-in-common-lisp/</link>
+      <pubDate>Wed, 27 Aug 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/08/27/sigint-in-common-lisp/</guid>
+      <description>&lt;p&gt;κeenです。もうすぐShibuya.lisp TT #8 ですね。今回はCIMのREPLの改善をしてたらSIGINTを補足しようとして詰まったので共有します。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>isucon夏期講習2014に参加してきた</title>
+      <link>/blog/2014/08/21/isucon-summer-2014/</link>
+      <pubDate>Thu, 21 Aug 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/08/21/isucon-summer-2014/</guid>
+      <description>&lt;p&gt;レポート締切間近のκeenです。ISUCON夏期講習2014に参加してきたのでレポートです。とはいっても去年の夏期講習もISUCONも参加してるので目新しいことはないんですが。主な目的はメンバー集めです。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Emacs便利機能/Tips紹介</title>
+      <link>/blog/2014/08/13/emacs-utility-functions/</link>
+      <pubDate>Wed, 13 Aug 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/08/13/emacs-utility-functions/</guid>
+      <description>&lt;p&gt;κeenです。このブログのアクセスログを見てるとEmacsの記事が好評なようなのでここは一つ私の知ってる便利機能を全列挙してみますね。
+
+どの辺から常識でどの辺からTipsかは私の主観です。だいたいるびきちさんの本に載ってるのは常識扱いです。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Mirah 0.1.3がリリースされました</title>
+      <link>/blog/2014/08/07/mirah-0-dot-1-3/</link>
+      <pubDate>Thu, 07 Aug 2014 23:52:15 +0000</pubDate>
+      
+      <guid>/blog/2014/08/07/mirah-0-dot-1-3/</guid>
+      <description>&lt;p&gt;本日2回目のκeenです。次はRuby-likeな文法でJavaが書けるMirah言語の0.1.3がリリースたのでこれを期にMirahの紹介をします。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Shibuya.XSS TT #5 に参加してきました</title>
+      <link>/blog/2014/08/07/shibuya-dot-xss-tt-number-5-nican-jia-sitekimasita/</link>
+      <pubDate>Thu, 07 Aug 2014 23:12:34 +0000</pubDate>
+      
+      <guid>/blog/2014/08/07/shibuya-dot-xss-tt-number-5-nican-jia-sitekimasita/</guid>
+      <description>&lt;p&gt;強化練中のκeenです。明日も朝早いのでこんな時間にエントリー書いてて寝坊しないか心配です。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Cloud9の紹介とLispのセットアップ</title>
+      <link>/blog/2014/08/02/introduction-to-cloud9/</link>
+      <pubDate>Sat, 02 Aug 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/08/02/introduction-to-cloud9/</guid>
+      <description>&lt;p&gt;κeenです。先日のLisp Meet Upで紹介した&lt;a href=&#34;https://c9.io&#34;&gt;Cloud9&lt;/a&gt;の詳解でも書きます。まあ、そんなに詳しくないんですけどね。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Lisp Meet Up #19でLTしてきました</title>
+      <link>/blog/2014/07/30/lisp-meet-up-number-19/</link>
+      <pubDate>Wed, 30 Jul 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/07/30/lisp-meet-up-number-19/</guid>
+      <description>&lt;p&gt;κeenです毎月恒例の&lt;a href=&#34;https://atnd.org/events/53246&#34;&gt;Lisp Meet Up presented by Shibuya.lisp&lt;/a&gt;でLTしてきたのでレポートです。
+
+今回は募集20に対して参加登録20、参加18、LT4本と集りの良い会でした。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>近況</title>
+      <link>/blog/2014/07/13/jin-kuang/</link>
+      <pubDate>Sun, 13 Jul 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/07/13/jin-kuang/</guid>
+      <description>&lt;p&gt;κeenです。書く書くいってた近況です。思ったよりあります。
+&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>パーティションテーブルとか色々吹っ飛ばした話</title>
+      <link>/blog/2014/06/12/partision-table/</link>
+      <pubDate>Thu, 12 Jun 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/06/12/partision-table/</guid>
+      <description>&lt;p&gt;ご不沙汰しております、κeenです。先日（と言ってもしばらく前）、安いHDDを買ってきてFreeBSDでも入れて遊ぼうかとしていました。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Lisp Meet Up #16 でLTしてきました。</title>
+      <link>/blog/2014/04/25/lisp-meet-up-number-16/</link>
+      <pubDate>Fri, 25 Apr 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/04/25/lisp-meet-up-number-16/</guid>
+      <description>&lt;p&gt;κeenです。年度末/年度始めで色々あり、しばらく更新できてませんでしたが &lt;a href=&#34;http://atnd.org/events/49370&#34;&gt;Lisp Meet Up Presented by Shibuya.lisp #16&lt;/a&gt;に参加してきたのでレポートです。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Lisp Meet Up #14でLTしてきました</title>
+      <link>/blog/2014/02/27/lisp-meet-up-number-14/</link>
+      <pubDate>Thu, 27 Feb 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/02/27/lisp-meet-up-number-14/</guid>
+      <description>&lt;p&gt;どうも、κeenです。Rubyをアップグレードしようとしたら&lt;code&gt;rvm&lt;/code&gt;が動かなくて、あれ？ってなったら私が&lt;code&gt;echo -&amp;gt; echo&lt;/code&gt;とかいう謎のsymlinkを作ってたせいでした。このブログはOctopressで作ってるのでその間更新遅れました。&lt;/p&gt;
+
+&lt;p&gt;さて、毎月恒例 &lt;a href=&#34;http://atnd.org/events/47730&#34;&gt;Lisp Meet Up Presented by Shibuya.lisp #14&lt;/a&gt;でLTしてきたので報告です。今回は「Real World OCamlを読んだ感想」というタイトルです。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>MathJaxを使って数式を埋め込む</title>
+      <link>/blog/2014/02/21/mathjax/</link>
+      <pubDate>Fri, 21 Feb 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/02/21/mathjax/</guid>
+      <description>&lt;p&gt;小ネタです。ブログに数式を埋め込むときの話。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Shell Scriptでオプションをパースするときの必勝法</title>
+      <link>/blog/2014/02/19/option-parse-for-shell/</link>
+      <pubDate>Wed, 19 Feb 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/02/19/option-parse-for-shell/</guid>
+      <description>&lt;p&gt;κeenです。CIMの解説 実装編の執筆はもうちょい掛かりそうです。だいたいコードが落ち着いたら書きます。&lt;/p&gt;
+
+&lt;p&gt;今回は長いオプションと短いオプションをシェルスクリプトでパースするときの話です。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>FreeBSDのmanページを手動インストールする</title>
+      <link>/blog/2014/02/01/freebsd-manpage/</link>
+      <pubDate>Sat, 01 Feb 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/02/01/freebsd-manpage/</guid>
+      <description>&lt;p&gt;FreeBSD10をインストールするときにdocをインストールしなかったら後で困ったのでメモ。環境はUbuntu13.10上のkvmに入れたFreeBSD10です。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>CIMの解説をしてみる コマンド編</title>
+      <link>/blog/2014/01/27/cim-explanation/</link>
+      <pubDate>Mon, 27 Jan 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/01/27/cim-explanation/</guid>
+      <description>&lt;p&gt;先日LTで紹介したCIMが思いの外反響を呼んでる(Githubのstarが15)ので解説でもしてみます。&lt;/p&gt;
+
+&lt;p&gt;コマンド編の次は実装編です。これでバグにエンカウントしたときの調査とか完璧ですね。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Lisp Meet Up #13でLTしてきました</title>
+      <link>/blog/2014/01/24/lisp-meet-up-number-13/</link>
+      <pubDate>Fri, 24 Jan 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/01/24/lisp-meet-up-number-13/</guid>
+      <description>&lt;p&gt;もう12時回ったので昨日になってしまいましたが &lt;a href=&#34;http://atnd.org/events/46746#comments&#34;&gt;Lisp Meet Up presented by Shibya.lisp #13&lt;/a&gt;に参加してLTしてきたので報告(?)エントリです。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Mpd 小ネタ</title>
+      <link>/blog/2014/01/21/mpd-something/</link>
+      <pubDate>Tue, 21 Jan 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/01/21/mpd-something/</guid>
+      <description>&lt;p&gt;mpdのちょっとした便利な使い方。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>RSPiでMongoDBを動かし、Twitter Post Alertを作った話</title>
+      <link>/blog/2014/01/19/rspi-plus-mongodb-plus-twitter/</link>
+      <pubDate>Sun, 19 Jan 2014 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2014/01/19/rspi-plus-mongodb-plus-twitter/</guid>
+      <description>&lt;p&gt;κeenです。ここのところ寒い日が続いてますね。寒いと家に扃(ひきこも)ってTweet数が急上昇します。 すると一日に何postしてるか気になるのでカウンタを作りました。&lt;br /&gt;
+そのときの苦労話です。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>.emacsの整理をした話 &#43; EmacsとViとShellとLispを悪魔合体させたら超絶便利だった</title>
+      <link>/blog/2013/12/13/dot-emacs-clean-up/</link>
+      <pubDate>Fri, 13 Dec 2013 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2013/12/13/dot-emacs-clean-up/</guid>
+      <description>&lt;p&gt;やや長いタイトルですが・・・年末になって大掃除がやってきましたね。みなさんもそろそろ.emacsの大掃除をしましょう。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>ClackのHandlerの書き方</title>
+      <link>/blog/2013/12/06/lisp-advent-calendar-7/</link>
+      <pubDate>Fri, 06 Dec 2013 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2013/12/06/lisp-advent-calendar-7/</guid>
+      <description>&lt;p&gt;(この記事は &lt;a href=&#34;http://qiita.com/advent-calendar/2013/lisp&#34;&gt;Lisp Advent Calendar&lt;/a&gt; 7日目のためのエントリです。&lt;br /&gt;
+ ( &lt;a href=&#34;http://meymao.hatenablog.com/entry/2013/12/06/140029&#34;&gt;6日目&lt;/a&gt; meymaoさんより「Lisperがクリスマスに贈るべきプレゼント三選」)&lt;br /&gt;
+ ( &lt;a href=&#34;http://www.principia-m.com/ts/0081/index-jp.html&#34;&gt;8日目&lt;/a&gt; athos0220さんよりマクロとクロージャで作る並行プログラミング言語))&lt;/p&gt;
+
+&lt;p&gt;ClackのHandlerの書き方についてちゃちゃっと解説します。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>UbuntuでEmacsからGPGを透過的に扱う</title>
+      <link>/blog/2013/12/04/emacs-gpg/</link>
+      <pubDate>Wed, 04 Dec 2013 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2013/12/04/emacs-gpg/</guid>
+      <description>&lt;p&gt;暗号化といえばGPGですがEmacsからGPGで暗号化されたファイルを編集しようとすると毎回パスワードを訊かれて鬱陶しいです。これはキーリングを登録することで解決できました。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rsync小ネタ</title>
+      <link>/blog/2013/11/30/something-about-rsync/</link>
+      <pubDate>Sat, 30 Nov 2013 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2013/11/30/something-about-rsync/</guid>
+      <description>&lt;p&gt;&lt;a href=&#34;/blog/2013/11/13/what-recent/&#34;&gt;mpdを導入したとき&lt;/a&gt;にrsyncでパーミッションの問題が発生したと言ってましたが解決策がありました。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Lisp Meet Up #11でLTしてきました</title>
+      <link>/blog/2013/11/29/lispmeetup-11/</link>
+      <pubDate>Fri, 29 Nov 2013 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2013/11/29/lispmeetup-11/</guid>
+      <description>&lt;p&gt;「Makefile書けない人がMake 4.0触ってみた」での発表です。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>ここ１ヶ月くらいの近況</title>
+      <link>/blog/2013/11/13/what-recent/</link>
+      <pubDate>Wed, 13 Nov 2013 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2013/11/13/what-recent/</guid>
+      <description>&lt;p&gt;#isucon 参戦記がフォロワーの多い@tagomorisさんとか@nitro_idiotさんとかにツイートされて普段の数十倍のアクセスが来てテンション上がったので近況書きますね。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>チーム「銀杏絶滅しろ」でisucon学生賞もらってきました</title>
+      <link>/blog/2013/11/11/isucon-final-stage/</link>
+      <pubDate>Mon, 11 Nov 2013 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2013/11/11/isucon-final-stage/</guid>
+      <description>&lt;p&gt;しばらく間が空きました。まあ、その間のことはいつかまとめて書きます。今回は &lt;a href=&#34;http://isucon.net/&#34;&gt;isucon#3&lt;/a&gt;について。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;/blog/2013/10/09/isucon-qualifying-event/&#34;&gt;先日&lt;/a&gt;、isucon#3の予選を突破したと書きましたが、日曜にその決勝戦があったので報告です。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>ISUCON#3予選に参加しました</title>
+      <link>/blog/2013/10/09/isucon-qualifying-event/</link>
+      <pubDate>Wed, 09 Oct 2013 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2013/10/09/isucon-qualifying-event/</guid>
+      <description>&lt;p&gt;&lt;a href=&#34;http://isucon.net/&#34;&gt;ISUCON&lt;/a&gt;#3の予選に参加してきた話です。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Tiarraにercで接続したときの/loadの問題</title>
+      <link>/blog/2013/10/06/tiarra-erc/</link>
+      <pubDate>Sun, 06 Oct 2013 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2013/10/06/tiarra-erc/</guid>
+      <description>&lt;p&gt;&lt;a href=&#34;http://www.clovery.jp/tiarra/&#34;&gt;tiarra&lt;/a&gt;に &lt;a href=&#34;http://www.emacswiki.org/ERC&#34;&gt;erc&lt;/a&gt;で接続したときの/loadの問題。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Emacsのdired-modeを使い易くする</title>
+      <link>/blog/2013/10/04/emacs-dired/</link>
+      <pubDate>Fri, 04 Oct 2013 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2013/10/04/emacs-dired/</guid>
+      <description>&lt;p&gt;Emacsの標準ライブラリ&lt;code&gt;dired.el&lt;/code&gt;を読んでたら色々発見があったのでメモ兼dired-modeとはなんじゃらほいって方にも一から解説してみます。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>MPlayerがうまく動かない</title>
+      <link>/blog/2013/09/29/mplayer/</link>
+      <pubDate>Sun, 29 Sep 2013 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2013/09/29/mplayer/</guid>
+      <description>&lt;p&gt;MPlayerを使ってBGMを流すコマンドを作ろうとしたときに困ったことがいくつかあったので誰か解決して下さい。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Octopressのgistプラグインが動かなかったので修正した</title>
+      <link>/blog/2013/09/26/patch-to-gist-plugin/</link>
+      <pubDate>Thu, 26 Sep 2013 22:57:00 +0000</pubDate>
+      
+      <guid>/blog/2013/09/26/patch-to-gist-plugin/</guid>
+      <description>&lt;p&gt;どうもGithubのgistのURLが変わってる(?)っぽくてOctopressのgistプラグインが動いてくれなかったので修正しました。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Shellyを使ってCommon LispファイルをExecutableにする</title>
+      <link>/blog/2013/09/26/shelly-script/</link>
+      <pubDate>Thu, 26 Sep 2013 21:25:00 +0000</pubDate>
+      
+      <guid>/blog/2013/09/26/shelly-script/</guid>
+      <description>&lt;p&gt;コマンドラインからCommon Lispの関数を実行できる &lt;a href=&#34;https://github.com/fukamachi/shelly&#34;&gt;Shelly&lt;/a&gt;を使ってCommon Lispファイルを実行形式にしてみました。Shellyは&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ shly + 1 2
+3
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;みたいに関数を実行できます。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Google Common Lispスタイルガイド</title>
+      <link>/blog/2013/09/21/google-commonlisp-style-guide/</link>
+      <pubDate>Sat, 21 Sep 2013 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2013/09/21/google-commonlisp-style-guide/</guid>
+      <description>&lt;p&gt;この度、 &lt;a href=&#34;http://google-styleguide.googlecode.com/svn/trunk/lispguide.xml&#34;&gt;Google Common Lispスタイルガイド&lt;/a&gt;が &lt;a href=&#34;http://google-common-lisp-style-guide-ja.cddddr.org/&#34;&gt;日本語に&lt;/a&gt;なりました。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Gitあれこれ</title>
+      <link>/blog/2013/09/18/some-git-matters/</link>
+      <pubDate>Wed, 18 Sep 2013 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2013/09/18/some-git-matters/</guid>
+      <description>&lt;p&gt;githubで共同作業してたらいろいろ困ったことがあったのでそのときのメモ。はじめてやって困ったことなので経験ある人には常識なのかもしれません。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>octomacs.elを修正しました</title>
+      <link>/blog/2013/09/16/octomacs-el/</link>
+      <pubDate>Mon, 16 Sep 2013 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2013/09/16/octomacs-el/</guid>
+      <description>&lt;p&gt;EmacsからOctopressに投稿できるOctomacs.elが最新版のrvm.elに対応してないようだったので修正してみました。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Qiitaのユーザーヒアリングを受けてきました。</title>
+      <link>/blog/2013/09/13/met-qiita-engineer/</link>
+      <pubDate>Fri, 13 Sep 2013 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2013/09/13/met-qiita-engineer/</guid>
+      <description>&lt;p&gt;今日の夕方、Qiitaのユーザーヒアリングを受けたのでその報告です。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>FreeBSD10でちょっとこけた</title>
+      <link>/blog/2013/09/12/error-on-svn/</link>
+      <pubDate>Thu, 12 Sep 2013 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2013/09/12/error-on-svn/</guid>
+      <description>&lt;p&gt;FreeBSD10をインストールしてたときにちょっとつまったところがあったのでメモ。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>COOKPADのアイコン</title>
+      <link>/blog/2013/09/07/cookpad/</link>
+      <pubDate>Sat, 07 Sep 2013 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2013/09/07/cookpad/</guid>
+      <description>&lt;p&gt;クックパッドにレシピ初投稿の記念として左上のソーシャルアイコンにクックパッドを追加しました。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Redmineのインストール</title>
+      <link>/blog/2013/09/05/install-redmine/</link>
+      <pubDate>Thu, 05 Sep 2013 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2013/09/05/install-redmine/</guid>
+      <description>&lt;p&gt;私はバイトではプロジェクト管理に &lt;a href=&#34;http://backlog.jp&#34;&gt;Backlog&lt;/a&gt;のサービスを利用してますが、同様のOSSに &lt;a href=&#34;http://redmine.jp&#34;&gt;Redmine&lt;/a&gt;なるものがあると聞いて動かしてみたときのメモ。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>PDFユーティリティ</title>
+      <link>/blog/2013/09/03/pdftk/</link>
+      <pubDate>Tue, 03 Sep 2013 23:34:00 +0000</pubDate>
+      
+      <guid>/blog/2013/09/03/pdftk/</guid>
+      <description>&lt;p&gt;小ネタ。コマンドラインからPDFを編集した話の備忘録。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Rails Tutorial</title>
+      <link>/blog/2013/09/03/rails-tutorial/</link>
+      <pubDate>Tue, 03 Sep 2013 22:15:00 +0000</pubDate>
+      
+      <guid>/blog/2013/09/03/rails-tutorial/</guid>
+      <description>&lt;p&gt;夜中にコーヒー飲むと眠れなくなりますね。昨晩もコーヒー飲んだら朝まで眠れず、寝たのが朝8時半、起きたのが16時でした。明日提出のレポート終ってないのに…&lt;/p&gt;
+
+&lt;p&gt;さて、かなり良いRuby on Railsのチュートリアルを見付けたので紹介します。&lt;br /&gt;
+ &lt;a href=&#34;http://railstutorial.jp&#34;&gt;Ruby on Rails チュートリアル：実例を使ってRailsを学ぼう&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Githubの変更を追う</title>
+      <link>/blog/2013/09/02/rss-of-github/</link>
+      <pubDate>Mon, 02 Sep 2013 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2013/09/02/rss-of-github/</guid>
+      <description>&lt;p&gt;こんばんは。κeenです。普段、Github上で最新のソースを追ってるプロジェクトはこまめにgit pullすることで更新を確認してたのですが、別の方法があることに気づきました。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>ブログ開設しました</title>
+      <link>/blog/2013/09/01/first-post/</link>
+      <pubDate>Sun, 01 Sep 2013 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2013/09/01/first-post/</guid>
+      <description>&lt;p&gt;はじめまして。κeenです。今までLispでblogエンジンを作ってblogを開設したいと思いつつも時間がなかったりWifiアダプタ失くしたりして結局あきらめ、github+octopressでblog作ることにしました。&lt;/p&gt;
+
+&lt;p&gt;&lt;/p&gt;</description>
     </item>
     
   </channel>
