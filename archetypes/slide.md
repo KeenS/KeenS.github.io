@@ -1,7 +1,8 @@
 ---
 categories: []
+date: {{ .Date }}
 description:
-
+title: "{{ replace .TranslationBaseName "-" " " | title }}"
 ---
 <section data-markdown
     data-separator="\n===\n"
