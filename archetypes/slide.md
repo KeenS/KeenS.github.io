@@ -9,7 +9,7 @@ title: "{{ replace .TranslationBaseName "-" " " | title }}"
     data-vertical="\n---\n"
     data-notes="^Note:">
 <script type="text/template">
-# {{ .Page.Titile }}
+# {{ replace .TranslationBaseName "-" " " | title }}
 ----------------------
 
 <!-- .slide: class="center" -->
