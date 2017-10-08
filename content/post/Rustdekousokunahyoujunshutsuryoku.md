@@ -178,3 +178,62 @@ There is NO WARRANTY, to the extent permitted by law.
 
 作者 David MacKenzie。
 ```
+
+# 2017-10-08 追記
+
+<blockquote class="twitter-tweet" data-conversation="none" data-lang="ja"><p lang="ja" dir="ltr">バッファリングするやつの<br>writeln!(out, &quot;yes&quot;).unwrap();<br>を<br>out.write(b&quot;yes\n&quot;).unwrap();<br>にするだけで最期の 2048 ごとのに匹敵するほどはやくなりました。<br>文字列からバイトへの変換にコピーが発生していそう。</p>&mdash; いじゅういん (@kei10in) <a href="https://twitter.com/kei10in/status/916038667600142336?ref_src=twsrc%5Etfw">2017年10月5日</a></blockquote>
+<blockquote class="twitter-tweet" data-conversation="none" data-lang="ja"><p lang="ja" dir="ltr">ありがとうございます。言われてみれば確かwritelnは一旦改行文字を結合してから（新たにアロケートしてから）出力していた気がします。後程追記しますね。</p>&mdash; κeen (@blackenedgold) <a href="https://twitter.com/blackenedgold/status/916088821741101056?ref_src=twsrc%5Etfw">2017年10月5日</a></blockquote>
+<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+ということで実験してみましょう。
+
+まずは指摘されたコード。
+
+``` rust
+use std::io::{stdout, Write, BufWriter};
+
+fn main() {
+    let out = stdout();
+    let mut out = BufWriter::new(out.lock());
+    for _ in 0..10_000_000 {
+        out.write(b"yes\n").unwrap();
+    }
+}
+```
+
+
+``` console
+$ rustc -O yes.rs
+$ time ./yes > /dev/null
+./yes > /dev/null  0.02s user 0.00s system 89% cpu 0.027 total
+```
+
+かなり速くなってます。ふむむむ。
+
+もう1つ、私が言及した`writeln!`よりも`write!`の方が速いというやつ。
+
+
+``` rust
+use std::io::{stdout, Write, BufWriter};
+
+fn main() {
+    let out = stdout();
+    let mut out = BufWriter::new(out.lock());
+    for _ in 0..10_000_000 {
+        out.write(b"yes\n").unwrap();
+    }
+}
+```
+
+``` console
+$ rustc -O yes.rs
+$ time ./yes > /dev/null
+./yes > /dev/null  0.15s user 0.00s system 98% cpu 0.155 total
+```
+
+
+あれ！？`write!`を使うと遅い…。`write!`は単に[`write_fmt`に置き換えられる](https://github.com/rust-lang/rust/blob/master/src/libcore/macros.rs#L403)だけなので大したコストじゃないと思ってたんですが`write_fmt`って以外とコストかかるんですね。
+
+ところで`writeln!`は[マクロの`concat!`を呼んでいる](https://github.com/rust-lang/rust/blob/master/src/libcore/macros.rs#L448)ので実行時にはアロケーションコストが掛からなそうです（汗。調べもせずに適当なことを言うのはやめましょう（戒め）
+
+/追記
