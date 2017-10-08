@@ -272,6 +272,58 @@ There is NO WARRANTY, to the extent permitted by law.
 
 作者 David MacKenzie。
 </code></pre>
+
+<h1 id="2017-10-08-追記">2017-10-08 追記</h1>
+
+<p><blockquote class="twitter-tweet" data-conversation="none" data-lang="ja"><p lang="ja" dir="ltr">バッファリングするやつの<br>writeln!(out, &quot;yes&quot;).unwrap();<br>を<br>out.write(b&quot;yes\n&quot;).unwrap();<br>にするだけで最期の 2048 ごとのに匹敵するほどはやくなりました。<br>文字列からバイトへの変換にコピーが発生していそう。</p>&mdash; いじゅういん (@kei10in) <a href="https://twitter.com/kei10in/status/916038667600142336?ref_src=twsrc%5Etfw">2017年10月5日</a></blockquote>
+<blockquote class="twitter-tweet" data-conversation="none" data-lang="ja"><p lang="ja" dir="ltr">ありがとうございます。言われてみれば確かwritelnは一旦改行文字を結合してから（新たにアロケートしてから）出力していた気がします。後程追記しますね。</p>&mdash; κeen (@blackenedgold) <a href="https://twitter.com/blackenedgold/status/916088821741101056?ref_src=twsrc%5Etfw">2017年10月5日</a></blockquote>
+<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script></p>
+
+<p>ということで実験してみましょう。</p>
+
+<p>まずは指摘されたコード。</p>
+
+<pre><code class="language-rust">use std::io::{stdout, Write, BufWriter};
+
+fn main() {
+    let out = stdout();
+    let mut out = BufWriter::new(out.lock());
+    for _ in 0..10_000_000 {
+        out.write(b&quot;yes\n&quot;).unwrap();
+    }
+}
+</code></pre>
+
+<pre><code class="language-console">$ rustc -O yes.rs
+$ time ./yes &gt; /dev/null
+./yes &gt; /dev/null  0.02s user 0.00s system 89% cpu 0.027 total
+</code></pre>
+
+<p>かなり速くなってます。ふむむむ。</p>
+
+<p>もう1つ、私が言及した<code>writeln!</code>よりも<code>write!</code>の方が速いというやつ。</p>
+
+<pre><code class="language-rust">use std::io::{stdout, Write, BufWriter};
+
+fn main() {
+    let out = stdout();
+    let mut out = BufWriter::new(out.lock());
+    for _ in 0..10_000_000 {
+        out.write(b&quot;yes\n&quot;).unwrap();
+    }
+}
+</code></pre>
+
+<pre><code class="language-console">$ rustc -O yes.rs
+$ time ./yes &gt; /dev/null
+./yes &gt; /dev/null  0.15s user 0.00s system 98% cpu 0.155 total
+</code></pre>
+
+<p>あれ！？<code>write!</code>を使うと遅い…。<code>write!</code>は単に<a href="https://github.com/rust-lang/rust/blob/master/src/libcore/macros.rs#L403"><code>write_fmt</code>に置き換えられる</a>だけなので大したコストじゃないと思ってたんですが<code>write_fmt</code>って以外とコストかかるんですね。</p>
+
+<p>ところで<code>writeln!</code>は<a href="https://github.com/rust-lang/rust/blob/master/src/libcore/macros.rs#L448">マクロの<code>concat!</code>を呼んでいる</a>ので実行時にはアロケーションコストが掛からなそうです（汗。調べもせずに適当なことを言うのはやめましょう（戒め）</p>
+
+<p>/追記</p>
                     </section>
                 </article>
             </div>
