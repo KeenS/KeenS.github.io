@@ -472,7 +472,7 @@ else節はオプショナルです。
 test_command のexit statusが0ならthen節が、それ以外ならelse節が実行されます。例えば以下のように使います。
 
 ``` shell
-if grep pohe > /etc/password > /dev/null 2>&1; then
+if grep pohe /etc/password > /dev/null 2>&1; then
     echo "Hello, pohe"
 else
     echo "pohe is absent"
@@ -614,6 +614,6 @@ expr 1 + 1
 
 # メタ
 この記事を書き始めたタイミングでOSアップデートしたらuim-skk+dvorak配列が使えなくなってしまいました。
-この機にとqwertyもSKKも捨て、qwerty配列にibusの *かな入力* を使い始めました。
+この機にとdvorakもSKKも捨て、qwerty配列にibusの *かな入力* を使い始めました。
 そしたらまあ全然書けなくて執筆開始が10-17なのに公開が10-30になってしまいました。
 まだかな入力には馴れきってないです。
