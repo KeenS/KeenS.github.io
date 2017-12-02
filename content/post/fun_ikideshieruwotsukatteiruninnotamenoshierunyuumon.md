@@ -84,7 +84,6 @@ POSIXシェルには文字列しかありません。
 
 `"文字列"` は内部でエスケープ記号や変数の展開が行なわれます。
 
-
 ``` shell
 hoge=world
 echo "hello\n$hoge"
@@ -113,6 +112,11 @@ this contains a single quote(') mark
 
 おおまかな指針として、特に何もなければ `'文字列'` を、変数展開したい場合は `"文字列"` を使うとよいでしょう。
 拡張シェルを使っていると`$`以外の記号(例えばzshで`!`など)も展開対象になるので気をつけましょう。
+
+2017-10-30 追記
+<blockquote class="twitter-tweet" data-conversation="none" data-lang="ja"><p lang="ja" dir="ltr">hoge=world<br>echo &quot;hello\n$hoge&quot;<br># -&gt; hello<br># -&gt; world<br>これ↑ですが、\n を解釈するのはある種の echo が行なっていることです。<br>printf &#39;%s&#39; &quot;hello\n$hoge&quot; |od -tcx1<br>などとして確認を。</p>&mdash; ふみやす＠シェルまおう(自称でない)🚲 (@satoh_fumiyasu) <a href="https://twitter.com/satoh_fumiyasu/status/924884773423628288?ref_src=twsrc%5Etfw">2017年10月30日</a></blockquote>
+
+/追記
 
 ## ヒアドキュメント
 ヒアドキュメントがあります。Rubyとかにあるやつですね。これは文字列ではなく標準入力として扱われます。
@@ -209,6 +213,13 @@ $ /usr/bin/time expr 1 + 1
 0.00user 0.00system 0:00.00elapsed 100%CPU (0avgtext+0avgdata 2096maxresident)k
 0inputs+0outputs (0major+79minor)pagefaults 0swaps
 ```
+
+2017-10-30 追記
+<blockquote class="twitter-tweet" data-conversation="none" data-lang="ja"><p lang="ja" dir="ltr">time(1)コマンドについても、POSIXで定義されています: <a href="https://t.co/tf1IHCfgOz">https://t.co/tf1IHCfgOz</a><br>記述にある通り、デフォルトの出力形式がバラバラですが、イマドキのOSなら「-p」オプションつければ最低限の互換性は確保できるかと</p>&mdash; SODA Noriyuki (@n_soda) <a href="https://twitter.com/n_soda/status/924895533629505536?ref_src=twsrc%5Etfw">2017年10月30日</a></blockquote>
+
+とのことですが、普通にUbuntu(の少なくとも14.10)に入っていないので実用上気をつけましょう。
+/追記
+
 
 ## シェルとコマンドの区別
 [昔のエントリ](/blog/2015/06/17/shell_scriptwokakutokinikiwotsuketaikoto/)でも触れましたがシェルレベルとコマンドレベルを区別しましょう。
@@ -449,6 +460,10 @@ B: バックグラウンド
 * `nohup`は解脱せずに不死属性つける感じです。多分。
 
 まあつまり何を言いたいかというとκeenも雰囲気で使ってます。
+
+2017-10-30 追記
+<blockquote class="twitter-tweet" data-conversation="none" data-lang="ja"><p lang="ja" dir="ltr">setsidコマンドにがPOSIX外なのはその通りですが、Linux固有というわけでもなくて、たぶんSVR4発祥だったと思います。</p>&mdash; SODA Noriyuki (@n_soda) <a href="https://twitter.com/n_soda/status/924897473377665024?ref_src=twsrc%5Etfw">2017年10月30日</a></blockquote>
+/追記
 
 あとzshやbash 4.0以降にコプロセスというのがありますが詳しくないです。
 
