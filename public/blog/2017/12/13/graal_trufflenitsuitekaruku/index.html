@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+    <head>
+        
+        <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:site" content="@blackenedgold" />
+        <meta name="twitter:title" content="Graal/Truffleについて軽く | κeenのHappy Hacκing Blog"/>
+        <meta name="twitter:description" content="κeenです。これは言語実装 Advent Calendar 201714日目の記事です。
+JVMのコンパイラエンジンGraalと高速インタプリタ作成フレームワークのTruffleについて。
+
+この記事の前に昨日の記事を読んでおくと理解の助けになるかもしれません。" />
+
+        <title>Graal/Truffleについて軽く | κeenのHappy Hacκing Blog</title>
+        <link rel="stylesheet" href='http://fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css' />
+        <link rel="stylesheet" href="/libraries/normalize.3.0.1.css" />
+        <link rel="stylesheet" href="/css/liquorice.css" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+        <link rel="icon" type="image/png" href="/favicon-32x32.png" sizes="32x32">
+        <link rel="icon" type="image/png" href="/favicon-16x16.png" sizes="16x16">
+        <link rel="manifest" href="/manifest.json">
+        <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#5bbad5">
+        <meta name="theme-color" content="#ffffff">
+        <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon-144-precomposed.png" sizes="144x144" />
+        <link rel="alternate" href="" type="application/rss+xml" title="κeenのHappy Hacκing Blog" />
+        
+        <script>
+         (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+             (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+                                  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+         })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+         ga('create', 'UA-43779888-1', 'auto');
+         ga('send', 'pageview');
+
+        </script>
+        
+        <link rel="stylesheet" href="/highlight.js/styles/xcode.css" />
+<script src="/highlight.js/highlight.min.js"></script>
+<script>hljs.initHighlightingOnLoad();</script>
+<script type="text/x-mathjax-config">
+ MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
+</script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS_CHTML"></script>
+</script>
+<meta http-equiv="X-UA-Compatible" CONTENT="IE=EmulateIE7" />
+<link rel="stylesheet" href="https://unpkg.com/mermaid@7.0.4/dist/mermaid.forest.min.css">
+
+    </head>
+    <body class="li-body">
+
+<header class="li-page-header" id="page-header">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-brand li-left">
+                <a href="/">κeenのHappy Hacκing Blog</a> | Lispエイリアンの狂想曲</div>
+                <div class="li-menu li-right">
+                    <span class="li-menu-icon" onclick="javascript:toggle('menu');">&#9776;</span>
+                    <ul id="menu2" class="li-menu-items">
+                        
+                            <li><a href="/about/"> About </a></li>
+                        
+                            <li><a href="/index.xml"> Atom </a></li>
+                        
+                            <li><a href="/post/"> Blog </a></li>
+                        
+                            <li><a href="/slide/"> Slide </a></li>
+                        
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="sixteen columns">
+                <ul id="menu" class="li-menu-items li-menu-mobile">
+                    
+                        <li><a href="/about/"> About </a></li>
+                    
+                        <li><a href="/index.xml"> Atom </a></li>
+                    
+                        <li><a href="/post/"> Blog </a></li>
+                    
+                        <li><a href="/slide/"> Slide </a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+
+
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <article class="li-article">
+                    <header class="li-article-header">
+                        <h1 class="li-article-title">Graal/Truffleについて軽く</h1>
+                        <div class="li-article-meta">
+    <time class="li-article-date">2017-12-13</time>
+    <ul class="li-article-tag">
+    
+        <li>
+            <a href="/categories/%e8%a8%80%e8%aa%9e%e5%ae%9f%e8%a3%85">言語実装</a>
+        </li>
+    
+        <li>
+            <a href="/categories/jvm">JVM</a>
+        </li>
+    
+        <li>
+            <a href="/categories/advent-calendar">Advent Calendar</a>
+        </li>
+    
+        <li>
+            <a href="/categories/advent-calendar-2017">Advent Calendar 2017</a>
+        </li>
+    
+</ul>
+
+</div>
+
+                    </header>
+                    <section>
+                        <p>κeenです。これは<a href="https://qiita.com/advent-calendar/2017/lang_dev">言語実装 Advent Calendar 2017</a>14日目の記事です。
+JVMのコンパイラエンジンGraalと高速インタプリタ作成フレームワークのTruffleについて。
+
+この記事の前に<a href="/blog/2017/12/12/rpythonnitsuitekaruku/">昨日の記事</a>を読んでおくと理解の助けになるかもしれません。</p>
+
+<h1 id="graalについて">Graalについて</h1>
+
+<p><a href="http://www.oracle.com/technetwork/oracle-labs/program-languages/overview/index.html">公式ページ</a>/<a href="https://github.com/graalvm/graal">GitHub</a>。</p>
+
+<p>Oracle Labで開発されているJavaのJITエンジンの1つです。
+<a href="http://openjdk.java.net/jeps/243">JVMのコンパイラインタフェース</a>(JVMCI)を利用してJavaでコンパイラを書いたものです。
+従来はコンパイル部分はC++で書かれてましたが曰くJavaも十分速くなったし高級で安全なJavaでコンバイラを書いてもいいだろとのこと。
+この絶妙にランタイムが拡張可能でかつパフォーマンスを損なわない感じはJavaならではですね。
+また、Javaで書かれているのでユーザがJavaで拡張可能でもあり、最適化や機械語生成を拡張できます。</p>
+
+<p>Graalはピーク性能の改善を目標としていて、Scalaアプリケーションなど一部のケースで既に従来のJVMの性能を上回ってるそうです。</p>
+
+<p>GraalをデフォルトでonにしたGraalVMというのもOracle Labから配布されているようです。</p>
+
+<h1 id="truffleについて">Truffleについて</h1>
+
+<p><a href="https://github.com/graalvm/graal/tree/master/truffle">GitHub</a>。</p>
+
+<p>JavaのASTインタプリタフレームワークです。
+多少言語実装をかじった人ならASTインタプリタは遅いことをご存知かと思いますがTruffleはそのままASTで解釈するだけではありません。
+昨日のRPythonのようにASTインタプリタは意味論を与えるのが主な目的で、実行時にはGraalと連携して最適化していきます。</p>
+
+<p>Truffleが行う最適化は<a href="https://dl.acm.org/citation.cfm?doid=2384577.2384587">自己最適化</a>です。
+Javaで実装された各ASTノードが<code>execute</code>メソッドを持っていて実行される訳ですが、ASTを実行中に書き換えることで高速化していきます。
+抽象的なインタプリタからセマンティクスを得て高速化していく点では似てますが、昨日のRPythonのJITとは違って全てがJVMの実行中に起きるのでちょっと図には書けないですね…。
+このゲスト言語のソースコードに合わせた(部分評価した)最適化と評価器そのものの最適化が表裏一体な感じがなんともいえませんね。</p>
+
+<p>さて、Truffleの目的は高速化以外にもあります。polyglot、つまり同じVM上で複数の言語を動かすのです。
+現状<a href="https://github.com/graalvm/truffleruby">Ruby</a>、<a href="https://bitbucket.org/ssllab/zippy">Python</a>、JavaScript、<a href="https://github.com/graalvm/fastr">R</a>、<a href="https://github.com/graalvm/sulong">LLVM IR</a>などが動きます。
+なにやらCLI/CLRとIronプロジェクトが去来しますがRuby、Python、JS、RはJVM実装の実績がありますしまあ大丈夫でしょう。
+<a href="http://graalvm.github.io/graal/truffle/javadoc/com/oracle/truffle/tutorial/embedding/package-summary.html">Truffle Tutorial: Embedding Truffle Languages in Java</a>を見ても分かるように相互連携はそれなりに出来るようです。</p>
+
+<h1 id="substrate-vm">Substrate VM</h1>
+
+<p><a href="https://github.com/graalvm/truffleruby/blob/master/doc/user/svm.md">資料</a>。
+あまり情報がないのですが、どうやらTruffleで書かれたインタプリタをコンパイルしてくれるようです。
+出来上がるバイナリはJVMやJava Byte Codeを含まないらしいので面白いですね。</p>
+
+<h1 id="truffleチラ見">Truffleチラ見</h1>
+
+<p><a href="https://github.com/graalvm/simplelanguage">simplelanguage</a>というレポジトリがあって、おもちゃ言語をTruffleで実装するデモが置いてあります。</p>
+
+<h2 id="エントリポイント">エントリポイント</h2>
+
+<p>日本語コメントはκeenによる。</p>
+
+<pre><code class="language-java">// SLMain.java
+public final class SLMain {
+
+    /**
+     * The main entry point.
+     */
+    public static void main(String[] args) throws IOException {
+        Source source;
+        if (args.length == 0) {
+            // @formatter:off
+            source = Source.newBuilder(new InputStreamReader(System.in)).
+                name(&quot;&lt;stdin&gt;&quot;).
+                // MIME Typeを指定することでその言語のインタプリタを指定する
+                mimeType(SLLanguage.MIME_TYPE).
+                build();
+            // @formatter:on
+        } else {
+            source = Source.newBuilder(new File(args[0])).build();
+        }
+
+        executeSource(source, System.in, System.out);
+    }
+
+    private static void executeSource(Source source, InputStream in, PrintStream out) {
+        out.println(&quot;== running on &quot; + Truffle.getRuntime().getName());
+
+        PolyglotEngine engine = PolyglotEngine.newBuilder().setIn(in).setOut(out).build();
+        assert engine.getLanguages().containsKey(SLLanguage.MIME_TYPE);
+
+        try {
+            // ここで実行
+            Value result = engine.eval(source);
+
+            if (result == null) {
+                throw new SLException(&quot;No function main() defined in SL source file.&quot;);
+            } else if (result.get() != SLNull.SINGLETON) {
+                out.println(result.get());
+            }
+
+        }
+        ...
+    }
+    ...
+}
+</code></pre>
+
+<h2 id="nodeと解釈">Nodeと解釈</h2>
+
+<pre><code class="language-java">// nodes/expression/SLMulNode.java
+
+package com.oracle.truffle.sl.nodes.expression;
+
+import java.math.BigInteger;
+
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.nodes.NodeInfo;
+import com.oracle.truffle.sl.nodes.SLBinaryNode;
+
+/**
+ * This class is similar to the extensively documented {@link SLAddNode}.
+ */
+@NodeInfo(shortName = &quot;*&quot;)
+// 辿っていくと、`com.oracle.truffle.api.nodes.Node`の子クラスになっている
+public abstract class SLMulNode extends SLBinaryNode {
+
+    @Specialization(rewriteOn = ArithmeticException.class)
+    protected long mul(long left, long right) {
+        return Math.multiplyExact(left, right);
+    }
+
+    @Specialization
+    @TruffleBoundary
+    protected BigInteger mul(BigInteger left, BigInteger right) {
+        // 本当に計算するだけ。
+        return left.multiply(right);
+    }
+}
+</code></pre>
+
+<h2 id="builtin">Builtin</h2>
+
+<p>ビルトイン関数も定義されます。</p>
+
+<pre><code class="language-java">// builtins/SLPrintlnBuiltin
+@NodeInfo(shortName = &quot;println&quot;)
+public abstract class SLPrintlnBuiltin extends SLBuiltinNode {
+   ...
+
+    @TruffleBoundary
+    private static void doPrint(PrintWriter out, Object value) {
+        out.println(value);
+    }
+}
+</code></pre>
+
+<h1 id="まとめ">まとめ</h1>
+
+<p>またしても締まりがないですが</p>
+
+<ul>
+<li>GraalというJavaで拡張可能なJITエンジンがあるよ</li>
+<li>Truffleという簡単にインタプリタを書けるフレームワークがあるよ</li>
+<li>TruffleはGraalを使いながら裏ですごい最適化をするよ</li>
+<li>Truffleで書いたインタプリタはSVMというツールでバイナリにもできるよ。</li>
+</ul>
+
+<h1 id="参考資料">参考資料</h1>
+
+<ul>
+<li><a href="https://github.com/graalvm/graal/blob/master/docs/Publications.md">Graal/Truffleの資料</a></li>
+<li><a href="http://chrisseaton.com/rubytruffle/jokerconf17/">Understanding How Graal Works - a Java JIT Compiler Written in Java</a></li>
+<li><a href="http://openjdk.java.net/projects/graal/">Graal Project</a></li>
+<li><a href="http://graalvm.github.io/graal/truffle/javadoc/com/oracle/truffle/tutorial/package-summary.html">Truffle Tutorial</a></li>
+<li><a href="http://nirvdrum.com/2017/02/15/truffleruby-on-the-substrate-vm.html">TruffleRuby on the Substrate VM</a></li>
+<li><a href="https://lafo.ssw.uni-linz.ac.at/pub/papers/2016_PLDI_Truffle.pdf">One VM to Rule Them All</a> スライド</li>
+<li><a href="https://www.youtube.com/watch?v=FJY96_6Y3a4&amp;feature=youtu.be">One VM to Rule Them All, One VM to Bind Them</a> YouTube</li>
+</ul>
+                    </section>
+                </article>
+            </div>
+        </div>
+
+        <div class="row li-author">
+    <div class="sixteen columns">
+        Written by <strong>κeen</strong>
+    </div>
+</div>
+
+
+        <div class="row li-pagination">
+            <div class="eight columns">
+                <div class="li-pagination-previous">
+                    
+                        &nbsp;
+                    
+                </div>
+            </div>
+            <div class="eight columns">
+                <div class="li-pagination-next">
+                    
+                        Older article<br />
+                        <a href="/blog/2017/12/12/rpythonnitsuitekaruku/"> RPythonについて軽く</a>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+<footer class="li-page-footer">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-page-footer-legal">
+                    &copy; 2017. All rights reserved. 
+                </div>
+                <div class="li-page-footer-theme">
+                    <span class=""><a href="https://github.com/eliasson/liquorice/">liquorice</a> is a theme for <a href="http://hugo.spf13.com">hugo</a></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+
+    <script type="text/javascript">
+    <!--
+    function toggle(id) {
+        var e = document.getElementById(id);
+        e.style.display == 'block' ? e.style.display = 'none' : e.style.display = 'block';
+    }
+    
+    </script>
+    <script type="text/javascript">
+     <!--
+                                   var _gaq = _gaq || [];
+     _gaq.push(['_setAccount', ""]);
+     _gaq.push(['_trackPageview']);
+
+     (function() {
+         var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+         ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+         var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+     })();
+    
+    </script>
+    <script src="https://unpkg.com/mermaid@7.0.4/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({startOnLoad:true
+     });</script>
+
+    </body>
+</html>
+
