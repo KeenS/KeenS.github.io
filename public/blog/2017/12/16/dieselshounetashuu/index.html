@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+    <head>
+        
+        <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:site" content="@blackenedgold" />
+        <meta name="twitter:title" content="diesel小ネタ集 | κeenのHappy Hacκing Blog"/>
+        <meta name="twitter:description" content="κeenです。これはRust Advent Calendar 2017の記事です。
+RustのORM、クエリビルダ、マイグレーションツールのdieselについて。
+dieselについては公式チュートリアルを読めばだいたい使い始められるのですが、それだけでは足りないのでいくつか持ちネタを書きます。
+
+diesel-1.0.0-beta1での情報です。" />
+
+        <title>diesel小ネタ集 | κeenのHappy Hacκing Blog</title>
+        <link rel="stylesheet" href='http://fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css' />
+        <link rel="stylesheet" href="/libraries/normalize.3.0.1.css" />
+        <link rel="stylesheet" href="/css/liquorice.css" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+        <link rel="icon" type="image/png" href="/favicon-32x32.png" sizes="32x32">
+        <link rel="icon" type="image/png" href="/favicon-16x16.png" sizes="16x16">
+        <link rel="manifest" href="/manifest.json">
+        <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#5bbad5">
+        <meta name="theme-color" content="#ffffff">
+        <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon-144-precomposed.png" sizes="144x144" />
+        <link rel="alternate" href="" type="application/rss+xml" title="κeenのHappy Hacκing Blog" />
+        
+        <script>
+         (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+             (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+                                  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+         })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+         ga('create', 'UA-43779888-1', 'auto');
+         ga('send', 'pageview');
+
+        </script>
+        
+        <link rel="stylesheet" href="/highlight.js/styles/xcode.css" />
+<script src="/highlight.js/highlight.min.js"></script>
+<script>hljs.initHighlightingOnLoad();</script>
+<script type="text/x-mathjax-config">
+ MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
+</script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS_CHTML"></script>
+</script>
+<meta http-equiv="X-UA-Compatible" CONTENT="IE=EmulateIE7" />
+<link rel="stylesheet" href="https://unpkg.com/mermaid@7.0.4/dist/mermaid.forest.min.css">
+
+    </head>
+    <body class="li-body">
+
+<header class="li-page-header" id="page-header">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-brand li-left">
+                <a href="/">κeenのHappy Hacκing Blog</a> | Lispエイリアンの狂想曲</div>
+                <div class="li-menu li-right">
+                    <span class="li-menu-icon" onclick="javascript:toggle('menu');">&#9776;</span>
+                    <ul id="menu2" class="li-menu-items">
+                        
+                            <li><a href="/about/"> About </a></li>
+                        
+                            <li><a href="/index.xml"> Atom </a></li>
+                        
+                            <li><a href="/post/"> Blog </a></li>
+                        
+                            <li><a href="/slide/"> Slide </a></li>
+                        
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="sixteen columns">
+                <ul id="menu" class="li-menu-items li-menu-mobile">
+                    
+                        <li><a href="/about/"> About </a></li>
+                    
+                        <li><a href="/index.xml"> Atom </a></li>
+                    
+                        <li><a href="/post/"> Blog </a></li>
+                    
+                        <li><a href="/slide/"> Slide </a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+
+
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <article class="li-article">
+                    <header class="li-article-header">
+                        <h1 class="li-article-title">diesel小ネタ集</h1>
+                        <div class="li-article-meta">
+    <time class="li-article-date">2017-12-16</time>
+    <ul class="li-article-tag">
+    
+        <li>
+            <a href="/categories/rust">Rust</a>
+        </li>
+    
+        <li>
+            <a href="/categories/diese">diese</a>
+        </li>
+    
+        <li>
+            <a href="/categories/%e5%b0%8f%e3%83%8d%e3%82%bf">小ネタ</a>
+        </li>
+    
+        <li>
+            <a href="/categories/advent-calendar">Advent Calendar</a>
+        </li>
+    
+        <li>
+            <a href="/categories/adventcalendar-2017">AdventCalendar 2017</a>
+        </li>
+    
+</ul>
+
+</div>
+
+                    </header>
+                    <section>
+                        <p>κeenです。これは<a href="https://qiita.com/advent-calendar/2017/rust-lang">Rust Advent Calendar 2017</a>の記事です。
+RustのORM、クエリビルダ、マイグレーションツールのdieselについて。
+dieselについては<a href="http://diesel.rs/guides/getting-started/">公式チュートリアル</a>を読めばだいたい使い始められるのですが、それだけでは足りないのでいくつか持ちネタを書きます。
+
+diesel-1.0.0-beta1での情報です。</p>
+
+<h1 id="table-マクロ"><code>table!</code> マクロ</h1>
+
+<p>チュートリアルには<code>infer_schema!</code>を使ったDSLの自動生成が書かれてますが、<code>table!</code>マクロを使って自分で書くこともできます。</p>
+
+<pre><code class="language-rust">table! {
+  posts {
+    id -&gt; Integer,
+    Title -&gt; Text,
+    body -&gt; Text,
+    published -&gt; Bool
+  }
+}
+</code></pre>
+
+<p>このときの型は<a href="http://docs.diesel.rs/diesel/types/index.html">dieselで定義されているSQL型</a>を書きます。
+このSQL型は特定のDBMにあるものも用意されていて、例えばPostgreSQLなら<a href="http://docs.diesel.rs/diesel/pg/types/sql_types/index.html">この辺</a>や<a href="http://docs.diesel.rs/diesel/pg/data_types/index.html">この辺</a>にあります。</p>
+
+<h2 id="viewの扱い">viewの扱い</h2>
+
+<p>dieselは基本的にはviewをサポートしてません。
+もちろん<code>infer_schema!</code>はviewは見てくれないのでどうしても使いたい場合は上記<code>table!</code>マクロで生成します。
+実際にSQLを発行してDBMに怒られるまでtypoとかに気づかないのでつらいですね。</p>
+
+<p>あとdieselの型的にはINSERTが書けてしまいます。もちろん実行時にはエラーになります。気をつけましょう。</p>
+
+<h1 id="newtype-pattern">NewType Pattern</h1>
+
+<p>0.99.0からQueryableがネスト可能に<a href="https://github.com/diesel-rs/diesel/pull/1184">なった</a>ので</p>
+
+<pre><code class="language-rust">#[derive(Queryable)]
+pub struct PostId(pub i32);
+
+#[derive(Queryable)]
+pub struct Post {
+    pub id: PostId,
+    pub title: String,
+    pub body: String,
+    pub published: bool,
+}
+</code></pre>
+
+<p>のように<code>id</code>に個別の型を与えることができるようになりました。</p>
+
+<p>しかしちょっと注意が必要です。</p>
+
+<p>まずクエリが<code>id</code>のためにタプルを作らないといけなくなります。</p>
+
+<pre><code class="language-rust">    dsl::posts
+        ...
+        // idを`(dsl::id,)` のようにしていしないといけない
+        .select(((dsl::id,), dsl::title, dsl::body, dsl::published))
+        .get_result(conn)
+</code></pre>
+
+<p>また、<code>find(id)</code>のようにクエリビルダの引数に渡そうと思うともうちょっと工夫が必要です。
+dieselのクエリビルダのDSLに混ぜるには<code>Expression</code>や<code>ToSql</code>のトレイトを実装しないといけません。</p>
+
+<p>とはいえ、どのidでも中身は同型なのでワンパターンです。これはマクロを用意すれば解決できて、</p>
+
+<pre><code class="language-rust">use diesel::types::{Integer, ToSql, ToSqlOutput, IsNull};
+use diesel::backend::Backend;
+use std::io::Write;
+use std::error::Error;
+macro_rules! derive_for_ids {
+    ($ty: ty) =&gt; {
+        // `Expression`系を自動定義。
+        // このマクロはdieselで定義されている。
+        expression_impls!(BigInt -&gt; $ty);
+
+        // `ToSql`を定義
+        impl&lt;DB: Backend&gt; ToSql&lt;BigInt, DB&gt; for $ty {
+            fn to_sql&lt;W: Write&gt;(
+                &amp;self,
+                out: &amp;mut ToSqlOutput&lt;W, DB&gt;,
+            ) -&gt; Result&lt;IsNull, Box&lt;Error + Send + Sync&gt;&gt; {
+                ToSql::&lt;BigInt, DB&gt;::to_sql(&amp;self.0, out)
+            }
+        }
+    }
+}
+
+</code></pre>
+
+<p>というマクロで一撃です。</p>
+
+<p>このマクロは以下のように使います。</p>
+
+<pre><code class="language-rust">
+#[derive(Queryable, Debug)]
+pub struct PostId(i32);
+derive_for_ids!(PostId);
+
+</code></pre>
+
+<p>このようにしてあげれば</p>
+
+<pre><code class="language-rust">pub fn find_post&lt;'a&gt;(conn: &amp;SqliteConnection, id: PostId) -&gt; Option&lt;Post&gt; {
+    use schema::posts::dsl;
+
+    dsl::posts
+        // findの引数に`PostId`の値を渡せる
+        .find(id)
+        .select(((dsl::id,), dsl::title, dsl::body, dsl::published))
+        .get_result(conn)
+        .optional()
+        .expect(&quot;Error finding&quot;)
+}
+</code></pre>
+
+<p>のように<code>PostId</code>のままDSLが使えます。</p>
+
+<h1 id="enum">enum</h1>
+
+<p>dieselはSQLのenumをサポートしていません。なのでDB側では<code>Integer</code>で定義して、Rustの<code>enum</code>にマッピングしてあげることを考えます。</p>
+
+<p>因みに、復習も兼ねて、Rustの<code>enum</code>は全ての列挙子が引数を取らなければ(いわゆるC-like enumであれば)</p>
+
+<pre><code class="language-rust">pub enum Visibility {
+    Public = 0,
+    Limited = 1,
+    Private = 2,
+}
+</code></pre>
+
+<p>のように数値を割り当てられますね(何も指定しなければ0始まりの連番です)。
+そして<code>Visibility::Public as i32</code>のように数値にキャスト可能です(逆はできません)。</p>
+
+<p>これを用いて諸々のDSL化に使われているトレイトを実装します。先程と同じく<code>Expression</code>、<code>ToSql</code>、<code>Queryable</code>ですが<code>derive(Queryable)</code>が使えないのでちょっと大変です。</p>
+
+<p>同じくワンパターンなのでマクロを定義してあげます。
+<code>enum</code>の列挙子を全て捕捉しないといけないので先程とちょっと変わって<code>enum</code>の定義をラップする形にします。</p>
+
+<pre><code class="language-rust">use diesel::types::{Integer, ToSql, ToSqlOutput, IsNull, FromSql, FromSqlRow, HasSqlType};
+use diesel::row::Row;
+use diesel::Queryable;
+use diesel::backend::Backend;
+use std::io::Write;
+use std::error::Error;
+
+macro_rules! define_enum {
+    ($(#[$meta:meta])*
+     pub enum $name: ident { $($variant: ident = $val: expr,)*}) =&gt; {
+        // 元のenumを定義
+        $(#[$meta])*
+        pub enum $name {
+            $($variant = $val,)*
+        }
+
+        // `ToSql`を定義
+        impl&lt;DB: Backend&gt; ToSql&lt;Integer, DB&gt; for $name {
+            fn to_sql&lt;W: Write&gt;(
+                &amp;self,
+                out: &amp;mut ToSqlOutput&lt;W, DB&gt;,
+            ) -&gt; Result&lt;IsNull, Box&lt;Error + Send + Sync&gt;&gt; {
+                ToSql::&lt;Integer, DB&gt;::to_sql(&amp;(*self as i32), out)
+            }
+        }
+
+        // `Expression`系を自動定義
+        expression_impls!(Integer -&gt; $name);
+
+        // `Queryable`のために`FromSql`と`FromSqlRow`を定義
+        impl&lt;DB: Backend&gt; FromSql&lt;Integer, DB&gt; for $name
+            where i32: FromSql&lt;Integer, DB&gt;  {
+            fn from_sql(bytes: Option&lt;&amp;DB::RawValue&gt;) -&gt; Result&lt;Self, Box&lt;Error + Send + Sync&gt;&gt; {
+                use self::$name::*;
+                match &lt;i32 as FromSql&lt;Integer, DB&gt;&gt;::from_sql(bytes)? {
+                    $($val =&gt; Ok($variant),)*
+                    s =&gt; Err(format!(&quot;invalid {} value: {}&quot;, stringify!($name), s).into()),
+                }
+            }
+        }
+
+        impl&lt;DB: Backend&gt; FromSqlRow&lt;Integer, DB&gt; for $name
+            where i32: FromSql&lt;Integer, DB&gt; {
+            fn build_from_row&lt;T: Row&lt;DB&gt;&gt;(row: &amp;mut T) -&gt; Result&lt;Self, Box&lt;Error + Send + Sync&gt;&gt; {
+                use self::$name::*;
+                match &lt;i32 as FromSqlRow&lt;Integer, DB&gt;&gt;::build_from_row(row)? {
+                    $($val =&gt; Ok($variant),)*
+                    s =&gt; Err(format!(&quot;invalid {} value: {}&quot;, stringify!($name), s).into()),
+                }
+            }
+        }
+
+        // `Queryable`を定義
+        impl&lt;DB&gt; Queryable&lt;Integer, DB&gt; for $name
+            where
+            DB: Backend + HasSqlType&lt;Integer&gt;,
+            $name: FromSqlRow&lt;Integer, DB&gt;,
+        {
+            type Row = Self;
+
+            fn build(row: Self::Row) -&gt; Self {
+                row
+            }
+        }
+
+    }
+}
+
+</code></pre>
+
+<p>というマクロを用意してあげます。</p>
+
+<p>このマクロは</p>
+
+<pre><code class="language-rust">define_enum! {
+    #[derive(Debug, Clone, Copy)]
+    pub enum Visibility {
+        Public = 0,
+        Limited = 1,
+        Private = 2,
+    }
+}
+</code></pre>
+
+<p>のように使います。</p>
+
+<p>そしたら以下のように構造体に含められますし、</p>
+
+<pre><code class="language-rust">
+#[derive(Queryable)]
+pub struct Post {
+    pub id: PostId,
+    pub title: String,
+    pub body: String,
+    // `Visibility`が`Queryable`の中に
+    pub published: Visibility,
+}
+
+
+#[derive(Insertable)]
+#[table_name = &quot;posts&quot;]
+pub struct NewPost&lt;'a&gt; {
+    pub title: &amp;'a str,
+    pub body: &amp;'a str,
+    // `Visibility`が`Insertable`の中に
+    pub visibility: Visibility,
+}
+</code></pre>
+
+<p>あるいはクエリビルダの中で</p>
+
+<pre><code class="language-rust">    dsl::posts
+        .find(id)
+        // `visibility`をselect
+        .select(((dsl::id,), dsl::title, dsl::body, dsl::visibility))
+        .get_result(conn)
+
+</code></pre>
+
+<p>や</p>
+
+<pre><code class="language-rust">    let new_post = NewPost {
+        title: title,
+        body: body,
+        visibility: Visibility::Private,
+    };
+
+    insert_into(posts::table)
+        // `visibility`をinsert
+        .values(&amp;new_post)
+        .execute(conn)
+</code></pre>
+
+<p>のように使えます。</p>
+
+<h1 id="終わりに">終わりに</h1>
+
+<p>小ネタ集といいつつ3つくらいしか出てきませんでした。
+まあ、その代わり内容が濃いめだったのでバランスが取れたかな？</p>
+
+<p>また思いついたら随時投稿しようと思います。</p>
+                    </section>
+                </article>
+            </div>
+        </div>
+
+        <div class="row li-author">
+    <div class="sixteen columns">
+        Written by <strong>κeen</strong>
+    </div>
+</div>
+
+
+        <div class="row li-pagination">
+            <div class="eight columns">
+                <div class="li-pagination-previous">
+                    
+                        &nbsp;
+                    
+                </div>
+            </div>
+            <div class="eight columns">
+                <div class="li-pagination-next">
+                    
+                        Older article<br />
+                        <a href="/blog/2017/12/13/graal_trufflenitsuitekaruku/"> Graal/Truffleについて軽く</a>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+<footer class="li-page-footer">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-page-footer-legal">
+                    &copy; 2017. All rights reserved. 
+                </div>
+                <div class="li-page-footer-theme">
+                    <span class=""><a href="https://github.com/eliasson/liquorice/">liquorice</a> is a theme for <a href="http://hugo.spf13.com">hugo</a></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+
+    <script type="text/javascript">
+    <!--
+    function toggle(id) {
+        var e = document.getElementById(id);
+        e.style.display == 'block' ? e.style.display = 'none' : e.style.display = 'block';
+    }
+    
+    </script>
+    <script type="text/javascript">
+     <!--
+                                   var _gaq = _gaq || [];
+     _gaq.push(['_setAccount', ""]);
+     _gaq.push(['_trackPageview']);
+
+     (function() {
+         var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+         ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+         var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+     })();
+    
+    </script>
+    <script src="https://unpkg.com/mermaid@7.0.4/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({startOnLoad:true
+     });</script>
+
+    </body>
+</html>
+
