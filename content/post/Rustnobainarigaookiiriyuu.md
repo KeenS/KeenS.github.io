@@ -138,3 +138,52 @@ Rustのバイナリサイズが(デバッグシンボルを除いても)大き�
 [Why is a Rust executable large?](https://lifthrasiir.github.io/rustlog/why-is-a-rust-executable-large.html)
 
 こちらではバイナリサイズが小さい上にjemallocをやめるとバイナリサイズが1/3くらいになってるのでやっぱり自分のやつは何かまちがってそう
+
+# 2017-12-19 追記: システムアロケータの本気
+どうやら古いドキュメントを参考にしていたようで、ちゃんと書いたらできました。
+
+```rust
+#![feature(alloc_system, allocator_api, global_allocator)]
+
+extern crate alloc_system;
+
+
+use alloc_system::System;
+
+#[global_allocator]
+static A: System = System;
+
+
+fn main() {
+
+    println!("Hello, World");
+
+}
+```
+
+```
+$ rustc +nightly -Copt-level=z -Clto -Clink-args=-static -Cpanic=abort hello.rs
+$ strip hello
+$ ls -l hello
+-rwxr-xr-x 1 kim kim 145816 12月 19 10:06 hello
+```
+
+143KiB。Cと比べるとまだまだ大きいですが十分小さくなりました。
+
+因みに「よくやる」コンパイルオプションだとこうなります。
+
+```
+$ rustc +nightly -Copt-level=3 hello.rs
+$ ls -l hello
+-rwxr-xr-x 1 kim kim 2587696 12月 19 10:10 hello
+$ strip hello
+$ ls -l hello
+-rwxr-xr-x 1 kim kim 186960 12月 19 10:10 hello
+```
+
+元の`strip`前の5MBや`strip`後の460KBに比べて半分(以下)です。
+`jemalloc`で最低限のバイナリへのオーバーヘッドの半分を占めていたことになります。
+
+`jemalloc`は`libc`の`malloc`に比べて速かったりRustに都合の良い(消費メモリが少なくて済む)アロケーションをしてくれたりするので使われているのですがバイナリサイズを気にするならシステムアロケータを使うのも手でしょう。
+
+`jemalloc`と`libc`の`malloc`のベンチマークは読者の課題とする。
