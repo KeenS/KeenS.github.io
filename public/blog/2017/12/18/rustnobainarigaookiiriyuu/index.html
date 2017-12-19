@@ -247,6 +247,53 @@ $ ls -l hello
 <p><a href="https://lifthrasiir.github.io/rustlog/why-is-a-rust-executable-large.html">Why is a Rust executable large?</a></p>
 
 <p>こちらではバイナリサイズが小さい上にjemallocをやめるとバイナリサイズが1/3くらいになってるのでやっぱり自分のやつは何かまちがってそう</p>
+
+<h1 id="2017-12-19-追記-システムアロケータの本気">2017-12-19 追記: システムアロケータの本気</h1>
+
+<p>どうやら古いドキュメントを参考にしていたようで、ちゃんと書いたらできました。</p>
+
+<pre><code class="language-rust">#![feature(alloc_system, allocator_api, global_allocator)]
+
+extern crate alloc_system;
+
+
+use alloc_system::System;
+
+#[global_allocator]
+static A: System = System;
+
+
+fn main() {
+
+    println!(&quot;Hello, World&quot;);
+
+}
+</code></pre>
+
+<pre><code>$ rustc +nightly -Copt-level=z -Clto -Clink-args=-static -Cpanic=abort hello.rs
+$ strip hello
+$ ls -l hello
+-rwxr-xr-x 1 kim kim 145816 12月 19 10:06 hello
+</code></pre>
+
+<p>143KiB。Cと比べるとまだまだ大きいですが十分小さくなりました。</p>
+
+<p>因みに「よくやる」コンパイルオプションだとこうなります。</p>
+
+<pre><code>$ rustc +nightly -Copt-level=3 hello.rs
+$ ls -l hello
+-rwxr-xr-x 1 kim kim 2587696 12月 19 10:10 hello
+$ strip hello
+$ ls -l hello
+-rwxr-xr-x 1 kim kim 186960 12月 19 10:10 hello
+</code></pre>
+
+<p>元の<code>strip</code>前の5MBや<code>strip</code>後の460KBに比べて半分(以下)です。
+<code>jemalloc</code>で最低限のバイナリへのオーバーヘッドの半分を占めていたことになります。</p>
+
+<p><code>jemalloc</code>は<code>libc</code>の<code>malloc</code>に比べて速かったりRustに都合の良い(消費メモリが少なくて済む)アロケーションをしてくれたりするので使われているのですがバイナリサイズを気にするならシステムアロケータを使うのも手でしょう。</p>
+
+<p><code>jemalloc</code>と<code>libc</code>の<code>malloc</code>のベンチマークは読者の課題とする。</p>
                     </section>
                 </article>
             </div>
