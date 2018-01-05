@@ -83,3 +83,13 @@ Girardの[元論文](https://www.sciencedirect.com/science/article/pii/030439758
 # ベクトル最適化
 
 これも[High Performance Compilers for Parallel Computing](https://dl.acm.org/citation.cfm?id=572937)を読むというだけ。社内で読書会やるとかやらないとかいいつつ結局何も動いてない。
+
+
+# 2018-01-05追記 量子コンピュータ
+[量子コンピュータ Advent Calendar 2017](https://qiita.com/advent-calendar/2017/quantum)に触発されて。
+量子コンピュータのためのプログラミング言語がいくつか出てるけど自分でも設計してみたくなった。
+[ここ](http://lyncs.hateblo.jp/entry/2017/12/16/000103)によるとCNOT取れるQUBitにも制限があるみたいだしある程度コンパイラが頑張るのかなあとか思ってる。
+
+量子プログラミング言語がどうなるのかまだイメージがつかめてない。
+チューリングマシンを模倣出来るらしいし普通のプログラミング言語にbit演算的なノリでアダマール演算とかが入るんだろうか。それとも実質アクセラレータとして使われるだけだから半分アセンブラみたいな言語になるんだろうか。
+少なくともそれくらいは判断付くように勉強したい。
