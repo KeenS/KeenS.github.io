@@ -167,3 +167,11 @@ fn main() {
 ```
 
 ただしこの考え方は飽くまでここに挙げた言語ではの話で、他にこの規則を破る言語もあるかと思います。
+
+# 追記
+
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">これなんだけどRustのinherited mutabilityは参照に対しても適用される点が非常に独特で、 &amp;&amp;mut Tから&amp;mut Tは作れない。ところが変数のmutabilityは話が別で、これはその変数自体の&amp;mut referencingを禁止するという限定的な効果しかない。κeenさんの例はそっちに該当している。</p>&mdash; Masaki=就寝=Hara (@qnighy) <a href="https://twitter.com/qnighy/status/957133716865761282?ref_src=twsrc%5Etfw">2018年1月27日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+Rustのミュータビリティの扱いは突き詰めると中々複雑なのでおいとくとして、「ミュータビリティの推移律」と言っていたのは「ミュータビリティの継承」（継承したミュータビリティの方が近い？）の間違いでした。
+これはひどい。
