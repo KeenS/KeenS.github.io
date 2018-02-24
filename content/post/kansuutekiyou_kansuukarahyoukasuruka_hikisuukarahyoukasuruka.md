@@ -15,7 +15,6 @@ OCamlは仕様では評価順序は未定義とし(らしい)つつも現在の�
 追記
 
 <blockquote class="twitter-tweet" data-conversation="none" data-lang="ja"><p lang="ja" dir="ltr">丁度読んでいたので参考情報です。OCaml の関数適用の評価順序が not specified と名言しているのは、 <a href="https://t.co/0Zd6Cl7Qgy">https://t.co/0Zd6Cl7Qgy</a> の Function application の項だと思います。（識者の方によると仕様はないそうですが…）</p>&mdash; takl (@takl) <a href="https://twitter.com/takl/status/967230921874194432?ref_src=twsrc%5Etfw">2018年2月24日</a></blockquote>
-<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
 
 /追記
 
@@ -178,6 +177,14 @@ r1 <- r1 - r3  // (a * b) - (c + d) / (e + f)
 ```
 
 頑張って不要になったレジスタを再利用しましたがr5まで出てきたのでレジスタを5つ使ったことになります。
+
+追記
+
+<blockquote class="twitter-tweet" data-conversation="none" data-lang="ja"><p lang="ja" dir="ltr">r1 &lt;- load a<br>r2 &lt;- load b<br>r1 &lt;- r1 + r2 // a * b<br>r2 &lt;- load c<br>r3 &lt;- load d<br>r2 &lt;- c + d  // c + d<br>r3 &lt;- load e<br>r4 &lt;- load f<br>r3 &lt;- r3 + r4  // e + f<br>r2 &lt;- r2 / r3  // (c + d) / (e + f)<br>r1 &lt;- r1 - r2  // (a * b) - (c + d) / (e + f)<br>でr4までになりませんか?</p>&mdash; エヌユル (@ncaq) <a href="https://twitter.com/ncaq/status/967287000100306944?ref_src=twsrc%5Etfw">2018年2月24日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+/追記
+
 
 今度は`-`の右辺から計算してみます。
 
