@@ -12,6 +12,13 @@ title: "関数適用、関数から評価するか？引数から評価するか
 
 OCamlは仕様では評価順序は未定義とし(らしい)つつも現在の実装(4.06.0)は引数を右から評価します。
 
+追記
+
+<blockquote class="twitter-tweet" data-conversation="none" data-lang="ja"><p lang="ja" dir="ltr">丁度読んでいたので参考情報です。OCaml の関数適用の評価順序が not specified と名言しているのは、 <a href="https://t.co/0Zd6Cl7Qgy">https://t.co/0Zd6Cl7Qgy</a> の Function application の項だと思います。（識者の方によると仕様はないそうですが…）</p>&mdash; takl (@takl) <a href="https://twitter.com/takl/status/967230921874194432?ref_src=twsrc%5Etfw">2018年2月24日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+/追記
+
 ```
 (* OCaml *)
 # let f x y = ();;
