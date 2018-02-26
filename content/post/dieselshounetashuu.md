@@ -1,5 +1,5 @@
 ---
-categories: [Rust, diese, 小ネタ, Advent Calendar, AdventCalendar 2017]
+categories: [Rust, diesel, 小ネタ, Advent Calendar, AdventCalendar 2017]
 date: 2017-12-16T16:40:36+09:00
 title: "diesel小ネタ集"
 ---
