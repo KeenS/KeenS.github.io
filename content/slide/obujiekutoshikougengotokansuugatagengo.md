@@ -32,19 +32,34 @@ title: "オブジェクト指向言語と関数型言語"
 
 # 理想のソフトウェア
 -------------------
-パラダイムってなんであるんだろう
 
-* ソフトウェア全般で凝集度を高めて結合度を低めるのが筋
+* 凝集度を高めて結合度を低めたい
+  + 似たようなものは同じところに
+  + 互いの依存関係を減らす
 * 変更に強いソフトウェア
 * バグの少ないソフトウェア
-* Open Close Principle
+* Open Closed Principle
+  + 変更に開いて修正に閉じる
+* 理想のソフトウェアを作るには？
+
+===
+# パラダイム
+-----------
+
+* [Wikipedia](https://ja.wikipedia.org/wiki/%E3%83%97%E3%83%AD%E3%82%B0%E3%83%A9%E3%83%9F%E3%83%B3%E3%82%B0%E3%83%91%E3%83%A9%E3%83%80%E3%82%A4%E3%83%A0)
+* プログラミングにおける思考のフレームワーク
+  + 一貫性の取れた設計
+  + 組み合わせたときの相性の良さ
+  + 一度理解するとその後の学習コストが下がる
+* ある程度成功しやすい手法のパターン化
 
 ===
 
 # 複数の言語パラダイムを知ろう
 ----------------------------
 
-[いま学ぶべき第二のプログラミング言語はコレだ！ 未来のために挑戦したい9つの言語とその理由](https://employment.en-japan.com/engineerhub/entry/2017/05/19/110000)
+
+[<img src="/images/manabiya/9_langs.png" alt="いま学ぶべき第二のプログラミング言語はコレだ！ 未来のために挑戦したい9つの言語とその理由" width="320px">](https://employment.en-japan.com/engineerhub/entry/2017/05/19/110000)<!-- .element: style="float:left;"  -->
 
 > 「ハンマーしか持っていなかったら、なんでも釘に見える」という戒めがありますが、第二言語を学ぶことは、まさにハンマー以外の道具を持つことだといえます。
 
@@ -52,22 +67,21 @@ title: "オブジェクト指向言語と関数型言語"
 # オブジェクト指向プログラミング と 関数型プログラミング
 ----------
 
-* 何故この２つ？
+* 何故この２つのパラダイム？
   + → よく使われるパラダイム2つ
   + 他には論理型プログラミングなどなどのパラダイムも
 * 片方しか経験ない人はもう片方も学んでみよう
-  + パラダイムが違うので最所は馴れない
+  + パラダイムが違うので最初は馴れない
   + コツは過去の成功体験を捨てること
-* どちらも手続き型プログラミングの改善が出発点
-
+    - パラダイムが違うのだから今まで通りにできないのは当たり前
+* どちらもベタな手続き型プログラミングよりいいコードを書きたい
 
 ===
 # 参考図書
 ----------
 
-* [オブジェクト指向設計実践ガイド](http://gihyo.jp/book/2016/978-4-7741-8361-9)
-* [関数プログラミング実践入門](http://gihyo.jp/book/2016/978-4-7741-8390-9)
-
+[![オブジェクト指向設計実践ガイド](http://image.gihyo.co.jp/assets/images/cover/2016/9784774183619.jpg)](http://gihyo.jp/book/2016/978-4-7741-8361-9) <!-- .element: style="float:left;"-->
+[![関数プログラミング実践入門](http://image.gihyo.co.jp/assets/images/cover/2016/9784774183909.jpg)](http://gihyo.jp/book/2016/978-4-7741-8390-9)     <!-- .element: style="float:right;"-->
 
 ===
 
@@ -79,7 +93,7 @@ title: "オブジェクト指向言語と関数型言語"
 * 依存関係を上手く扱うことで変更に強いソフトウェアへ
   * DDDなどの設計手法
 * コードの分割
-* (サブタイプ)ポリモーフィズムによるコードの再利用
+* コードの再利用
 
 ===
 
@@ -89,6 +103,7 @@ title: "オブジェクト指向言語と関数型言語"
 
 * 副作用 = 計算以外のもの
   + 破壊的変更、出入力など
+    - (深入りするとややこしい)
 * 状態を排除することで文脈に依存しないわかりやすいコードへ
   * 読みやすくなる
   * バグが少なくなる
@@ -101,8 +116,37 @@ title: "オブジェクト指向言語と関数型言語"
 
 ===
 
-# コード例(手続き的)
--------------------
+# 何が違うの？
+------------
+
+<table style="width:100%">
+<tr style="border-bottom: solid 3px #000"><th style="border-right: solid 3px #000"></th><th>OOP</th><th>FP</th></tr>
+<tr><th style="border-right: solid 3px #000">状態</th><td>隠蔽</td><td>排除</td></tr>
+<tr><th style="border-right: solid 3px #000">誰が</th><td>オブジェクト</td><td>関数</td></tr>
+<tr><th style="border-right: solid 3px #000">対象</th><td>メッセージ</td><td>データ</td></tr>
+<tr><th style="border-right: solid 3px #000">抽象</th><td>データ</td><td>処理</td></tr>
+</table>
+
+
+===
+# 手続き的(自然言語)
+-------------------------
+
+入力: `array` - 配列,  `n` - 配列の長さ  
+出力: `array`の要素の合計
+
+1. `sum = 0`, `i=0` とする
+2. もし`i` が`n`未満ならへ飛ぶ
+3. 7へ飛ぶ
+4. `sum`に`array`の`i`番目を足したものを`sum`に代入
+5. `i`をインクリメント
+6. 2へ飛ぶ
+7. `sum`を返す
+
+===
+
+# 手続き的(C言語)
+----------------
 
 ``` c
 int
@@ -117,30 +161,47 @@ procedual_sum(const int array[], size_t n)
   return sum;
 }
 ```
+===
+
+# OOP的発想
+----------
+
+* 手続きがデータについて知りすぎている
+  + 配列という具体的実装
+  + 繰り返しの終了条件
+  + インデックスによってアクセス可能なこと
+* もっと具体的実装を抽象化しよう
 
 ===
-# コード例(OOP)
+# イメージ
+
+<img src="/images/manabiya/object.png" width="100%" height="100%">
+
+
+===
+
+# OOPコード例(C言語)
 -------------------
 
 ``` c
-typedef struct list {
+struct list {
   int (*get)(const struct list *, size_t i);
   size_t (*len)(const struct list *);
   struct iter *(*iter)(const struct list *);
   void (*fin)(struct list *);
-} list_t;
+};
 
-typedef struct iter {
+struct iter {
   int (*next)(struct iter *);
   bool (*has_next)(const struct iter *);
   void (*fin)(struct iter *);
-} iter_t;
+};
 
 int
-objective_sum(const list_t *list)
+objective_sum(const struct list *list)
 {
   int sum = 0;
-  iter_t *iter = list->iter(list);
+  struct iter *iter = list->iter(list);
   while (iter->has_next(iter)) {
     sum += iter->next(iter);
   }
@@ -150,40 +211,45 @@ objective_sum(const list_t *list)
 }
 ```
 
+===
+# 実装イメージ
+
+<img src="/images/manabiya/object_impl.png" width="100%" height="100%">
+
 
 ===
-# 承 コード例(OOP)
+# OOPコード例(C言語) 実装
 -------------------
 
 ``` c++
-typedef struct array_list {
-  list_t super;
+struct array_list {
+  struct list super;
   int *inner;
   size_t n;
-} array_list_t;
+};
 
 
-typedef struct array_list_iter {
-  iter_t super;
-  const array_list_t *array;
+struct array_list_iter {
+  struct iter super;
+  const struct array_list *array;
   size_t i;
-} array_list_iter_t;
+};
 
-void array_list_fin(list_t *);
-int array_list_get(const list_t *, size_t);
-size_t array_list_len(const list_t *);
-iter_t *array_list_iter(const list_t *);
+void array_list_fin(struct list *);
+int array_list_get(const struct list *, size_t);
+size_t array_list_len(const struct list *);
+struct iter *array_list_iter(const struct list *);
 
-array_list_iter_t *array_list_iter_new(const array_list_t *);
-void array_list_iter_fin(iter_t *);
-int array_list_iter_next(iter_t *);
-bool array_list_iter_has_next(const iter_t *);
+struct array_list_iter *array_list_iter_new(const struct array_list *);
+void array_list_iter_fin(struct iter *);
+int array_list_iter_next(struct iter *);
+bool array_list_iter_has_next(const struct iter *);
 
 
-array_list_t *
+struct array_list *
 array_list_new(int *inner, size_t n)
 {
-  array_list_t *array = (array_list_t *)malloc(sizeof(array_list_t));
+  struct array_list *array = (struct array_list *)malloc(sizeof(struct array_list));
   if (! array) {
     return array;
   }
@@ -199,39 +265,39 @@ array_list_new(int *inner, size_t n)
 }
 
 void
-array_list_fin(list_t *super)
+array_list_fin(struct list *super)
 {
-  array_list_t *self = (array_list_t *) super;
+  struct array_list *self = (struct array_list *) super;
   free(self);
 }
 
 int
-array_list_get(const list_t *super, size_t i)
+array_list_get(const struct list *super, size_t i)
 {
-  const array_list_t *self = (array_list_t *) super;
+  const struct array_list *self = (struct array_list *) super;
 
   return self->inner[i];
 }
 
 size_t
-array_list_len(const list_t *super)
+array_list_len(const struct list *super)
 {
-  const array_list_t *self = (array_list_t *) super;
+  const struct array_list *self = (struct array_list *) super;
 
   return self->n;
 }
 
-iter_t *
-array_list_iter(const list_t *super)
+struct iter *
+array_list_iter(const struct list *super)
 {
-  array_list_t *self = (array_list_t *) super;
-  return (iter_t *)array_list_iter_new(self);
+  struct array_list *self = (struct array_list *) super;
+  return (struct iter *)array_list_iter_new(self);
 }
 
-array_list_iter_t *
-array_list_iter_new(const array_list_t *array)
+struct array_list_iter *
+array_list_iter_new(const struct array_list *array)
 {
-  array_list_iter_t *iter = malloc(sizeof(array_list_iter_t));
+  struct array_list_iter *iter = malloc(sizeof(struct array_list_iter));
   if (! iter) {
     return iter;
   }
@@ -247,17 +313,17 @@ array_list_iter_new(const array_list_t *array)
 }
 
 void
-array_list_iter_fin(iter_t *super)
+array_list_iter_fin(struct iter *super)
 {
-  array_list_iter_t *self = (array_list_iter_t *)super;
+  struct array_list_iter *self = (struct array_list_iter *)super;
   free(self);
 }
 
 int
-array_list_iter_next(iter_t *super)
+array_list_iter_next(struct iter *super)
 {
-  array_list_iter_t *self = (array_list_iter_t *)super;
-  int ret = self->array->super.get((list_t *)self->array, self->i);
+  struct array_list_iter *self = (struct array_list_iter *)super;
+  int ret = self->array->super.get((struct list *)self->array, self->i);
 
   self->i++;
 
@@ -265,12 +331,11 @@ array_list_iter_next(iter_t *super)
 }
 
 bool
-array_list_iter_has_next(const iter_t *super)
+array_list_iter_has_next(const struct iter *super)
 {
-  const array_list_iter_t *self = (array_list_iter_t *)super;
-  return self->i < self->array->super.len((list_t *)self->array);
+  const struct array_list_iter *self = (struct array_list_iter *)super;
+  return self->i < self->array->super.len((struct list *)self->array);
 }
-
 ```
 
 ===
@@ -283,36 +348,54 @@ array_list_iter_has_next(const iter_t *super)
 * 具体的実装がなくてもコードを書けた
 
 ===
-# コード例(FP)
+
+# FP的発想
+----------
+
+* 手続き的過ぎる
+  + 1つ1つ順番に操作しないといけない
+  + 順番に追っていかないと変数の中身もわからない
+* もっと操作を抽象化しよう
+
+===
+# FP的記述
+
+\\\[
+\begin{align}
+S\_0 &= 0 \\\\
+S\_n &= S\_{n-1} + arr[n]
+\end{align}
+\\\]
+
+
+===
+# FP的記述
+
+\\\[
+\begin{align}
+S\_0 &= 0 \\\\
+S\_n &= f(S\_{n-1}, arr[n])
+\end{align}
+\\\]
+
+===
+# FPコード例(C言語)
 -------------------
 
 ``` c++
-struct env {
-  const int *array;
-  size_t n;
-  int(*f)(int, int);
-};
-
 int
-reduce_inner(const struct env *const env, const size_t i, const int acc)
+reduce(const int array[], const size_t n, const int init, int(*f)(const int, const int))
 {
-  if (env->n <= i) {
-    return acc;
+  if (n == 0) {
+    return init;
   } else {
-    return reduce_inner(env, i + 1, env->f(acc, env->array[i]));
+    return f(reduce(array, n - 1, init, f), array[n - 1]);
   }
 }
 
-int
-reduce(const int array[], const size_t n, int(*f)(int, int))
-{
-  const struct env env = {array, n, f};
-
-  return reduce_inner(&env, 0, 0);
-}
 
 int
-add(int x, int y)
+add(const int x, const int y)
 {
   return x + y;
 }
@@ -320,7 +403,7 @@ add(int x, int y)
 int
 functional_sum(const int array[], const size_t n)
 {
-  return reduce(array, n, add);
+  return reduce(array, n, 0, add);
 }
 ```
 
@@ -332,28 +415,12 @@ functional_sum(const int array[], const size_t n)
 * ループ(`reduce`)と中身(`add`)に分解してコードを書いた
   + 制御構造(`for`文)を関数にできた
 * 副作用(変数の更新)を行わずにコードを書いた
-* 1関数が小さくなった
 * 宣言的になった
-
-
-===
-
-# 何が違うの？
-------------
-
-<table>
-<tr><th></th><th>OOP</th><th>FP</th></tr>
-<tr><th>状態</th><td>隠蔽</td><td>排除</td></tr>
-<tr><th>誰が何を</th><td>オブジェクトがメッセージを知っている</td><td>関数がデータを知っている</td></tr>
-<tr><th>抽象</th><td>データ</td><td>処理</td></tr>
-</table>
-
-
 
 ===
 # OOPって実用的？
 ----------------
-* メッセージパッシングの構文面倒そう
+* メッセージパッシングの構文面倒
   ```
   obj->msg(obj)
   ```
@@ -391,14 +458,24 @@ functional_sum(const int array[], const size_t n)
 ------------
 
 [関数型プログラミングの今昔](https://www.slideshare.net/ksknac/120901fp-key)
-* 関数型(プログラミングを支援する)言語
 * オブジェクト指向(プログラミングを支援する)言語
+* 関数型(プログラミングを支援する)言語
+* マルチパラダイム言語もある
+  + 複数のプログラミングパラダイムを支援
+  + それらを混ぜて使うことも
 
 ===
 # OOP言語色々
 ---------------------
 * メソッド呼び出し構文があればOOPを支援(?)
-  + ディスパッチ
+  ```
+  obj->msg(obj)
+  ```
+  が
+  ```
+  obj.msg()
+  ```
+  に
 * クラスベース
   + 単一継承
     - Ruby Java C# ...
@@ -422,8 +499,6 @@ functional_sum(const int array[], const size_t n)
   + ある意味では親と子の密結合
 
   > 「サブクラスがsuperを送らなければならないようなコードを書くと、さらに依存が追加されます。」
-
-* 抽象の境界と差分プログラミングとスパゲッティコードの話
 * リスコフの置換則
   + 親クラスはいつでもサブクラスに置き換えられるべき
 
@@ -432,10 +507,12 @@ functional_sum(const int array[], const size_t n)
 <img src="/images/manabiya/class_method.png" width="100%" height="100%">
 
 ===
+抽象の境界と差分プログラミングとスパゲッティコードの話
 
 <img src="/images/manabiya/abstract.png" width="100%" height="100%">
 
 ===
+抽象の境界と差分プログラミングとスパゲッティコードの話
 
 <img src="/images/manabiya/bad_abstract.png" width="100%" height="100%">
 
@@ -453,7 +530,6 @@ functional_sum(const int array[], const size_t n)
   + クラスが名前空間も兼任
   + スタンドアロンな関数が書けない（かった）
   + コールバックには無名クラスとか
-* サブクラスで自由にオーバーライド可能
 
 ===
 # Java
@@ -514,8 +590,10 @@ class Triangle extends Figure {
 ===
 # Ruby
 -------
+
 * クラスベース単一継承
 * 遅くない？→気にしない
+  + 生産性の方が大事
 * ダックタイピング
   + メッセージに応答すればなんでもいい
 * 数値や`+`などもオブジェクト/メソッド
@@ -524,6 +602,8 @@ class Triangle extends Figure {
   * mix-in
   * たとえばイテレータ相当のものは`Enumerable`モジュールが担当
   * `for`文相当のものは`each`で可能
+* クラスの権限がそんなに強くない
+
 ===
 
 # Ruby
@@ -547,7 +627,7 @@ class Triangle extends Figure {
 ------
 
 * メソッド呼び出し構文がある
-* 継承しない
+* クラスや継承はない
   + 代わりにインターフェースとインクルードがある
 
 ===
@@ -556,9 +636,13 @@ class Triangle extends Figure {
 
 ``` go
 type Drawer interface {
-	move(int, int);
-	draw()
+	draw();
 }
+type Mover interface {
+	move(int, int);
+}
+
+
 
 type Point struct {
 	x int;
@@ -592,7 +676,7 @@ func (t Triangle) move(dx int, dy int) {
 ```
 
 ===
-# Go
+# Go(拡張)
 ------
 
 ``` go
@@ -632,15 +716,15 @@ func drawColoredLine(from Point, to Point, color Color) {}
 ===
 # ありがちな機能
 ---------------
-* 「関数型 = Haskell」はHaskellプログラマの麻疹
-* 便利な関数の扱い
+* 破壊的変更できないorあまりしない
+* 関数の便利な扱い
   + 無名関数
   + 演算子も関数
   + 関数合成
   + 高階関数
   + カリー化
-* パラメトリックポリモーフィズム(ジェネリクス)
 * ADTとパターンマッチと網羅性検査
+* ※「関数型 = Haskell」はHaskellプログラマの麻疹
 
 ===
 # 便利な関数の扱い
@@ -659,7 +743,8 @@ inner_product ([1, 2, 3], [1, 2, 3]); (* => 14 *)
 * カリー化
 
 ``` standard-ml
-List.find (String.isPrefix "manabiya")
+fun findManabiya list = List.find (String.isPrefix "manabiya") list
+val findManabiya = List.find (String.isPrefix "manabiya")
 ```
 
 * 無名関数
@@ -721,7 +806,7 @@ end
 
 * リストを2回コピーしてるけど遅くない？
   + 言語による
-  + [基本は10倍〜100倍遅いけど全く変わらない言語(処理系)もある]((https://gist.github.com/KeenS/35345a4661dc696f467abd2de830568d))
+  + [基本は10倍〜100倍遅いけど全く変わらない言語(処理系)もある](https://gist.github.com/KeenS/35345a4661dc696f467abd2de830568d)
     - 10倍しか遅くならないのはけっこう頑張ってる方
     - 関数型言語に向いたGCアルゴリズム(Copy GC)の採用
     - 最適化で消せる
@@ -795,12 +880,13 @@ end
 # Haskell(GHC)
 ----------
 * 強い静的型付け
-* 強力な型システム(System F_ω)
+* 強力な型システム
 * 型クラスによるデータ抽象
 * 純粋
   + 破壊的変更とIOを基本許さない
   + 全て式になる
     - 雑にいうとセミコロンなしでプログラミングする
+  + 入力からのみ出力が決まる → 型をみたら関数の中身が分かる
 * 遅延評価
   + 必要になるまで値を計算しない
   + 純粋なのでプログラムの結果は変わらない
@@ -909,12 +995,6 @@ tarai(int x, int y, int z)
 
 
 ===
-# マルチパラダイム言語
----------------------
-* Scala、 Common Lisp
-* 関数型なオブジェクト指向も可能
-
-===
 
 # 関数型言語のOOP
 -----------------
@@ -953,13 +1033,32 @@ tarai(int x, int y, int z)
 * 相性の悪い点もある
 
 ===
+# プログラミング言語のこれから
+--------------------------
+
+* 今回挙げた言語はかなり古い言語
+  + Ruby, Java, Haskell, SMLは20年以上前に出来た
+* 古い言語は当時技術を元に設計される
+  + ハードウェア
+  + コンパイル技法
+  + ベストプラクティス
+* これからは新しい概念、いいとこ取りの言語設計も出てくる？
+  + 並列並行サポート
+  + ADTとパターンマッチ、無名関数
+  + 所有権
+  + などなど
+
+===
 # まとめ
 --------
 
 * オブジェクト指向/関数型とはパラダイムのことだよ
 * オブジェクト指向/関数型とはそのパラダイムを支援する言語のことだよ
+  + 言語とパラダイムの区別を明確に！
 * それぞれ目的もアプローチも違うよ
-* 両方手札に持ってから使い分けようね
+* 両方手札に持って使い分けようね
+* これ以外にも新しい言語にも注目
+
 
 </script>
 </section>
