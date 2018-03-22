@@ -10,8 +10,14 @@ title: "オブジェクト指向言語と関数型言語"
     data-notes="^Note:">
 <script type="text/template">
 
-# オブジェクト指向言語と関数型言語
-----------------------
+<h1>
+オブジェクト指向言語  
+と  
+関数型言語
+</h1>
+
+----------------
+
 [MANABIYA](https://manabiya.tech/) 2日目5時間目
 
 <!-- .slide: class="center" -->
@@ -30,19 +36,29 @@ title: "オブジェクト指向言語と関数型言語"
 
 ===
 
+# はじめに
+----------
+
+* 机上のキーストラップは是非お持ち帰り下さい
+* 主にプログラミング言語を1つ覚えたくらいの人を対象にしています
+* トークで40分全部使い切る予定なので質問はこのあとの職員室でお願いします
+* たまに細かい話が出てきますが分からなければスルーして下さい
+  + 主に重箱の角をつつく人への対策です
+
+===
+
 # 理想のソフトウェア
 -------------------
 
+* 変更に強いソフトウェア
+* バグの少ないソフトウェア
 * 凝集度を高めて結合度を低めたい
   + 似たようなものは同じところに
   + 互いの依存関係を減らす
-* 変更に強いソフトウェア
-* バグの少ないソフトウェア
-* Open Closed Principle
-  + 変更に開いて修正に閉じる
 * 理想のソフトウェアを作るには？
 
 ===
+
 # パラダイム
 -----------
 
@@ -51,11 +67,23 @@ title: "オブジェクト指向言語と関数型言語"
   + 一貫性の取れた設計
   + 組み合わせたときの相性の良さ
   + 一度理解するとその後の学習コストが下がる
+* 特定の言語に依存しない概念
 * ある程度成功しやすい手法のパターン化
 
 ===
 
-# 複数の言語パラダイムを知ろう
+# 色々なパラダイム
+------------------
+
+* 手続き型 - プログラムとは機械の操作の記述だ
+* オブジェクト指向 - プログラムとはオブジェクト間のメッセージのやりとりだ
+* 関数型 - プログラムとは計算だ
+* 論理型 - ...
+* などなど
+
+===
+
+# 複数のパラダイムを知ろう<!-- .element: style="font-size: calc(var(--title-font-size) * 0.8)"-->
 ----------------------------
 
 
@@ -64,17 +92,16 @@ title: "オブジェクト指向言語と関数型言語"
 > 「ハンマーしか持っていなかったら、なんでも釘に見える」という戒めがありますが、第二言語を学ぶことは、まさにハンマー以外の道具を持つことだといえます。
 
 ===
-# オブジェクト指向プログラミング と 関数型プログラミング
+# オブジェクト指向プログラミング と 関数型プログラミング <!-- .element: style="font-size: calc(var(--title-font-size) * 0.7)"-->
 ----------
 
 * 何故この２つのパラダイム？
   + → よく使われるパラダイム2つ
-  + 他には論理型プログラミングなどなどのパラダイムも
 * 片方しか経験ない人はもう片方も学んでみよう
   + パラダイムが違うので最初は馴れない
   + コツは過去の成功体験を捨てること
     - パラダイムが違うのだから今まで通りにできないのは当たり前
-* どちらもベタな手続き型プログラミングよりいいコードを書きたい
+* ベタな手続き型プログラミングよりいいコードを書きたい
 
 ===
 # 参考図書
@@ -99,7 +126,7 @@ title: "オブジェクト指向言語と関数型言語"
 
 # FPって？
 --------------------
-**副作用** を出来るだけ使わないプログラミング手法
+**副作用** を出来るだけ使わないプログラミング手法[※](https://twitter.com/esumii/status/638591159518887936)
 
 * 副作用 = 計算以外のもの
   + 破壊的変更、出入力など
@@ -108,10 +135,6 @@ title: "オブジェクト指向言語と関数型言語"
   * 読みやすくなる
   * バグが少なくなる
 * コードの分割と合成
-
-
-
-<blockquote class="twitter-tweet" data-conversation="none" data-lang="ja"><p lang="ja" dir="ltr"><a href="https://twitter.com/esumii?ref_src=twsrc%5Etfw">@esumii</a> 前にも書いたかもしれないけど「関数型＝λ計算ベース」とか「関数型＝関数が第一級」とかいう定義だと、「関数型データ構造」みたいな用語も説明がつかない。ので、やっぱり「破壊的代入などの副作用がない（ないし少ない）」が妥当だと思う</p>&mdash; Eijiro Sumii (@esumii) <a href="https://twitter.com/esumii/status/638591159518887936?ref_src=twsrc%5Etfw">2015年9月1日</a></blockquote>
 
 
 ===
@@ -136,7 +159,7 @@ title: "オブジェクト指向言語と関数型言語"
 出力: `array`の要素の合計
 
 1. `sum = 0`, `i=0` とする
-2. もし`i` が`n`未満ならへ飛ぶ
+2. もし`i` が`n`未満なら4へ飛ぶ
 3. 7へ飛ぶ
 4. `sum`に`array`の`i`番目を足したものを`sum`に代入
 5. `i`をインクリメント
@@ -166,11 +189,10 @@ procedual_sum(const int array[], size_t n)
 # OOP的発想
 ----------
 
-* 手続きがデータについて知りすぎている
-  + 配列という具体的実装
-  + 繰り返しの終了条件
-  + インデックスによってアクセス可能なこと
-* もっと具体的実装を抽象化しよう
+* データの中身を列挙するオブジェクト(イテレータ)を用意しよう
+  + イテレータはデータにメッセージを送って取得しよう
+* イテレータにメッセージを送って要素を取得しよう
+* イテレータを返してくれればデータの実装は気にしなくてよくなるな
 
 ===
 # イメージ
@@ -184,11 +206,9 @@ procedual_sum(const int array[], size_t n)
 -------------------
 
 ``` c
-struct list {
-  int (*get)(const struct list *, size_t i);
-  size_t (*len)(const struct list *);
-  struct iter *(*iter)(const struct list *);
-  void (*fin)(struct list *);
+struct iterable {
+  struct iter *(*iter)(const struct iterable *);
+  void (*fin)(struct iterable *);
 };
 
 struct iter {
@@ -198,10 +218,10 @@ struct iter {
 };
 
 int
-objective_sum(const struct list *list)
+objective_sum(const struct iterable *data)
 {
   int sum = 0;
-  struct iter *iter = list->iter(list);
+  struct iter *iter = data->iter(data);
   while (iter->has_next(iter)) {
     sum += iter->next(iter);
   }
@@ -218,12 +238,14 @@ objective_sum(const struct list *list)
 
 
 ===
-# OOPコード例(C言語) 実装
+# OOPコード例(C言語) 実装<!-- .element: style="font-size: calc(var(--title-font-size) * 0.8)"-->
 -------------------
 
 ``` c++
 struct array_list {
-  struct list super;
+  struct iterable super;
+  int (*get)(const struct array_list *, size_t i);
+  size_t (*len)(const struct array_list *);
   int *inner;
   size_t n;
 };
@@ -235,10 +257,11 @@ struct array_list_iter {
   size_t i;
 };
 
-void array_list_fin(struct list *);
-int array_list_get(const struct list *, size_t);
-size_t array_list_len(const struct list *);
-struct iter *array_list_iter(const struct list *);
+struct iter *array_list_iter(const struct iterable *);
+
+void array_list_fin(struct iterable *);
+int array_list_get(const struct array_list *, size_t);
+size_t array_list_len(const struct array_list *);
 
 struct array_list_iter *array_list_iter_new(const struct array_list *);
 void array_list_iter_fin(struct iter *);
@@ -254,10 +277,10 @@ array_list_new(int *inner, size_t n)
     return array;
   }
 
-  array->super.get = array_list_get;
-  array->super.len = array_list_len;
   array->super.iter = array_list_iter;
   array->super.fin = array_list_fin;
+  array->get = array_list_get;
+  array->len = array_list_len;
   array->inner = inner;
   array->n = n;
 
@@ -265,34 +288,32 @@ array_list_new(int *inner, size_t n)
 }
 
 void
-array_list_fin(struct list *super)
+array_list_fin(struct iterable *super)
 {
   struct array_list *self = (struct array_list *) super;
   free(self);
 }
 
-int
-array_list_get(const struct list *super, size_t i)
+struct iter *
+array_list_iter(const struct iterable *super)
 {
-  const struct array_list *self = (struct array_list *) super;
+  struct array_list *self = (struct array_list *) super;
 
+  return (struct iter *)array_list_iter_new(self);
+}
+
+int
+array_list_get(const struct array_list *self, size_t i)
+{
   return self->inner[i];
 }
 
 size_t
-array_list_len(const struct list *super)
+array_list_len(const struct array_list *self)
 {
-  const struct array_list *self = (struct array_list *) super;
-
   return self->n;
 }
 
-struct iter *
-array_list_iter(const struct list *super)
-{
-  struct array_list *self = (struct array_list *) super;
-  return (struct iter *)array_list_iter_new(self);
-}
 
 struct array_list_iter *
 array_list_iter_new(const struct array_list *array)
@@ -323,58 +344,54 @@ int
 array_list_iter_next(struct iter *super)
 {
   struct array_list_iter *self = (struct array_list_iter *)super;
-  int ret = self->array->super.get((struct list *)self->array, self->i);
+  int ret = self->array->get(self->array, self->i);
 
   self->i++;
 
   return ret;
 }
-
-bool
-array_list_iter_has_next(const struct iter *super)
-{
-  const struct array_list_iter *self = (struct array_list_iter *)super;
-  return self->i < self->array->super.len((struct list *)self->array);
-}
 ```
 
 ===
-# OOP
+# OOPコードの特徴
 -----
 
 * オブジェクト(`iter_t`)にメッセージ(`has_next`、`next`)を送ってループを書いた
 * インターフェース(`list_t`、`iter_t`)と実装(`array_list_t`、`array_list_iter_t`)を分離してコードを書いた
 * データの中身を知らなくてもコードを書けた
+  + 今回は配列のみだが木構造や辞書などにも適用できる
 * 具体的実装がなくてもコードを書けた
+  + コードの分割ができる
 
 ===
 
 # FP的発想
 ----------
 
-* 手続き的過ぎる
-  + 1つ1つ順番に操作しないといけない
-  + 順番に追っていかないと変数の中身もわからない
-* もっと操作を抽象化しよう
+* 配列の中身の合計を求める式を立てよう
+* 計算を一般化して汎用性をあげよう
+* それをプログラムとして書き下そう
 
 ===
 # FP的記述
+----------
 
 \\\[
 \begin{align}
 S\_0 &= 0 \\\\
-S\_n &= S\_{n-1} + arr[n]
+S\_n &= S\_{n-1} + arr[n - 1]
 \end{align}
 \\\]
 
 
 ===
 # FP的記述
+----------
 
 \\\[
 \begin{align}
-S\_0 &= 0 \\\\
-S\_n &= f(S\_{n-1}, arr[n])
+S\_0 &= init \\\\
+S\_n &= f(S\_{n-1}, arr[n - 1])
 \end{align}
 \\\]
 
@@ -409,8 +426,8 @@ functional_sum(const int array[], const size_t n)
 
 ===
 
-# FP
------
+# FP的コードの特徴
+----------------
 
 * ループ(`reduce`)と中身(`add`)に分解してコードを書いた
   + 制御構造(`for`文)を関数にできた
@@ -418,34 +435,37 @@ functional_sum(const int array[], const size_t n)
 * 宣言的になった
 
 ===
-# OOPって実用的？
+# OOPコードの問題点
 ----------------
-* メッセージパッシングの構文面倒
+* メッセージパッシングの書き方が冗長
   ```
   obj->msg(obj)
   ```
-* 遅くない？
+* 普通のコードより遅そう
   + 毎回関数ポインタ経由でメッセージ
-  + ことある毎にオブジェクトをアロケート
-* プリミティブどうするの
+  + ことある毎にオブジェクトを作る
+    - 今回は余計にイテレータオブジェクトを作った
+* `int`と`+`はオブジェクトとメッセージになってない
+  + 設計の一貫性がとれてない
 * メッセージ増やすとデータサイズが増えそう
 
 ===
-# FPって実用的？
+# FPコードの問題点
 ---------------
 
-* 一々足し算する関数定義するの？
-* データに依存したコードになってるけど大丈夫？
-* 遅くない？
-  + 毎回データのコピーが発生する
-    - 今回の例では運良くintしかコピーしなかった
-* 副作用使わずにプログラミングできるの？
-  + ひとまずループは書けたけど他は？
+* 余計な関数定義が増える
+  + 足し算するための`add`関数を定義した
+* データに依存したコードになっている
+  + 他のデータ型に対して適用できない
+* 副作用を使わない
+  + 機械の操作とは大分違う
+* 毎回データのコピーが発生する
+  + 今回の例では運良く`int`しかコピーしなかったが一般には頻繁にデータをコピーする
 
 ===
 
-# 答え
-------
+# 問題の解決案
+--------------
 言語による<!-- .element: class="fragment" data-fragment-index="1" -->
 
 * 対象にしているものが広すぎる<!-- .element: class="fragment" data-fragment-index="2" -->
@@ -489,40 +509,41 @@ functional_sum(const int array[], const size_t n)
 
 ===
 
-# クラスベース
+# クラスベースの特徴
 ---------------------
 * メッセージはクラスが知っている
-* 継承によるインターフェースと実装の継承
-
-  > 「オブジェクトの階層構造をコストとして払う代わりに、メッセージの移譲は無料で手に入れられる」
-
+  + メッセージを増やしてもオブジェクトは肥大化しない
+* クラス継承によるインターフェースと実装の再利用
   + ある意味では親と子の密結合
-
-  > 「サブクラスがsuperを送らなければならないようなコードを書くと、さらに依存が追加されます。」
 * リスコフの置換則
   + 親クラスはいつでもサブクラスに置き換えられるべき
+* 意識しないと差分プログラミングをしてしまってスパゲッティコードになる
+
+> 「オブジェクトの階層構造をコストとして払う代わりに、メッセージの移譲は無料で手に入れられる」
+
+> 「サブクラスがsuperを送らなければならないようなコードを書くと、さらに依存が追加されます。」
 
 ===
 
 <img src="/images/manabiya/class_method.png" width="100%" height="100%">
 
 ===
-抽象の境界と差分プログラミングとスパゲッティコードの話
+抽象の境界と差分プログラミングとスパゲッティコード
 
 <img src="/images/manabiya/abstract.png" width="100%" height="100%">
 
 ===
-抽象の境界と差分プログラミングとスパゲッティコードの話
+抽象の境界と差分プログラミングとスパゲッティコード
 
 <img src="/images/manabiya/bad_abstract.png" width="100%" height="100%">
 
 
 ===
-# Java
+# Javaの特徴
 ------
 * クラスベース単一継承
 * 抽象クラスやインターフェースによる抽象化
-* 遅くない？
+* 遅くならない工夫
   + → プリミティブ型はオブジェクトじゃない
   + → JITによる高速化
   + → GCアルゴリズムの改善
@@ -532,7 +553,7 @@ functional_sum(const int array[], const size_t n)
   + コールバックには無名クラスとか
 
 ===
-# Java
+# Javaのコード例
 ------
 
 ``` java
@@ -575,7 +596,7 @@ class Triangle extends Figure {
 ```
 
 ===
-# Java
+# Javaのコード例について<!-- .element: style="font-size: calc(var(--title-font-size) * 0.9)"-->
 ------
 
 * 設計は難しい
@@ -588,26 +609,25 @@ class Triangle extends Figure {
   + `new ColoredLine` にする？
 
 ===
-# Ruby
+# Rubyの特徴
 -------
 
 * クラスベース単一継承
-* 遅くない？→気にしない
-  + 生産性の方が大事
+* 生産性を重視した設計
+* 数値や`+`などもオブジェクト/メソッド
 * ダックタイピング
   + メッセージに応答すればなんでもいい
-* 数値や`+`などもオブジェクト/メソッド
-* オープンクラス、モンキーパッチ
 * クラスだけでなくモジュールも
   * mix-in
   * たとえばイテレータ相当のものは`Enumerable`モジュールが担当
   * `for`文相当のものは`each`で可能
 * クラスの権限がそんなに強くない
+  + オープンクラス
 
 ===
 
-# Ruby
--------
+# Rubyらしさ(主観)
+-----------
 * for文なしでの繰り返し
   + ブロック構文
 
@@ -623,83 +643,12 @@ class Triangle extends Figure {
 ```
 
 ===
-# Go
-------
+# Goの特徴
+----------
 
 * メソッド呼び出し構文がある
 * クラスや継承はない
   + 代わりにインターフェースとインクルードがある
-
-===
-# Go
-------
-
-``` go
-type Drawer interface {
-	draw();
-}
-type Mover interface {
-	move(int, int);
-}
-
-
-
-type Point struct {
-	x int;
-	y int;
-}
-
-func (p Point) move(dx int, dy int) {
-	p.x += dx;
-	p.y += dy;
-}
-
-type Triangle struct {
-	a Point;
-	b Point;
-	c Point;
-}
-
-func (t Triangle) draw() {
-	drawLine(t.a, t.b);
-	drawLine(t.b, t.c);
-	drawLine(t.c, t.a);
-}
-
-func drawLine(from Point, to Point) {}
-
-func (t Triangle) move(dx int, dy int) {
-	t.a.move(dx, dy);
-	t.b.move(dx, dy);
-	t.c.move(dx, dy);
-}
-```
-
-===
-# Go(拡張)
-------
-
-``` go
-type Color struct {
-	r int;
-	g int;
-	b int;
-}
-
-type ColoredTriangle struct {
-	*Triangle;
-	color Color;
-}
-
-func (t ColoredTriangle) draw() {
-	drawColoredLine(t.a, t.b, t.color);
-	drawColoredLine(t.b, t.c, t.color);
-	drawColoredLine(t.c, t.a, t.color);
-}
-
-
-func drawColoredLine(from Point, to Point, color Color) {}
-```
 
 ===
 
@@ -709,9 +658,13 @@ func drawColoredLine(from Point, to Point, color Color) {}
  + SML
  + OCaml
  + F#
-* Haskell
+* Haskell系
+ + Haskell (GHC)
+ + Agda
+ + Idris
 * Erlang
-* Clojure
+* Lisp系
+  + Clojure
 
 ===
 # ありがちな機能
@@ -723,7 +676,6 @@ func drawColoredLine(from Point, to Point, color Color) {}
   + 関数合成
   + 高階関数
   + カリー化
-* ADTとパターンマッチと網羅性検査
 * ※「関数型 = Haskell」はHaskellプログラマの麻疹
 
 ===
@@ -752,37 +704,6 @@ val findManabiya = List.find (String.isPrefix "manabiya")
 ``` standard-ml
 String.tokens (fn c => c = #" " orelse c = #"\n")
 ```
-
-===
-# ADTとパターンマッチ
---------------------
-
-``` sml
-datatype expr = Plus of expr * expr
-              | Mul of expr * expr
-              | Int of int
-
-fun eval (Plus(e1, e2)) = eval e1 + eval e2
-  | eval (Mul(e1, e2)) = eval e1 * eval e2
-  | eval (Int(e)) = e
-
-fun show (Plus(e1, e2)) = show e1 ^ " + " ^ show e2
-  | show (Mul(e1, e2)) = show e1 ^ " * " ^ show e2
-  | show (Int(e)) = Int.toString e
-
-val () = let
-    val expr = Plus(Int 1, Mul(Int 2, Int 3))
-in
-    print (show expr);
-    print " = ";
-    print (Int.toString (eval expr));
-    print "\n"
-end
-```
-
-Note:
-クラスベースオブジェクト指向でやろうとするとvisitorパターンになってかなり面倒
-
 ===
 # データコピーの話
 ------------------
@@ -819,8 +740,8 @@ end
 
 ===
 
-# Clojure
----------
+# Clojureの特徴
+---------------
 
 * デフォルトイミュータブルなLisp方言
 * イミュータブルHashMap/Set
@@ -835,7 +756,7 @@ end
   + データ競合が起きない
 
 ===
-# SML
+# SMLの特徴
 ------
 * 強い静的型付
 * 普通に破壊的変更あるよ
@@ -843,7 +764,7 @@ end
 * ファンクタによる依存の注入
 
 ===
-# SML
+# SMLのコード例
 ------
 * モジュールによるカプセル化
   + データに対する操作を一箇所に集めるのは変わらない
@@ -863,7 +784,7 @@ end
 ```
 
 ===
-# SML
+# SMLのコード例
 ------
 * ファンクタによる依存の注入
 
@@ -877,7 +798,7 @@ end
 ```
 
 ===
-# Haskell(GHC)
+# Haskell(GHC)の特徴
 ----------
 * 強い静的型付け
 * 強力な型システム
@@ -886,13 +807,14 @@ end
   + 破壊的変更とIOを基本許さない
   + 全て式になる
     - 雑にいうとセミコロンなしでプログラミングする
-  + 入力からのみ出力が決まる → 型をみたら関数の中身が分かる
+  + 入力からのみ出力が決まる → 型をみたら関数の使い方が大体分かる
 * 遅延評価
   + 必要になるまで値を計算しない
+    - 評価の順番も変わる
   + 純粋なのでプログラムの結果は変わらない
     - (細かいことを言うと無限ループの挙動が違うけど)
 ===
-# Haskell(GHC)
+# Haskell(GHC)のコード例<!-- .element: style="font-size: calc(var(--title-font-size) * 0.8)"-->
 ----------
 
 * 型クラスによるデータ抽象
@@ -933,28 +855,28 @@ instance Movable Triangle where
 
 ===
 
-# Haskell(GHC)
-----------
+# Haskell(GHC)と逐次処理<!-- .element: style="font-size: calc(var(--title-font-size) * 0.8)"-->
+----------------
 > 雑にいうとセミコロンなしでプログラミングする
 
-* 逐次処理はどうするの？
+* 逐次処理はどうするの？(e.g. 1行読んでそれを出力)
   1. プログラムを値として扱って合成する
     ```haskell
-    Program a -> Program b -> Program b
+    Program1 ○ Program2 -> Program2'
     ```
-  2. 直前の値も受け取れる
+  2. 直前の値も受け取れるようにする
     ```haskell
-    Program a -> (a -> Program b) -> Program b
+    Program1 ○ (a -> Program2 ) -> Program2'
     ```
   3. 色々な種類のプログラムに対応可能
     ```haskell
-    m a -> (a -> m b) -> m b
+    Program a ○ (a -> Program b) -> Program b
     ```
   4. 具体的には`>>=`という演算子で合成
      ```haskell
      getLine >>= putStrLn
      ```
-  5.シンタックスシュガー
+  5. シンタックスシュガー
     ```haskell
     do
       s <- getLine
@@ -963,12 +885,12 @@ instance Movable Triangle where
 
 ===
 
-# Haskell(GHC)
+# Haskell(GHC)の遅延評価<!-- .element: style="font-size: calc(var(--title-font-size) * 0.8)"-->
 ----------
 * 遅延評価
-  + 計算量が変わる
-    `tarai(12, 6, 0)`で2,604,860回 vs 110回
   + 同等のCのコードよりずっと速い
+  + 計算量が変わる
+  + `tarai(12, 6, 0)`で2,604,860回 vs 110回
 
 ``` haskell
 tarai:: Int -> Int -> Int -> Int
@@ -1010,7 +932,7 @@ tarai(int x, int y, int z)
 ```
 
 ===
-# オブジェクト指向言語のFP
+# オブジェクト指向言語のFP<!-- .element: style="font-size: calc(var(--title-font-size) * 0.8)"-->
 -------------------------
 
 * 高階関数
@@ -1021,7 +943,7 @@ tarai(int x, int y, int z)
   + RustやSwift
 
 ===
-# 結局どういう関係なの？
+# 結局どういう関係なの？<!-- .element: style="font-size: calc(var(--title-font-size) * 0.9)"-->
 ----------------------
 
 * 大きな部分では変わらない
@@ -1033,7 +955,7 @@ tarai(int x, int y, int z)
 * 相性の悪い点もある
 
 ===
-# プログラミング言語のこれから
+# プログラミング言語のこれから<!-- .element: style="font-size: calc(var(--title-font-size) * 0.75)"-->
 --------------------------
 
 * 今回挙げた言語はかなり古い言語
@@ -1044,7 +966,7 @@ tarai(int x, int y, int z)
   + ベストプラクティス
 * これからは新しい概念、いいとこ取りの言語設計も出てくる？
   + 並列並行サポート
-  + ADTとパターンマッチ、無名関数
+  + 代数的データ型とパターンマッチ、無名関数
   + 所有権
   + などなど
 
