@@ -1,7 +1,7 @@
 ---
 categories: [オブジェクト指向, 関数型]
 date: 2018-03-14T22:22:40+09:00
-description:
+description: "manabiya.techでの発表資料。オブジェクト指向と関数型についてのスピリチュアルな話"
 title: "オブジェクト指向言語と関数型言語"
 ---
 <section data-markdown
@@ -29,8 +29,8 @@ title: "オブジェクト指向言語と関数型言語"
 
 ----------------
 
-[MANABIYA](https://manabiya.tech/) 2日目5時間目  
-#manabiya
+[MANABIYA](https://manabiya.tech/) 2日目5時間目@ギャラリーB  
+[#manabiya](https://twitter.com/search?src=typd&q=%23manabiya&lang=ja)
 
 <!-- .slide: class="center" -->
 ===
