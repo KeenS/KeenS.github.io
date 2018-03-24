@@ -668,6 +668,8 @@ class Triangle extends Figure {
 * Lisp系
   + Clojure
 
+<!-- .slide: style="font-size:calc(var(--base-font-size) * 0.9)" -->
+
 ===
 # ありがちな機能
 ---------------
@@ -723,15 +725,17 @@ end
 
 * もうちょっと一般に世の中のアルゴリズムを実装すると遅くない？
 
+<!-- .slide: style="font-size:calc(var(--base-font-size) * 0.9)" -->
+
 ===
+
 # データコピーの話
 ------------------
 
 * リストを2回コピーしてるけど遅くない？
   + 言語による
-  + [基本は10倍〜100倍遅いけど全く変わらない言語(処理系)もある](https://gist.github.com/KeenS/35345a4661dc696f467abd2de830568d)
-    - 10倍しか遅くならないのはけっこう頑張ってる方
-    - 関数型言語に向いたGCアルゴリズム(Copy GC)の採用
+  + [1倍〜100倍遅い](https://gist.github.com/KeenS/35345a4661dc696f467abd2de830568d)
+    - 関数型言語に向いたGCアルゴリズムの採用
     - 最適化で消せる
 * もうちょっと一般に世の中のアルゴリズムを実装すると遅くない？
   + A1. 遅い部分は諦めて副作用を使う
@@ -739,6 +743,7 @@ end
      - [純粋関数型データ構造](http://asciidwango.jp/post/160831986220/%E7%B4%94%E7%B2%8B%E9%96%A2%E6%95%B0%E5%9E%8B%E3%83%87%E3%83%BC%E3%82%BF%E6%A7%8B%E9%80%A0)
      - [関数プログラミング 珠玉のアルゴリズムデザイン](http://shop.ohmsha.co.jp/shopdetail/000000004066/)
 
+<!-- .slide: style="font-size:calc(var(--base-font-size) * 0.9)" -->
 
 ===
 
@@ -749,6 +754,7 @@ end
 * イミュータブルHashMap/Set
   + イミュータブルだけどデータを全部コピーする訳ではない
   + [HAMT](https://en.wikipedia.org/wiki/Hash_array_mapped_trie)
+
 ``` clojure
 (aoosc {:name "κeen"} :age 25)
   ; ->{:age 25, :name "κeen"}
@@ -758,6 +764,7 @@ end
   + データ競合が起きない
 
 ===
+
 # SMLの特徴
 ------
 * 強い静的型付
@@ -766,6 +773,7 @@ end
 * ファンクタによる依存の注入
 
 ===
+
 # SMLのコード例
 ------
 * モジュールによるカプセル化
@@ -815,6 +823,9 @@ end
     - 評価の順番も変わる
   + 純粋なのでプログラムの結果は変わらない
     - (細かいことを言うと無限ループの挙動が違うけど)
+
+<!-- .slide: style="font-size:calc(var(--base-font-size) * 0.8)" -->
+
 ===
 # Haskell(GHC)のコード例<!-- .element: style="font-size: calc(var(--title-font-size) * 0.8)"-->
 ----------
@@ -885,6 +896,8 @@ instance Movable Triangle where
       putStrLn s
     ```
 
+<!-- .slide: style="font-size:calc(var(--base-font-size) * 0.8)" -->
+
 ===
 
 # Haskell(GHC)の遅延評価<!-- .element: style="font-size: calc(var(--title-font-size) * 0.8)"-->
@@ -917,6 +930,8 @@ tarai(int x, int y, int z)
 }
 ```
 
+
+<!-- .slide: style="font-size:calc(var(--base-font-size) * 0.7)" -->
 
 ===
 
