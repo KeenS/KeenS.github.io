@@ -756,7 +756,7 @@ end
   + [HAMT](https://en.wikipedia.org/wiki/Hash_array_mapped_trie)
 
 ``` clojure
-(aoosc {:name "κeen"} :age 25)
+(assoc {:name "κeen"} :age 25)
   ; ->{:age 25, :name "κeen"}
 ```
 
@@ -954,7 +954,7 @@ tarai(int x, int y, int z)
 
 * 高階関数
   + Rubyのブロックも
-* JavaのStreaming API
+* JavaのStream API
   + [FP in Java](https://www.amazon.co.jp/dp/1937785467)
 
 ===
