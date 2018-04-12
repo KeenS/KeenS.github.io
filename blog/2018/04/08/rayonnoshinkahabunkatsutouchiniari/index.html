@@ -186,12 +186,12 @@ fn min_max_&lt;T: Ord&gt;(v: &amp;[T]) -&gt; (&amp;T, &amp;T) {
 }
 </code></pre>
 
-<p>しかしこのアルゴリズムはrayonのイテレータでは記述出来ないでしょう。
+<p>このアルゴリズムはrayonのイテレータでは記述出来ないでしょう。
 こういうときにデータ並列操作を自分で書けるのが<code>join</code>です。</p>
 
 <h1 id="join"><code>join</code></h1>
 
-<p><code>par_iter</code>が高レベルAPIなのに対して<a href="https://docs.rs/rayon/1.0.1/rayon/fn.join.html"><code>join</code></a>はカスタムjobを書くためのAPIとされています。以下のような型シグネチャを持つ関数です。</p>
+<p><code>par_iter</code>が高レベルAPIなのに対して<a href="https://docs.rs/rayon/1.0.1/rayon/fn.join.html"><code>join</code></a>はカスタムジョブを書くためのAPIとされています。以下のような型シグネチャを持つ関数です。</p>
 
 <pre><code class="language-pub">pub fn join&lt;A, B, RA, RB&gt;(oper_a: A, oper_b: B) -&gt; (RA, RB) where
     A: FnOnce() -&gt; RA + Send,
@@ -265,7 +265,7 @@ fn min_max_rayon_&lt;T: Ord + Send + Sync&gt;(v: &amp;[T]) -&gt; (&amp;T, &amp;T
 
 <h1 id="joinと再帰とwork-stealing">joinと再帰とWork Stealing</h1>
 
-<p><code>rayon::join(|| min_max_rayon_(&amp;v[..mid]), || min_max_rayon_(&amp;v[mid..]));</code>をよく見ると再帰呼び出ししていますね。すると再帰先でもまた<code>join</code>を呼び、今回の基底ケースは<code>v.len() == 2</code>なので 100万要素のスライスに対して50万個のタスクができることになります。
+<p><code>rayon::join(|| min_max_rayon_(&amp;v[..mid]), || min_max_rayon_(&amp;v[mid..]));</code>をよく見ると再帰呼び出ししています。すると再帰先でもまた<code>join</code>を呼び、今回の基底ケースは<code>v.len() == 2</code>なので 100万要素のスライスに対して50万個のタスクができることになります。
 素直に50万個のスレッドを作るわけにもいきませんしシンプルなジョブキューを作っても50万回の排他ロックはとてつもなく遅いでしょう</p>
 
 <pre><code class="language-rust">// 1タスクスレッドは重すぎる
@@ -400,7 +400,7 @@ fn min_max_rayon_&lt;T: Ord + Send + Sync&gt;(v: &amp;[T]) -&gt; (&amp;T, &amp;T
 
 <p>rayonにはカスタムjobのためのAPIとして<code>join</code>の他に <a href="https://docs.rs/rayon/1.0.1/rayon/fn.scope.html"><code>scope</code></a>も用意されています。こちらは2つとは限らずに好き勝手タスクを<code>spawn</code>できるので自由度が高いです。なんなら<code>scope</code>を用いて<code>join</code>を実装することも可能です。</p>
 
-<p>しかし可能な限り<code>join</code>の方を使えとあります。<code>join</code>の方がWork Stealingに併せたAPIなのでこっちの方が内部実装が高速だとのこと。
+<p>しかし可能な限り<code>join</code>の方を使えとあります。<code>join</code>の方がWork Stealingに合わせたAPIなのでこっちの方が内部実装が高速だとのこと。
 上記の通り恐らくrayonはWork Stealingを前提に作られているので<code>join</code>が本体で<code>scope</code>は副産物なのでしょう。</p>
 
 <h1 id="ベンチマーク">ベンチマーク</h1>
@@ -487,11 +487,11 @@ test bench_min_max_rayon     ... bench:     412,036 ns/iter (+/- 89,327)
 
 <h1 id="join-と分割統治"><code>join</code> と分割統治</h1>
 
-<p><code>join</code>の素晴らしい点は思考のフレームワークにもなっている点ですね。
+<p><code>join</code>の素晴らしい点は思考のフレームワークにもなっている点です。
 小さな問題に分割して解いて、その解を組み合わせて全体の問題を解く。分割統治って言うらしいです。
 クイックソートやマージソートがよく知られる例ですね。私はアルゴリズムに詳しいわけでは無いので細かな点は近日中にネットに出没するらしい詳しい記事に譲るとします。</p>
 
-<p>たとえば最大上位者数問題、つまり全ての要素の中での「自身より右側にあって自身より大きい要素の数(上位者数)」の最大値を求める問題は素朴にはこう書けます。</p>
+<p>この例の他にはたとえば最大上位者数問題、つまり全ての要素の中での「自身より右側にあって自身より大きい要素の数(上位者数)」の最大値を求める問題は素朴にはこう書けます。</p>
 
 <pre><code class="language-rust">fn msc&lt;T: PartialOrd + Send + Sync&gt;(v: &amp;[T]) -&gt; usize {
     v.iter()
@@ -572,7 +572,7 @@ fn join&lt;'a, 'v, T: PartialOrd + Send + Sync&gt;(
 <li>このブログの大半の内容はrayonの<a href="http://smallcultfollowing.com/babysteps/blog/2015/12/18/rayon-data-parallelism-in-rust/">作者による解説</a>でカバーされています。</li>
 <li><code>min_max</code> の例は<a href="https://www.amazon.co.jp/dp/476490408X">アルゴリズムイントロダクション</a>から採りました</li>
 <li>最大上位者数問題は<a href="https://www.amazon.co.jp/dp/4274050645/">関数プログラミング 珠玉のアルゴリズムデザイン</a>から採りました</li>
-<li>今回用いたコードは<a href="https://github.com/KeenS/rayon-playground">こちら</a></li>
+<li>今回用いたコードは<a href="https://github.com/KeenS/rayon-playground">こちら</a>にあります。</li>
 <li>以下にチューニングの結果を示します。閾値を小さくするとオーバーヘッドが無視出来ず、大きくすると並列性能が出ないことが見て取れると思います。
 データが多くて見づらいですがラベルをクリックするとデータ毎に表示/非表示を切り替えられるので色々比べてみて下さい。</li>
 </ul>
