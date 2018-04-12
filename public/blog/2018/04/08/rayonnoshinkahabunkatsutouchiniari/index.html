@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+    <head>
+        
+        <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:site" content="@blackenedgold" />
+        <meta name="twitter:title" content="rayonの真価は分割統治にアリ | κeenのHappy Hacκing Blog"/>
+        <meta name="twitter:description" content="κeenです。やや釣りっぽいタイトルですがRustのデータ並列ライブラリのrayonについて。イテレータを並列に計算できるだけでなくjoinで自分で並列処理を書くこともできるんだよという記事です。
+
+" />
+
+        <title>rayonの真価は分割統治にアリ | κeenのHappy Hacκing Blog</title>
+        <link rel="stylesheet" href='//fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css' />
+        <link rel="stylesheet" href="/libraries/normalize.3.0.1.css" />
+        <link rel="stylesheet" href="/css/liquorice.css" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+        <link rel="icon" type="image/png" href="/favicon-32x32.png" sizes="32x32">
+        <link rel="icon" type="image/png" href="/favicon-16x16.png" sizes="16x16">
+        <link rel="manifest" href="/manifest.json">
+        <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#5bbad5">
+        <meta name="theme-color" content="#ffffff">
+        <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon-144-precomposed.png" sizes="144x144" />
+        <link rel="alternate" href="" type="application/rss+xml" title="κeenのHappy Hacκing Blog" />
+        
+        <script>
+         (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+             (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+                                  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+         })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+         ga('create', 'UA-43779888-1', 'auto');
+         ga('send', 'pageview');
+
+        </script>
+        
+        <link rel="stylesheet" href="/highlight.js/styles/monokai.css" />
+<script src="/highlight.js/highlight.min.js"></script>
+<script>hljs.initHighlightingOnLoad();</script>
+<script type="text/x-mathjax-config">
+ MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
+</script>
+<script async src="//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS_CHTML"></script>
+</script>
+<meta http-equiv="X-UA-Compatible" CONTENT="IE=EmulateIE7" />
+<link rel="stylesheet" href="//unpkg.com/mermaid@7.0.4/dist/mermaid.forest.min.css">
+
+    </head>
+    <body class="li-body">
+
+<header class="li-page-header" id="page-header">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-brand li-left">
+                <a href="/">κeenのHappy Hacκing Blog</a> | Lispエイリアンの狂想曲</div>
+                <div class="li-menu li-right">
+                    <span class="li-menu-icon" onclick="javascript:toggle('menu');">&#9776;</span>
+                    <ul id="menu2" class="li-menu-items">
+                        
+                            <li><a href="/about/"> About </a></li>
+                        
+                            <li><a href="/index.xml"> Atom </a></li>
+                        
+                            <li><a href="/post/"> Blog </a></li>
+                        
+                            <li><a href="/slide/"> Slide </a></li>
+                        
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="sixteen columns">
+                <ul id="menu" class="li-menu-items li-menu-mobile">
+                    
+                        <li><a href="/about/"> About </a></li>
+                    
+                        <li><a href="/index.xml"> Atom </a></li>
+                    
+                        <li><a href="/post/"> Blog </a></li>
+                    
+                        <li><a href="/slide/"> Slide </a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+
+
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <article class="li-article">
+                    <header class="li-article-header">
+                        <h1 class="li-article-title">rayonの真価は分割統治にアリ</h1>
+                        <div class="li-article-meta">
+    <time class="li-article-date">2018-04-08</time>
+    <ul class="li-article-tag">
+    
+        <li>
+            <a href="/categories/rust">rust</a>
+        </li>
+    
+        <li>
+            <a href="/categories/rayon">rayon</a>
+        </li>
+    
+        <li>
+            <a href="/categories/%e3%82%a2%e3%83%ab%e3%82%b4%e3%83%aa%e3%82%ba%e3%83%a0">アルゴリズム</a>
+        </li>
+    
+</ul>
+
+</div>
+
+                    </header>
+                    <section>
+                        <p>κeenです。やや釣りっぽいタイトルですがRustのデータ並列ライブラリの<a href="https://github.com/rayon-rs/rayon">rayon</a>について。イテレータを並列に計算できるだけでなく<code>join</code>で自分で並列処理を書くこともできるんだよという記事です。</p>
+
+<p></p>
+
+<h1 id="rayonと-par-iter">rayonと<code>par_iter</code></h1>
+
+<p>rayonはRustのデータ並列ライブラリです。あの化学繊維の<a href="https://ja.wikipedia.org/wiki/%E3%83%AC%E3%83%BC%E3%83%A8%E3%83%B3">レーヨン</a>です。Thread(糸)にちなんだ名前なんですかね。</p>
+
+<p>rayonで一番良く使われるのは<code>par_iter</code>でしょう。このように使えます。</p>
+
+<pre><code class="language-rust">use rayon::prelude::*;
+let vec = vec![1, 2, 3, 4, 5, 6];
+// _par_iter でデータ並列計算
+let max = vec.par_iter().max();
+assert_eq!(max, Some(6));
+</code></pre>
+
+<p>このようにほぼRustのイテレータを置き換える形で使えます。</p>
+
+<p>その反面、イテレータらしい処理でないと<code>par_iter</code>は使えません。
+たとえば次のminとmaxを同時に求めるアルゴリズムはどうでしょう。
+要素を同時に2つ取って、大小の区別をつけてからmin、maxと比較するのでminとmaxを個別に求めるのに比べて比較回数が3/4くらいになります。
+しかし同時に2つ取るのでidiomaticなイテレータからは外れてしまいます。</p>
+
+<pre><code class="language-rust">fn main() {
+    let vec = vec![1, 2, 3, 4, 5, 6];
+    let (min, max) = min_max(&amp;vec);
+    assert_eq!(min, Some(&amp;1));
+    assert_eq!(max, Some(&amp;6));
+}
+
+fn min_max&lt;T: Ord&gt;(v: &amp;[T]) -&gt; (Option&lt;&amp;T&gt;, Option&lt;&amp;T&gt;) {
+    if v.is_empty() {
+        return (None, None);
+    } else {
+        let (min, max) = min_max_(v);
+        (Some(min), Some(max))
+    }
+}
+
+fn min_max_&lt;T: Ord&gt;(v: &amp;[T]) -&gt; (&amp;T, &amp;T) {
+    use std::cmp;
+    debug_assert!(0 &lt; v.len());
+    let mut iter = v.iter();
+    let mut min;
+    let mut max;
+    if v.len() % 2 == 0 {
+        min = iter.next().unwrap();
+        max = iter.next().unwrap();
+    } else {
+        min = iter.next().unwrap();
+        max = min;
+    }
+    while let Some(a) = iter.next() {
+        let b = iter.next().unwrap();
+        let (small, large) = if a &lt; b { (a, b) } else { (a, b) };
+        min = cmp::min(min, small);
+        max = cmp::max(max, large);
+    }
+    (min, max)
+}
+</code></pre>
+
+<p>しかしこのアルゴリズムはrayonのイテレータでは記述出来ないでしょう。
+こういうときにデータ並列操作を自分で書けるのが<code>join</code>です。</p>
+
+<h1 id="join"><code>join</code></h1>
+
+<p><code>par_iter</code>が高レベルAPIなのに対して<a href="https://docs.rs/rayon/1.0.1/rayon/fn.join.html"><code>join</code></a>はカスタムjobを書くためのAPIとされています。以下のような型シグネチャを持つ関数です。</p>
+
+<pre><code class="language-pub">pub fn join&lt;A, B, RA, RB&gt;(oper_a: A, oper_b: B) -&gt; (RA, RB) where
+    A: FnOnce() -&gt; RA + Send,
+    B: FnOnce() -&gt; RB + Send,
+    RA: Send,
+    RB: Send,
+</code></pre>
+
+<p>少しややこしいですが、普通のスレッドの<code>spawn</code>のように新たなタスクを始める関数です。ただし引数に処理関数を2つ取ります。このシグネチャから「タスクを半分に分割しなさい。そうすればそれぞれを並列に解くことが出来ます。」というメッセージが伝わりますね。</p>
+
+<p>今回のmin_maxの例でいくとまずスライスを半分に分割し、それぞれでmin_maxを求めたあとでmin同士、max同士を比べるとよさそうです。こうなるでしょうか。</p>
+
+<pre><code class="language-rust">fn main() {
+    let vec = vec![1, 2, 3, 4, 5, 6];
+    let (min, max) = min_max_rayon(&amp;vec);
+    assert_eq!(min, Some(&amp;1));
+    assert_eq!(max, Some(&amp;6));
+}
+
+fn min_max_rayon&lt;T: Ord + Send + Sync&gt;(v: &amp;[T]) -&gt; (Option&lt;&amp;T&gt;, Option&lt;&amp;T&gt;) {
+    match v.len() {
+        0 =&gt; (None, None),
+        1 =&gt; (Some(&amp;v[0]), Some(&amp;v[0])),
+        _ =&gt; {
+            let (min, max) = min_max_rayon_(v);
+            (Some(min), Some(max))
+        }
+    }
+}
+fn min_max_rayon_&lt;T: Ord + Send + Sync&gt;(v: &amp;[T]) -&gt; (&amp;T, &amp;T) {
+    use std::cmp;
+    debug_assert!(1 &lt; v.len());
+
+    match v.len() {
+        2 =&gt; {
+            let a = &amp;v[0];
+            let b = &amp;v[1];
+            if a &lt; b {
+                (a, b)
+            } else {
+                (b, a)
+            }
+        }
+        _ =&gt; {
+            fn doit&lt;T: Ord + Send + Sync&gt;(v: &amp;[T]) -&gt; (&amp;T, &amp;T) {
+                let mid = match v.len() % 4 {
+                    0 =&gt; v.len() / 2,
+                    2 =&gt; v.len() / 2 + 2,
+                    _ =&gt; unreachable!(),
+                };
+                let ((min1, max1), (min2, max2)) =
+                    // ここで `rayon::join` を用いている
+                    rayon::join(|| min_max_rayon_(&amp;v[..mid]), || min_max_rayon_(&amp;v[mid..]));
+                (cmp::min(min1, min2), cmp::max(max1, max2))
+            }
+            if v.len() % 2 == 1 {
+                let t = &amp;v[0];
+                let v = &amp;v[1..];
+                let (min, max) = doit(v);
+                (cmp::min(t, min), cmp::max(t, max))
+            } else {
+                doit(v)
+            }
+        }
+    }
+}
+</code></pre>
+
+<p>コメントに書きましたが <code>rayon::join(|| min_max_rayon_(&amp;v[..mid]), || min_max_rayon_(&amp;v[mid..]));</code> が今回の核心です。ほとんど並列を意識させずにコードを書けていますね。
+事実 <code>(min_max_rayon_(&amp;v[..mid]), min_max_rayon_(&amp;v[mid..]))</code> のようにただのタプルにしても結果は変わりません。</p>
+
+<h1 id="joinと再帰とwork-stealing">joinと再帰とWork Stealing</h1>
+
+<p><code>rayon::join(|| min_max_rayon_(&amp;v[..mid]), || min_max_rayon_(&amp;v[mid..]));</code>をよく見ると再帰呼び出ししていますね。すると再帰先でもまた<code>join</code>を呼び、今回の基底ケースは<code>v.len() == 2</code>なので 100万要素のスライスに対して50万個のタスクができることになります。
+素直に50万個のスレッドを作るわけにもいきませんしシンプルなジョブキューを作っても50万回の排他ロックはとてつもなく遅いでしょう</p>
+
+<pre><code class="language-rust">// 1タスクスレッドは重すぎる
+[Thread][Thread][Thread][Thread][Thread]
+[Thread][Thread][Thread][Thread][Thread]
+[Thread][Thread][Thread][Thread][Thread]
+[Thread][Thread][Thread][Thread][Thread]
+....
+</code></pre>
+
+<pre><code class="language-rust">// キューでもロックが遅い
+
+                 |---|',
+                 |   |  |
+                 |---|  |
+                 | . |  50万
+                 | . |  |
+                 |---|  |
+                 |   |,'
+                 +---+
+                 &gt;lock&lt;
+                   .
+               .   .   .
+            .    . .  .   .
+         .     .   .   .     .
+      .      .     .     .      .
+   .       .       .       .       .
+[Thread][Thread][Thread][Thread][Thread]
+
+</code></pre>
+
+<p>rayonが採用しているのはWork Stealingです。他の言語でも使われているのでご存知の方も多いでしょう。
+私は<a href="http://supertech.csail.mit.edu/papers/ft_gateway.pdf">元論文</a>は読んだことはないのですが興味のある方は目を通してみて下さい。ここではスピリチュアルに説明します。
+まず、各スレッドが各自のDequeを持っています。</p>
+
+<pre><code class="language-rust"> |   |   |   |   |   |   |   |
+ +---+   +---+   +---+   +---+
+ |   |   |   |   |   |   |   |
+ +---+   +---+   +---+   +---+
+ |   |   |   |   |   |   |   |
+ +---+   +---+   +---+   +---+
+   |       |       |       |
+[Thread][Thread][Thread][Thread]
+</code></pre>
+
+<p>このうちの1つのスレッドの動きに着目しましょう。
+最初は大きなJobがいます。</p>
+
+<pre><code class="language-rust"> +---+
+ |100|
+ +---+
+   |
+[Thread]
+
+</code></pre>
+
+<p>このタスクを実行すると先程のmin_maxのように<code>join</code>を使うと半分に分割されますね。
+それは1つは即座に実行、もう一つはDequeにpush_frontされます。</p>
+
+<pre><code class="language-rust"> +---+
+ |50 |
+ +---+
+   |
+ +---+
+ |50 |
+ +---+
+[Thread]
+
+</code></pre>
+
+<p>これを何度か繰り返します。再帰しているので小さなタスクが手前にきます。</p>
+
+<pre><code class="language-rust"> +---+
+ |50 |
+ +---+
+ |26 |
+ +---+
+ |12 |
+ +---+
+ |6  |
+ +---+
+   |
+ +---+
+ |6  |
+ +---+
+[Thread]
+
+</code></pre>
+
+<p>ここまでは全て自分のスレッド内での作業なのでロックは必要ありません。
+ここで何か他のスレッドが全てのタスクを終えて空いているとしましょう</p>
+
+<pre><code class="language-rust"> +---+
+ |50 |
+ +---+
+ |26 |
+ +---+
+ |12 |
+ +---+
+ |6  |
+ +---+
+   |
+ +---+     |   |
+ |6  |     +---+
+ +---+       |
+[Thread1] [Thread2]
+
+</code></pre>
+
+<p>するとThread2はThread1からJobを奪います。奪うのは一番後ろ、<code>50</code>です。これは他のたとえばThread3も同じように奪いに来る可能性もあるのでロックを取ります。</p>
+
+<pre><code class="language-rust"> &gt;lock&lt; -----+
+ +---+       |
+ |26 |       |
+ +---+       |
+ |12 |       |
+ +---+       |
+ |6  |       |
+ +---+       v
+   |       +---+
+ +---+     |50 |
+ |6  |     +---+
+ +---+       |
+[Thread1] [Thread2]
+
+</code></pre>
+
+<p>これでロックを出来る限り少なく、一番大きなタスクを他のスレッドに渡すことができました。
+このようにrayonは<code>rayon::join</code>と再帰呼出しに向いたスケジューリングを採用しています。</p>
+
+<h1 id="join-と-scope"><code>join</code> と <code>scope</code></h1>
+
+<p>rayonにはカスタムjobのためのAPIとして<code>join</code>の他に <a href="https://docs.rs/rayon/1.0.1/rayon/fn.scope.html"><code>scope</code></a>も用意されています。こちらは2つとは限らずに好き勝手タスクを<code>spawn</code>できるので自由度が高いです。なんなら<code>scope</code>を用いて<code>join</code>を実装することも可能です。</p>
+
+<p>しかし可能な限り<code>join</code>の方を使えとあります。<code>join</code>の方がWork Stealingに併せたAPIなのでこっちの方が内部実装が高速だとのこと。
+上記の通り恐らくrayonはWork Stealingを前提に作られているので<code>join</code>が本体で<code>scope</code>は副産物なのでしょう。</p>
+
+<h1 id="ベンチマーク">ベンチマーク</h1>
+
+<p>さて、並列というものはby definitionで速くないといけません。ベンチマークをとりましょう。</p>
+
+<p>nightlyの機能のベンチマークを使います。また、適当な配列を用意するのに<a href="https://github.com/rust-lang-nursery/rand"><code>rand</code></a>を使い、このような関数で実装します。</p>
+
+<pre><code class="language-rust">extern crate rand;
+fn random_vec(n: usize) -&gt; Vec&lt;i32&gt; {
+    let mut rng = rand::thread_rng();
+    (0..n).into_iter().map(|_| rng.gen::&lt;i32&gt;()).collect()
+}
+</code></pre>
+
+<p>これを用いて以下のようにベンチマークをとります。実行するのは4コア8スレッドのIntel&reg; Core&trade; i7-4910MQ CPU @ 2.90GHzです。</p>
+
+<pre><code class="language-rust">#[bench]
+fn bench_min_max(b: &amp;mut Bencher) {
+    let v = random_vec(1024 * 1024 * 32);
+    b.iter(|| min_max(&amp;v))
+}
+
+#[bench]
+fn bench_min_max_rayon(b: &amp;mut Bencher) {
+    let v = random_vec(1024 * 1024 * 32);
+    b.iter(|| min_max_rayon(&amp;v))
+}
+
+</code></pre>
+
+<p>結果は</p>
+
+<pre><code class="language-rust">$ cargo +nightly bench
+test bench_min_max           ... bench:   2,001,679 ns/iter (+/- 236,508)
+test bench_min_max_rayon     ... bench:   5,608,823 ns/iter (+/- 1,225,619)
+</code></pre>
+
+<p>なんとrayonを使ったほうが遅いです。</p>
+
+<p>詳細なグラフはこちら。</p>
+
+<canvas id="vanilla_vs_rayon"></canvas>
+
+<p>これは第一にrayon化するだけでどうやらオーバーヘッドが乗るから。もう一つに、いくらwork stealingとはいえ毎度jobを作っているとバカにならないコストが発生するからです。
+なのである程度のサイズ以下になったら<code>min_max_rayon</code>にスイッチするとよいでしょう。</p>
+
+<p><code>min_max_rayon_</code>の</p>
+
+<pre><code class="language-rust">    match v.len() {
+        2 =&gt; {
+            let a = &amp;v[0];
+            let b = &amp;v[1];
+            if a &lt; b {
+                (a, b)
+            } else {
+                (b, a)
+            }
+        }
+        _ =&gt; {
+
+</code></pre>
+
+<p>の部分を</p>
+
+<pre><code class="language-rust">    if v.len() &lt;= 8192 {
+        min_max_(v)
+    } else {
+
+</code></pre>
+
+<p>に書換えます。この8192というのは私の手元のベンチマークに合わせてチューニングした結果です。
+どうしてもrayonに載せるだけでそれなりにオーバーヘッドがかかるので並列化がペイするためにはそれなりに大きくないといけなくなります。</p>
+
+<p>こうするとぐっと速くなって</p>
+
+<pre><code class="language-rust">test bench_min_max           ... bench:   1,982,283 ns/iter (+/- 124,381)
+test bench_min_max_rayon     ... bench:     412,036 ns/iter (+/- 89,327)
+</code></pre>
+
+<p>と大体(/ 1982283.0 412036.0) = 4.9倍速くなってますね。</p>
+
+<canvas id="vanilla_vs_rayon_tuned"></canvas>
+
+<h1 id="join-と分割統治"><code>join</code> と分割統治</h1>
+
+<p><code>join</code>の素晴らしい点は思考のフレームワークにもなっている点ですね。
+小さな問題に分割して解いて、その解を組み合わせて問題を解く。分割統治って言うらしいです。
+私はアルゴリズムに詳しいわけでは無いので細かな点は近日中にネットに出没するらしい詳しい記事に譲るとします。</p>
+
+<p>たとえば最大上位者数問題、つまり全ての要素の中での「自身より右側にあって自身より大きい要素の数(上位者数)」の最大値を求める問題は素朴にはこう書けます。</p>
+
+<pre><code class="language-rust">fn msc&lt;T: PartialOrd + Send + Sync&gt;(v: &amp;[T]) -&gt; usize {
+    v.iter()
+        .enumerate()
+        .map(|(n, t)| scount(t, &amp;v[n..]))
+        .max()
+        .unwrap()
+}
+
+fn scount&lt;T: PartialOrd + Send + Sync&gt;(t: &amp;T, v: &amp;[T]) -&gt; usize {
+    v.iter().filter(|s| t &lt; s).count()
+}
+</code></pre>
+
+<p>これは $O(n^2)$ の計算量を持ちますがこれをうまく分割統治統治すると $O(n \log n)$ で求められます。</p>
+
+<pre><code class="language-rust">fn msc_divide&lt;T: PartialOrd + Send + Sync&gt;(v: &amp;[T]) -&gt; usize {
+    table(v).into_iter().map(|(_, n)| n).max().unwrap()
+}
+
+fn table&lt;T: PartialOrd + Send + Sync&gt;(v: &amp;[T]) -&gt; Vec&lt;(&amp;T, usize)&gt; {
+    if v.len() == 1 {
+        vec![(&amp;v[0], 0)]
+    } else {
+        let mid = v.len() / 2;
+        let xs = &amp;v[0..mid];
+        let ys = &amp;v[mid..];
+        let xs = table(xs);
+        let ys = table(ys);
+        join(&amp;xs, &amp;ys)
+    }
+}
+fn join&lt;'a, 'v, T: PartialOrd + Send + Sync&gt;(
+    mut xs: &amp;'a [(&amp;'v T, usize)],
+    mut ys: &amp;'a [(&amp;'v T, usize)],
+) -&gt; Vec&lt;(&amp;'v T, usize)&gt; {
+    let mut v = Vec::new();
+    loop {
+        if ys.is_empty() {
+            v.extend(xs);
+            return v;
+        } else if xs.is_empty() {
+            v.extend(ys);
+            return v;
+        } else {
+            let xt = &amp;xs[0];
+            let yt = &amp;ys[0];
+            if xt.0 &lt; yt.0 {
+                v.push((xt.0, xt.1 + ys.len()));
+                xs = &amp;xs[1..];
+            } else {
+                v.push(yt.clone());
+                ys = &amp;ys[1..];
+            }
+        }
+    }
+}
+</code></pre>
+
+<p>このコードはほぼストレートに<code>table</code>をrayon化できるのは見て取れるでしょう。
+良いアルゴリズムと良い並列化が両立するのは素晴らしいですね。</p>
+
+<h1 id="まとめ">まとめ</h1>
+
+<ul>
+<li>rayonには<code>par_iter</code>以外にも<code>join</code>があるよ</li>
+<li><code>join</code>を使うといろんなアルゴリズムを並列化出来るよ
+
+<ul>
+<li>ただし無闇に並列化すると遅くなるから注意</li>
+</ul></li>
+<li><code>join</code>と分割統治は相性がいいよ</li>
+</ul>
+
+<h1 id="ノート">ノート</h1>
+
+<ul>
+<li>このブログの大半の内容はrayonの<a href="http://smallcultfollowing.com/babysteps/blog/2015/12/18/rayon-data-parallelism-in-rust/">作者による解説</a>でカバーされています。</li>
+<li><code>min_max</code> の例は<a href="https://www.amazon.co.jp/dp/476490408X">アルゴリズムイントロダクション</a>から採りました</li>
+<li>最大上位者数問題は<a href="https://www.amazon.co.jp/dp/4274050645/">関数プログラミング 珠玉のアルゴリズムデザイン</a>から採りました</li>
+<li>以下にチューニングの結果を示します。閾値を小さくするとオーバーヘッドが無視出来ず、大きくすると並列性能が出ないことが見て取れると思います。
+データが多くて見づらいですがラベルをクリックするとデータ毎に表示/非表示を切り替えられるので色々比べてみて下さい。</li>
+</ul>
+
+<canvas id="rayon_thresholds"></canvas>
+
+<h1 id="余談">余談</h1>
+
+<p>因みにですが個別に<code>min</code>と<code>max</code>で求めたものと比べると</p>
+
+<pre><code class="language-rust">const N: usize = 1024 * 1024;
+
+#[bench]
+fn bench_min_and_max(b: &amp;mut Bencher) {
+    let v = random_vec(N);
+    b.iter(|| (v.iter().min(), v.iter().max()))
+}
+
+#[bench]
+fn bench_min_max(b: &amp;mut Bencher) {
+    let v = random_vec(N);
+    b.iter(|| min_max(&amp;v))
+}
+
+#[bench]
+fn bench_min_and_max_rayon(b: &amp;mut Bencher) {
+    use rayon::prelude::*;
+    let v = random_vec(N);
+    b.iter(|| (v.par_iter().min(), v.par_iter().max()))
+}
+
+#[bench]
+fn bench_min_max_rayon(b: &amp;mut Bencher) {
+    let v = random_vec(N);
+    b.iter(|| min_max_rayon(&amp;v))
+}
+</code></pre>
+
+<p>なんと全体的にはminとmaxを個別に求めた方が速い結果になりました。</p>
+
+<pre><code class="language-rust">test bench_min_and_max       ... bench:     593,406 ns/iter (+/- 21,954)
+test bench_min_and_max_rayon ... bench:     416,664 ns/iter (+/- 68,554)
+test bench_min_max           ... bench:   1,982,283 ns/iter (+/- 124,381)
+test bench_min_max_rayon     ... bench:     412,036 ns/iter (+/- 89,327)
+</code></pre>
+
+<p>min_max_rayonは辛勝…。</p>
+
+<canvas id="min_and_max_vs_min_max"></canvas>
+
+<p>色々試すとどうやらループの中で<code>if</code>を使ってるのが遅いらしく、ループ内の<code>if</code>を取り除いたら、つまり比較演算の削減を諦めてmin, maxを個別に求めるのと変わらないループを書くと速くなりました。不思議…。
+別にイテレータの<code>min</code>や<code>max</code>がSIMDを生成していたとかではなくて、単に生成されるコードの品質の問題でした。</p>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.4.0/Chart.min.js"></script>
+
+<script type="application/javascript">
+var labels = [];
+for(var i = 0; i <= 19; i++) {
+    labels[i] = 2**(i+1);
+}
+function genConfig(title, datasets) {
+    let config = {
+    type: 'line',
+    data: {
+        labels: labels,
+        datasets: []
+    },
+    options: {
+        responsive: true,
+        title: {
+        display: true,
+        text: title
+        },
+        tooltips: {
+        mode: 'index',
+        intersect: false,
+        },
+        hover: {
+        mode: 'nearest',
+        intersect: true
+        },
+        scales: {
+        xAxes: [{
+            display: true,
+            scaleLabel: {
+            display: true,
+            labelString: 'vector size'
+            }
+        }],
+        yAxes: [{
+            display: true,
+                    type: 'logarithmic',
+            scaleLabel: {
+            display: true,
+            labelString: 'time (ns)'
+            }
+        }]
+        }
+    }
+    };
+    datasets.forEach(data => {
+        config.data.datasets.push({
+        label: data.label,
+        backgroundColor: data.color,
+        borderColor: data.color,
+        data: data.data,
+        fill: false
+    });
+    })
+    return config
+}
+
+var vanilla_vs_rayon = document.getElementById('vanilla_vs_rayon').getContext('2d');
+new Chart(vanilla_vs_rayon, genConfig("min_max vs min_max_rayon", [
+    {
+        label: 'min_max_rayon',
+        color: 'rgb(256, 128, 128)',
+        data: [1, 4969, 6263, 8260, 10238, 11591, 13227, 15180, 17157, 23007, 33231, 47599, 75734, 133570, 241004, 421043, 804201, 1572861, 3136177, 5995852],
+    },
+    {
+        label: 'min_max',
+        color: 'rgb(128, 128, 256)',
+        data: [0, 2, 5, 9, 21, 39, 73, 144, 289, 686, 3740, 8591, 17501, 42219, 69543, 135583, 275131, 530968, 1019684, 1976327],
+    }
+]));
+
+var vanilla_vs_rayon_tuned = document.getElementById('vanilla_vs_rayon_tuned').getContext('2d');
+new Chart(vanilla_vs_rayon_tuned, genConfig("min_max vs min_max_rayon(チューニング後)", [
+    {
+        label: 'min_max_rayon',
+        color: 'rgb(256, 128, 128)',
+        data: [1, 2, 6, 10, 18, 35, 70, 139, 277, 632, 2252, 6758, 15635, 46270, 47309, 51649, 83701, 152410, 275619, 532008],
+    },
+    {
+        label: 'min_max',
+        color: 'rgb(128, 128, 256)',
+        data: [0, 2, 5, 9, 21, 39, 73, 144, 289, 686, 3740, 8591, 17501, 42219, 69543, 135583, 275131, 530968, 1019684, 1976327],
+    }
+]));
+
+var rayon_thresholds = document.getElementById('rayon_thresholds').getContext('2d');
+new Chart(rayon_thresholds, genConfig("thresholdを変えたときのmim_max_rayonのパフォーマンス", [
+    {
+        label: '2',
+        data: [1, 4969, 6263, 8260, 10238, 11591, 13227, 15180, 17157, 23007, 33231, 47599, 75734, 133570, 241004, 421043, 804201, 1572861, 3136177, 5995852]
+    },
+
+    {
+        label: '4',
+        data: [1, 2, 5377, 6789, 7559, 9979, 11886, 13038, 14988, 18823, 23705, 31624, 53671, 92329, 161459, 279781, 547332, 1029873, 2043434, 3989602]
+    },
+
+    {
+        label: '0000008',
+        data: [2, 2, 6, 5718, 7489, 8650, 11075, 12323, 13605, 15674, 18473, 25299, 34824, 55843, 99329, 188902, 341966, 648656, 1258574, 2354102]
+    },
+
+    {
+        label: '0000016',
+        data: [2, 3, 6, 11, 5370, 6605, 8975, 11009, 11961, 13482, 16042, 19543, 27623, 42773, 73452, 136375, 242573, 449895, 894581, 1711311]
+    },
+
+    {
+        label: '0000032',
+        data: [2, 3, 7, 16, 23, 8106, 7789, 10858, 11720, 12659, 13847, 16564, 22043, 31661, 54789, 93711, 162402, 311356, 599225, 1264995]
+    },
+
+    {
+        label: '0000064',
+        data: [1, 3, 6, 13, 25, 42, 7565, 8450, 11010, 12113, 13547, 15418, 19406, 28498, 45491, 74264, 130119, 229457, 423164, 816093]
+    },
+
+    {
+        label: '0000128',
+        data: [1, 2, 6, 13, 19, 37, 72, 5739, 9677, 11677, 12904, 14111, 17413, 23945, 36427, 56699, 105557, 187037, 355136, 652626]
+    },
+
+    {
+        label: '0000256',
+        data: [1, 3, 7, 13, 22, 58, 110, 184, 12032, 11574, 12861, 14554, 16853, 22186, 32045, 49191, 90558, 163303, 307767, 593919]
+    },
+
+    {
+        label: '0000512',
+        data: [1, 2, 6, 12, 19, 37, 73, 141, 284, 7833, 10931, 12553, 15002, 20304, 29863, 47826, 79071, 144858, 272874, 531286]
+    },
+
+    {
+        label: '0001024',
+        data: [1, 2, 5, 11, 20, 35, 95, 184, 390, 698, 18329, 19275, 18980, 23640, 34736, 56762, 96810, 164784, 302074, 584485]
+    },
+
+    {
+        label: '0002048',
+        data: [1, 3, 5, 13, 23, 41, 81, 162, 347, 645, 2011, 17156, 16931, 19250, 28485, 44241, 76107, 132698, 252528, 491360]
+    },
+
+    {
+        label: '0004096',
+        data: [1, 2, 5, 9, 19, 51, 86, 173, 343, 687, 3225, 7011, 29425, 29276, 31519, 48384, 81598, 150722, 277016, 540963]
+    },
+
+    {
+        label: '0008192',
+        color: 'rgb(256, 128, 128)',
+        data: [1, 2, 6, 10, 18, 35, 70, 139, 277, 632, 2252, 6758, 15635, 46270, 47309, 51649, 83701, 152410, 275619, 532008]
+    },
+
+    {
+        label: '0016384',
+        data: [1, 2, 6, 11, 20, 42, 84, 157, 312, 617, 2341, 6095, 14035, 30036, 64901, 68928, 76370, 138835, 243741, 473987]
+    },
+
+    {
+        label: '0032768',
+        data: [1, 2, 5, 11, 18, 35, 70, 139, 282, 588, 2380, 7300, 16692, 37347, 73819, 182132, 168316, 155573, 353786, 565423]
+    },
+
+    {
+        label: '0065536',
+        data: [1, 3, 6, 10, 21, 40, 79, 162, 294, 611, 2040, 6633, 13929, 30203, 63107, 121916, 226008, 246603, 244836, 482809]
+    },
+
+    {
+        label: '0131072',
+        data: [1, 2, 5, 11, 19, 35, 69, 137, 274, 624, 2241, 6736, 14389, 30630, 63357, 124594, 250942, 395238, 466010, 481440]
+    },
+
+    {
+        label: '0262144',
+        data: [1, 2, 5, 10, 18, 36, 71, 140, 280, 559, 2211, 6056, 14412, 30083, 61307, 125313, 251839, 519617, 751774, 979082]
+    },
+
+    {
+        label: '0524288',
+        data: [1, 2, 5, 12, 21, 38, 77, 144, 294, 609, 2311, 6007, 13846, 30177, 69691, 144964, 275105, 545024, 1060201, 1353068]
+    },
+
+    {
+        label: '1048576',
+        data: [1, 2, 5, 10, 18, 36, 77, 156, 303, 606, 1740, 5905, 14085, 29457, 63666, 130469, 260893, 518881, 986104, 2013271]
+    },
+]));
+var min_and_max_vs_min_max = document.getElementById('min_and_max_vs_min_max').getContext('2d');
+new Chart(min_and_max_vs_min_max, genConfig("min_and_max, min_and_max_rayon, min_max, min_max_rayon", [
+    {
+        label: 'min_max_rayon',
+        color: 'rgb(256, 128, 128)',
+        data: [1, 2, 6, 10, 18, 35, 70, 139, 277, 632, 2252, 6758, 15635, 46270, 47309, 51649, 83701, 152410, 275619, 532008],
+    },
+    {
+        label: 'min_max',
+        color: 'rgb(128, 128, 256)',
+        data: [0, 2, 5, 9, 21, 39, 73, 144, 289, 686, 3740, 8591, 17501, 42219, 69543, 135583, 275131, 530968, 1019684, 1976327],
+    },
+    {
+        label: 'min_and_max_rayon',
+        color: 'rgb(256, 64, 64)',
+        data: [9116, 11592, 16563, 20167, 22646, 33490, 37236, 38469, 41873, 44973, 47956, 51669, 59828, 69602, 82043, 107234, 150433, 203012, 309735, 496755],
+    },
+    {
+        label: 'min_and_max',
+        color: 'rgb(64, 64, 256)',
+        data: [2, 5, 7, 12, 20, 36, 68, 136, 279, 559, 1102, 2180, 4366, 9030, 18182, 35873, 71861, 144179, 293551, 580270],
+    }
+]));
+
+</script>
+                    </section>
+                </article>
+            </div>
+        </div>
+
+        <div class="row li-author">
+    <div class="sixteen columns">
+        Written by <strong>κeen</strong>
+    </div>
+</div>
+
+
+        <div class="row li-pagination">
+            <div class="eight columns">
+                <div class="li-pagination-previous">
+                    
+                        &nbsp;
+                    
+                </div>
+            </div>
+            <div class="eight columns">
+                <div class="li-pagination-next">
+                    
+                        Older article<br />
+                        <a href="/blog/2018/04/04/cargo_asmderustnomemorimawarisaitekikawochekku/"> cargo asmでRustのメモリ周り最適化をチェック</a>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+<footer class="li-page-footer">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-page-footer-legal">
+                    &copy; 2018. All rights reserved. 
+                </div>
+                <div class="li-page-footer-theme">
+                    <span class=""><a href="https://github.com/eliasson/liquorice/">liquorice</a> is a theme for <a href="http://hugo.spf13.com">hugo</a></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+
+    <script type="text/javascript">
+    <!--
+    function toggle(id) {
+        var e = document.getElementById(id);
+        e.style.display == 'block' ? e.style.display = 'none' : e.style.display = 'block';
+    }
+    
+    </script>
+    <script type="text/javascript">
+     <!--
+                                   var _gaq = _gaq || [];
+     _gaq.push(['_setAccount', ""]);
+     _gaq.push(['_trackPageview']);
+
+     (function() {
+         var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+         ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+         var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+     })();
+    
+    </script>
+    <script src="https://unpkg.com/mermaid@7.0.4/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({startOnLoad:true
+     });</script>
+
+    </body>
+</html>
+
