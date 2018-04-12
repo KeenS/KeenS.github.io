@@ -69,11 +69,11 @@ fn min_max_<T: Ord>(v: &[T]) -> (&T, &T) {
 }
 ```
 
-しかしこのアルゴリズムはrayonのイテレータでは記述出来ないでしょう。
+このアルゴリズムはrayonのイテレータでは記述出来ないでしょう。
 こういうときにデータ並列操作を自分で書けるのが`join`です。
 
 # `join`
-`par_iter`が高レベルAPIなのに対して[`join`](https://docs.rs/rayon/1.0.1/rayon/fn.join.html)はカスタムjobを書くためのAPIとされています。以下のような型シグネチャを持つ関数です。
+`par_iter`が高レベルAPIなのに対して[`join`](https://docs.rs/rayon/1.0.1/rayon/fn.join.html)はカスタムジョブを書くためのAPIとされています。以下のような型シグネチャを持つ関数です。
 
 ```pub
 pub fn join<A, B, RA, RB>(oper_a: A, oper_b: B) -> (RA, RB) where
@@ -148,7 +148,7 @@ fn min_max_rayon_<T: Ord + Send + Sync>(v: &[T]) -> (&T, &T) {
 事実 `(min_max_rayon_(&v[..mid]), min_max_rayon_(&v[mid..]))` のようにただのタプルにしても結果は変わりません。
 
 # joinと再帰とWork Stealing
-`rayon::join(|| min_max_rayon_(&v[..mid]), || min_max_rayon_(&v[mid..]));`をよく見ると再帰呼び出ししていますね。すると再帰先でもまた`join`を呼び、今回の基底ケースは`v.len() == 2`なので 100万要素のスライスに対して50万個のタスクができることになります。
+`rayon::join(|| min_max_rayon_(&v[..mid]), || min_max_rayon_(&v[mid..]));`をよく見ると再帰呼び出ししています。すると再帰先でもまた`join`を呼び、今回の基底ケースは`v.len() == 2`なので 100万要素のスライスに対して50万個のタスクができることになります。
 素直に50万個のスレッドを作るわけにもいきませんしシンプルなジョブキューを作っても50万回の排他ロックはとてつもなく遅いでしょう
 
 
@@ -294,7 +294,7 @@ rayonが採用しているのはWork Stealingです。他の言語でも使わ�
 # `join` と `scope`
 rayonにはカスタムjobのためのAPIとして`join`の他に [`scope`](https://docs.rs/rayon/1.0.1/rayon/fn.scope.html)も用意されています。こちらは2つとは限らずに好き勝手タスクを`spawn`できるので自由度が高いです。なんなら`scope`を用いて`join`を実装することも可能です。
 
-しかし可能な限り`join`の方を使えとあります。`join`の方がWork Stealingに併せたAPIなのでこっちの方が内部実装が高速だとのこと。
+しかし可能な限り`join`の方を使えとあります。`join`の方がWork Stealingに合わせたAPIなのでこっちの方が内部実装が高速だとのこと。
 上記の通り恐らくrayonはWork Stealingを前提に作られているので`join`が本体で`scope`は副産物なのでしょう。
 
 # ベンチマーク
@@ -388,11 +388,11 @@ test bench_min_max_rayon     ... bench:     412,036 ns/iter (+/- 89,327)
 
 # `join` と分割統治
 
-`join`の素晴らしい点は思考のフレームワークにもなっている点ですね。
+`join`の素晴らしい点は思考のフレームワークにもなっている点です。
 小さな問題に分割して解いて、その解を組み合わせて全体の問題を解く。分割統治って言うらしいです。
 クイックソートやマージソートがよく知られる例ですね。私はアルゴリズムに詳しいわけでは無いので細かな点は近日中にネットに出没するらしい詳しい記事に譲るとします。
 
-たとえば最大上位者数問題、つまり全ての要素の中での「自身より右側にあって自身より大きい要素の数(上位者数)」の最大値を求める問題は素朴にはこう書けます。
+この例の他にはたとえば最大上位者数問題、つまり全ての要素の中での「自身より右側にあって自身より大きい要素の数(上位者数)」の最大値を求める問題は素朴にはこう書けます。
 
 ``` rust
 fn msc<T: PartialOrd + Send + Sync>(v: &[T]) -> usize {
@@ -470,7 +470,7 @@ fn join<'a, 'v, T: PartialOrd + Send + Sync>(
 * このブログの大半の内容はrayonの[作者による解説](http://smallcultfollowing.com/babysteps/blog/2015/12/18/rayon-data-parallelism-in-rust/)でカバーされています。
 * `min_max` の例は[アルゴリズムイントロダクション](https://www.amazon.co.jp/dp/476490408X)から採りました
 * 最大上位者数問題は[関数プログラミング 珠玉のアルゴリズムデザイン](https://www.amazon.co.jp/dp/4274050645/)から採りました
-* 今回用いたコードは[こちら](https://github.com/KeenS/rayon-playground)
+* 今回用いたコードは[こちら](https://github.com/KeenS/rayon-playground)にあります。
 * 以下にチューニングの結果を示します。閾値を小さくするとオーバーヘッドが無視出来ず、大きくすると並列性能が出ないことが見て取れると思います。
   データが多くて見づらいですがラベルをクリックするとデータ毎に表示/非表示を切り替えられるので色々比べてみて下さい。
 
