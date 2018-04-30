@@ -8,19 +8,29 @@
         <meta name="twitter:card" content="summary" />
         <meta name="twitter:site" content="@blackenedgold" />
         <meta name="twitter:title" content="Onigmoを最大49%高速化した話 | κeenのHappy Hacκing Blog"/>
-        <meta name="twitter:description" content="" />
+        <meta name="twitter:description" content="κeenです。Rubyでも使われてる高速な正規表現エンジン、Onigmo(鬼雲)を高速化したのでその話を。 先日、正規表現技術入門を読んだというエントリの中で
+ ところで本に載ってた鬼雲のコードはDT(編注: Direct Threaded)にしてなかったけど簡単のためなのかな？あるいは厳格にC89に準拠するため？picrinみたくプリプロセッサで分岐すれば使えるのに。
+ と書いたところ、鬼雲の作者、K.Takataさんから
+@k_takata 「picrinみたくプリプロセッサで分岐すれば使えるのに。」これも知らなかった。
+&mdash; K.Takata (@k_takata) 2015, 5月 11 
+という反応を頂きました。そしてイシューにも乗ったので言い出しっぺとして実装してみました。こちらのプルリクです。
+Direct Threaded VM自体の解説はRubyist Magazineに載っている笹田さんのものが詳しいようです Rubyist Magazine - YARV Maniacs 【第 3 回】 命令ディスパッチの高速化
+実装は少し技巧的ですがwhile, switch, case, break, continueなどをマクロでラップしつつDT VMが有効ならそれらと互換性のあるDT用のコード（gotoやラベル）に展開します。元はpicrinで使われていたテクニックです。 このコードは @wasabizが書いたものなのでpicrinがどこを参考にして書かれたかは@wasabizに聞いて下さい。もしかしたらわさびずの発明かもしれませんね。
+で、パフォーマンスの方ですが、最初、素直に制御命令を1つづつマクロで書き換えたのですが、こうなりました。
+master
+ パターン時間 Twain47 ms ^Twain47 ms Twain$47 ms Huck[a-zA-Z]&#43;|Finn[a-zA-Z]&#43;127 ms a[^x]{20}b1172 ms Tom|Sawyer|Huckleberry|Finn151 ms .{0,3}(Tom|Sawyer|Huckleberry|Finn)497 ms [a-zA-Z]&#43;ing4032 ms ^[a-zA-Z]{0,4}ing[^a-zA-Z]96 ms [a-zA-Z]&#43;ing$4175 ms ^[a-zA-Z ]{5,}$1770 ms ^.{16,20}$1757 ms ([a-f](.[d-m].){0,2}[h-n]){2}1849 ms ([A-Za-z]awyer|[A-Za-z]inn)[^a-zA-Z]656 ms &#34;" />
 
         <title>Onigmoを最大49%高速化した話 | κeenのHappy Hacκing Blog</title>
         <link rel="stylesheet" href='//fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css' />
-        <link rel="stylesheet" href="/libraries/normalize.3.0.1.css" />
-        <link rel="stylesheet" href="/css/liquorice.css" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-        <link rel="icon" type="image/png" href="/favicon-32x32.png" sizes="32x32">
-        <link rel="icon" type="image/png" href="/favicon-16x16.png" sizes="16x16">
-        <link rel="manifest" href="/manifest.json">
-        <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#5bbad5">
+        <link rel="stylesheet" href="//KeenS.github.io/libraries/normalize.3.0.1.css" />
+        <link rel="stylesheet" href="//KeenS.github.io/css/liquorice.css" />
+        <link rel="apple-touch-icon" sizes="180x180" href="//KeenS.github.io/apple-touch-icon.png">
+        <link rel="icon" type="image/png" href="//KeenS.github.io/favicon-32x32.png" sizes="32x32">
+        <link rel="icon" type="image/png" href="//KeenS.github.io/favicon-16x16.png" sizes="16x16">
+        <link rel="manifest" href="//KeenS.github.io/manifest.json">
+        <link rel="mask-icon" href="//KeenS.github.io/safari-pinned-tab.svg" color="#5bbad5">
         <meta name="theme-color" content="#ffffff">
-        <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon-144-precomposed.png" sizes="144x144" />
+        <link rel="apple-touch-icon-precomposed" href="//KeenS.github.io/apple-touch-icon-144-precomposed.png" sizes="144x144" />
         <link rel="alternate" href="" type="application/rss+xml" title="κeenのHappy Hacκing Blog" />
         
         <script>
@@ -34,8 +44,8 @@
 
         </script>
         
-        <link rel="stylesheet" href="/highlight.js/styles/monokai.css" />
-<script src="/highlight.js/highlight.min.js"></script>
+        <link rel="stylesheet" href="//KeenS.github.io/highlight.js/styles/monokai.css" />
+<script src="//KeenS.github.io/highlight.js/highlight.min.js"></script>
 <script>hljs.initHighlightingOnLoad();</script>
 <script type="text/x-mathjax-config">
  MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
@@ -53,18 +63,18 @@
         <div class="row">
             <div class="sixteen columns">
                 <div class="li-brand li-left">
-                <a href="/">κeenのHappy Hacκing Blog</a> | Lispエイリアンの狂想曲</div>
+                <a href="//KeenS.github.io/">κeenのHappy Hacκing Blog</a> | Lispエイリアンの狂想曲</div>
                 <div class="li-menu li-right">
                     <span class="li-menu-icon" onclick="javascript:toggle('menu');">&#9776;</span>
                     <ul id="menu2" class="li-menu-items">
                         
-                            <li><a href="/about/"> About </a></li>
+                            <li><a href="//KeenS.github.io/about/"> About </a></li>
                         
-                            <li><a href="/index.xml"> Atom </a></li>
+                            <li><a href="//KeenS.github.io/index.xml"> Atom </a></li>
                         
-                            <li><a href="/post/"> Blog </a></li>
+                            <li><a href="//KeenS.github.io/post/"> Blog </a></li>
                         
-                            <li><a href="/slide/"> Slide </a></li>
+                            <li><a href="//KeenS.github.io/slide/"> Slide </a></li>
                         
                     </ul>
                 </div>
@@ -74,13 +84,13 @@
             <div class="sixteen columns">
                 <ul id="menu" class="li-menu-items li-menu-mobile">
                     
-                        <li><a href="/about/"> About </a></li>
+                        <li><a href="//KeenS.github.io/about/"> About </a></li>
                     
-                        <li><a href="/index.xml"> Atom </a></li>
+                        <li><a href="//KeenS.github.io/index.xml"> Atom </a></li>
                     
-                        <li><a href="/post/"> Blog </a></li>
+                        <li><a href="//KeenS.github.io/post/"> Blog </a></li>
                     
-                        <li><a href="/slide/"> Slide </a></li>
+                        <li><a href="//KeenS.github.io/slide/"> Slide </a></li>
                     
                 </ul>
             </div>
@@ -104,7 +114,7 @@
     <ul class="li-article-tag">
     
         <li>
-            <a href="/categories/%e6%ad%a3%e8%a6%8f%e8%a1%a8%e7%8f%be">正規表現</a>
+            <a href="//KeenS.github.io/categories/%e6%ad%a3%e8%a6%8f%e8%a1%a8%e7%8f%be">正規表現</a>
         </li>
     
 </ul>
@@ -290,7 +300,7 @@
                 <div class="li-pagination-previous">
                     
                         Later article<br />
-                        <a href="/blog/2015/05/29/daiikkyuuraberuwomotanaigengoniokerudirect_threaded_vmnojissou/"> 第一級ラベルを持たない言語におけるDirect Threaded VMの実装</a>
+                        <a href="//KeenS.github.io/blog/2015/05/29/daiikkyuuraberuwomotanaigengoniokerudirect_threaded_vmnojissou/"> 第一級ラベルを持たない言語におけるDirect Threaded VMの実装</a>
                     
                 </div>
             </div>
@@ -298,7 +308,7 @@
                 <div class="li-pagination-next">
                     
                         Older article<br />
-                        <a href="/blog/2015/05/24/yuureikatawoshitta/"> 幽霊型を知った</a>
+                        <a href="//KeenS.github.io/blog/2015/05/24/yuureikatawoshitta/"> 幽霊型を知った</a>
                     
                 </div>
             </div>
