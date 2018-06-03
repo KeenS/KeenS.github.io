@@ -116,11 +116,11 @@ y_k = \sum^{N-1}\_{j=0} x_j e^{-2\pi{}i\frac{jk}{N}}
 フーリエ変換なのである種の周期関数の周期を発見できます。たとえば互いに素な$x$と$N$に対して
 
 \\\[
-x^r \equiv 1 \(\mod N\)
+x^r \equiv 1 \pmod{N}
 \\\]
 
 を満たすような最小の正整数$r$を見つけることができます(こういう$r$を位数といいますね)。
-これの周期性は$f(n) = x^n \mod N$とすれば$f(n+r) = x^{n+r} \mod N = x^n \mod N = f(n)$から分かるかと思います。
+これの周期性は$f(n) = x^n \pmod{N}$とすれば$f(n+r) = x^{n+r} \pmod{N} = x^n \pmod{N} = f(n)$から分かるかと思います。
 教科書にはこれを量子フーリエ逆変換で求めるために周期$r$の計算を作ったり(剰余指数化)$r$に依存せずに固有ベクトルの和を作ったり(演習5.13)(正n角形の重心は原点みたいな話)観測した位相から$r$を復元したり(連分数展開)、と回路の構築に必要な構成方法が載っています。
 
 さらに、位数が効率的に分かるならばそれをオラクル的に扱って古典的アルゴリズムで素因数分解が可能です(shorのアルゴリズム)。
@@ -138,7 +138,11 @@ x^r \equiv 1 \(\mod N\)
 5章は演習問題は紙には解かずに頭の中で考えるだけにしたが読むのは格段に速くなった。しかしプログにまとめるのが遅くなった。この辺うまくバランスを取りたい。
 
 # その他
-$x^r \equiv 1 \(\mod N\)$のレンダリングがキモいんですがそういうものですか？
+~~$x^r \equiv 1 \pmod{N}$のレンダリングがキモいんですがそういうものですか？~~  
+追記  
+<blockquote class="twitter-tweet" data-conversation="none" data-lang="ja"><p lang="ja" dir="ltr">(mod N)は \pmod{N}と書けば綺麗になるはずです</p>&mdash; koba(社畜化待ったなし) (@kobae964) <a href="https://twitter.com/kobae964/status/997828222900301826?ref_src=twsrc%5Etfw">2018年5月19日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>  
+/ 追記
 
 
 文章内でケットを表記するにあたって以下の記事を参考にしました。yyuさんありがとうございます。
