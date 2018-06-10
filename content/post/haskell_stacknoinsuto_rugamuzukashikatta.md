@@ -1,11 +1,13 @@
 ---
 categories: [Haskell]
 date: 2018-06-03T12:08:45+09:00
-title: "haskell stackのインストールが難しかった"
+title: "ghc-modのインストールが難しかった"
 ---
 詳しい経緯は省きますがHaskellを書こうとしたらghc-modが新しいマシンに入ってなく、新規に入れようとしたら躓いたので解決方法をネットの海に投げておきます。
 
 cabalを使うと解決しそうな気がしますがdependency hellはもう懲り懲りなのでstackしか使わない縛りでやってます。
+
+2018-06-05 追記: タイトルを直しました。URLは据え置きます /追記
 <!--more-->
 
 大本は[これ](https://github.com/DanielG/ghc-mod/pull/922#issuecomment-353896120)なのですが[このパッチ](https://github.com/DanielG/ghc-mod/pull/927)の影響でさらにで1行だけ変更が入ります。
