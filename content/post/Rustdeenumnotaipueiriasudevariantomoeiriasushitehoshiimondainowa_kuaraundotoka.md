@@ -57,26 +57,17 @@ mod IntFoo {
 
 ただし問題が2つある。1つ目はシンプルにコンパイルエラーになる点。型名とモジュール名は被ってはいけないらしい。というかモジュールって型名空間に入るんだ。
 
-<code>
-<pre><font color="#EF2929"><b>error[E0428]</b></font><b>: the name `IntFoo` is defined multiple times</b>
+<code class="nohighlight">
+<pre><font color="#EF2929"><b>error[E0428]</b></font><b>: the name \`IntFoo\` is defined multiple times</b>
  <font color="#729FCF"><b>--&gt; </b></font>enum_typename.rs:9:1
   <font color="#729FCF"><b>|</b></font>
 <font color="#729FCF"><b>7</b></font> <font color="#729FCF"><b>| </b></font>type IntFoo = Foo&lt;i64&gt;;
-  <font color="#729FCF"><b>| -----------------------</b></font> <font color="#729FCF"><b>previous definition of the type `IntFoo` here</b></font>
+  <font color="#729FCF"><b>| -----------------------</b></font> <font color="#729FCF"><b>previous definition of the type \`IntFoo\` here</b></font>
 <font color="#729FCF"><b>8</b></font> <font color="#729FCF"><b>| </b></font>
 <font color="#729FCF"><b>9</b></font> <font color="#729FCF"><b>| </b></font>mod IntFoo {
-  <font color="#729FCF"><b>| </b></font><font color="#EF2929"><b>^^^^^^^^^^</b></font> <font color="#EF2929"><b>`IntFoo` redefined here</b></font>
+  <font color="#729FCF"><b>| </b></font><font color="#EF2929"><b>^^^^^^^^^^</b></font> <font color="#EF2929"><b>\`IntFoo\` redefined here</b></font>
   <font color="#729FCF"><b>|</b></font>
-  <font color="#729FCF"><b>= </b></font><b>note</b>: `IntFoo` must be defined only once in the type namespace of this module
-
-<font color="#EF2929"><b>error[E0601]</b></font><b>: `main` function not found in crate `enum_typename`</b>
-  <font color="#729FCF"><b>|</b></font>
-  <font color="#729FCF"><b>= </b></font><b>note</b>: consider adding a `main` function to `enum_typename.rs`
-
-<font color="#EF2929"><b>error</b></font><b>: aborting due to 2 previous errors</b>
-
-<b>Some errors occurred: E0428, E0601.</b>
-<b>For more information about an error, try `rustc --explain E0428`.</b>
+  <font color="#729FCF"><b>= </b></font><b>note</b>: \`IntFoo\` must be defined only once in the type namespace of this module
 </pre>
 </code>
 
