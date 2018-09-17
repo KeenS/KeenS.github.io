@@ -1,16 +1,17 @@
 ---
 categories: ["ML", "OCaml", "言語処理系", "compiler"]
 date: 2018-09-16T01:26:15+09:00
-description:
-title: "Inside Pattern Machings"
+description: "ML Day #2 での発表用。パターンマッチの実装について"
+title: "Inside Pattern Matchings"
 ---
 <section data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
 <script type="text/template">
-# Inside Pattern Machings
+# Inside Pattern Matchings
 ----------------------
+[ML Day #2](https://ml-lang.connpass.com/event/94284/)
 
 <!-- .slide: class="center" -->
 ===
@@ -46,12 +47,16 @@ title: "Inside Pattern Machings"
   + 「コードを生成」が割と厄介
   + 次の中間言語の設計に影響を与える
     - というか専用の中間言語作るくらいの心意気が必要
+
+===
+# 発表について
+-------------
 * 既存手法を調べたら非自明だった
   + → 既存手法の紹介だけでも価値がありそう
   + → 発表するか
   + (本当は実装までしたかったけど進捗だめです)
 * 変数束縛の話はしない
-
+  + ワイルドカードで我慢して
 
 ===
 # パターンについて
@@ -97,7 +102,7 @@ if (lx == [] && true) {
   return 1;
 } else if (true && ly == []) {
   return 2;
-} else if (lx == [] &&  ly == []) {
+} else if (lx == (::) &&  ly == (::)) {
   // discriminantとデータは別
   x = lx.0;
   xs = lx.1;
@@ -137,7 +142,7 @@ swith(lx) {
 ```
 
 ===
-# dicision tree
+# decision tree
 --------------
 
 * パターンから決定木を作る
@@ -150,7 +155,7 @@ swith(lx) {
 * X コードが嵩む(パターンがコピーされうる)
 
 ===
-# dicision tree
+# decision tree
 --------------
 
 * 最初に実装しようとした
@@ -158,7 +163,7 @@ swith(lx) {
   + 主にデータの持ち方の問題
   + 1つの節の中にネストさせるパターンを集めるのが大変
 * 直積とパターンのネストどっちを先にやるかは調べてない
-* ORパターンを入れるとdicision diagramになりそう？
+* ORパターンを入れるとdecision diagramになりそう？
   + CFGが欲しくなる
 
 ===
@@ -193,7 +198,7 @@ with (failwith "Patrtial match")
   + パターンの並びのままprefixが共通なら共有する
   + 例外とハンドラを使う
 * O コードがコンパクト(パターンはコピーされない)
-* X dicision treeほど速くない
+* X decision treeほど速くない
 * O 最適化ができる
   + まずは動くものを作ってあとで高速化
 
@@ -261,7 +266,7 @@ with (failwith "Patrtial match")
   + intも無限の直和からなるとする
 * 値はコンストラクタで作られる
   $v ::= c(v1, .., vn)$
-* $パターンへの入力はベクトルで与えられる
+* パターンへの入力はベクトルで与えられる
   $\vec{v} = (v_1 \cdots v_n)$
 
 ===
@@ -270,8 +275,8 @@ with (failwith "Patrtial match")
 ## パターン
 
 * パターンは2つ $p ::=$
-  + $\mathbf{_}$ (ワイルドカード)
-  + $c(p1, .., pn)$ (コンストラクタ)
+  + $\mathbf{\\\_}$ (ワイルドカード)
+  + $c(p_1, .., p_n)$ (コンストラクタ)
 * パターンもベクトルになる
   $\vec{p} = (p_1 \cdots p_n)$
 
@@ -296,8 +301,8 @@ case (lx, ly) of
 \begin{equation\*}
 (P \to L) = \begin{pmatrix}
 [] & \mathbf{\\\_}  & → & 1 \\\\  
-\mathbf{\\\_} & [] & → & 1 \\\\  
-(::) & (::) & → & 1
+\mathbf{\\\_} & [] & → & 2 \\\\  
+(::) & (::) & → & 3
 \end{pmatrix}
 \end{equation\*}
 \\]
@@ -406,7 +411,7 @@ switch x1 with
 -------
 ## (b)コンストラクタ則
 * コンストラクタ $c$ に特殊化された節行列$\mathcal{S}(c, P \to L)$を次のように定義する
-  + $p^i_1 = c(q^i1, \cdots, q^i_a)$のとき$q^1\_2 \cdots q^1\_a p^1\_2 \cdots p^1\_n \to l^1$
+  + $p^i_1 = c(q^i_1, \cdots, q^i_a)$のとき$q^i\_2 \cdots q^i\_a p^i\_2 \cdots p^i\_n \to l^i$
   + $p^i_1$ が $c^{\prime} \not= c$ のときナシ
 * 各コンストラクタの腕を以下のようにする
 
@@ -438,6 +443,8 @@ catch
   C(\vec{x}, P_1 → L_1)
 with C(\vec{x}, P_2 → L_2)
 ```
+
+===
 
 # 例
 ----
@@ -480,7 +487,7 @@ catch
       case []: C((ly), (_ → 1))
       default: exit
   with catch
-      C((ly), (_ → 2))
+      C((ly), ([] → 2))
   with switch lx with
          case (::): C((ly), (y::ys → 3))
          default: exit
@@ -503,7 +510,7 @@ catch
       case []: C((), (→ 1))
   with catch
     switch ly with
-      case []: C((), (→ 1))
+      case []: C((), (→ 2))
       default: exit
   with switch lx with
          case (::): switch ly with
@@ -528,7 +535,7 @@ catch
       default: exit
   with catch
     switch ly with
-      case []: 1
+      case []: 2
       default: exit
   with switch lx with
          case (::): switch ly with
