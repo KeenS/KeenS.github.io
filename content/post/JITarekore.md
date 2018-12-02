@@ -4,10 +4,12 @@ date: 2018-12-01T19:20:40+09:00
 title: "JITあれこれ"
 ---
 κeenです。遅刻してしまいましたがこのエントリーは [言語実装 Advent Calendar 2018](https://qiita.com/advent-calendar/2018/lang_dev) 1日目の記事です。
-最近私の観測範囲内でJITが流行っているのですが一口にJITと言っても色々あるよなーと思ったので私がJITについて知っていることをグダクダ話ます。
+最近私の観測範囲内でJITが流行っているのですが一口にJITと言っても色々あるよなーと思ったので私がJITについて知っていることをグダクダ話します。
 <!--more-->
 
 このブログでも何度がJITや周辺技術について取り上げてますが話の流れがスムーズになるので最初から説明していきます。
+
+2018-12-03: 加筆修正しました。差分は[こちら](https://github.com/KeenS/KeenS.github.io/commit/55eea979857879be6f09ef7c52836c29ebedb725#diff-4ca9c4059b3670fab6b5d3a3e1eecc36)
 
 # JITって？
 Just in Time(コンパイル)のことで、日本語にすると「間に合ってコンパイル」になりますかね。
@@ -459,14 +461,14 @@ result of fib: 24157817
 ```
 
 元のVMから比べて $ (2.45 - 1.52) / 2.45 = 0.379... $ 38%の高速化です。
-因みにThreaded VMから比べると $ (1.61 - 1.52) / 61 = 0.055... $ 6%の高速化です。
+因みにThreaded VMから比べると $ (1.61 - 1.52) / 1.61 = 0.055... $ 6%の高速化です。
 わずかながら高速化しました。
 
 それでもまだ、ジャンプが1つ残っています。
 メソッド定義時点で次に実行するコードは分かっているのでした。
 残ったジャンプも取り除けないでしょうか。
 
-## シンプルなJIT
+## なんちゃってJIT
 
 ジャンプが嫌ならコードをくっつけてしまえばいいのです。
 VM命令に対応するネイティブコード片を集めてきて1箇所のメモリに書き込めばジャンプが消えます。
@@ -537,6 +539,66 @@ Command terminated by signal 11
 
 動かないのは置いておいて、もし動いたとしたらこれは理想的なコードでしょうか。
 これは最適化されたコードをくっつけています。でもやっぱり、くっつけた後に最適化したいですよね？
+たとえば以下のような命令列は
+
+``` c
+IP_INST_GET_LOCAL(0),
+IP_INST_GET_LOCAL(1),
+IP_INST_SUB(),
+```
+
+コードの並びとしてはこのようになります。
+
+``` c
+{
+  ip_value_t v;
+
+  v = LOCAL(0);
+
+  PUSH(v);
+}
+{
+  ip_value_t v;
+
+  v = LOCAL(1);
+
+  PUSH(v);
+}
+{
+  ip_value_t v1, v2, ret;
+  long long int x, y;
+
+  POP(&v1);
+  POP(&v2);
+  y = IP_VALUE2LLINT(v1);
+  x = IP_VALUE2LLINT(v2);
+
+  ret = IP_LLINT2VALUE(x - y);
+
+  PUSH(ret);
+
+}
+```
+
+でも、 `PUSH` して `POP` と無駄を挟んでいるので最適化して
+
+``` c
+ip_value_t v1, v2, ret;
+long long int x, y;
+
+v1 = LOCAL(0);
+v2 = LOCAL(1);
+
+y = IP_VALUE2LLINT(v1);
+x = IP_VALUE2LLINT(v2);
+
+ret = IP_LLINT2VALUE(x - y);
+
+PUSH(ret);
+```
+
+のように短くできるはずです。
+これはコード同士の並びがわからないとできないのでくっつけたあとに最適化したいですよね。
 
 ## コンパイラを使ったJIT
 
@@ -617,9 +679,11 @@ run(struct ip_vm *vm)
 }
 ```
 
-これをコンパイルしたら望み通りコードをくっつけた後にコンパイルすることができます。
-コンパイルしたあとはDLLを作ってロードしてあげれば実行できます。
-このあたりの話はやはり2015年のAdvent Calendarに[書いた](https://keens.github.io/blog/2015/12/12/sml_nimanabukonpairagengoniokerureplnojissouhouhou/)ので参考にして下さい。
+これをコンパイルしたら望み通りコードをくっつけた後にコンパイルすることができます。目標達成です。
+
+ところ実行中にCコンパイラを呼んで新しい実行可能ファイルを作ったところでどう実行するんだと思うかもしれません。
+これはDLLを作ってロードしてあげれば実行できます。
+そういう話は話はやはり2015年のAdvent Calendarに[書いた](https://keens.github.io/blog/2015/12/12/sml_nimanabukonpairagengoniokerureplnojissouhouhou/)ので参考にして下さい。
 
 これも実装してみようとしましたが先のJITの例が動かなかったので萎えて書いてないです。
 ちゃんと実装したら多分動きます。
@@ -631,14 +695,23 @@ run(struct ip_vm *vm)
 やっぱり、実行中にCコンパイラのプロセスを呼ぶのは筋が悪いです。
 外部システムに依存しますしプロセスの起動はそこそこ重い処理です。
 最適化もCのセマンティクスを通すので本来処理系が知ってるはずの情報が落ちたりもします。
-さらにDLLにしてロードというだけでオーバーヘッドがあります。
+さらにDLLにしてロードというだけで時間的にも空間的にもオーバーヘッドがあります。
 そこを気にしだすとインメモリでアセンブルして自前でコード生成になったりします。
 
 ならば、とLLVMを使う例もありますがLLVMはコンパイラ向けの中間言語を使うので軽い気持ちで使うと思ったより面倒なことになるでしょう。
 LLVMを使ってJITをしていたRubyのRubiniusやPythonのPystonが奮わないのもそのせいかもしれません。あとLLVMつらいらしい(あんまりLLVM使ったことがないので伝聞)。
 
+あるいはアセンブラを直接書けるとその処理系に特化したコード生成できたりします。
+Common LispだとCのコードを吐いてコンパイルする処理系にECLというのがありますが、ほとんどのベンチマークで、自分でアセンブラまで持ってるSBCLより遅いです。
+これはCコンパイラが弱い訳ではなくてSBCLがかなり工夫を凝らした実装をしているからです。
+たとえば多値と単値を区別するのにキャリーフラグを使っておりレジスタ使用量を抑えたりしています。この話題は最近[話した](https://keens.github.io/slide/common_lispnotachitosonojissoutachi/)ので良かったら見てみて下さい。
+
+歴史あるCommon Lisp処理系のSBCLは様々なプラットホーム向けに頑張ってアセンブラを実装していますが流石にそこまでやれる処理系はそう多くないでしょう。ライブラリの助けを借りることになります。
 JITライブラリもいくつかあります。LibJITやGNU Lightning、もう少し軽いのならXbyakなど。あとLuaJITのやつなんだっけ。
 
+ツールは主眼であった問題を解決してくれますが、今度はツールを上手く使いこなすという問題がでます。
+たとえば命令の並びが決定すると `PUSH` と `POP` が減らせるという話もメモリが絡む最適化はCコンパイラが苦手とするところなのでやってくれないかもしれません。
+結局は作者側での工夫が必要でしょう。
 
 # JITを超えた先へ
 
@@ -671,7 +744,7 @@ JITの常識を超えてみましょう。何があるでしょうか。
 一見良さそうなアイディアですが今までの方式と比べて大きな技術的トレードオフがあります。
 VMとコンパイルされるコード、2種類のインタプリタを実装する必要があるのです。
 これは手間なだけではなく両者で挙動が違うと、たとえば256回実行すると結果が変わるバグなどになります。
-この大きなトレードオフにも関わらず適応的JITを選択するケースが多いようです(要出典)。みなさん頑張りやさんですね。
+この大きなトレードオフにも関わらず適応的コンパイルを選択するケースが多いようです(要出典)。みなさん頑張りやさんですね。
 
 
 ## Tracing JIT
@@ -758,7 +831,7 @@ JUMP(3)
 ifのthen節がよく実行されるならthen節のみのトレースが出てくるのでifの条件節が常にtrueであることを前提に最適化できます。
 たとえば `if x isinstanceof Int` がtrueならば以後は動的型チェックを省いて実行できたりします。
 
-しかしやはりこれにもトレードオフが入ります。
+しかしやはりこれにもトレードオフが入ります。これも適応的コンパイルの一種なので適応的コンパイルのデメリットはそのまま残りますが、さらなるデメリットがあります。
 メソッドの実行途中でVMから抜けてネイティブコードになったりネイティブコードを実行してたら急にVMに戻ったりするわけです。
 そういう橋渡しがかなり難しいと聞きます。
 が、私は詳しくないので詳しい方に説明をゆずります。言語実装 Advent Calendarの続きにご期待下さい。
@@ -779,4 +852,91 @@ ifのthen節がよく実行されるならthen節のみのトレースが出て�
 * とはいえ過去に数十%の高速化に成功したこともあるので場合によりけり。 CF [Onigmoを最大49%高速化した話](https://keens.github.io/blog/2015/05/26/onigmowosaidai49_kousokukashitahanashi/)
   + 余談ですが当時Threaded VMとDirect Threaded VMの違いを分かってなかったのでThreaded VMなのにDirect Threaded VMと呼んでしまってます。
 * ラベルとラベルの間のコードをコピーするJITの話はOracle Labのどこかのスライドで見た記憶から実装しましたが思い出せませんでした。
+* マクロを定義してCコードを生成するのは確かmoclで見た気がします。恐らくKCLの頃からやってるんじゃないでしょうか。
+* JITにCコンパイラを使うと無駄が多いという話をしましたがRubyのJITは色々工夫を凝らしているようです。言語実装 Advent Calendarの最終日にその話があるようなので期待しましょう。
 
+# 付録
+
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">JITあれこれ <a href="https://t.co/pwdpM5jzVA">https://t.co/pwdpM5jzVA</a> 分かりやすくて丁寧なJITの解説。私が試した時は、Threaded VMはそれほど速くならなかった気がするので、使ったコンパイラとOSを書いてくれるとより良いかなと思った</p>&mdash; Miura Hideki (@miura1729) <a href="https://twitter.com/miura1729/status/1069053214190841856?ref_src=twsrc%5Etfw">2018年12月2日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+確かにそうですね。本文中でベンチマークを取った環境は以下です。
+
+* コンパイラ: gcc (Ubuntu 8.2.0-7ubuntu1) 8.2.0
+* OS: Ubuntu 18.10
+* CPU: AMD Ryzen Threadripper 1950X 16-Core Processor
+
+AMDマシンですね。
+
+ところで私はもう一つマシンを持ってるのでこちらでもベンチマークをしてみます。
+
+* コンパイラ: gcc (Ubuntu 7.3.0-27ubuntu1~18.04) 7.3.0
+* OS: Ubuntu 18.04
+* CPU: Intel(R) Core(TM) i7-4910MQ CPU @ 2.90GHz
+
+こちらはIntelマシンです。ベンチマークの結果はこうなりました。
+
+``` console
+$ time ./main_simple
+result of fib: 24157817
+1.23user 0.00system 0:01.24elapsed 99%CPU (0avgtext+0avgdata 1556maxresident)k
+$ time ./main_threaded
+result of fib: 24157817
+1.24user 0.00system 0:01.24elapsed 100%CPU (0avgtext+0avgdata 1552maxresident)k
+$ time ./main_direct_threaded
+result of fib: 24157817
+1.19user 0.00system 0:01.19elapsed 100%CPU (0avgtext+0avgdata 1532maxresident)k
+```
+
+
+うおー、Threaded VMで遅くなってる。
+コンパイラのバージョンとCPUの両方が変わってるのでわかりませんがIntel CPUの方が分岐予測が賢いかGCCのバージョンが上がって `while (){switch (){}}` のコンパイルが賢くなったか、あるいはそのどちらともでしょう。
+
+ところで、上記までのベンチマークは最適化オプションを `-O3` にしていました。アーキテクチャ間の差異が気になったので `-march=native` を付けて使っているCPU向けに最適化してみます。
+
+AMDマシン
+
+``` console
+$ time ./main_simple
+result of fib: 24157817
+1.66user 0.00system 0:01.66elapsed 99%CPU (0avgtext+0avgdata 1612maxresident)k
+0inputs+0outputs (0major+68minor)pagefaults 0swaps
+$ time ./main_threaded
+result of fib: 24157817
+1.60user 0.00system 0:01.61elapsed 99%CPU (0avgtext+0avgdata 1548maxresident)k
+0inputs+0outputs (0major+67minor)pagefaults 0swaps
+$ time ./main_direct_threaded
+result of fib: 24157817
+1.50user 0.00system 0:01.50elapsed 99%CPU (0avgtext+0avgdata 1536maxresident)k
+0inputs+0outputs (0major+66minor)pagefaults 0swaps
+```
+
+Intelマシン
+
+
+``` c
+$ time ./main_simple
+result of fib: 24157817
+1.21user 0.00system 0:01.21elapsed 100%CPU (0avgtext+0avgdata 1488maxresident)k
+$ time ./main_threaded
+result of fib: 24157817
+1.23user 0.00system 0:01.23elapsed 99%CPU (0avgtext+0avgdata 1560maxresident)k
+$ time ./main_direct_threaded
+result of fib: 24157817
+1.22user 0.00system 0:01.22elapsed 99%CPU (0avgtext+0avgdata 1508maxresident)k
+```
+
+まとめてみます
+
+.                           | Simple VM | Threaded VM | vs Simple | Direct Threaded VM | vs Simple |
+:---------------------------|----------:|------------:|----------:|-------------------:|----------:|
+マシン1/`-O3`               |      2.45 |        1.61 |       34% |               1.52 |       38% |
+マシン1/`-O3 -march=native` |      1.66 |        1.60 |      3.6% |               1.50 |       10% |
+マシン2/`-O3`               |      1.23 |        1.24 |     -0.8% |               1.19 |      3.2% |
+マシン2/`-O3 -march=native` |      1.21 |        1.23 |     -1.7% |               1.22 |     -0.8% |
+
+マシン1 = AMD/Ubuntu 18.10/gcc 8.2.0  
+マシン2 = Intel/Ubuntu 18.04/gcc 7.3.0  
+
+
+参考になれば。
