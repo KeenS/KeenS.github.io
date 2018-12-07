@@ -7,6 +7,8 @@ title: Rustのモジュールの使い方
 κeenです。たまにRustのモジュールが分かりづらいとの声を聞くので解説しますね。
 
 <!--more-->
+※ [2018版](https://keens.github.io/blog/2018/12/08/rustnomoju_runotsukaikata_2018_editionhan/) も書きました。恐らくこちらの方が求める情報と思います。
+
 とりあえずサンプルプロジェクトを作ります。
 
 ```
