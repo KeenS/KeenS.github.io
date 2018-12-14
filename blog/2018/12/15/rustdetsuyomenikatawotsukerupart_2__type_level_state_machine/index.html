@@ -7,16 +7,15 @@
 
         <meta name="twitter:card" content="summary" />
         <meta name="twitter:site" content="@blackenedgold" />
-        <meta name="twitter:title" content="Rustで強めに型をつけるPart 1: New Type Pattern | κeenのHappy Hacκing Blog"/>
-        <meta name="twitter:description" content="このエントリはRustその2 Advent Calendar 2018 6日目の記事を時空を遡って書いています。
+        <meta name="twitter:title" content="Rustで強めに型をつけるPart 2: Type Level State Machine | κeenのHappy Hacκing Blog"/>
+        <meta name="twitter:description" content="このエントリはRustその2 Advent Calendar 2018 7日目の記事を時空を遡って書いています。
 
-κeenです。頭痛い。寝れない。寝れないので空いてる日の分を埋めに行きます。
-「Rustで強めに型をつける」シリーズではある程度有名なテクニックを紹介しようかと思います。
-みんな当たり前のように書くと知らない人はいつまで経っても知る機会が無いですからね。まずはNew Type Patternから。
+κeenです。寝れないので空いてる日の分を埋めに行きます。次はType Level State Machine。あるいはやりすぎてない方のBuilderバターン。
+過去記事で当たり前のように書いたコードをもう少し丁寧に説明します。
 
 " />
 
-        <title>Rustで強めに型をつけるPart 1: New Type Pattern | κeenのHappy Hacκing Blog</title>
+        <title>Rustで強めに型をつけるPart 2: Type Level State Machine | κeenのHappy Hacκing Blog</title>
         <link rel="stylesheet" href='//fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css' />
         <link rel="stylesheet" href="//KeenS.github.io/libraries/normalize.3.0.1.css" />
         <link rel="stylesheet" href="//KeenS.github.io/css/liquorice.css" />
@@ -104,7 +103,7 @@
             <div class="sixteen columns">
                 <article class="li-article">
                     <header class="li-article-header">
-                        <h1 class="li-article-title">Rustで強めに型をつけるPart 1: New Type Pattern</h1>
+                        <h1 class="li-article-title">Rustで強めに型をつけるPart 2: Type Level State Machine</h1>
                         <div class="li-article-meta">
     <time class="li-article-date">2018-12-15</time>
     <ul class="li-article-tag">
@@ -131,153 +130,118 @@
 
                     </header>
                     <section>
-                        <p>このエントリは<a href="https://qiita.com/advent-calendar/2018/rust2">Rustその2 Advent Calendar 2018</a> 6日目の記事を時空を遡って書いています。</p>
+                        <p>このエントリは<a href="https://qiita.com/advent-calendar/2018/rust2">Rustその2 Advent Calendar 2018</a> 7日目の記事を時空を遡って書いています。</p>
 
-<p>κeenです。頭痛い。寝れない。寝れないので空いてる日の分を埋めに行きます。
-「Rustで強めに型をつける」シリーズではある程度有名なテクニックを紹介しようかと思います。
-みんな当たり前のように書くと知らない人はいつまで経っても知る機会が無いですからね。まずはNew Type Patternから。</p>
+<p>κeenです。寝れないので空いてる日の分を埋めに行きます。次はType Level State Machine。あるいはやりすぎてない方のBuilderバターン。
+<a href="https://keens.github.io/blog/2017/02/09/rustnochottoyarisuginabuilderpata_n/">過去記事</a>で当たり前のように書いたコードをもう少し丁寧に説明します。</p>
 
 <p></p>
 
-<h1 id="基本">基本</h1>
+<p>以下のようなデータ型のビルダーを作りたいとします。</p>
 
-<p>例えば<a href="https://crates.io">crates.io</a>を作るとしましょう。エンティティがいくつかありますね。クレートやユーザなど。</p>
-
-<pre><code class="language-rust">struct Crate {
-    id: u64,
-    authors: Vec&lt;User&gt;,
-    // ...
-}
-
-struct Release {
-    id: u64,
-    crate_id: u64,
-}
-
-
-struct User {
-    id: u64,
-    // ...
-}
-
-</code></pre>
-
-<p>どのエンティティも大体 <code>id</code> フィールドを持つと思います。このような状況で以下の関数を見て下さい。</p>
-
-<pre><code class="language-rust">fn list_releases(id: u64) -&gt; Vec&lt;Release&gt; {
-    unimplemented!()
+<pre><code class="language-rust">#[derive(Debug)]
+struct Person {
+    id: u32,
+    name: String,
+    age: u32,
+    address: Option&lt;String&gt;,
+    zipcode: Option&lt;String&gt;,
 }
 </code></pre>
 
-<p>この <code>id</code> には何を渡すべきでしょうか。クレートのIDを渡してそのリリース一覧を取得する関数？それともユーザIDを渡してそのユーザがauthorのリリース一覧？
-パッとはわからないですね。
-この問題への対処は関数がおかしいとか仮引数の名前をちゃんとつけろだとかドキュメントを書けとか色々意見があるかと思いますが、我々の頼れるコンパイラに任せてしまうのがNew Type Patternです。
-まず、IDを表す型を導入します。</p>
+<p>ビルダは以下のように使いたいとします。</p>
 
-<pre><code class="language-rust">struct CrateId(u64);
-struct ReleaseId(u64);
-struct UserId(u64);
+<pre><code class="language-rust">let person = PersonBuilder::new()
+       .id(1)
+       .name(&quot;κeen&quot;.to_string())
+       .age(26)
+       .address(&quot;Tokyo&quot;.to_string())
+       .build();
 </code></pre>
 
-<p>そしてそれらを使います。</p>
+<p>このとき、 <code>Person</code> には <code>id</code>、<code>name</code>、<code>age</code>のフィールドは自明なデフォルト値を持たないので必須にしたいです。
+つまり少なくとも <code>.id()</code>、<code>.name()</code>、<code>.age()</code> の3つのメソッドを呼ばないと <code>.build()</code> を呼べないようにしたいです。さて、どうしましょう。</p>
 
-<pre><code class="language-rust">struct Crate {
-    id: CrateId,
-    authors: Vec&lt;User&gt;,
-    // ...
-}
+<p>3つのメソッドを呼ばないと<code>.build()</code>を実装した型がでてこないようにすればいいのです。
+型の話は置いておいて、ひとまず以下のようなステートマシンをイメージしましょう。</p>
 
-struct Release {
-    id: ReleaseId,
-    crate_id: CrateId,
-}
-
-
-struct User {
-    id: UserId,
-    // ...
-}
-
+<pre><code class="language-text">                                   .zipcode()
+                                   .address()
+                                  +----------+
+                                  |          |
+    .id()     .name()     .age()  v          | .build()
+(S)-------[1]---------[2]--------[3]---------+----------(E)
 </code></pre>
 
-<p>これで型からどのエンティティのIDを意図していたかが分かります。
-これで先程の関数を書き直すと、意図がはっきりします。</p>
+<p>メソッドを呼ぶ度そのラベルのついた状態に遷移すると思って下さい。
+<code>id</code>、<code>name</code>、<code>age</code> を呼ばないと <code>build</code> が呼べないですね。<code>zipcode</code> や <code>address</code> が複数回呼べてしまいますがまあ、それは目を瞑りましょう。
+これを型にエンコードします。遷移はメソッド呼び出しで表現します。</p>
 
-<pre><code class="language-rust">fn list_releases(id: CrateId) -&gt; Vec&lt;Release&gt; {
-    unimplemented!()
-}
-</code></pre>
-
-<p>ドキュメントや変数名など人に頼るのではなくコンパイラの型チェックに乗せた自動化された仕組みで正しさを保証できるようになりました。</p>
-
-<p>ところでこのバターン、別の見方もできます。IDの実装の隠蔽です。
-IDとは別に <code>u64</code> である必要はなくて、 <code>u32</code> かもしれませんし UUIDかもしれません。
-ユーザIDはGitHubのIDで持ってるかもしれません。 それを隠蔽するために新しい型を導入したとも見れます。</p>
-
-<h1 id="幽霊型">幽霊型</h1>
-
-<p>ところで先程の <code>XxxId</code> 、エンティティが増えたら <code>XxxId</code> も増えるのでしょうか。増えます。大体のID型に求められる実装は同じ(<code>Copy</code> を導出するなど)なのでコピペが捗りますね。
-これはマクロで対処することもできるのですが、もう少し楽に出来る方法があります。幽霊型(Phantom Type)を使う方法です。
-まず、IDの実体は以下のように定義されます。</p>
-
-<pre><code class="language-rust">use std::marker::PhantomData;
-
-#[derive(Copy, Clone, Debug, Hash, Default, PartialEq, Eq, Ord, PartialOrd)]
-struct Id&lt;T&gt; {
-    id: u64,
-    _phantom: PhantomData&lt;T&gt;
-}
-
-impl&lt;T&gt; Id&lt;T&gt; {
-    pub fn new(id: u64) -&gt; Self {
-        id,
-        _phantom: PhantomData,
+<pre><code class="language-rust">// Sに対応
+struct PersonBuilderId;
+impl PersonBuilderId {
+    pub fn new() -&gt; Self {
+        PersonBuilderId
     }
-
-    pub fn get(&amp;self) -&gt; u64 {
-        self.id
+    // idの次はname
+    pub fn id(self, id: u32) -&gt; PersonBuilderName {
+        PersonBuilderName { id: id }
     }
 }
+// 1に対応
+struct PersonBuilderName {
+    id: u32,
+}
+impl PersonBuilderName {
+    // nameの次はage
+    pub fn name(self, name: String) -&gt; PersonBuilderAge {
+        PersonBuilderAge {
+            id: self.id,
+            name: name,
+        }
+    }
+}
+// 2に対応
+struct PersonBuilderAge {
+    id: u32,
+    name: String,
+}
+impl PersonBuilderAge {
+    // ageは最後
+    pub fn name(self, age: u32) -&gt; PersonBuilder {
+        PersonBuilder {
+            id: self.id,
+            name: self.name,
+            age: age,
+            address: None,
+            zipcode: None,
+        }
+    }
+}
+// 3に対応
+struct PersonBuilder {
+    id: u32,
+    name: String,
+    age: u32,
+    address: Option&lt;String&gt;,
+    zipcode: Option&lt;String&gt;,
+}
 
+impl PersonBuilder {
+    pub fn new() -&gt; PersonBuilderId { ... }
+    pub fn address(self, address: String) -&gt; Self { ... }
+    pub fn zipcode(self, zipcode: String) -&gt; Self { ... }
+    pub fn build(self) -&gt; Person { ... }
+}
 </code></pre>
 
-<p>本来ならIDに必要ない <code>T</code> というパラメータが増えています。
-Rustは使われていない型パラメータを許さないので適当にダミーの値を作って型パラメータを消費します。そのためのデータ型が <code>PhantomData</code> です。
-これは型パラメータを消費するためだけの存在で、サイズを持ちません。
-これを使って先程の例はこう書けます。</p>
+<p>これで目的の「<code>id</code>、<code>name</code>、<code>age</code>が揃うまで<code>build</code>」が呼べないが達成されました。</p>
 
-<pre><code class="language-rust">struct Crate {
-    id: Id&lt;Crate&gt;,
-    authors: Vec&lt;User&gt;,
-    // ...
-}
+<p>因みにこのコードはRustの所有権を上手く使っています。各メソッドで <code>self</code> の所有権を取るので古い状態が消えるのが都合がいいんですね。
+こういう状態遷移はビルダーに限らず色々あると思います。例えばヘッダを書いてからボディを書きたいとか特定のメソッドを呼ぶとアクティブになって特定のメソッドを呼ぶとパッシブになるとか。
+そういうのの状態管理に使えると便利です。</p>
 
-struct Release {
-    id: Id&lt;Release&gt;,
-    crate_id: CrateId,
-}
-
-
-struct User {
-    id: Id&lt;User&gt;,
-    // ...
-}
-
-</code></pre>
-
-<p>内部実装は <code>u64</code> に固定されてしまいますが、実装を繰り返すことなくID型を定義できました。</p>
-
-<h1 id="ノート">ノート</h1>
-
-<ul>
-<li>New Type Pattternは公式のスタイルガイドにも<a href="https://doc.rust-lang.org/1.0.0/style/features/types/newtype.html">載っています</a></li>
-<li>IDに幽霊型を付けるアイディアはScala文化から借りました。元になったスライドはあるのですが今探したら見当たりませんでした。</li>
-<li>Rustの <code>PhantomData</code> の扱いは罠があるのですが詳しくは<a href="https://qnighy.hatenablog.com/entry/2018/01/14/220000">qnighyさんのブログ</a>を参考にして下さい。
-
-<ul>
-<li>因みにここの例は説明を省くために罠を踏んだ形になってます。注意。</li>
-</ul></li>
-</ul>
+<p>なんかあんまり丁寧な解説にならなかった</p>
                     </section>
                 </article>
             </div>
@@ -294,8 +258,7 @@ struct User {
             <div class="eight columns">
                 <div class="li-pagination-previous">
                     
-                        Later article<br />
-                        <a href="//KeenS.github.io/blog/2018/12/15/rustdetsuyomenikatawotsukerupart_2__type_level_state_machine/"> Rustで強めに型をつけるPart 2: Type Level State Machine</a>
+                        &nbsp;
                     
                 </div>
             </div>
@@ -303,7 +266,7 @@ struct User {
                 <div class="li-pagination-next">
                     
                         Older article<br />
-                        <a href="//KeenS.github.io/blog/2018/12/08/rustnomoju_runotsukaikata_2018_editionhan/"> Rustのモジュールの使い方 2018 Edition版</a>
+                        <a href="//KeenS.github.io/blog/2018/12/15/rustdetsuyomenikatawotsukerupart_1__new_type_pattern/"> Rustで強めに型をつけるPart 1: New Type Pattern</a>
                     
                 </div>
             </div>
