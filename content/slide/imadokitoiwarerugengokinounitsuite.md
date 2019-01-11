@@ -30,20 +30,14 @@ title: "イマドキと言われる言語機能について"
 # 最近っぽい言語
 ----------------
 
-言語     | 1.0リリース | 特徴
----------|------------|-------
- Go      |   2012     | goroutineが使えるシンプルな言語
- Rust    |   2015     | 安全なシステムプログラミング言語
- Swift   |   2014     | iOSアプリが作れる
- Scala   |   2004     | 関数型パラダイムを取り入れたJVM言語
- Kotlin  |   2016     | 整理されたJava
+言語              | 1.0リリース | 特徴
+:-----------------------------------------------|------------|:------
+ [Go](https://golang.org/)                      |   2012     | goroutineが使えるシンプルな言語
+ [Rust](https://www.rust-lang.org/)             |   2015     | 安全なシステムプログラミング言語
+ [Swift](https://developer.apple.com/jp/swift/) |   2014     | iOSアプリが作れる
+ [Scala](https://www.scala-lang.org/)           |   2004     | 関数型パラダイムを取り入れたJVM言語
+ [Kotlin](https://kotlinlang.org/)              |   2016     | 整理されたJava
 
-https://golang.org/
-https://www.rust-lang.org/
-https://developer.apple.com/jp/swift/
-https://www.scala-lang.org/
-https://clojure.org/
-https://kotlinlang.org/
 
 ===
 
@@ -53,7 +47,9 @@ https://kotlinlang.org/
 * 静的型付言語が増えてきた
   + 動的型付言語が主流だった反動？
 * 静的コンパイルする言語が増えてきた
+* インタプリタ言語にも速度が求められるようになってきた
 * 関数型言語の機能を取り入れるようになってきた
+* 速度やマルチコア対応が気にされ始めた
 * マルチタスクのサポートが増えてきた
 
 ===
@@ -61,7 +57,7 @@ https://kotlinlang.org/
 --------
 
 * 動的型付言語に(部分的に)静的型を入れるのが増えてきた
-  + [漸進的型付け (2016)](http://wphomes.soic.indiana.edu/jsiek/what-is-gradual-typing/)かな？
+  + [漸進的型付け (2006)](http://wphomes.soic.indiana.edu/jsiek/what-is-gradual-typing/)かな？
   + [TypeScript](https://www.typescriptlang.org/)
   + Pythonの[Type Hints](https://www.python.org/dev/peps/pep-0484/)
   + Ruby 3に型を入れたいらしい
@@ -86,6 +82,47 @@ function greeter(person: string) {
 * 型がかなり多機能 CF [TypeScriptで最低一つは必須なオプションオブジェクトの型を作る](https://qiita.com/uhyo/items/583ddf7af3b489d5e8e9)
 * 型のないコードも許容する
 
+===
+# Rustの `Option`
+-------
+
+``` rust
+pub enum Option<T> {
+    None,
+    Some(T),
+}
+
+let x: Option<u32> = Some(2);
+assert_eq!(x.is_some(), true);
+
+let x: Option<u32> = None;
+assert_eq!(x.is_some(), false);
+```
+
+===
+# Rustの `Option`
+-------
+
+* 代数的データ型で定義される
+* 特に `Option` が特別扱いされているわけではない
+
+
+===
+# KotlinのNull許容型
+--------
+
+``` kotlin
+val listWithNulls: List<String?> = listOf("Kotlin", null)
+for (item in listWithNulls) {
+    item?.let { println(it) } // prints A and ignores null
+}
+```
+
+===
+# KotlinのNull許容型
+--------
+
+* Nullable Typeのための構文が用意されている
 
 ===
 # 継承に依らないポリモーフィズム
@@ -94,14 +131,70 @@ function greeter(person: string) {
 * 今まで主流の言語は継承によるポリモーフィズムが多かった
   + Ruby, Perl, Python, Java, C++
 * それ以外の方法が増えてきた
- + [型クラス]()かな？
- + Scalaのトレイト
- + Scalaの貧者の型クラス, Rustのトレイト, Swift, Clojureのプロトコル
+ + [型クラス(1988)](https://people.csail.mit.edu/dnj/teaching/6898/papers/wadler88.pdf)とか構造的ポリモーフィズムとか
+ + Scalaの貧者の型クラス, Rustのトレイト
  + Goのインターフェース
 
 
 ===
-# Go
+# Rustのトレイト
+------
+
+``` rust
+struct Sheep { naked: bool, name: &'static str }
+
+trait Animal {
+    // Instance method signatures; these will return a string.
+    fn name(&self) -> &'static str;
+    fn noise(&self) -> &'static str;
+}
+
+// Implement the `Animal` trait for `Sheep`.
+impl Animal for Sheep {
+    fn name(&self) -> &'static str {
+        self.name
+    }
+
+    fn noise(&self) -> &'static str {
+        if self.is_naked() {
+            "baaaaah?"
+        } else {
+            "baaaaah!"
+        }
+    }
+}
+```
+
+===
+# Rustのトレイト
+------
+
+* 割と普通の型クラス
+
+===
+# Scalaの型クラス
+-------
+
+
+``` scala
+trait Show[A] {
+  def show(a: A): String
+}
+implicit val intCanShow: Show[Int] =
+  new Show[Int] {
+    def show(int: Int): String = s"int $int"
+}
+def showExp(implicit sh: Show[A]) = sh.show(a)
+```
+
+===
+# Scalaの型クラス
+-------
+
+* dictinary passing方式のimplicit parameterを生で実装
+
+===
+# Goのインターフェース
 -----
 
 ``` go
@@ -122,18 +215,23 @@ func (t T) M() {
 ```
 
 ===
+# Goのインターフェース
+-----
+
+* 構造的ポリモーフィズムっぽい？
+
+===
 
 # 所有権
 ---------
 
 * GCを使わないメモリ管理
  + [線形型 (1990?)](http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.31.5002)
- + Rust
- + (部分的に)C++のムーブセマンティクス
+ + Rust, (部分的に)C++のムーブセマンティクス
 
 ===
-# Rust
-------
+# Rustの所有権
+--------------
 
 ``` rust
 let s1 = String::from("hello");
@@ -147,6 +245,13 @@ println!("{}, world!", s1);
 ```
 
 ===
+# Rustの所有権
+--------------
+
+* Rustの最大の特徴とされるが難しいという声も
+
+===
+
 # 非同期処理
 -----------------
 
@@ -154,19 +259,14 @@ println!("{}, world!", s1);
   + C#, JavaScript, (Scala), (Rust)
 * コルーチン
   + kotlin, (Java)
-* goroutine + CSP
-  + コルーチンではない
-  + 軽量スレッドではない
-  + go
+* goroutine + [CSP(1978)](https://www.cs.cmu.edu/~crary/819-f09/Hoare78.pdf)
+  + goroutineはコルーチンではない
+  + goroutineは軽量スレッドではない
+  + Go
 
 ===
-
-# C#
+# C#の `async` / `await`
 -----
-
-* `async` ブロック内で `await` を呼ぶことでIOでブロックしなくなる
-  + シンタックスシュガーなので内部ではステートマシンになる
-  + コルーチンと違ってスタックレス
 
 ``` c#
 private readonly HttpClient _httpClient = new HttpClient();
@@ -183,8 +283,19 @@ downloadButton.Clicked += async (o, e) =>
 ```
 
 ===
-# Go
+
+# C#の `async` / `await`
 -----
+
+* `async` / `await` を最初に発明したのが C# らしい？
+* `async` ブロック内で `await` を呼ぶことでIOでブロックしなくなる
+  + シンタックスシュガーで内部ではステートマシンになる
+  + コルーチンと違ってスタックレス
+* ユーザが非同期タスクを作ることも出来る
+
+===
+# Goのgoroutine
+-----------------
 
 ``` go
 func sum(s []int, c chan int) {
@@ -208,6 +319,16 @@ func main() {
 ```
 
 ===
+# Goのgoroutine
+-----------------
+
+* goroutineはマルチスレッドで動く
+* goroutineはIOなどのタイミングで他のgoroutineに制御を移す
+* goroutineはnon-preemptive
+* goroutine同士は(基本は)チャネルで通信する
+
+
+===
 
 # 開発支援ツール
 ----------------
@@ -216,6 +337,7 @@ func main() {
   + コードを自動整形してくれる
   + 自動インデントより多くをする
 * [Language Server Protocol](https://langserver.org/)
+  + 古くはLispのSWANK?
   + 開発支援のためにクエリに答える
   + 型、定義箇所、ドキュメント、名前変更など
 
@@ -240,7 +362,16 @@ fn main() {
 ```
 
 ===
-# LSP
+# フォーマッタ
+---------
+
+* インデントを調整する
+* 改行や途中にある空白も変更する
+* CLIから起動できるので誰が書いても最終的に同じ見た目になる
+  + チーム開発で便利
+
+===
+# Language Server
 -----
 
 ``` text
@@ -258,6 +389,17 @@ client-notification Fri Jan 11 03:54:52 2019:
           (:settings nil))
 
 ```
+
+===
+# Language Server
+-----
+
+* クライアント(エディタなど)からのクエリに答える
+  + 型情報、補完情報などなど
+  + オンラインにクエリに答えないといけない
+* プロトコルが統一化されたので言語に依存せずに使えるようになった
+* 割と処理系開発元と同じところが提供することが多くなった
+* 静的解析よりなので動的型付き言語には少し不満
 
 ===
 # まとめ
