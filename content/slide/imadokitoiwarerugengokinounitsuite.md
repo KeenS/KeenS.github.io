@@ -13,7 +13,7 @@ title: "イマドキと言われる言語機能について"
 <script type="text/template">
 # イマドキと言われる言語機能について
 ----------------------
-第60回プログラミングシンポジウム
+[第60回プログラミングシンポジウム](http://www.ipsj.or.jp/prosym/60/60program.html)
 <!-- .slide: class="center" -->
 ===
 # About Me
