@@ -21,6 +21,7 @@ title: "{{ replace .TranslationBaseName "-" " " | title }}"
  * κeen
  * [@blackenedgold](https://twitter.com/blackenedgold)
  * Github: [KeenS](https://github.com/KeenS)
+ * GitLab: [blackenedgold](https://gitlab.com/blackenedgold)
  * [Idein Inc.](https://idein.jp/)のエンジニア
  * Lisp, ML, Rust, Shell Scriptあたりを書きます
 
