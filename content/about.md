@@ -28,6 +28,7 @@ menu: "main"
 
 - Twitter: [@blackenedgold](http://twitter.com/blackenedgold)
 - GitHub: [KeenS](https://github.com/KeenS)
+- GitLab: [blackenedgold](https://gitlab.com/blackenedgold)
 - COOKPAD: [κeen](http://cookpad.com/kitchen/3303629)
 - Qiita: [blackenedgold](https://qiita.com/blackenedgold)
 - SlideShare: [blackenedgold](http://www.slideshare.net/blackenedgold)
