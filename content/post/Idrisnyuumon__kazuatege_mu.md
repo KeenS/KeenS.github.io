@@ -1,5 +1,5 @@
 ---
-categories: ["Idris"]
+categories: ["Idris", "Idris入門"]
 date: 2019-01-07T03:44:57+09:00
 title: "Idris入門: 数当てゲーム"
 ---

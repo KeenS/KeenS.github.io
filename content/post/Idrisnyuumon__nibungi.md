@@ -1,5 +1,5 @@
 ---
-categories: ["Idris"]
+categories: ["Idris", "Idris入門"]
 date: 2019-01-17T23:34:55+09:00
 title: "Idris入門: 二分木"
 ---
