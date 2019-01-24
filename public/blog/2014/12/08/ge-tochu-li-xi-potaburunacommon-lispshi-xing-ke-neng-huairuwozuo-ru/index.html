@@ -37,9 +37,7 @@
 
         </script>
         
-        <link rel="stylesheet" href="//KeenS.github.io/highlight.js/styles/monokai.css" />
-<script src="//KeenS.github.io/highlight.js/highlight.min.js"></script>
-<script>hljs.initHighlightingOnLoad();</script>
+        <link rel="stylesheet" href="//KeenS.github.io/css/syntax-monokai.css" />
 <script type="text/x-mathjax-config">
  MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
 </script>
@@ -177,48 +175,42 @@ exec sbcl --script &quot;$0&quot; -- &quot;$@&quot;
 <p>ところでこのブロックコメントの中にはシェルスクリプト書き放題だよね？そのシェルスクリプト内でどのLisp使うか決めたらポータブルになりそうじゃない？</p>
 
 <p>こういうのはどう？</p>
+<div class="highlight"><pre class="chroma"><code class="language-lisp" data-lang="lisp"><span class="err">#</span><span class="nv">!/bin/sh</span>
 
-<pre><code class="language-lisp">#!/bin/sh
+<span class="cm">#|
+</span><span class="cm">run_if_exists(){
+</span><span class="cm"> command -v $1 &gt; /dev/null 2&gt;&amp;1 &amp;&amp; exec &#34;$@&#34;
+</span><span class="cm">}
+</span><span class="cm"> run_if_exists sbcl --noinform --no-sysinit --no-userinit --script &#34;$0&#34; -- &#34;$@&#34;
+</span><span class="cm"> run_if_exists clisp -norc --quiet --silent -on-error exit  &#34;$0&#34; -- &#34;$@&#34;
+</span><span class="cm"> run_if_exists ecl -norc -q -shell &#34;$0&#34; -- &#34;$@&#34;
+</span><span class="cm"> run_if_exists mkcl -norc -q -shell &#34;$0&#34; -- &#34;$@&#34;
+</span><span class="cm"> run_if_exists alisp -qq -#! &#34;$0&#34; -- &#34;$@&#34;
+</span><span class="cm">|#</span>
 
-#|
-run_if_exists(){
- command -v $1 &gt; /dev/null 2&gt;&amp;1 &amp;&amp; exec &quot;$@&quot;
-}
- run_if_exists sbcl --noinform --no-sysinit --no-userinit --script &quot;$0&quot; -- &quot;$@&quot;
- run_if_exists clisp -norc --quiet --silent -on-error exit  &quot;$0&quot; -- &quot;$@&quot;
- run_if_exists ecl -norc -q -shell &quot;$0&quot; -- &quot;$@&quot;
- run_if_exists mkcl -norc -q -shell &quot;$0&quot; -- &quot;$@&quot;
- run_if_exists alisp -qq -#! &quot;$0&quot; -- &quot;$@&quot;
-|#
-
-(write-line (lisp-implementation-type))
-(force-output)
-</code></pre>
-
+<span class="p">(</span><span class="nv">write-line</span> <span class="p">(</span><span class="nv">lisp-implementation-type</span><span class="p">))</span>
+<span class="p">(</span><span class="nv">force-output</span><span class="p">)</span></code></pre></div>
 <p>cclとabclは1行目のシェバンを読み飛ばせなかった&amp;評価結果をエコーバックしない方法が見当らなかったからパス。CMUCLは自分の環境で動かないから検証出来てない。</p>
 
 <p>これでポータブルに実行は可能。コマンドライン引数の扱いとかはライブラリを頼ってくれ。因みにCIMでは</p>
-
-<pre><code class="language-lisp">  #+allegro  (cdr (system:command-line-arguments))
-  #+sbcl (do*  ((var sb-ext:*posix-argv* (cdr list))
-                (list var var))
-               ((string= (car list) &quot;--&quot;) (return (cdr list))))
-  #+clisp ext:*args*
-  #+ecl (do*  ((var (si:command-args) (cdr list))
-               (list var var))
-              ((string= (car list) &quot;--&quot;) (return (cdr list))))
-  #+abcl extensions:*command-line-argument-list*
-  #+gcl (do*  ((var si::*command-args* (cdr list))
-               (list var var))
-              ((string= (car list) &quot;--&quot;) (return (cdr list))))
-  #+cmu ext:*command-line-words*
-  #+ccl ccl:*unprocessed-command-line-arguments*
-  #+mkcl (do*  ((var (si:command-args) (cdr list))
-               (list var var))
-              ((string= (car list) &quot;--&quot;) (return (cdr list))))
-  #+lispworks system:*line-arguments-list*
-</code></pre>
-
+<div class="highlight"><pre class="chroma"><code class="language-lisp" data-lang="lisp">  <span class="o">#+</span><span class="nv">allegro</span>  <span class="p">(</span><span class="nv">cdr</span> <span class="p">(</span><span class="nv">system:command-line-arguments</span><span class="p">))</span>
+  <span class="o">#+</span><span class="nv">sbcl</span> <span class="p">(</span><span class="nv">do*</span>  <span class="p">((</span><span class="nv">var</span> <span class="nv">sb-ext:*posix-argv*</span> <span class="p">(</span><span class="nv">cdr</span> <span class="nv">list</span><span class="p">))</span>
+                <span class="p">(</span><span class="nv">list</span> <span class="nv">var</span> <span class="nv">var</span><span class="p">))</span>
+               <span class="p">((</span><span class="nv">string=</span> <span class="p">(</span><span class="nv">car</span> <span class="nv">list</span><span class="p">)</span> <span class="s">&#34;--&#34;</span><span class="p">)</span> <span class="p">(</span><span class="nv">return</span> <span class="p">(</span><span class="nv">cdr</span> <span class="nv">list</span><span class="p">))))</span>
+  <span class="o">#+</span><span class="nv">clisp</span> <span class="nv">ext:*args*</span>
+  <span class="o">#+</span><span class="nv">ecl</span> <span class="p">(</span><span class="nv">do*</span>  <span class="p">((</span><span class="nv">var</span> <span class="p">(</span><span class="nv">si:command-args</span><span class="p">)</span> <span class="p">(</span><span class="nv">cdr</span> <span class="nv">list</span><span class="p">))</span>
+               <span class="p">(</span><span class="nv">list</span> <span class="nv">var</span> <span class="nv">var</span><span class="p">))</span>
+              <span class="p">((</span><span class="nv">string=</span> <span class="p">(</span><span class="nv">car</span> <span class="nv">list</span><span class="p">)</span> <span class="s">&#34;--&#34;</span><span class="p">)</span> <span class="p">(</span><span class="nv">return</span> <span class="p">(</span><span class="nv">cdr</span> <span class="nv">list</span><span class="p">))))</span>
+  <span class="o">#+</span><span class="nv">abcl</span> <span class="nv">extensions:*command-line-argument-list*</span>
+  <span class="o">#+</span><span class="nv">gcl</span> <span class="p">(</span><span class="nv">do*</span>  <span class="p">((</span><span class="nv">var</span> <span class="nv">si::*command-args*</span> <span class="p">(</span><span class="nv">cdr</span> <span class="nv">list</span><span class="p">))</span>
+               <span class="p">(</span><span class="nv">list</span> <span class="nv">var</span> <span class="nv">var</span><span class="p">))</span>
+              <span class="p">((</span><span class="nv">string=</span> <span class="p">(</span><span class="nv">car</span> <span class="nv">list</span><span class="p">)</span> <span class="s">&#34;--&#34;</span><span class="p">)</span> <span class="p">(</span><span class="nv">return</span> <span class="p">(</span><span class="nv">cdr</span> <span class="nv">list</span><span class="p">))))</span>
+  <span class="o">#+</span><span class="nv">cmu</span> <span class="nv">ext:*command-line-words*</span>
+  <span class="o">#+</span><span class="nv">ccl</span> <span class="nv">ccl:*unprocessed-command-line-arguments*</span>
+  <span class="o">#+</span><span class="nv">mkcl</span> <span class="p">(</span><span class="nv">do*</span>  <span class="p">((</span><span class="nv">var</span> <span class="p">(</span><span class="nv">si:command-args</span><span class="p">)</span> <span class="p">(</span><span class="nv">cdr</span> <span class="nv">list</span><span class="p">))</span>
+               <span class="p">(</span><span class="nv">list</span> <span class="nv">var</span> <span class="nv">var</span><span class="p">))</span>
+              <span class="p">((</span><span class="nv">string=</span> <span class="p">(</span><span class="nv">car</span> <span class="nv">list</span><span class="p">)</span> <span class="s">&#34;--&#34;</span><span class="p">)</span> <span class="p">(</span><span class="nv">return</span> <span class="p">(</span><span class="nv">cdr</span> <span class="nv">list</span><span class="p">))))</span>
+  <span class="o">#+</span><span class="nv">lispworks</span> <span class="nv">system:*line-arguments-list*</span></code></pre></div>
 <p>としている。参考までに。</p>
                     </section>
                 </article>

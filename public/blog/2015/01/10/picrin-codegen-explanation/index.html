@@ -35,9 +35,7 @@
 
         </script>
         
-        <link rel="stylesheet" href="//KeenS.github.io/highlight.js/styles/monokai.css" />
-<script src="//KeenS.github.io/highlight.js/highlight.min.js"></script>
-<script>hljs.initHighlightingOnLoad();</script>
+        <link rel="stylesheet" href="//KeenS.github.io/css/syntax-monokai.css" />
 <script type="text/x-mathjax-config">
  MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
 </script>
@@ -155,52 +153,49 @@
 <p>extlib/benz/macro.cに処理があります。</p>
 
 <p>メインの部分はこれです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="k">static</span> <span class="n">pic_value</span>
+<span class="nf">macroexpand_node</span><span class="p">(</span><span class="n">pic_state</span> <span class="o">*</span><span class="n">pic</span><span class="p">,</span> <span class="n">pic_value</span> <span class="n">expr</span><span class="p">,</span> <span class="k">struct</span> <span class="n">pic_senv</span> <span class="o">*</span><span class="n">senv</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="k">switch</span> <span class="p">(</span><span class="n">pic_type</span><span class="p">(</span><span class="n">expr</span><span class="p">))</span> <span class="p">{</span>
+  <span class="k">case</span> <span class="nl">PIC_TT_SYMBOL</span><span class="p">:</span> <span class="p">{</span>
+    <span class="k">return</span> <span class="n">macroexpand_symbol</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">pic_sym</span><span class="p">(</span><span class="n">expr</span><span class="p">),</span> <span class="n">senv</span><span class="p">);</span>
+  <span class="p">}</span>
+  <span class="k">case</span> <span class="nl">PIC_TT_PAIR</span><span class="p">:</span> <span class="p">{</span>
+    <span class="n">pic_value</span> <span class="n">car</span><span class="p">;</span>
+    <span class="k">struct</span> <span class="n">pic_macro</span> <span class="o">*</span><span class="n">mac</span><span class="p">;</span>
 
-<pre><code class="language-c">static pic_value
-macroexpand_node(pic_state *pic, pic_value expr, struct pic_senv *senv)
-{
-  switch (pic_type(expr)) {
-  case PIC_TT_SYMBOL: {
-    return macroexpand_symbol(pic, pic_sym(expr), senv);
-  }
-  case PIC_TT_PAIR: {
-    pic_value car;
-    struct pic_macro *mac;
+    <span class="k">if</span> <span class="p">(</span><span class="o">!</span> <span class="n">pic_list_p</span><span class="p">(</span><span class="n">expr</span><span class="p">))</span> <span class="p">{</span>
+      <span class="n">pic_errorf</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="s">&#34;cannot macroexpand improper list: ~s&#34;</span><span class="p">,</span> <span class="n">expr</span><span class="p">);</span>
+    <span class="p">}</span>
 
-    if (! pic_list_p(expr)) {
-      pic_errorf(pic, &quot;cannot macroexpand improper list: ~s&quot;, expr);
-    }
+    <span class="n">car</span> <span class="o">=</span> <span class="n">macroexpand</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">pic_car</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">expr</span><span class="p">),</span> <span class="n">senv</span><span class="p">);</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">pic_sym_p</span><span class="p">(</span><span class="n">car</span><span class="p">))</span> <span class="p">{</span>
+      <span class="n">pic_sym</span> <span class="n">tag</span> <span class="o">=</span> <span class="n">pic_sym</span><span class="p">(</span><span class="n">car</span><span class="p">);</span>
 
-    car = macroexpand(pic, pic_car(pic, expr), senv);
-    if (pic_sym_p(car)) {
-      pic_sym tag = pic_sym(car);
+      <span class="k">if</span> <span class="p">(</span><span class="n">tag</span> <span class="o">==</span> <span class="n">pic</span><span class="o">-&gt;</span><span class="n">rDEFINE_SYNTAX</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="n">macroexpand_defsyntax</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">expr</span><span class="p">,</span> <span class="n">senv</span><span class="p">);</span>
+      <span class="p">}</span>
+      <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="n">tag</span> <span class="o">==</span> <span class="n">pic</span><span class="o">-&gt;</span><span class="n">rLAMBDA</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="n">macroexpand_defer</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">expr</span><span class="p">,</span> <span class="n">senv</span><span class="p">);</span>
+      <span class="p">}</span>
+      <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="n">tag</span> <span class="o">==</span> <span class="n">pic</span><span class="o">-&gt;</span><span class="n">rDEFINE</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="n">macroexpand_define</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">expr</span><span class="p">,</span> <span class="n">senv</span><span class="p">);</span>
+      <span class="p">}</span>
+      <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="n">tag</span> <span class="o">==</span> <span class="n">pic</span><span class="o">-&gt;</span><span class="n">rQUOTE</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="n">macroexpand_quote</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">expr</span><span class="p">);</span>
+      <span class="p">}</span>
 
-      if (tag == pic-&gt;rDEFINE_SYNTAX) {
-        return macroexpand_defsyntax(pic, expr, senv);
-      }
-      else if (tag == pic-&gt;rLAMBDA) {
-        return macroexpand_defer(pic, expr, senv);
-      }
-      else if (tag == pic-&gt;rDEFINE) {
-        return macroexpand_define(pic, expr, senv);
-      }
-      else if (tag == pic-&gt;rQUOTE) {
-        return macroexpand_quote(pic, expr);
-      }
+      <span class="k">if</span> <span class="p">((</span><span class="n">mac</span> <span class="o">=</span> <span class="n">find_macro</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">tag</span><span class="p">))</span> <span class="o">!=</span> <span class="nb">NULL</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="n">macroexpand_node</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">macroexpand_macro</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">mac</span><span class="p">,</span> <span class="n">expr</span><span class="p">,</span> <span class="n">senv</span><span class="p">),</span> <span class="n">senv</span><span class="p">);</span>
+      <span class="p">}</span>
+    <span class="p">}</span>
 
-      if ((mac = find_macro(pic, tag)) != NULL) {
-        return macroexpand_node(pic, macroexpand_macro(pic, mac, expr, senv), senv);
-      }
-    }
-
-    return pic_cons(pic, car, macroexpand_list(pic, pic_cdr(pic, expr), senv));
-  }
-  default:
-    return expr;
-  }
-}
-</code></pre>
-
+    <span class="k">return</span> <span class="n">pic_cons</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">car</span><span class="p">,</span> <span class="n">macroexpand_list</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">pic_cdr</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">expr</span><span class="p">),</span> <span class="n">senv</span><span class="p">));</span>
+  <span class="p">}</span>
+  <span class="k">default</span><span class="o">:</span>
+    <span class="k">return</span> <span class="n">expr</span><span class="p">;</span>
+  <span class="p">}</span>
+<span class="p">}</span></code></pre></div>
 <p>S式を行きがけ順でマクロ展開していきます。</p>
 
 <p>リストの先頭にあるものをマクロと疑って展開しようとしますが、見ての通り<code>define-syntax</code>、<code>lambda</code>、<code>define</code>、<code>quote</code>だけは特別扱いされています。このスペシャルフォーム達は引数に括弧つきのものを取ったり引数を全く触ってほしくなかったりするのでマクロ展開時に特別な処理がされるんですね。他はシンボルは変数名(identifier)として処理し、リストとシンボル以外のものはそのまま返します。</p>
@@ -212,46 +207,43 @@ macroexpand_node(pic_state *pic, pic_value expr, struct pic_senv *senv)
 <p>変なことはしてません。スコープを遡っていき、最初に見付かったインターンされたシンボルを返します。見付からなかった(=未定義のシンボルだった)ときは新たなgensymを返します。</p>
 
 <h2 id="define-syntax"><code>define-syntax</code></h2>
+<div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="k">static</span> <span class="n">pic_value</span>
+<span class="nf">macroexpand_defsyntax</span><span class="p">(</span><span class="n">pic_state</span> <span class="o">*</span><span class="n">pic</span><span class="p">,</span> <span class="n">pic_value</span> <span class="n">expr</span><span class="p">,</span> <span class="k">struct</span> <span class="n">pic_senv</span> <span class="o">*</span><span class="n">senv</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="n">pic_value</span> <span class="n">var</span><span class="p">,</span> <span class="n">val</span><span class="p">;</span>
+  <span class="n">pic_sym</span> <span class="n">sym</span><span class="p">,</span> <span class="n">rename</span><span class="p">;</span>
 
-<pre><code class="language-c">static pic_value
-macroexpand_defsyntax(pic_state *pic, pic_value expr, struct pic_senv *senv)
-{
-  pic_value var, val;
-  pic_sym sym, rename;
+  <span class="k">if</span> <span class="p">(</span><span class="n">pic_length</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">expr</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">3</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">pic_errorf</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="s">&#34;syntax error&#34;</span><span class="p">);</span>
+  <span class="p">}</span>
 
-  if (pic_length(pic, expr) != 3) {
-    pic_errorf(pic, &quot;syntax error&quot;);
-  }
+  <span class="n">var</span> <span class="o">=</span> <span class="n">pic_cadr</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">expr</span><span class="p">);</span>
+  <span class="k">if</span> <span class="p">(</span><span class="o">!</span> <span class="n">pic_sym_p</span><span class="p">(</span><span class="n">var</span><span class="p">))</span> <span class="p">{</span>
+    <span class="n">pic_errorf</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="s">&#34;binding to non-symbol object&#34;</span><span class="p">);</span>
+  <span class="p">}</span>
+  <span class="n">sym</span> <span class="o">=</span> <span class="n">pic_sym</span><span class="p">(</span><span class="n">var</span><span class="p">);</span>
+  <span class="k">if</span> <span class="p">(</span><span class="o">!</span> <span class="n">pic_find_rename</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">senv</span><span class="p">,</span> <span class="n">sym</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">rename</span><span class="p">))</span> <span class="p">{</span>
+    <span class="n">rename</span> <span class="o">=</span> <span class="n">pic_add_rename</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">senv</span><span class="p">,</span> <span class="n">sym</span><span class="p">);</span>
+  <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+    <span class="n">pic_warnf</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="s">&#34;redefining syntax variable: ~s&#34;</span><span class="p">,</span> <span class="n">pic_sym_value</span><span class="p">(</span><span class="n">sym</span><span class="p">));</span>
+  <span class="p">}</span>
 
-  var = pic_cadr(pic, expr);
-  if (! pic_sym_p(var)) {
-    pic_errorf(pic, &quot;binding to non-symbol object&quot;);
-  }
-  sym = pic_sym(var);
-  if (! pic_find_rename(pic, senv, sym, &amp;rename)) {
-    rename = pic_add_rename(pic, senv, sym);
-  } else {
-    pic_warnf(pic, &quot;redefining syntax variable: ~s&quot;, pic_sym_value(sym));
-  }
+  <span class="n">val</span> <span class="o">=</span> <span class="n">pic_cadr</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">pic_cdr</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">expr</span><span class="p">));</span>
 
-  val = pic_cadr(pic, pic_cdr(pic, expr));
+  <span class="n">pic_try</span> <span class="p">{</span>
+    <span class="n">val</span> <span class="o">=</span> <span class="n">pic_eval</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">val</span><span class="p">,</span> <span class="n">pic</span><span class="o">-&gt;</span><span class="n">lib</span><span class="p">);</span>
+  <span class="p">}</span> <span class="n">pic_catch</span> <span class="p">{</span>
+    <span class="n">pic_errorf</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="s">&#34;macroexpand error while definition: %s&#34;</span><span class="p">,</span> <span class="n">pic_errmsg</span><span class="p">(</span><span class="n">pic</span><span class="p">));</span>
+  <span class="p">}</span>
 
-  pic_try {
-    val = pic_eval(pic, val, pic-&gt;lib);
-  } pic_catch {
-    pic_errorf(pic, &quot;macroexpand error while definition: %s&quot;, pic_errmsg(pic));
-  }
+  <span class="k">if</span> <span class="p">(</span><span class="o">!</span> <span class="n">pic_proc_p</span><span class="p">(</span><span class="n">val</span><span class="p">))</span> <span class="p">{</span>
+    <span class="n">pic_errorf</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="s">&#34;macro definition </span><span class="se">\&#34;</span><span class="s">~s</span><span class="se">\&#34;</span><span class="s"> evaluates to non-procedure object&#34;</span><span class="p">,</span> <span class="n">var</span><span class="p">);</span>
+  <span class="p">}</span>
 
-  if (! pic_proc_p(val)) {
-    pic_errorf(pic, &quot;macro definition \&quot;~s\&quot; evaluates to non-procedure object&quot;, var);
-  }
+  <span class="n">define_macro</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">rename</span><span class="p">,</span> <span class="n">pic_proc_ptr</span><span class="p">(</span><span class="n">val</span><span class="p">),</span> <span class="n">senv</span><span class="p">);</span>
 
-  define_macro(pic, rename, pic_proc_ptr(val), senv);
-
-  return pic_none_value();
-}
-</code></pre>
-
+  <span class="k">return</span> <span class="n">pic_none_value</span><span class="p">();</span>
+<span class="p">}</span></code></pre></div>
 <p>手を入れる候補。やってることは単純で、<code>(define-syntax &lt;name&gt; &lt;definition&gt;)</code>の形で引数を渡される筈だからnameをdefinitionに関連づけてマクロとして登録します。返り値はnone。返り値はnone。大事なことなので2回言いました。</p>
 
 <p>一応実行時にはマクロ展開は全て終了してる筈なので<code>define-syntax</code>をマクロ展開時に消し去っても良い筈なんですが、気持ち悪いですよね。コアを小さくするという意味では正解なんですが…。あとファイルのコンパイルを考えた時に<code>define-syntax</code>をファイルの外に持ち出せなくなるという実用上の問題もあります。</p>
@@ -263,41 +255,38 @@ macroexpand_defsyntax(pic_state *pic, pic_value expr, struct pic_senv *senv)
 <h2 id="lambda"><code>lambda</code></h2>
 
 <p><code>lambda</code>の扱いは面倒です。一番分かり易い例は再帰マクロですかね。マクロの定義中に定義中のマクロが見えてる必要があります。この解決策として<code>lambda</code>だけはマクロ展開を遅延(defer)します。じゃあいつ遅延されたマクロが展開されるかというと</p>
+<div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="n">pic_value</span>
+<span class="nf">pic_macroexpand</span><span class="p">(</span><span class="n">pic_state</span> <span class="o">*</span><span class="n">pic</span><span class="p">,</span> <span class="n">pic_value</span> <span class="n">expr</span><span class="p">,</span> <span class="k">struct</span> <span class="n">pic_lib</span> <span class="o">*</span><span class="n">lib</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="k">struct</span> <span class="n">pic_lib</span> <span class="o">*</span><span class="n">prev</span><span class="p">;</span>
+  <span class="n">pic_value</span> <span class="n">v</span><span class="p">;</span>
 
-<pre><code class="language-c">pic_value
-pic_macroexpand(pic_state *pic, pic_value expr, struct pic_lib *lib)
-{
-  struct pic_lib *prev;
-  pic_value v;
+<span class="cp">#if DEBUG
+</span><span class="cp"></span>  <span class="n">puts</span><span class="p">(</span><span class="s">&#34;before expand:&#34;</span><span class="p">);</span>
+  <span class="n">pic_debug</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">expr</span><span class="p">);</span>
+  <span class="n">puts</span><span class="p">(</span><span class="s">&#34;&#34;</span><span class="p">);</span>
+<span class="cp">#endif
+</span><span class="cp"></span>
+  <span class="cm">/* change library for macro-expansion time processing */</span>
+  <span class="n">prev</span> <span class="o">=</span> <span class="n">pic</span><span class="o">-&gt;</span><span class="n">lib</span><span class="p">;</span>
+  <span class="n">pic</span><span class="o">-&gt;</span><span class="n">lib</span> <span class="o">=</span> <span class="n">lib</span><span class="p">;</span>
 
-#if DEBUG
-  puts(&quot;before expand:&quot;);
-  pic_debug(pic, expr);
-  puts(&quot;&quot;);
-#endif
+  <span class="n">lib</span><span class="o">-&gt;</span><span class="n">env</span><span class="o">-&gt;</span><span class="n">defer</span> <span class="o">=</span> <span class="n">pic_nil_value</span><span class="p">();</span> <span class="cm">/* the last expansion could fail and leave defer field old */</span>
 
-  /* change library for macro-expansion time processing */
-  prev = pic-&gt;lib;
-  pic-&gt;lib = lib;
+  <span class="n">v</span> <span class="o">=</span> <span class="n">macroexpand</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">expr</span><span class="p">,</span> <span class="n">lib</span><span class="o">-&gt;</span><span class="n">env</span><span class="p">);</span>
 
-  lib-&gt;env-&gt;defer = pic_nil_value(); /* the last expansion could fail and leave defer field old */
+  <span class="n">macroexpand_deferred</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">lib</span><span class="o">-&gt;</span><span class="n">env</span><span class="p">);</span>
 
-  v = macroexpand(pic, expr, lib-&gt;env);
+  <span class="n">pic</span><span class="o">-&gt;</span><span class="n">lib</span> <span class="o">=</span> <span class="n">prev</span><span class="p">;</span>
 
-  macroexpand_deferred(pic, lib-&gt;env);
-
-  pic-&gt;lib = prev;
-
-#if DEBUG
-  puts(&quot;after expand:&quot;);
-  pic_debug(pic, v);
-  puts(&quot;&quot;);
-#endif
-
-  return v;
-}
-</code></pre>
-
+<span class="cp">#if DEBUG
+</span><span class="cp"></span>  <span class="n">puts</span><span class="p">(</span><span class="s">&#34;after expand:&#34;</span><span class="p">);</span>
+  <span class="n">pic_debug</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">v</span><span class="p">);</span>
+  <span class="n">puts</span><span class="p">(</span><span class="s">&#34;&#34;</span><span class="p">);</span>
+<span class="cp">#endif
+</span><span class="cp"></span>
+  <span class="k">return</span> <span class="n">v</span><span class="p">;</span>
+<span class="p">}</span></code></pre></div>
 <p><code>macroexpand</code>の後です。<code>macroexpand</code>は<code>macroexpand_node</code>の薄いラッパと思って下さい。</p>
 
 <p>遅延されたマクロ展開は<code>senv-&gt;defer</code>にpushされ、<code>macroexpand_deferred</code>で1つずつ<code>macroexpand_lambda</code>されます。<code>macroexpand_lambda</code>はまあ、想像通りです。formalをα変換したあとformalとbodyをマクロ展開します。α変換は<code>senv</code>にシンボル -&gt; gensymのキーペアを突っ込むだけです。返り値は<code>(lambda formal body)</code>。</p>
@@ -319,15 +308,12 @@ pic_macroexpand(pic_state *pic, pic_value expr, struct pic_lib *lib)
 <p><code>define-syntax</code>だけを指摘しましたが、マクロ展開後にnoneになるマクロは他にもあります。library関係全部です。個人的にはやつらもVM命令まで残すべきだと思ってます。</p>
 
 <p>因みにもう1つlibrary関係の問題があります。<code>define-library</code>直下の<code>begin</code>についてです。</p>
-
-<pre><code class="language-scheme">(define-library (hoge)
-  (begin
-    (define foo ...)
-    (define bar ...)
-  )
-)
-</code></pre>
-
+<div class="highlight"><pre class="chroma"><code class="language-scheme" data-lang="scheme"><span class="p">(</span><span class="nv">define-library</span> <span class="p">(</span><span class="nv">hoge</span><span class="p">)</span>
+  <span class="p">(</span><span class="nv">begin</span>
+    <span class="p">(</span><span class="k">define </span><span class="nv">foo</span> <span class="o">...</span><span class="p">)</span>
+    <span class="p">(</span><span class="k">define </span><span class="nv">bar</span> <span class="o">...</span><span class="p">)</span>
+  <span class="p">)</span>
+<span class="p">)</span></code></pre></div>
 <p>のようなコードを考えます。<code>define-library</code>直下の<code>begin</code>は他とセマンティクスが違って、<code>begin</code>内のコードをトップレベルで定義されたかのように扱う必要があります。しかしpicrinは普通の<code>begin</code>と同じように扱っています。これがどのような違いを産むかというと、コンパイル順を見れば分かり易いです。</p>
 
 <p>仕様: fooのマクロ展開-&gt;fooの解析-&gt;fooのコード生成-&gt;barのマクロ展開-&gt;barの解析-&gt;barのコード生成<br />
@@ -358,85 +344,73 @@ picrin: fooのマクロ展開-&gt;barのマクロ展開-&gt;fooの解析-&gt;bar
 <p><code>analyze_var</code>がスコープの深さでgref、lref、crefに振り分けます。<code>analyze_*_var</code>はgref、lref、crefを返すだけの関数。</p>
 
 <p>スコープを遡って変数を捜していき、変数が見付かったスコープの深さ=今いるスコープの深さならグローバル変数、、今いるスコープならローカル変数、それ以外なら捕捉変数です。</p>
+<div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="k">static</span> <span class="n">pic_value</span>
+<span class="nf">analyze_var</span><span class="p">(</span><span class="n">analyze_state</span> <span class="o">*</span><span class="n">state</span><span class="p">,</span> <span class="n">pic_sym</span> <span class="n">sym</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="n">pic_state</span> <span class="o">*</span><span class="n">pic</span> <span class="o">=</span> <span class="n">state</span><span class="o">-&gt;</span><span class="n">pic</span><span class="p">;</span>
+  <span class="kt">int</span> <span class="n">depth</span><span class="p">;</span>
 
-<pre><code class="language-c">static pic_value
-analyze_var(analyze_state *state, pic_sym sym)
-{
-  pic_state *pic = state-&gt;pic;
-  int depth;
+  <span class="k">if</span> <span class="p">((</span><span class="n">depth</span> <span class="o">=</span> <span class="n">find_var</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">sym</span><span class="p">))</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">pic_errorf</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="s">&#34;unbound variable %s&#34;</span><span class="p">,</span> <span class="n">pic_symbol_name</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">sym</span><span class="p">));</span>
+  <span class="p">}</span>
 
-  if ((depth = find_var(state, sym)) == -1) {
-    pic_errorf(pic, &quot;unbound variable %s&quot;, pic_symbol_name(pic, sym));
-  }
-
-  if (depth == state-&gt;scope-&gt;depth) {
-    return analyze_global_var(state, sym);
-  } else if (depth == 0) {
-    return analyze_local_var(state, sym);
-  } else {
-    return analyze_free_var(state, sym, depth);
-  }
-}
-</code></pre>
-
+  <span class="k">if</span> <span class="p">(</span><span class="n">depth</span> <span class="o">==</span> <span class="n">state</span><span class="o">-&gt;</span><span class="n">scope</span><span class="o">-&gt;</span><span class="n">depth</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">return</span> <span class="n">analyze_global_var</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">sym</span><span class="p">);</span>
+  <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="n">depth</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">return</span> <span class="n">analyze_local_var</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">sym</span><span class="p">);</span>
+  <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+    <span class="k">return</span> <span class="n">analyze_free_var</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">sym</span><span class="p">,</span> <span class="n">depth</span><span class="p">);</span>
+  <span class="p">}</span>
+<span class="p">}</span></code></pre></div>
 <p>因みにこれ、変数が見付からなかったらエラー出してますけどSchemeは仕様上は</p>
-
-<pre><code class="language-scheme">(define (foo) (bar))
-(define (bar) ...)
-</code></pre>
-
+<div class="highlight"><pre class="chroma"><code class="language-scheme" data-lang="scheme"><span class="p">(</span><span class="k">define </span><span class="p">(</span><span class="nv">foo</span><span class="p">)</span> <span class="p">(</span><span class="nv">bar</span><span class="p">))</span>
+<span class="p">(</span><span class="k">define </span><span class="p">(</span><span class="nv">bar</span><span class="p">)</span> <span class="o">...</span><span class="p">)</span></code></pre></div>
 <p>のように後から定義することも可能なので仕様に準拠してないことになります。ここが手を入れるポイント2つ目。</p>
 
 <p>改善案は見付からなかった変数は一旦NOWHEREとかに束縛しておいてanalyze時にはエラーを出さない。実行時にNOWHEREに束縛された変数が出てくればエラー。</p>
 
 <h2 id="define-1">define</h2>
+<div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="k">static</span> <span class="n">pic_value</span>
+<span class="nf">analyze_define</span><span class="p">(</span><span class="n">analyze_state</span> <span class="o">*</span><span class="n">state</span><span class="p">,</span> <span class="n">pic_value</span> <span class="n">obj</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="n">pic_state</span> <span class="o">*</span><span class="n">pic</span> <span class="o">=</span> <span class="n">state</span><span class="o">-&gt;</span><span class="n">pic</span><span class="p">;</span>
+  <span class="n">pic_value</span> <span class="n">var</span><span class="p">,</span> <span class="n">val</span><span class="p">;</span>
+  <span class="n">pic_sym</span> <span class="n">sym</span><span class="p">;</span>
 
-<pre><code class="language-c">static pic_value
-analyze_define(analyze_state *state, pic_value obj)
-{
-  pic_state *pic = state-&gt;pic;
-  pic_value var, val;
-  pic_sym sym;
+  <span class="k">if</span> <span class="p">(</span><span class="n">pic_length</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">3</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">pic_errorf</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="s">&#34;syntax error&#34;</span><span class="p">);</span>
+  <span class="p">}</span>
 
-  if (pic_length(pic, obj) != 3) {
-    pic_errorf(pic, &quot;syntax error&quot;);
-  }
+  <span class="n">var</span> <span class="o">=</span> <span class="n">pic_list_ref</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="mi">1</span><span class="p">);</span>
+  <span class="k">if</span> <span class="p">(</span><span class="o">!</span> <span class="n">pic_sym_p</span><span class="p">(</span><span class="n">var</span><span class="p">))</span> <span class="p">{</span>
+    <span class="n">pic_errorf</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="s">&#34;syntax error&#34;</span><span class="p">);</span>
+  <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+    <span class="n">sym</span> <span class="o">=</span> <span class="n">pic_sym</span><span class="p">(</span><span class="n">var</span><span class="p">);</span>
+  <span class="p">}</span>
+  <span class="n">var</span> <span class="o">=</span> <span class="n">analyze_declare</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">sym</span><span class="p">);</span>
 
-  var = pic_list_ref(pic, obj, 1);
-  if (! pic_sym_p(var)) {
-    pic_errorf(pic, &quot;syntax error&quot;);
-  } else {
-    sym = pic_sym(var);
-  }
-  var = analyze_declare(state, sym);
+  <span class="k">if</span> <span class="p">(</span><span class="n">pic_pair_p</span><span class="p">(</span><span class="n">pic_list_ref</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+      <span class="o">&amp;&amp;</span> <span class="n">pic_sym_p</span><span class="p">(</span><span class="n">pic_list_ref</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">pic_list_ref</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="mi">0</span><span class="p">))</span>
+      <span class="o">&amp;&amp;</span> <span class="n">pic_sym</span><span class="p">(</span><span class="n">pic_list_ref</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">pic_list_ref</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="mi">0</span><span class="p">))</span> <span class="o">==</span> <span class="n">pic</span><span class="o">-&gt;</span><span class="n">rLAMBDA</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">pic_value</span> <span class="n">formals</span><span class="p">,</span> <span class="n">body_exprs</span><span class="p">;</span>
 
-  if (pic_pair_p(pic_list_ref(pic, obj, 2))
-      &amp;&amp; pic_sym_p(pic_list_ref(pic, pic_list_ref(pic, obj, 2), 0))
-      &amp;&amp; pic_sym(pic_list_ref(pic, pic_list_ref(pic, obj, 2), 0)) == pic-&gt;rLAMBDA) {
-    pic_value formals, body_exprs;
+    <span class="n">formals</span> <span class="o">=</span> <span class="n">pic_list_ref</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">pic_list_ref</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="mi">1</span><span class="p">);</span>
+    <span class="n">body_exprs</span> <span class="o">=</span> <span class="n">pic_list_tail</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">pic_list_ref</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="mi">2</span><span class="p">);</span>
 
-    formals = pic_list_ref(pic, pic_list_ref(pic, obj, 2), 1);
-    body_exprs = pic_list_tail(pic, pic_list_ref(pic, obj, 2), 2);
+    <span class="n">val</span> <span class="o">=</span> <span class="n">analyze_defer</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">pic_sym_value</span><span class="p">(</span><span class="n">sym</span><span class="p">),</span> <span class="n">formals</span><span class="p">,</span> <span class="n">body_exprs</span><span class="p">);</span>
+  <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">pic_length</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">3</span><span class="p">)</span> <span class="p">{</span>
+      <span class="n">pic_errorf</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="s">&#34;syntax error&#34;</span><span class="p">);</span>
+    <span class="p">}</span>
+    <span class="n">val</span> <span class="o">=</span> <span class="n">analyze</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">pic_list_ref</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="nb">false</span><span class="p">);</span>
+  <span class="p">}</span>
 
-    val = analyze_defer(state, pic_sym_value(sym), formals, body_exprs);
-  } else {
-    if (pic_length(pic, obj) != 3) {
-      pic_errorf(pic, &quot;syntax error&quot;);
-    }
-    val = analyze(state, pic_list_ref(pic, obj, 2), false);
-  }
-
-  return pic_list3(pic, pic_symbol_value(pic-&gt;sSETBANG), var, val);
-}
-</code></pre>
-
+  <span class="k">return</span> <span class="n">pic_list3</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">pic_symbol_value</span><span class="p">(</span><span class="n">pic</span><span class="o">-&gt;</span><span class="n">sSETBANG</span><span class="p">),</span> <span class="n">var</span><span class="p">,</span> <span class="n">val</span><span class="p">);</span>
+<span class="p">}</span></code></pre></div>
 <p>手続を<code>define</code>するときに上の後から定義(interreferencial definitionという)を一部の状況で実現するために束縛する値がlambdaかどうかで場合分けしています。lambdaの場合は<code>analyze_defer</code>を使います。そうすることで</p>
-
-<pre><code class="language-scheme">(begin
-  (define (foo) (bar))
-  (define (bar) ...))
-</code></pre>
-
+<div class="highlight"><pre class="chroma"><code class="language-scheme" data-lang="scheme"><span class="p">(</span><span class="nv">begin</span>
+  <span class="p">(</span><span class="k">define </span><span class="p">(</span><span class="nv">foo</span><span class="p">)</span> <span class="p">(</span><span class="nv">bar</span><span class="p">))</span>
+  <span class="p">(</span><span class="k">define </span><span class="p">(</span><span class="nv">bar</span><span class="p">)</span> <span class="o">...</span><span class="p">))</span></code></pre></div>
 <p>と書けばbegin -&gt; define foo -&gt; define bar -&gt; (analyze deferred) -&gt; foo本体 -&gt; bar本体
 の順番に解析されることになるのでコンパイルが通ります。</p>
 
@@ -464,90 +438,84 @@ analyze_define(analyze_state *state, pic_value obj)
 <p>captureについて: 変数を導入した側から見たら「捕捉された変数」で、変数を参照する側から見たら「自由変数」です。</p>
 
 <p>さて、変数の種類を見たところで<code>analyze_procedure</code>の定義を見てみましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="k">static</span> <span class="n">pic_value</span>
+<span class="nf">analyze_procedure</span><span class="p">(</span><span class="n">analyze_state</span> <span class="o">*</span><span class="n">state</span><span class="p">,</span> <span class="n">pic_value</span> <span class="n">name</span><span class="p">,</span> <span class="n">pic_value</span> <span class="n">formals</span><span class="p">,</span> <span class="n">pic_value</span> <span class="n">body_exprs</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="n">pic_state</span> <span class="o">*</span><span class="n">pic</span> <span class="o">=</span> <span class="n">state</span><span class="o">-&gt;</span><span class="n">pic</span><span class="p">;</span>
+  <span class="n">pic_value</span> <span class="n">args</span><span class="p">,</span> <span class="n">locals</span><span class="p">,</span> <span class="n">varg</span><span class="p">,</span> <span class="n">captures</span><span class="p">,</span> <span class="n">body</span><span class="p">;</span>
 
-<pre><code class="language-c">static pic_value
-analyze_procedure(analyze_state *state, pic_value name, pic_value formals, pic_value body_exprs)
-{
-  pic_state *pic = state-&gt;pic;
-  pic_value args, locals, varg, captures, body;
+  <span class="n">assert</span><span class="p">(</span><span class="n">pic_sym_p</span><span class="p">(</span><span class="n">name</span><span class="p">)</span> <span class="o">||</span> <span class="n">pic_false_p</span><span class="p">(</span><span class="n">name</span><span class="p">));</span>
 
-  assert(pic_sym_p(name) || pic_false_p(name));
+  <span class="k">if</span> <span class="p">(</span><span class="n">push_scope</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">formals</span><span class="p">))</span> <span class="p">{</span>
+    <span class="n">analyze_scope</span> <span class="o">*</span><span class="n">scope</span> <span class="o">=</span> <span class="n">state</span><span class="o">-&gt;</span><span class="n">scope</span><span class="p">;</span>
+    <span class="n">pic_sym</span> <span class="o">*</span><span class="n">var</span><span class="p">;</span>
+    <span class="n">size_t</span> <span class="n">i</span><span class="p">;</span>
 
-  if (push_scope(state, formals)) {
-    analyze_scope *scope = state-&gt;scope;
-    pic_sym *var;
-    size_t i;
+    <span class="n">args</span> <span class="o">=</span> <span class="n">pic_nil_value</span><span class="p">();</span>
+    <span class="k">for</span> <span class="p">(</span><span class="n">i</span> <span class="o">=</span> <span class="n">xv_size</span><span class="p">(</span><span class="o">&amp;</span><span class="n">scope</span><span class="o">-&gt;</span><span class="n">args</span><span class="p">);</span> <span class="n">i</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">;</span> <span class="o">--</span><span class="n">i</span><span class="p">)</span> <span class="p">{</span>
+      <span class="n">var</span> <span class="o">=</span> <span class="n">xv_get</span><span class="p">(</span><span class="o">&amp;</span><span class="n">scope</span><span class="o">-&gt;</span><span class="n">args</span><span class="p">,</span> <span class="n">i</span> <span class="o">-</span> <span class="mi">1</span><span class="p">);</span>
+      <span class="n">pic_push</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">pic_sym_value</span><span class="p">(</span><span class="o">*</span><span class="n">var</span><span class="p">),</span> <span class="n">args</span><span class="p">);</span>
+    <span class="p">}</span>
 
-    args = pic_nil_value();
-    for (i = xv_size(&amp;scope-&gt;args); i &gt; 0; --i) {
-      var = xv_get(&amp;scope-&gt;args, i - 1);
-      pic_push(pic, pic_sym_value(*var), args);
-    }
+    <span class="n">varg</span> <span class="o">=</span> <span class="n">scope</span><span class="o">-&gt;</span><span class="n">varg</span>
+      <span class="o">?</span> <span class="n">pic_true_value</span><span class="p">()</span>
+      <span class="o">:</span> <span class="n">pic_false_value</span><span class="p">();</span>
 
-    varg = scope-&gt;varg
-      ? pic_true_value()
-      : pic_false_value();
+    <span class="cm">/* To know what kind of local variables are defined, analyze body at first. */</span>
+    <span class="n">body</span> <span class="o">=</span> <span class="n">analyze</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">pic_cons</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">pic_sym_value</span><span class="p">(</span><span class="n">pic</span><span class="o">-&gt;</span><span class="n">rBEGIN</span><span class="p">),</span> <span class="n">body_exprs</span><span class="p">),</span> <span class="nb">true</span><span class="p">);</span>
 
-    /* To know what kind of local variables are defined, analyze body at first. */
-    body = analyze(state, pic_cons(pic, pic_sym_value(pic-&gt;rBEGIN), body_exprs), true);
+    <span class="n">analyze_deferred</span><span class="p">(</span><span class="n">state</span><span class="p">);</span>
 
-    analyze_deferred(state);
+    <span class="n">locals</span> <span class="o">=</span> <span class="n">pic_nil_value</span><span class="p">();</span>
+    <span class="k">for</span> <span class="p">(</span><span class="n">i</span> <span class="o">=</span> <span class="n">xv_size</span><span class="p">(</span><span class="o">&amp;</span><span class="n">scope</span><span class="o">-&gt;</span><span class="n">locals</span><span class="p">);</span> <span class="n">i</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">;</span> <span class="o">--</span><span class="n">i</span><span class="p">)</span> <span class="p">{</span>
+      <span class="n">var</span> <span class="o">=</span> <span class="n">xv_get</span><span class="p">(</span><span class="o">&amp;</span><span class="n">scope</span><span class="o">-&gt;</span><span class="n">locals</span><span class="p">,</span> <span class="n">i</span> <span class="o">-</span> <span class="mi">1</span><span class="p">);</span>
+      <span class="n">pic_push</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">pic_sym_value</span><span class="p">(</span><span class="o">*</span><span class="n">var</span><span class="p">),</span> <span class="n">locals</span><span class="p">);</span>
+    <span class="p">}</span>
 
-    locals = pic_nil_value();
-    for (i = xv_size(&amp;scope-&gt;locals); i &gt; 0; --i) {
-      var = xv_get(&amp;scope-&gt;locals, i - 1);
-      pic_push(pic, pic_sym_value(*var), locals);
-    }
+    <span class="n">captures</span> <span class="o">=</span> <span class="n">pic_nil_value</span><span class="p">();</span>
+    <span class="k">for</span> <span class="p">(</span><span class="n">i</span> <span class="o">=</span> <span class="n">xv_size</span><span class="p">(</span><span class="o">&amp;</span><span class="n">scope</span><span class="o">-&gt;</span><span class="n">captures</span><span class="p">);</span> <span class="n">i</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">;</span> <span class="o">--</span><span class="n">i</span><span class="p">)</span> <span class="p">{</span>
+      <span class="n">var</span> <span class="o">=</span> <span class="n">xv_get</span><span class="p">(</span><span class="o">&amp;</span><span class="n">scope</span><span class="o">-&gt;</span><span class="n">captures</span><span class="p">,</span> <span class="n">i</span> <span class="o">-</span> <span class="mi">1</span><span class="p">);</span>
+      <span class="n">pic_push</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">pic_sym_value</span><span class="p">(</span><span class="o">*</span><span class="n">var</span><span class="p">),</span> <span class="n">captures</span><span class="p">);</span>
+    <span class="p">}</span>
 
-    captures = pic_nil_value();
-    for (i = xv_size(&amp;scope-&gt;captures); i &gt; 0; --i) {
-      var = xv_get(&amp;scope-&gt;captures, i - 1);
-      pic_push(pic, pic_sym_value(*var), captures);
-    }
+    <span class="n">pop_scope</span><span class="p">(</span><span class="n">state</span><span class="p">);</span>
+  <span class="p">}</span>
+  <span class="k">else</span> <span class="p">{</span>
+    <span class="n">pic_errorf</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="s">&#34;invalid formal syntax: ~s&#34;</span><span class="p">,</span> <span class="n">args</span><span class="p">);</span>
+  <span class="p">}</span>
 
-    pop_scope(state);
-  }
-  else {
-    pic_errorf(pic, &quot;invalid formal syntax: ~s&quot;, args);
-  }
-
-  return pic_list7(pic, pic_sym_value(pic-&gt;sLAMBDA), name, args, locals, varg, captures, body);
-}
-</code></pre>
-
+  <span class="k">return</span> <span class="n">pic_list7</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">pic_sym_value</span><span class="p">(</span><span class="n">pic</span><span class="o">-&gt;</span><span class="n">sLAMBDA</span><span class="p">),</span> <span class="n">name</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">locals</span><span class="p">,</span> <span class="n">varg</span><span class="p">,</span> <span class="n">captures</span><span class="p">,</span> <span class="n">body</span><span class="p">);</span>
+<span class="p">}</span></code></pre></div>
 <p>スコープを作ったあとは最初に引数をスコープに登録して本体内ででcapture出来るようにしてます。んで本体をanalyzeしてローカル変数と捕捉された変数を洗い出してます。</p>
 
 <p>因みにvargというのはCommon Lispでいう&amp;restや&amp;optionalを引っ括めたものです。</p>
 
 <h2 id="begin">begin</h2>
+<div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="k">static</span> <span class="n">pic_value</span>
+<span class="nf">analyze_begin</span><span class="p">(</span><span class="n">analyze_state</span> <span class="o">*</span><span class="n">state</span><span class="p">,</span> <span class="n">pic_value</span> <span class="n">obj</span><span class="p">,</span> <span class="kt">bool</span> <span class="n">tailpos</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="n">pic_state</span> <span class="o">*</span><span class="n">pic</span> <span class="o">=</span> <span class="n">state</span><span class="o">-&gt;</span><span class="n">pic</span><span class="p">;</span>
+  <span class="n">pic_value</span> <span class="n">seq</span><span class="p">;</span>
+  <span class="kt">bool</span> <span class="n">tail</span><span class="p">;</span>
 
-<pre><code class="language-c">static pic_value
-analyze_begin(analyze_state *state, pic_value obj, bool tailpos)
-{
-  pic_state *pic = state-&gt;pic;
-  pic_value seq;
-  bool tail;
-
-  switch (pic_length(pic, obj)) {
-  case 1:
-    return analyze(state, pic_none_value(), tailpos);
-  case 2:
-    return analyze(state, pic_list_ref(pic, obj, 1), tailpos);
-  default:
-    seq = pic_list1(pic, pic_symbol_value(pic-&gt;sBEGIN));
-    for (obj = pic_cdr(pic, obj); ! pic_nil_p(obj); obj = pic_cdr(pic, obj)) {
-      if (pic_nil_p(pic_cdr(pic, obj))) {
-        tail = tailpos;
-      } else {
-        tail = false;
-      }
-      seq = pic_cons(pic, analyze(state, pic_car(pic, obj), tail), seq);
-    }
-    return pic_reverse(pic, seq);
-  }
-}
-</code></pre>
-
+  <span class="k">switch</span> <span class="p">(</span><span class="n">pic_length</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">))</span> <span class="p">{</span>
+  <span class="k">case</span> <span class="mi">1</span><span class="o">:</span>
+    <span class="k">return</span> <span class="n">analyze</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">pic_none_value</span><span class="p">(),</span> <span class="n">tailpos</span><span class="p">);</span>
+  <span class="k">case</span> <span class="mi">2</span><span class="o">:</span>
+    <span class="k">return</span> <span class="n">analyze</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">pic_list_ref</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">tailpos</span><span class="p">);</span>
+  <span class="k">default</span><span class="o">:</span>
+    <span class="n">seq</span> <span class="o">=</span> <span class="n">pic_list1</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">pic_symbol_value</span><span class="p">(</span><span class="n">pic</span><span class="o">-&gt;</span><span class="n">sBEGIN</span><span class="p">));</span>
+    <span class="k">for</span> <span class="p">(</span><span class="n">obj</span> <span class="o">=</span> <span class="n">pic_cdr</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">);</span> <span class="o">!</span> <span class="n">pic_nil_p</span><span class="p">(</span><span class="n">obj</span><span class="p">);</span> <span class="n">obj</span> <span class="o">=</span> <span class="n">pic_cdr</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">))</span> <span class="p">{</span>
+      <span class="k">if</span> <span class="p">(</span><span class="n">pic_nil_p</span><span class="p">(</span><span class="n">pic_cdr</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">)))</span> <span class="p">{</span>
+        <span class="n">tail</span> <span class="o">=</span> <span class="n">tailpos</span><span class="p">;</span>
+      <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+        <span class="n">tail</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>
+      <span class="p">}</span>
+      <span class="n">seq</span> <span class="o">=</span> <span class="n">pic_cons</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">analyze</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">pic_car</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">),</span> <span class="n">tail</span><span class="p">),</span> <span class="n">seq</span><span class="p">);</span>
+    <span class="p">}</span>
+    <span class="k">return</span> <span class="n">pic_reverse</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">seq</span><span class="p">);</span>
+  <span class="p">}</span>
+<span class="p">}</span></code></pre></div>
 <p>そんなに大したコードじゃないんですけど末尾呼出最適化のためのコードが垣間見えたので載せました。</p>
 
 <p><code>begin</code>自身が末尾位置にいれば<code>begin</code>の最後の式は末尾位置になりますがそれ以外は必ず非末尾位置になるよねーってコードです。</p>
@@ -567,20 +535,17 @@ analyze_begin(analyze_state *state, pic_value obj, bool tailpos)
 <h3 id="vm命令フォーマット">VM命令フォーマット</h3>
 
 <p>フォーマットは3種類あります。</p>
-
-<pre><code class="language-c">struct pic_code {
-  enum pic_opcode insn;
-  union {
-    int i;
-    char c;
-    struct {
-      int depth;
-      int idx;
-    } r;
-  } u;
-};
-</code></pre>
-
+<div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="k">struct</span> <span class="n">pic_code</span> <span class="p">{</span>
+  <span class="k">enum</span> <span class="n">pic_opcode</span> <span class="n">insn</span><span class="p">;</span>
+  <span class="k">union</span> <span class="p">{</span>
+    <span class="kt">int</span> <span class="n">i</span><span class="p">;</span>
+    <span class="kt">char</span> <span class="n">c</span><span class="p">;</span>
+    <span class="k">struct</span> <span class="p">{</span>
+      <span class="kt">int</span> <span class="n">depth</span><span class="p">;</span>
+      <span class="kt">int</span> <span class="n">idx</span><span class="p">;</span>
+    <span class="p">}</span> <span class="n">r</span><span class="p">;</span>
+  <span class="p">}</span> <span class="n">u</span><span class="p">;</span>
+<span class="p">};</span></code></pre></div>
 <p>見ての通り命令番号(opcode)+</p>
 
 <ol>
@@ -592,63 +557,57 @@ analyze_begin(analyze_state *state, pic_value obj, bool tailpos)
 <p>になっています。因みに普通使われるのは1. intで、2. charはOP_PUSHCHARのみ、3. int2つはOP_CREFとOP_CSETのみに使われます。また、引数(?)を全く持たない命令もあります(スタックマシンなため)。</p>
 
 <h3 id="愉快なvm命令たち">愉快なVM命令たち</h3>
-
-<pre><code class="language-c">enum pic_opcode {
-  OP_NOP,
-  OP_POP,
-  OP_PUSHNIL,
-  OP_PUSHTRUE,
-  OP_PUSHFALSE,
-  OP_PUSHINT,
-  OP_PUSHCHAR,
-  OP_PUSHCONST,
-  OP_GREF,
-  OP_GSET,
-  OP_LREF,
-  OP_LSET,
-  OP_CREF,
-  OP_CSET,
-  OP_JMP,
-  OP_JMPIF,
-  OP_NOT,
-  OP_CALL,
-  OP_TAILCALL,
-  OP_RET,
-  OP_LAMBDA,
-  OP_CONS,
-  OP_CAR,
-  OP_CDR,
-  OP_NILP,
-  OP_ADD,
-  OP_SUB,
-  OP_MUL,
-  OP_DIV,
-  OP_MINUS,
-  OP_EQ,
-  OP_LT,
-  OP_LE,
-  OP_STOP
-}
-</code></pre>
-
+<div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="k">enum</span> <span class="n">pic_opcode</span> <span class="p">{</span>
+  <span class="n">OP_NOP</span><span class="p">,</span>
+  <span class="n">OP_POP</span><span class="p">,</span>
+  <span class="n">OP_PUSHNIL</span><span class="p">,</span>
+  <span class="n">OP_PUSHTRUE</span><span class="p">,</span>
+  <span class="n">OP_PUSHFALSE</span><span class="p">,</span>
+  <span class="n">OP_PUSHINT</span><span class="p">,</span>
+  <span class="n">OP_PUSHCHAR</span><span class="p">,</span>
+  <span class="n">OP_PUSHCONST</span><span class="p">,</span>
+  <span class="n">OP_GREF</span><span class="p">,</span>
+  <span class="n">OP_GSET</span><span class="p">,</span>
+  <span class="n">OP_LREF</span><span class="p">,</span>
+  <span class="n">OP_LSET</span><span class="p">,</span>
+  <span class="n">OP_CREF</span><span class="p">,</span>
+  <span class="n">OP_CSET</span><span class="p">,</span>
+  <span class="n">OP_JMP</span><span class="p">,</span>
+  <span class="n">OP_JMPIF</span><span class="p">,</span>
+  <span class="n">OP_NOT</span><span class="p">,</span>
+  <span class="n">OP_CALL</span><span class="p">,</span>
+  <span class="n">OP_TAILCALL</span><span class="p">,</span>
+  <span class="n">OP_RET</span><span class="p">,</span>
+  <span class="n">OP_LAMBDA</span><span class="p">,</span>
+  <span class="n">OP_CONS</span><span class="p">,</span>
+  <span class="n">OP_CAR</span><span class="p">,</span>
+  <span class="n">OP_CDR</span><span class="p">,</span>
+  <span class="n">OP_NILP</span><span class="p">,</span>
+  <span class="n">OP_ADD</span><span class="p">,</span>
+  <span class="n">OP_SUB</span><span class="p">,</span>
+  <span class="n">OP_MUL</span><span class="p">,</span>
+  <span class="n">OP_DIV</span><span class="p">,</span>
+  <span class="n">OP_MINUS</span><span class="p">,</span>
+  <span class="n">OP_EQ</span><span class="p">,</span>
+  <span class="n">OP_LT</span><span class="p">,</span>
+  <span class="n">OP_LE</span><span class="p">,</span>
+  <span class="n">OP_STOP</span>
+<span class="p">}</span></code></pre></div>
 <p>大体名前から分かるかと思います。<code>quote</code>は<code>OP_PUSH*</code>系になります。<code>OP_STOP</code>はあるのに<code>OP_START</code>がないのは分かりますね。開始はユーザーの操作から始まるのに対して停止はプログラム側が行うからです。</p>
 
 <h3 id="lambdaとか">lambdaとか</h3>
 
 <p>lambdaとかのエントリポイント付きのコード1まとまりはirepと呼ばれています。</p>
-
-<pre><code class="language-c">struct pic_irep {
-  PIC_OBJECT_HEADER
-  pic_sym name;
-  pic_code *code;
-  int argc, localc, capturec;
-  bool varg;
-  struct pic_irep **irep;
-  pic_valuel *pool;
-  size_t clen, ilen, plen;
-};
-</code></pre>
-
+<div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="k">struct</span> <span class="n">pic_irep</span> <span class="p">{</span>
+  <span class="n">PIC_OBJECT_HEADER</span>
+  <span class="n">pic_sym</span> <span class="n">name</span><span class="p">;</span>
+  <span class="n">pic_code</span> <span class="o">*</span><span class="n">code</span><span class="p">;</span>
+  <span class="kt">int</span> <span class="n">argc</span><span class="p">,</span> <span class="n">localc</span><span class="p">,</span> <span class="n">capturec</span><span class="p">;</span>
+  <span class="kt">bool</span> <span class="n">varg</span><span class="p">;</span>
+  <span class="k">struct</span> <span class="n">pic_irep</span> <span class="o">**</span><span class="n">irep</span><span class="p">;</span>
+  <span class="n">pic_valuel</span> <span class="o">*</span><span class="n">pool</span><span class="p">;</span>
+  <span class="n">size_t</span> <span class="n">clen</span><span class="p">,</span> <span class="n">ilen</span><span class="p">,</span> <span class="n">plen</span><span class="p">;</span>
+<span class="p">};</span></code></pre></div>
 <ul>
 <li><code>PIC_OBJECT_HEADER</code>: オブジェクトタイプのタグ</li>
 <li><code>name</code>: 名前（あれば）</li>
@@ -669,64 +628,58 @@ analyze_begin(analyze_state *state, pic_value obj, bool tailpos)
 <h3 id="cons">cons</h3>
 
 <p>まずは肩馴らし。</p>
-
-<pre><code class="language-c">  else if (sym == pic-&gt;sCONS) {
-    codegen(state, pic_list_ref(pic, obj, 1));
-    codegen(state, pic_list_ref(pic, obj, 2));
-    cxt-&gt;code[cxt-&gt;clen].insn = OP_CONS;
-    cxt-&gt;clen++;
-    return;
-  }
-</code></pre>
-
+<div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c">  <span class="k">else</span> <span class="nf">if</span> <span class="p">(</span><span class="n">sym</span> <span class="o">==</span> <span class="n">pic</span><span class="o">-&gt;</span><span class="n">sCONS</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">codegen</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">pic_list_ref</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="mi">1</span><span class="p">));</span>
+    <span class="n">codegen</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">pic_list_ref</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="mi">2</span><span class="p">));</span>
+    <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">code</span><span class="p">[</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="p">].</span><span class="n">insn</span> <span class="o">=</span> <span class="n">OP_CONS</span><span class="p">;</span>
+    <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="o">++</span><span class="p">;</span>
+    <span class="k">return</span><span class="p">;</span>
+  <span class="p">}</span></code></pre></div>
 <p>引数1と引数2を生成する命令を吐いてから<code>OP_CONS</code>命令を吐きます。引数1と引数2は自ら値をスタックにPUSHします。</p>
 
 <h3 id="quote-1">quote</h3>
 
 <p>少し長いですが。</p>
+<div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c">  <span class="k">else</span> <span class="nf">if</span> <span class="p">(</span><span class="n">sym</span> <span class="o">==</span> <span class="n">pic</span><span class="o">-&gt;</span><span class="n">sQUOTE</span><span class="p">)</span> <span class="p">{</span>
+    <span class="kt">int</span> <span class="n">pidx</span><span class="p">;</span>
 
-<pre><code class="language-c">  else if (sym == pic-&gt;sQUOTE) {
-    int pidx;
-
-    obj = pic_list_ref(pic, obj, 1);
-    switch (pic_type(obj)) {
-    case PIC_TT_BOOL:
-      if (pic_true_p(obj)) {
-        cxt-&gt;code[cxt-&gt;clen].insn = OP_PUSHTRUE;
-      } else {
-        cxt-&gt;code[cxt-&gt;clen].insn = OP_PUSHFALSE;
-      }
-      cxt-&gt;clen++;
-      return;
-    case PIC_TT_INT:
-      cxt-&gt;code[cxt-&gt;clen].insn = OP_PUSHINT;
-      cxt-&gt;code[cxt-&gt;clen].u.i = pic_int(obj);
-      cxt-&gt;clen++;
-      return;
-    case PIC_TT_NIL:
-      cxt-&gt;code[cxt-&gt;clen].insn = OP_PUSHNIL;
-      cxt-&gt;clen++;
-      return;
-    case PIC_TT_CHAR:
-      cxt-&gt;code[cxt-&gt;clen].insn = OP_PUSHCHAR;
-      cxt-&gt;code[cxt-&gt;clen].u.c = pic_char(obj);
-      cxt-&gt;clen++;
-      return;
-    default:
-      if (cxt-&gt;plen &gt;= cxt-&gt;pcapa) {
-        cxt-&gt;pcapa *= 2;
-        cxt-&gt;pool = pic_realloc(pic, cxt-&gt;pool, sizeof(pic_value) * cxt-&gt;pcapa);
-      }
-      pidx = (int)cxt-&gt;plen++;
-      cxt-&gt;pool[pidx] = obj;
-      cxt-&gt;code[cxt-&gt;clen].insn = OP_PUSHCONST;
-      cxt-&gt;code[cxt-&gt;clen].u.i = pidx;
-      cxt-&gt;clen++;
-      return;
-    }
-  }
-</code></pre>
-
+    <span class="n">obj</span> <span class="o">=</span> <span class="n">pic_list_ref</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="mi">1</span><span class="p">);</span>
+    <span class="k">switch</span> <span class="p">(</span><span class="n">pic_type</span><span class="p">(</span><span class="n">obj</span><span class="p">))</span> <span class="p">{</span>
+    <span class="k">case</span> <span class="nl">PIC_TT_BOOL</span><span class="p">:</span>
+      <span class="k">if</span> <span class="p">(</span><span class="n">pic_true_p</span><span class="p">(</span><span class="n">obj</span><span class="p">))</span> <span class="p">{</span>
+        <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">code</span><span class="p">[</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="p">].</span><span class="n">insn</span> <span class="o">=</span> <span class="n">OP_PUSHTRUE</span><span class="p">;</span>
+      <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+        <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">code</span><span class="p">[</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="p">].</span><span class="n">insn</span> <span class="o">=</span> <span class="n">OP_PUSHFALSE</span><span class="p">;</span>
+      <span class="p">}</span>
+      <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="o">++</span><span class="p">;</span>
+      <span class="k">return</span><span class="p">;</span>
+    <span class="k">case</span> <span class="nl">PIC_TT_INT</span><span class="p">:</span>
+      <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">code</span><span class="p">[</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="p">].</span><span class="n">insn</span> <span class="o">=</span> <span class="n">OP_PUSHINT</span><span class="p">;</span>
+      <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">code</span><span class="p">[</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="p">].</span><span class="n">u</span><span class="p">.</span><span class="n">i</span> <span class="o">=</span> <span class="n">pic_int</span><span class="p">(</span><span class="n">obj</span><span class="p">);</span>
+      <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="o">++</span><span class="p">;</span>
+      <span class="k">return</span><span class="p">;</span>
+    <span class="k">case</span> <span class="nl">PIC_TT_NIL</span><span class="p">:</span>
+      <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">code</span><span class="p">[</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="p">].</span><span class="n">insn</span> <span class="o">=</span> <span class="n">OP_PUSHNIL</span><span class="p">;</span>
+      <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="o">++</span><span class="p">;</span>
+      <span class="k">return</span><span class="p">;</span>
+    <span class="k">case</span> <span class="nl">PIC_TT_CHAR</span><span class="p">:</span>
+      <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">code</span><span class="p">[</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="p">].</span><span class="n">insn</span> <span class="o">=</span> <span class="n">OP_PUSHCHAR</span><span class="p">;</span>
+      <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">code</span><span class="p">[</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="p">].</span><span class="n">u</span><span class="p">.</span><span class="n">c</span> <span class="o">=</span> <span class="n">pic_char</span><span class="p">(</span><span class="n">obj</span><span class="p">);</span>
+      <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="o">++</span><span class="p">;</span>
+      <span class="k">return</span><span class="p">;</span>
+    <span class="k">default</span><span class="o">:</span>
+      <span class="k">if</span> <span class="p">(</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">plen</span> <span class="o">&gt;=</span> <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">pcapa</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">pcapa</span> <span class="o">*=</span> <span class="mi">2</span><span class="p">;</span>
+        <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">pool</span> <span class="o">=</span> <span class="n">pic_realloc</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">pool</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">pic_value</span><span class="p">)</span> <span class="o">*</span> <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">pcapa</span><span class="p">);</span>
+      <span class="p">}</span>
+      <span class="n">pidx</span> <span class="o">=</span> <span class="p">(</span><span class="kt">int</span><span class="p">)</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">plen</span><span class="o">++</span><span class="p">;</span>
+      <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">pool</span><span class="p">[</span><span class="n">pidx</span><span class="p">]</span> <span class="o">=</span> <span class="n">obj</span><span class="p">;</span>
+      <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">code</span><span class="p">[</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="p">].</span><span class="n">insn</span> <span class="o">=</span> <span class="n">OP_PUSHCONST</span><span class="p">;</span>
+      <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">code</span><span class="p">[</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="p">].</span><span class="n">u</span><span class="p">.</span><span class="n">i</span> <span class="o">=</span> <span class="n">pidx</span><span class="p">;</span>
+      <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="o">++</span><span class="p">;</span>
+      <span class="k">return</span><span class="p">;</span>
+    <span class="p">}</span>
+  <span class="p">}</span></code></pre></div>
 <p>リテラルや定数をPUSHする命令を吐いてますね。</p>
 
 <h3 id="ref系">REF系</h3>
@@ -734,136 +687,121 @@ analyze_begin(analyze_state *state, pic_value obj, bool tailpos)
 <p>local、captureはirep構造体についてるのpoolを参照します。globalはVMのシンボルテーブルから直接引きます。因みにpicrinのシンボルはただのintです。</p>
 
 <p>captureは上位のスコープで既に出てきた変数を参照するだけなので「n個上位のm番目のcaptured変数」と指定するだけなので簡単ですが、localはarg、普通のlocal、下位スコープにcaptureされたlocal、の3つに分けて置いているので少し面倒です。</p>
+<div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c">  <span class="k">if</span> <span class="p">(</span><span class="n">sym</span> <span class="o">==</span> <span class="n">state</span><span class="o">-&gt;</span><span class="n">sGREF</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">code</span><span class="p">[</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="p">].</span><span class="n">insn</span> <span class="o">=</span> <span class="n">OP_GREF</span><span class="p">;</span>
+    <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">code</span><span class="p">[</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="p">].</span><span class="n">u</span><span class="p">.</span><span class="n">i</span> <span class="o">=</span> <span class="n">pic_sym</span><span class="p">(</span><span class="n">pic_list_ref</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="mi">1</span><span class="p">));</span>
+    <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="o">++</span><span class="p">;</span>
+    <span class="k">return</span><span class="p">;</span>
+  <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="n">sym</span> <span class="o">==</span> <span class="n">state</span><span class="o">-&gt;</span><span class="n">sCREF</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">pic_sym</span> <span class="n">name</span><span class="p">;</span>
+    <span class="kt">int</span> <span class="n">depth</span><span class="p">;</span>
 
-<pre><code class="language-c">  if (sym == state-&gt;sGREF) {
-    cxt-&gt;code[cxt-&gt;clen].insn = OP_GREF;
-    cxt-&gt;code[cxt-&gt;clen].u.i = pic_sym(pic_list_ref(pic, obj, 1));
-    cxt-&gt;clen++;
-    return;
-  } else if (sym == state-&gt;sCREF) {
-    pic_sym name;
-    int depth;
+    <span class="n">depth</span> <span class="o">=</span> <span class="n">pic_int</span><span class="p">(</span><span class="n">pic_list_ref</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="mi">1</span><span class="p">));</span>
+    <span class="n">name</span>  <span class="o">=</span> <span class="n">pic_sym</span><span class="p">(</span><span class="n">pic_list_ref</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="mi">2</span><span class="p">));</span>
+    <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">code</span><span class="p">[</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="p">].</span><span class="n">insn</span> <span class="o">=</span> <span class="n">OP_CREF</span><span class="p">;</span>
+    <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">code</span><span class="p">[</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="p">].</span><span class="n">u</span><span class="p">.</span><span class="n">r</span><span class="p">.</span><span class="n">depth</span> <span class="o">=</span> <span class="n">depth</span><span class="p">;</span>
+    <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">code</span><span class="p">[</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="p">].</span><span class="n">u</span><span class="p">.</span><span class="n">r</span><span class="p">.</span><span class="n">idx</span> <span class="o">=</span> <span class="n">index_capture</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">depth</span><span class="p">);</span>
+    <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="o">++</span><span class="p">;</span>
+    <span class="k">return</span><span class="p">;</span>
+  <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="n">sym</span> <span class="o">==</span> <span class="n">state</span><span class="o">-&gt;</span><span class="n">sLREF</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">pic_sym</span> <span class="n">name</span><span class="p">;</span>
+    <span class="kt">int</span> <span class="n">i</span><span class="p">;</span>
 
-    depth = pic_int(pic_list_ref(pic, obj, 1));
-    name  = pic_sym(pic_list_ref(pic, obj, 2));
-    cxt-&gt;code[cxt-&gt;clen].insn = OP_CREF;
-    cxt-&gt;code[cxt-&gt;clen].u.r.depth = depth;
-    cxt-&gt;code[cxt-&gt;clen].u.r.idx = index_capture(state, name, depth);
-    cxt-&gt;clen++;
-    return;
-  } else if (sym == state-&gt;sLREF) {
-    pic_sym name;
-    int i;
-
-    name = pic_sym(pic_list_ref(pic, obj, 1));
-    if ((i = index_capture(state, name, 0)) != -1) {
-      cxt-&gt;code[cxt-&gt;clen].insn = OP_LREF;
-      cxt-&gt;code[cxt-&gt;clen].u.i = i + (int)xv_size(&amp;cxt-&gt;args) + (int)xv_size(&amp;cxt-&gt;locals) + 1;
-      cxt-&gt;clen++;
-      return;
-    }
-    cxt-&gt;code[cxt-&gt;clen].insn = OP_LREF;
-    cxt-&gt;code[cxt-&gt;clen].u.i = index_local(state, name);
-    cxt-&gt;clen++;
-    return;
-  }
-</code></pre>
-
+    <span class="n">name</span> <span class="o">=</span> <span class="n">pic_sym</span><span class="p">(</span><span class="n">pic_list_ref</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="mi">1</span><span class="p">));</span>
+    <span class="k">if</span> <span class="p">((</span><span class="n">i</span> <span class="o">=</span> <span class="n">index_capture</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span> <span class="o">!=</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+      <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">code</span><span class="p">[</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="p">].</span><span class="n">insn</span> <span class="o">=</span> <span class="n">OP_LREF</span><span class="p">;</span>
+      <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">code</span><span class="p">[</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="p">].</span><span class="n">u</span><span class="p">.</span><span class="n">i</span> <span class="o">=</span> <span class="n">i</span> <span class="o">+</span> <span class="p">(</span><span class="kt">int</span><span class="p">)</span><span class="n">xv_size</span><span class="p">(</span><span class="o">&amp;</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">args</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="kt">int</span><span class="p">)</span><span class="n">xv_size</span><span class="p">(</span><span class="o">&amp;</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">locals</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">;</span>
+      <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="o">++</span><span class="p">;</span>
+      <span class="k">return</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">code</span><span class="p">[</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="p">].</span><span class="n">insn</span> <span class="o">=</span> <span class="n">OP_LREF</span><span class="p">;</span>
+    <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">code</span><span class="p">[</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="p">].</span><span class="n">u</span><span class="p">.</span><span class="n">i</span> <span class="o">=</span> <span class="n">index_local</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">name</span><span class="p">);</span>
+    <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="o">++</span><span class="p">;</span>
+    <span class="k">return</span><span class="p">;</span>
+  <span class="p">}</span></code></pre></div>
 <p>因みにset系もほぼ同じようなコードです。</p>
 
 <h3 id="lambda-2">lambda</h3>
+<div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c">  <span class="k">else</span> <span class="nf">if</span> <span class="p">(</span><span class="n">sym</span> <span class="o">==</span> <span class="n">pic</span><span class="o">-&gt;</span><span class="n">sLAMBDA</span><span class="p">)</span> <span class="p">{</span>
+    <span class="kt">int</span> <span class="n">k</span><span class="p">;</span>
 
-<pre><code class="language-c">  else if (sym == pic-&gt;sLAMBDA) {
-    int k;
+    <span class="k">if</span> <span class="p">(</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">ilen</span> <span class="o">&gt;=</span> <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">icapa</span><span class="p">)</span> <span class="p">{</span>
+      <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">icapa</span> <span class="o">*=</span> <span class="mi">2</span><span class="p">;</span>
+      <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">irep</span> <span class="o">=</span> <span class="n">pic_realloc</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">irep</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="k">struct</span> <span class="n">pic_irep</span> <span class="o">*</span><span class="p">)</span> <span class="o">*</span> <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">icapa</span><span class="p">);</span>
+    <span class="p">}</span>
+    <span class="n">k</span> <span class="o">=</span> <span class="p">(</span><span class="kt">int</span><span class="p">)</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">ilen</span><span class="o">++</span><span class="p">;</span>
+    <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">code</span><span class="p">[</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="p">].</span><span class="n">insn</span> <span class="o">=</span> <span class="n">OP_LAMBDA</span><span class="p">;</span>
+    <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">code</span><span class="p">[</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="p">].</span><span class="n">u</span><span class="p">.</span><span class="n">i</span> <span class="o">=</span> <span class="n">k</span><span class="p">;</span>
+    <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="o">++</span><span class="p">;</span>
 
-    if (cxt-&gt;ilen &gt;= cxt-&gt;icapa) {
-      cxt-&gt;icapa *= 2;
-      cxt-&gt;irep = pic_realloc(pic, cxt-&gt;irep, sizeof(struct pic_irep *) * cxt-&gt;icapa);
-    }
-    k = (int)cxt-&gt;ilen++;
-    cxt-&gt;code[cxt-&gt;clen].insn = OP_LAMBDA;
-    cxt-&gt;code[cxt-&gt;clen].u.i = k;
-    cxt-&gt;clen++;
-
-    cxt-&gt;irep[k] = codegen_lambda(state, obj);
-    return;
-  }
-</code></pre>
-
+    <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">irep</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">codegen_lambda</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">obj</span><span class="p">);</span>
+    <span class="k">return</span><span class="p">;</span>
+  <span class="p">}</span></code></pre></div>
 <p><code>codegen_lambda</code>に投げているのでこの部分は簡単です。irepプールにコードを置いてそれを参照する命令を吐くだけ。</p>
 
 <p><code>codegen_lambda</code>はというとそこまで長くなくて</p>
+<div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="k">static</span> <span class="k">struct</span> <span class="n">pic_irep</span> <span class="o">*</span>
+<span class="nf">codegen_lambda</span><span class="p">(</span><span class="n">codegen_state</span> <span class="o">*</span><span class="n">state</span><span class="p">,</span> <span class="n">pic_value</span> <span class="n">obj</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="n">pic_state</span> <span class="o">*</span><span class="n">pic</span> <span class="o">=</span> <span class="n">state</span><span class="o">-&gt;</span><span class="n">pic</span><span class="p">;</span>
+  <span class="n">pic_value</span> <span class="n">name</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">locals</span><span class="p">,</span> <span class="n">closes</span><span class="p">,</span> <span class="n">body</span><span class="p">;</span>
+  <span class="kt">bool</span> <span class="n">varg</span><span class="p">;</span>
 
-<pre><code class="language-c">static struct pic_irep *
-codegen_lambda(codegen_state *state, pic_value obj)
-{
-  pic_state *pic = state-&gt;pic;
-  pic_value name, args, locals, closes, body;
-  bool varg;
+  <span class="n">name</span> <span class="o">=</span> <span class="n">pic_list_ref</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="mi">1</span><span class="p">);</span>
+  <span class="n">args</span> <span class="o">=</span> <span class="n">pic_list_ref</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="mi">2</span><span class="p">);</span>
+  <span class="n">locals</span> <span class="o">=</span> <span class="n">pic_list_ref</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="mi">3</span><span class="p">);</span>
+  <span class="n">varg</span> <span class="o">=</span> <span class="n">pic_true_p</span><span class="p">(</span><span class="n">pic_list_ref</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="mi">4</span><span class="p">));</span>
+  <span class="n">closes</span> <span class="o">=</span> <span class="n">pic_list_ref</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="mi">5</span><span class="p">);</span>
+  <span class="n">body</span> <span class="o">=</span> <span class="n">pic_list_ref</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="mi">6</span><span class="p">);</span>
 
-  name = pic_list_ref(pic, obj, 1);
-  args = pic_list_ref(pic, obj, 2);
-  locals = pic_list_ref(pic, obj, 3);
-  varg = pic_true_p(pic_list_ref(pic, obj, 4));
-  closes = pic_list_ref(pic, obj, 5);
-  body = pic_list_ref(pic, obj, 6);
-
-  /* inner environment */
-  push_codegen_context(state, name, args, locals, varg, closes);
-  {
-    /* body */
-    codegen(state, body);
-  }
-  return pop_codegen_context(state);
-}
-</code></pre>
-
+  <span class="cm">/* inner environment */</span>
+  <span class="n">push_codegen_context</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">locals</span><span class="p">,</span> <span class="n">varg</span><span class="p">,</span> <span class="n">closes</span><span class="p">);</span>
+  <span class="p">{</span>
+    <span class="cm">/* body */</span>
+    <span class="n">codegen</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">body</span><span class="p">);</span>
+  <span class="p">}</span>
+  <span class="k">return</span> <span class="n">pop_codegen_context</span><span class="p">(</span><span class="n">state</span><span class="p">);</span>
+<span class="p">}</span></code></pre></div>
 <p>単純に本体に対して<code>codegen</code>を呼んで出来た命令を取り出してるだけです。</p>
 
 <h3 id="if">if</h3>
 
 <p>schemeはほとんどの制御を継続に任せているのでなんとjmp命令を吐くのはifだけです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c">  <span class="k">else</span> <span class="nf">if</span> <span class="p">(</span><span class="n">sym</span> <span class="o">==</span> <span class="n">pic</span><span class="o">-&gt;</span><span class="n">sIF</span><span class="p">)</span> <span class="p">{</span>
+    <span class="kt">int</span> <span class="n">s</span><span class="p">,</span> <span class="n">t</span><span class="p">;</span>
 
-<pre><code class="language-c">  else if (sym == pic-&gt;sIF) {
-    int s, t;
+    <span class="n">codegen</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">pic_list_ref</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="mi">1</span><span class="p">));</span>
 
-    codegen(state, pic_list_ref(pic, obj, 1));
+    <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">code</span><span class="p">[</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="p">].</span><span class="n">insn</span> <span class="o">=</span> <span class="n">OP_JMPIF</span><span class="p">;</span>
+    <span class="n">s</span> <span class="o">=</span> <span class="p">(</span><span class="kt">int</span><span class="p">)</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="o">++</span><span class="p">;</span>
 
-    cxt-&gt;code[cxt-&gt;clen].insn = OP_JMPIF;
-    s = (int)cxt-&gt;clen++;
+    <span class="cm">/* if false branch */</span>
+    <span class="n">codegen</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">pic_list_ref</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="mi">3</span><span class="p">));</span>
+    <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">code</span><span class="p">[</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="p">].</span><span class="n">insn</span> <span class="o">=</span> <span class="n">OP_JMP</span><span class="p">;</span>
+    <span class="n">t</span> <span class="o">=</span> <span class="p">(</span><span class="kt">int</span><span class="p">)</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="o">++</span><span class="p">;</span>
 
-    /* if false branch */
-    codegen(state, pic_list_ref(pic, obj, 3));
-    cxt-&gt;code[cxt-&gt;clen].insn = OP_JMP;
-    t = (int)cxt-&gt;clen++;
+    <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">code</span><span class="p">[</span><span class="n">s</span><span class="p">].</span><span class="n">u</span><span class="p">.</span><span class="n">i</span> <span class="o">=</span> <span class="p">(</span><span class="kt">int</span><span class="p">)</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span> <span class="o">-</span> <span class="n">s</span><span class="p">;</span>
 
-    cxt-&gt;code[s].u.i = (int)cxt-&gt;clen - s;
-
-    /* if true branch */
-    codegen(state, pic_list_ref(pic, obj, 2));
-    cxt-&gt;code[t].u.i = (int)cxt-&gt;clen - t;
-    return;
-  }
-</code></pre>
-
+    <span class="cm">/* if true branch */</span>
+    <span class="n">codegen</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">pic_list_ref</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="mi">2</span><span class="p">));</span>
+    <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">code</span><span class="p">[</span><span class="n">t</span><span class="p">].</span><span class="n">u</span><span class="p">.</span><span class="n">i</span> <span class="o">=</span> <span class="p">(</span><span class="kt">int</span><span class="p">)</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span> <span class="o">-</span> <span class="n">t</span><span class="p">;</span>
+    <span class="k">return</span><span class="p">;</span>
+  <span class="p">}</span></code></pre></div>
 <h3 id="call">call</h3>
 
 <p>思ったより短いです。単純に引数を評価する命令を吐いたあと引数の数を指定して呼ぶだけです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c">  <span class="k">else</span> <span class="nf">if</span> <span class="p">(</span><span class="n">sym</span> <span class="o">==</span> <span class="n">state</span><span class="o">-&gt;</span><span class="n">sCALL</span> <span class="o">||</span> <span class="n">sym</span> <span class="o">==</span> <span class="n">state</span><span class="o">-&gt;</span><span class="n">sTAILCALL</span><span class="p">)</span> <span class="p">{</span>
+    <span class="kt">int</span> <span class="n">len</span> <span class="o">=</span> <span class="p">(</span><span class="kt">int</span><span class="p">)</span><span class="n">pic_length</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">);</span>
+    <span class="n">pic_value</span> <span class="n">elt</span><span class="p">;</span>
 
-<pre><code class="language-c">  else if (sym == state-&gt;sCALL || sym == state-&gt;sTAILCALL) {
-    int len = (int)pic_length(pic, obj);
-    pic_value elt;
-
-    pic_for_each (elt, pic_cdr(pic, obj)) {
-      codegen(state, elt);
-    }
-    cxt-&gt;code[cxt-&gt;clen].insn = (sym == state-&gt;sCALL) ? OP_CALL : OP_TAILCALL;
-    cxt-&gt;code[cxt-&gt;clen].u.i = len - 1;
-    cxt-&gt;clen++;
-    return;
-  }
-</code></pre>
-
+    <span class="n">pic_for_each</span> <span class="p">(</span><span class="n">elt</span><span class="p">,</span> <span class="n">pic_cdr</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">obj</span><span class="p">))</span> <span class="p">{</span>
+      <span class="n">codegen</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">elt</span><span class="p">);</span>
+    <span class="p">}</span>
+    <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">code</span><span class="p">[</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="p">].</span><span class="n">insn</span> <span class="o">=</span> <span class="p">(</span><span class="n">sym</span> <span class="o">==</span> <span class="n">state</span><span class="o">-&gt;</span><span class="n">sCALL</span><span class="p">)</span> <span class="o">?</span> <span class="nl">OP_CALL</span> <span class="p">:</span> <span class="n">OP_TAILCALL</span><span class="p">;</span>
+    <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">code</span><span class="p">[</span><span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="p">].</span><span class="n">u</span><span class="p">.</span><span class="n">i</span> <span class="o">=</span> <span class="n">len</span> <span class="o">-</span> <span class="mi">1</span><span class="p">;</span>
+    <span class="n">cxt</span><span class="o">-&gt;</span><span class="n">clen</span><span class="o">++</span><span class="p">;</span>
+    <span class="k">return</span><span class="p">;</span>
+  <span class="p">}</span></code></pre></div>
 <h1 id="最後に">最後に</h1>
 
 <p>これを書くのに半日掛かりましたがちゃんとコンパイルプロセスを理解して問題を洗い出すことが出来ました。良かった。</p>

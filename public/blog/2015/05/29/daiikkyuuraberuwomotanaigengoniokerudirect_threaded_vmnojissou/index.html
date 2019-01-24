@@ -36,9 +36,7 @@ SMLのようにgotoがない言語だとDT VMの実装出来ないよなー、�
 
         </script>
         
-        <link rel="stylesheet" href="//KeenS.github.io/highlight.js/styles/monokai.css" />
-<script src="//KeenS.github.io/highlight.js/highlight.min.js"></script>
-<script>hljs.initHighlightingOnLoad();</script>
+        <link rel="stylesheet" href="//KeenS.github.io/css/syntax-monokai.css" />
 <script type="text/x-mathjax-config">
  MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
 </script>
@@ -212,8 +210,7 @@ label2:
 <p><a href="https://github.com/KeenS/SML-VM">ソースコード全体</a>はGithuに上げてます。SML/NJで動きます。SML#向けのインターフェースファイルを書いていますが何故かコンパイルが通りません。</p>
 
 <p>次のようなASTを実行するインタプリタ、VM、Direct Threaded VMを実装しました。但し、VMとDTVMはクロージャをサポートしていません。</p>
-
-<pre><code class="language-sml">datatype monoop
+<div class="highlight"><pre class="chroma"><code class="language-sml" data-lang="sml">datatype monoop
   = Not
 
 datatype binop
@@ -231,14 +228,11 @@ datatype t
   | Var of string
   | Lambda of t list * t
   | Call of t * t list
-  | Progn of t list
-</code></pre>
-
+  | Progn of t list</code></pre></div>
 <p>インタプリタはこのASTを解釈実行、VMはいくつかの中間表現を経てオペコードにコンパイルし、それを実行します。尚、最適化は行いません。</p>
 
 <p>VMのディスパッチ部分は次のような実装になっています。</p>
-
-<pre><code class="language-sml">    fun aux () = (
+<div class="highlight"><pre class="chroma"><code class="language-sml" data-lang="sml">    fun aux () = (
         case  (Array.sub(ops, !pc)) of
             O.Not =&gt; (case pop vm of
                          V.Bool x =&gt; push vm (V.Bool (not x))
@@ -278,12 +272,9 @@ datatype t
           | O.End =&gt; raise Exit
       ;
         pc := (!pc) + 1;
-      aux ())
-</code></pre>
-
+      aux ())</code></pre></div>
 <p>DT VMではこれを次のように書き換えました。</p>
-
-<pre><code class="language-sml">fun next () = let
+<div class="highlight"><pre class="chroma"><code class="language-sml" data-lang="sml">fun next () = let
     val () = pc := (!pc) + 1;
     val (index, arg) = Array.sub(cops, !pc) in
     Array.sub(opArray, index) arg
@@ -376,9 +367,7 @@ Array.fromList [
 
 fun aux () = let val (index, arg) = Array.sub(cops, !pc) in
                  Array.sub(opArray, index) arg
-             end
-</code></pre>
-
+             end</code></pre></div>
 <p>1引数を受け取ってunitを返す関数の配列としてVMを表しています。
 1つ注意点として、前処理としてタグ付き共用体として表されている命令をタグ(配列のインデックス)と共用体に分解するのですが、SMLに共用体はないので構造体で代用しています。 <code>oparg</code> 型がそれにあたります。</p>
 
@@ -397,24 +386,21 @@ fun aux () = let val (index, arg) = Array.sub(cops, !pc) in
 <h2 id="計測">計測</h2>
 
 <p>今回、次のようなフィボナッチ数列を計算するコードの実行速度を計測しました。</p>
-
-<pre><code class="language-sml">fun fib n = (Progn [
-                Bind (Var &quot;fib&quot;,
-                      Lambda([Var &quot;n&quot;],
+<div class="highlight"><pre class="chroma"><code class="language-sml" data-lang="sml">fun fib n = (Progn [
+                Bind (Var &#34;fib&#34;,
+                      Lambda([Var &#34;n&#34;],
                                (If (BinOp(GreaterThan,
                                           (Int 2),
-                                          (Var &quot;n&quot;)),
+                                          (Var &#34;n&#34;)),
                                     Int(1),
                                     BinOp(Add,
-                                          Call(Var &quot;fib&quot;, [BinOp(Add,
-                                                                 Var &quot;n&quot;,
+                                          Call(Var &#34;fib&#34;, [BinOp(Add,
+                                                                 Var &#34;n&#34;,
                                                                  Int ~1)]),
-                                          Call(Var &quot;fib&quot;, [BinOp(Add,
-                                                                 Var &quot;n&quot;,
+                                          Call(Var &#34;fib&#34;, [BinOp(Add,
+                                                                 Var &#34;n&#34;,
                                                                  Int ~2)])))))),
-                Call(Var &quot;fib&quot;, [Int n])])
-</code></pre>
-
+                Call(Var &#34;fib&#34;, [Int n])])</code></pre></div>
 <p>コンパイラは以下のような命令列を吐きます。命令の内部表現が違うだけで命令列自体はVMとDTVMで共通です。
 繰り返しますが、最適化はしてないのでL25で次の命令にジャンプしてるだとか目に見えて無駄なコードもあります。</p>
 
@@ -448,23 +434,20 @@ fun aux () = let val (index, arg) = Array.sub(cops, !pc) in
 </code></pre>
 
 <p>計測には次のようなコードを使いました。コンパイラは実行効率を無視して書いたのでベンチマークには含めていません。</p>
-
-<pre><code class="language-sml">val target = (AST.fib 35)
+<div class="highlight"><pre class="chroma"><code class="language-sml" data-lang="sml">val target = (AST.fib 35)
 val compiled = VM.compile target
 val dtcompiled = DTVM.compile target
 val vm = VM.new ()
 val dtvm = DTVM.new ()
 
-val _ = Benchmark.benchset &quot;fib 35&quot; 1 [
-        (&quot;Interpreter&quot;,
+val _ = Benchmark.benchset &#34;fib 35&#34; 1 [
+        (&#34;Interpreter&#34;,
          fn () =&gt; (Interp.run target; ())),
-        (&quot;Normal VM&quot;,
+        (&#34;Normal VM&#34;,
          fn () =&gt; (VM.run vm compiled; ())),
-        (&quot;Direct Threaded VM&quot;,
+        (&#34;Direct Threaded VM&#34;,
          fn () =&gt; (DTVM.run dtvm dtcompiled; ()))
-    ]
-</code></pre>
-
+    ]</code></pre></div>
 <h2 id="結果">結果</h2>
 
 <p>Intel Core i5 M450 2.4GHz 2コア4スレッド、Ubunt 15.04、SML/NJ v110.77で実行しました。</p>
@@ -489,23 +472,20 @@ val _ = Benchmark.benchset &quot;fib 35&quot; 1 [
 <script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script></p>
 
 <p>尚、このつぶやきはfibの引数を小さくして繰り返しを増やした時のものです。多分コンパイルを外に出してるので繰り返しが多いとその分のオーバーヘッドの差が効いてくるのでしょう。</p>
-
-<pre><code class="language-sml">val target = (AST.fib 24)
+<div class="highlight"><pre class="chroma"><code class="language-sml" data-lang="sml">val target = (AST.fib 24)
 val compiled = VM.compile target
 val dtcompiled = DTVM.compile target
 val vm = VM.new ()
 val dtvm = DTVM.new ()
 
-val _ = Benchmark.benchset &quot;fib 24&quot; 10 [
-        (&quot;Interpreter&quot;,
+val _ = Benchmark.benchset &#34;fib 24&#34; 10 [
+        (&#34;Interpreter&#34;,
          fn () =&gt; (Interp.run target; ())),
-        (&quot;Normal VM&quot;,
+        (&#34;Normal VM&#34;,
          fn () =&gt; (VM.run vm compiled; ())),
-        (&quot;Direct Threaded VM&quot;,
+        (&#34;Direct Threaded VM&#34;,
          fn () =&gt; (DTVM.run dtvm dtcompiled; ()))
-    ]
-</code></pre>
-
+    ]</code></pre></div>
 <pre><code>-------------------+---------------------------------------------------
  Interpreter       |************************************************** 2052ms
  Normal VM         |** 104ms

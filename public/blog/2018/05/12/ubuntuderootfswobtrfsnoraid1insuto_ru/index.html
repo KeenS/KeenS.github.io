@@ -37,9 +37,7 @@
 
         </script>
         
-        <link rel="stylesheet" href="//KeenS.github.io/highlight.js/styles/monokai.css" />
-<script src="//KeenS.github.io/highlight.js/highlight.min.js"></script>
-<script>hljs.initHighlightingOnLoad();</script>
+        <link rel="stylesheet" href="//KeenS.github.io/css/syntax-monokai.css" />
 <script type="text/x-mathjax-config">
  MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
 </script>
@@ -185,8 +183,7 @@
 <p>ただし/bootしか作業しないのとfdisk相当の処理をインストーラでやってしまったでかなり簡略化されます。</p>
 
 <p>まずはUbuntuがinstallされて<strong>いない</strong>方のデバイスを準備します。</p>
-
-<pre><code class="language-console">$ sudo apt install mdadm
+<div class="highlight"><pre class="chroma"><code class="language-console" data-lang="console">$ sudo apt install mdadm
 # RAID1 の準備。なんかメタデータでwarning出るけど強行突破しても問題なさそう
 $ sudo mdadm --create /dev/md0 --auto=yes --level=raid1 --raid-devices=2 missing /dev/sdb1
 # 設定ファイルの生成
@@ -204,9 +201,7 @@ $ sudo mount /dev/md0 /boot
 # ここでfstabを編集して /boot の起動デバイスを/dev/md0にする
 $ vi /etc/fstab
 # mdadmを使った構成をブートシーケンスに反映させる
-$ sudo update-initramfs -u
-</code></pre>
-
+$ sudo update-initramfs -u</code></pre></div>
 <p>因みに<code>update-initramfs</code>は失敗すると起動しなくなるコマンドなので盲目的に叩くのではなくて何をするコマンドなのかは調べてから使いましょう。
 余談ですが私はこのタイミングで<code>/etc/fstab</code>のswapfsの行を削除して/swapのファイルを消しました。</p>
 
@@ -215,17 +210,11 @@ $ sudo update-initramfs -u
 <h2 id="再起動後">再起動後</h2>
 
 <p>ここでは既にディスク2の/bootから起動しているはずです。ディスク1の/bootパーティションをこれのRAID1 Arrayに加えます。</p>
-
-<pre><code class="language-console">$ sudo mdadm /dev/md0 --add /dev/sda1
-</code></pre>
-
+<div class="highlight"><pre class="chroma"><code class="language-console" data-lang="console">$ sudo mdadm /dev/md0 --add /dev/sda1</code></pre></div>
 <p>最後にgrubをインストールします。</p>
-
-<pre><code class="language-console">$ sudo install-grub2 /dev/ディスク1
+<div class="highlight"><pre class="chroma"><code class="language-console" data-lang="console">$ sudo install-grub2 /dev/ディスク1
 $ sudo install-grub2 /dev/ディスク2
-$ sudo update-grub
-</code></pre>
-
+$ sudo update-grub</code></pre></div>
 <p>これで再起動して正常に起動したら/bootはmdadm化できました。</p>
 
 <h1 id="のraid化">/ のRAID化</h1>
@@ -235,11 +224,8 @@ $ sudo update-grub
 <p>今は / はディスク1から読まれていて、ディスク2が空いてるはずです。これにディスク2を加えます。</p>
 
 <p>btrfsの機能を使うのですぐに終わります。</p>
-
-<pre><code class="language-console">$ sudo btrfs device add -f /dev/ディスク2 /mnt
-$ sudo btrfs balance start -dconvert=raid1 -mconvert=raid1 /
-</code></pre>
-
+<div class="highlight"><pre class="chroma"><code class="language-console" data-lang="console">$ sudo btrfs device add -f /dev/ディスク2 /mnt
+$ sudo btrfs balance start -dconvert=raid1 -mconvert=raid1 /</code></pre></div>
 <p>これだけ。</p>
 
 <p>…のはずですがinitramfsにバグがあるらしく、これだと起動時にディスク2が見つからずにエラーが出ます。
@@ -289,17 +275,14 @@ Shiftを押しながら起動時するとgrubのメニューにいくようで�
 <p>適切なシーケンスを踏んでない(systemdとかを起動してない)ので修正作業用の一時処理です。</p>
 
 <p>Ubuntuのインストーラでbtrfsでフォーマットすると裏で勝手に/用の<code>@</code>と/home用の<code>@home</code>の2つのsubvolumeを作るようです。</p>
-
-<pre><code class="language-console">(initramfs) mount -o subvol=@ /dev/ディスク2 /root
+<div class="highlight"><pre class="chroma"><code class="language-console" data-lang="console">(initramfs) mount -o subvol=@ /dev/ディスク2 /root
 (initramfs) mount -o subvol=@home /dev/ディスク2 /root/home
 (initramfs) mount -o move /sys /root/sys
 (initramfs) mount -o move /proc /root/proc
 (initramfs) mount -o move /dev /root/dev
 (initramfs) chroot root
 bash # mdadm --assemble --scan
-bash # mount /dev/md0 /boot
-</code></pre>
-
+bash # mount /dev/md0 /boot</code></pre></div>
 <p>これでfstabやgrubやinitramfsを修正できます。</p>
 
 <h1 id="参考">参考</h1>

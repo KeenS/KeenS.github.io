@@ -40,9 +40,7 @@
 
         </script>
         
-        <link rel="stylesheet" href="//KeenS.github.io/highlight.js/styles/monokai.css" />
-<script src="//KeenS.github.io/highlight.js/highlight.min.js"></script>
-<script>hljs.initHighlightingOnLoad();</script>
+        <link rel="stylesheet" href="//KeenS.github.io/css/syntax-monokai.css" />
 <script type="text/x-mathjax-config">
  MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
 </script>
@@ -436,95 +434,91 @@ $0 is: /home/kim/bin/cargo-foo
 <p>ちょっと独特な引数の渡り方をしてますね。しかし予め了解しておけば特に問題はなさそうです。1つサブコマンドを作ってみましょう。</p>
 
 <p>指定した名前のパッケージをCargo.tomlのdependenciesに書き足してくれるサブコマンドです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh"><span class="cp">#!/bin/sh
+</span><span class="cp"></span>usage<span class="o">(){</span>
+    cat <span class="s">&lt;&lt;EOF
+</span><span class="s">Add the dependency of crate to Cargo.toml
+</span><span class="s">
+</span><span class="s">Usage:
+</span><span class="s">    cargo use &lt;crate&gt; [version]
+</span><span class="s">    cargo use -h | --help
+</span><span class="s">
+</span><span class="s">Description:
+</span><span class="s">    Add the dependency of crate to Cargo.toml.
+</span><span class="s">    If vension is omitted, adopt the latest version.
+</span><span class="s">
+</span><span class="s">EOF</span>
+<span class="o">}</span>
 
-<pre><code class="language-sh">#!/bin/sh
-usage(){
-    cat &lt;&lt;EOF
-Add the dependency of crate to Cargo.toml
+version<span class="o">(){</span>
+    cargo search <span class="s2">&#34;</span><span class="nv">$1</span><span class="s2">&#34;</span> <span class="p">|</span> grep -Eo <span class="s2">&#34;^</span><span class="nv">$1</span><span class="s2"> \(.*?\)&#34;</span> <span class="p">|</span> sed <span class="s2">&#34;s/^</span><span class="nv">$1</span><span class="s2"> (\(.*\))/\1/&#34;</span>
+<span class="o">}</span>
 
-Usage:
-    cargo use &lt;crate&gt; [version]
-    cargo use -h | --help
+find_cargo<span class="o">(){</span>
+    <span class="c1"># TODO: look up parent directories
+</span><span class="c1"></span>    ls <span class="p">|</span> grep <span class="s1">&#39;^Cargo.toml$&#39;</span>
+<span class="o">}</span>
 
-Description:
-    Add the dependency of crate to Cargo.toml.
-    If vension is omitted, adopt the latest version.
+ensure_dep_exists<span class="o">(){</span>
+    <span class="nv">cargo</span><span class="o">=</span><span class="s2">&#34;</span><span class="nv">$1</span><span class="s2">&#34;</span>
+    <span class="k">if</span> ! grep -F <span class="s1">&#39;[dependencies]&#39;</span> <span class="s2">&#34;</span><span class="nv">$cargo</span><span class="s2">&#34;</span> &gt; /dev/null <span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="p">;</span> <span class="k">then</span>
+        <span class="nb">echo</span> <span class="s1">&#39;[dependencies]&#39;</span> &gt;&gt; <span class="s2">&#34;</span><span class="nv">$cargo</span><span class="s2">&#34;</span>
+    <span class="k">fi</span>
+<span class="o">}</span>
 
-EOF
-}
+insert_dep<span class="o">(){</span>
+    <span class="nv">cargo</span><span class="o">=</span><span class="s2">&#34;</span><span class="nv">$1</span><span class="s2">&#34;</span>
+    <span class="nv">crate</span><span class="o">=</span><span class="s2">&#34;</span><span class="nv">$2</span><span class="s2">&#34;</span>
+    <span class="nv">version</span><span class="o">=</span><span class="s2">&#34;</span><span class="nv">$3</span><span class="s2">&#34;</span>
+    <span class="c1"># FIXME: Because Linux and Mac behaves defferently on null string argument, don&#39;t use it and adopt workaround.
+</span><span class="c1"></span>    sed -i<span class="s1">&#39;&#39;</span> <span class="s2">&#34;/\[dependencies\]/{a\
+</span><span class="s2"></span><span class="nv">$crate</span><span class="s2"> = \&#34;</span><span class="nv">$version</span><span class="s2">\&#34;
+</span><span class="s2">}&#34;</span> <span class="s2">&#34;</span><span class="nv">$cargo</span><span class="s2">&#34;</span>
+<span class="o">}</span>
 
-version(){
-    cargo search &quot;$1&quot; | grep -Eo &quot;^$1 \(.*?\)&quot; | sed &quot;s/^$1 (\(.*\))/\1/&quot;
-}
+run<span class="o">(){</span>
+    <span class="nv">CARGO_TOML</span><span class="o">=</span><span class="s2">&#34;</span><span class="k">$(</span>find_cargo<span class="k">)</span><span class="s2">&#34;</span>
+    <span class="k">if</span> <span class="o">[</span> <span class="nv">$?</span> !<span class="o">=</span> <span class="m">0</span> <span class="o">]</span>
+    <span class="k">then</span>
+        <span class="nb">echo</span> <span class="s2">&#34;Cargo.toml not found&#34;</span> <span class="m">1</span>&gt;<span class="p">&amp;</span><span class="m">2</span>
+        <span class="nb">exit</span> <span class="m">1</span>
+    <span class="k">fi</span>
 
-find_cargo(){
-    # TODO: look up parent directories
-    ls | grep '^Cargo.toml$'
-}
-
-ensure_dep_exists(){
-    cargo=&quot;$1&quot;
-    if ! grep -F '[dependencies]' &quot;$cargo&quot; &gt; /dev/null 2&gt;&amp;1; then
-        echo '[dependencies]' &gt;&gt; &quot;$cargo&quot;
-    fi
-}
-
-insert_dep(){
-    cargo=&quot;$1&quot;
-    crate=&quot;$2&quot;
-    version=&quot;$3&quot;
-    # FIXME: Because Linux and Mac behaves defferently on null string argument, don't use it and adopt workaround.
-    sed -i'' &quot;/\[dependencies\]/{a\
-$crate = \&quot;$version\&quot;
-}&quot; &quot;$cargo&quot;
-}
-
-run(){
-    CARGO_TOML=&quot;$(find_cargo)&quot;
-    if [ $? != 0 ]
-    then
-        echo &quot;Cargo.toml not found&quot; 1&gt;&amp;2
-        exit 1
-    fi
-
-    if [ -z &quot;$1&quot; ]; then
+    <span class="k">if</span> <span class="o">[</span> -z <span class="s2">&#34;</span><span class="nv">$1</span><span class="s2">&#34;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
         usage
-        exit 1
-    else
-        CRATE=&quot;$1&quot;
-    fi
+        <span class="nb">exit</span> <span class="m">1</span>
+    <span class="k">else</span>
+        <span class="nv">CRATE</span><span class="o">=</span><span class="s2">&#34;</span><span class="nv">$1</span><span class="s2">&#34;</span>
+    <span class="k">fi</span>
 
-    if [ -z &quot;$2&quot; ]; then
-        VERSION=&quot;$(version $1)&quot;
-    else
-        VERSION=&quot;$2&quot;
-    fi
+    <span class="k">if</span> <span class="o">[</span> -z <span class="s2">&#34;</span><span class="nv">$2</span><span class="s2">&#34;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+        <span class="nv">VERSION</span><span class="o">=</span><span class="s2">&#34;</span><span class="k">$(</span>version <span class="nv">$1</span><span class="k">)</span><span class="s2">&#34;</span>
+    <span class="k">else</span>
+        <span class="nv">VERSION</span><span class="o">=</span><span class="s2">&#34;</span><span class="nv">$2</span><span class="s2">&#34;</span>
+    <span class="k">fi</span>
 
-    ensure_dep_exists &quot;$CARGO_TOML&quot;
-    insert_dep &quot;$CARGO_TOML&quot; &quot;$CRATE&quot; &quot;$VERSION&quot;    
-}
+    ensure_dep_exists <span class="s2">&#34;</span><span class="nv">$CARGO_TOML</span><span class="s2">&#34;</span>
+    insert_dep <span class="s2">&#34;</span><span class="nv">$CARGO_TOML</span><span class="s2">&#34;</span> <span class="s2">&#34;</span><span class="nv">$CRATE</span><span class="s2">&#34;</span> <span class="s2">&#34;</span><span class="nv">$VERSION</span><span class="s2">&#34;</span>    
+<span class="o">}</span>
 
-main(){
-    # $1 is &quot;use&quot; when called as a cargo plugin
-    if [ &quot;$1&quot; != use ]; then
-        echo &quot;Use this as a cargo plugin&quot;
+main<span class="o">(){</span>
+    <span class="c1"># $1 is &#34;use&#34; when called as a cargo plugin
+</span><span class="c1"></span>    <span class="k">if</span> <span class="o">[</span> <span class="s2">&#34;</span><span class="nv">$1</span><span class="s2">&#34;</span> !<span class="o">=</span> use <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+        <span class="nb">echo</span> <span class="s2">&#34;Use this as a cargo plugin&#34;</span>
         usage
-        exit 1
-    fi
-    shift
-    if [ &quot;$1&quot; = -h ] || [ &quot;$1&quot; = --help ]; then
+        <span class="nb">exit</span> <span class="m">1</span>
+    <span class="k">fi</span>
+    <span class="nb">shift</span>
+    <span class="k">if</span> <span class="o">[</span> <span class="s2">&#34;</span><span class="nv">$1</span><span class="s2">&#34;</span> <span class="o">=</span> -h <span class="o">]</span> <span class="o">||</span> <span class="o">[</span> <span class="s2">&#34;</span><span class="nv">$1</span><span class="s2">&#34;</span> <span class="o">=</span> --help <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
         usage
-        exit
-    else
-        run &quot;$@&quot;
-    fi
-}
+        <span class="nb">exit</span>
+    <span class="k">else</span>
+        run <span class="s2">&#34;</span><span class="nv">$@</span><span class="s2">&#34;</span>
+    <span class="k">fi</span>
+<span class="o">}</span>
 
 
-main &quot;$@&quot;
-
-</code></pre>
-
+main <span class="s2">&#34;</span><span class="nv">$@</span><span class="s2">&#34;</span></code></pre></div>
 <p>まだ洗練されていませんがお気に入りのタスクです。誰かCLIからCargo.tomlをいじれるツール作ってくれないかな。</p>
                     </section>
                 </article>

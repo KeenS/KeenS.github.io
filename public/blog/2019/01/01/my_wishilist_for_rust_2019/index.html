@@ -39,9 +39,7 @@ I&rsquo;m writing my blog in Japanese because I put importance on Japanese commu
 
         </script>
         
-        <link rel="stylesheet" href="//KeenS.github.io/highlight.js/styles/monokai.css" />
-<script src="//KeenS.github.io/highlight.js/highlight.min.js"></script>
-<script>hljs.initHighlightingOnLoad();</script>
+        <link rel="stylesheet" href="//KeenS.github.io/css/syntax-monokai.css" />
 <script type="text/x-mathjax-config">
  MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
 </script>
@@ -175,31 +173,24 @@ tests/
 
 <p>マクロを使うとエラーメッセージが分かりづらい。
 例えば以下ようなマクロを書いたとする。</p>
-
-<pre><code class="language-rust">macro_rules! my_struct {
-    (struct $name:ident {
-        $($field: ident : $ty: ty),*
-    }) =&gt; {
-        struct $name {
-            $($field: $ty),*
-        }
-    }
-}
-</code></pre>
-
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="n">macro_rules</span><span class="o">!</span><span class="w"> </span><span class="n">my_struct</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="p">(</span><span class="k">struct</span> <span class="cp">$name</span>:<span class="nc">ident</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="cp">$($field</span>: <span class="nc">ident</span><span class="w"> </span>: <span class="cp">$ty</span>: <span class="nc">ty</span><span class="p">),</span><span class="o">*</span><span class="w">
+</span><span class="w">    </span><span class="p">})</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="k">struct</span> <span class="cp">$name</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">            </span><span class="cp">$($field</span>: <span class="cp">$ty</span><span class="p">),</span><span class="o">*</span><span class="w">
+</span><span class="w">        </span><span class="p">}</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span></code></pre></div>
 <p>これを以下のように使うとエラーになる。</p>
-
-<pre><code class="language-rust">my_struct! {
-    struct MyStruct {
-        hoge: i32,
-        fuga: i64,
-    }
-}
-</code></pre>
-
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="n">my_struct</span><span class="o">!</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="k">struct</span> <span class="nc">MyStruct</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="n">hoge</span>: <span class="kt">i32</span><span class="p">,</span><span class="w">
+</span><span class="w">        </span><span class="n">fuga</span>: <span class="kt">i64</span><span class="p">,</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span></code></pre></div>
 <p>メッセージはこうだ</p>
-
-<pre><code class="language-text">error: no rules expected the token `}`
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">error: no rules expected the token `}`
   --&gt; macro_struct.rs:15:5
    |
 15 |     }
@@ -207,9 +198,7 @@ tests/
 
 error: aborting due to previous error
 
-error: Could not compile `macro_struct`.
-</code></pre>
-
+error: Could not compile `macro_struct`.</code></pre></div>
 <p>何が悪いのか分かりづらい。</p>
 
 <p>もう1つの問題は、このマクロが正しい <code>struct</code> 定義の構文を受け取らない点にある。
@@ -217,41 +206,32 @@ error: Could not compile `macro_struct`.
 
 <p>さらにrustfmtも効かなくなる。
 以下のように書いてもrustfmtは何も変更しない。</p>
-
-<pre><code class="language-rust">my_struct! {
-    struct MyStruct {
-      hoge: i32,
-        fuga: i64,
-    }
-}
-
-</code></pre>
-
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="n">my_struct</span><span class="o">!</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="k">struct</span> <span class="nc">MyStruct</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">      </span><span class="n">hoge</span>: <span class="kt">i32</span><span class="p">,</span><span class="w">
+</span><span class="w">        </span><span class="n">fuga</span>: <span class="kt">i64</span><span class="p">,</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span></code></pre></div>
 <p>これらの問題の解決策として、高レベルなマクロパターンがあると良さそうに思う。
 例えば <code>struct_def</code> パターン。</p>
-
-<pre><code class="language-rust">macro_rules! my_struct {
-    ($struct: struct_def) =&gt; {
-        $struct;
-        // some items (like name, fieles, arrtibutes, etc) is accessible via `#` notation
-        impl $struct#name {
-            // ..
-        }
-    }
-}
-</code></pre>
-
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="n">macro_rules</span><span class="o">!</span><span class="w"> </span><span class="n">my_struct</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="p">(</span><span class="cp">$struct</span>: <span class="nc">struct_def</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="cp">$struct</span><span class="p">;</span><span class="w">
+</span><span class="w">        </span><span class="c1">// some items (like name, fieles, arrtibutes, etc) is accessible via `#` notation
+</span><span class="c1"></span><span class="w">        </span><span class="k">impl</span><span class="w"> </span><span class="cp">$struct</span><span class="err">#</span><span class="n">name</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">            </span><span class="c1">// ..
+</span><span class="c1"></span><span class="w">        </span><span class="p">}</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span></code></pre></div>
 <h2 id="手続きマクロが扱いづらい">手続きマクロが扱いづらい</h2>
 
 <p>手続きマクロのためにCargoバッケージを1つ作るのは面倒だ。
 1バッケージ内でライブラリ/バイナリと手続きマクロを同居させたい。
 エントリーポイントに <code>macro.rs</code> を増やすのはどうだろう。</p>
-
-<pre><code class="language-rust">src/
-  macro.rs  // entry point for proc_macro crate
-  lib.rs    // entry point for lib crate
-  bin.rs    // entry point for bin crate
-</code></pre>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="n">src</span><span class="o">/</span><span class="w">
+</span><span class="w">  </span><span class="kr">macro</span><span class="p">.</span><span class="n">rs</span><span class="w">  </span><span class="c1">// entry point for proc_macro crate
+</span><span class="c1"></span><span class="w">  </span><span class="n">lib</span><span class="p">.</span><span class="n">rs</span><span class="w">    </span><span class="c1">// entry point for lib crate
+</span><span class="c1"></span><span class="w">  </span><span class="n">bin</span><span class="p">.</span><span class="n">rs</span><span class="w">    </span><span class="o">//</span><span class="w"> </span><span class="n">entry</span><span class="w"> </span><span class="n">point</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">bin</span><span class="w"> </span><span class="k">crate</span></code></pre></div>
                     </section>
                 </article>
             </div>
