@@ -41,9 +41,7 @@ H2O Advent Calendar 7日目
 
         </script>
         
-        <link rel="stylesheet" href="//KeenS.github.io/highlight.js/styles/monokai.css" />
-<script src="//KeenS.github.io/highlight.js/highlight.min.js"></script>
-<script>hljs.initHighlightingOnLoad();</script>
+        <link rel="stylesheet" href="//KeenS.github.io/css/syntax-monokai.css" />
 <script type="text/x-mathjax-config">
  MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
 </script>
@@ -184,244 +182,236 @@ H2O Advent Calendar 7日目
 <p>mod_xxxにしようと思ったんですけど水だし溶液ってことでsol_xxxにします。</p>
 
 <p>H2Oにこんな感じのパッチ当てて</p>
-
-<pre><code class="language-diff">diff --git a/src/main.c b/src/main.c
-index 7fc4680..57804a6 100644
---- a/src/main.c
-+++ b/src/main.c
-@@ -30,6 +30,7 @@
- #include &lt;signal.h&gt;
+<div class="highlight"><pre class="chroma"><code class="language-diff" data-lang="diff"><span class="gh">diff --git a/src/main.c b/src/main.c
+</span><span class="gh">index 7fc4680..57804a6 100644
+</span><span class="gh"></span><span class="gd">--- a/src/main.c
+</span><span class="gd"></span><span class="gi">+++ b/src/main.c
+</span><span class="gi"></span><span class="gu">@@ -30,6 +30,7 @@
+</span><span class="gu"></span> #include &lt;signal.h&gt;
  #include &lt;stdio.h&gt;
  #include &lt;unistd.h&gt;
-+#include &lt;dlfcn.h&gt;
- #include &lt;sys/stat.h&gt;
+<span class="gi">+#include &lt;dlfcn.h&gt;
+</span><span class="gi"></span> #include &lt;sys/stat.h&gt;
  #include &lt;sys/socket.h&gt;
  #include &lt;sys/types.h&gt;
-@@ -76,6 +77,8 @@ struct config_t {
-     } state;
+<span class="gu">@@ -76,6 +77,8 @@ struct config_t {
+</span><span class="gu"></span>     } state;
  };
  
-+typedef int(*sol_init_fn)(h2o_configurator_command_t *, h2o_configurator_context_t *, const char *, yoml_t *);
-+
- static unsigned long openssl_thread_id_callback(void)
+<span class="gi">+typedef int(*sol_init_fn)(h2o_configurator_command_t *, h2o_configurator_context_t *, const char *, yoml_t *);
+</span><span class="gi">+
+</span><span class="gi"></span> static unsigned long openssl_thread_id_callback(void)
  {
      return (unsigned long)pthread_self();
-@@ -381,6 +384,43 @@ static int on_config_num_threads(h2o_configurator_command_t *cmd, h2o_configurat
-     return h2o_config_scanf(cmd, config_file, config_node, &quot;%u&quot;, &amp;conf-&gt;num_threads);
+<span class="gu">@@ -381,6 +384,43 @@ static int on_config_num_threads(h2o_configurator_command_t *cmd, h2o_configurat
+</span><span class="gu"></span>     return h2o_config_scanf(cmd, config_file, config_node, &#34;%u&#34;, &amp;conf-&gt;num_threads);
  }
  
-+static int on_config_use(h2o_configurator_command_t *cmd, h2o_configurator_context_t *ctx, const char *config_file, yoml_t *config_node)
-+{
-+  /* struct config_t *conf = H2O_STRUCT_FROM_MEMBER(struct config_t, global_config, ctx-&gt;globalconf); */
-+  char *sol_name;
-+  sol_init_fn init_fn;
-+  void *handle;
-+
-+  /* fetch solution name */
-+  switch (config_node-&gt;type) {
-+  case YOML_TYPE_SCALAR:
-+    sol_name = config_node-&gt;data.scalar;
-+    break;
-+  default:
-+    h2o_config_print_error(cmd, config_file, config_node, &quot;value must be a string or a mapping (with keys: `port` and optionally `host`)&quot;);
-+    return -1;
-+  }
-+
-+  char dl_name[strlen(&quot;sol_.so&quot;) + strlen(sol_name) + 1];
-+  char init_fn_name[strlen(&quot;init_sol_&quot;) + strlen(sol_name) + 1];
-+
-+  sprintf(dl_name, &quot;./sol_%s.so&quot;, sol_name);
-+  sprintf(init_fn_name, &quot;init_sol_%s&quot;, sol_name);
-+  handle = dlopen(dl_name, RTLD_LAZY);
-+  if (! handle){
-+    h2o_config_print_error(cmd, config_file, config_node, &quot;cannot load the solution&quot;);
-+    return -1;
-+  }
-+
-+  init_fn = dlsym(handle, init_fn_name);
-+  if(dlerror()){
-+    h2o_config_print_error(cmd, config_file, config_node, &quot;cannot find the initialize function&quot;);
-+    return -1;
-+  }
-+  return (*init_fn)(cmd, ctx, config_file, config_node);
-+
-+}
-+
- static void usage_print_directives(h2o_globalconf_t *conf)
+<span class="gi">+static int on_config_use(h2o_configurator_command_t *cmd, h2o_configurator_context_t *ctx, const char *config_file, yoml_t *config_node)
+</span><span class="gi">+{
+</span><span class="gi">+  /* struct config_t *conf = H2O_STRUCT_FROM_MEMBER(struct config_t, global_config, ctx-&gt;globalconf); */
+</span><span class="gi">+  char *sol_name;
+</span><span class="gi">+  sol_init_fn init_fn;
+</span><span class="gi">+  void *handle;
+</span><span class="gi">+
+</span><span class="gi">+  /* fetch solution name */
+</span><span class="gi">+  switch (config_node-&gt;type) {
+</span><span class="gi">+  case YOML_TYPE_SCALAR:
+</span><span class="gi">+    sol_name = config_node-&gt;data.scalar;
+</span><span class="gi">+    break;
+</span><span class="gi">+  default:
+</span><span class="gi">+    h2o_config_print_error(cmd, config_file, config_node, &#34;value must be a string or a mapping (with keys: `port` and optionally `host`)&#34;);
+</span><span class="gi">+    return -1;
+</span><span class="gi">+  }
+</span><span class="gi">+
+</span><span class="gi">+  char dl_name[strlen(&#34;sol_.so&#34;) + strlen(sol_name) + 1];
+</span><span class="gi">+  char init_fn_name[strlen(&#34;init_sol_&#34;) + strlen(sol_name) + 1];
+</span><span class="gi">+
+</span><span class="gi">+  sprintf(dl_name, &#34;./sol_%s.so&#34;, sol_name);
+</span><span class="gi">+  sprintf(init_fn_name, &#34;init_sol_%s&#34;, sol_name);
+</span><span class="gi">+  handle = dlopen(dl_name, RTLD_LAZY);
+</span><span class="gi">+  if (! handle){
+</span><span class="gi">+    h2o_config_print_error(cmd, config_file, config_node, &#34;cannot load the solution&#34;);
+</span><span class="gi">+    return -1;
+</span><span class="gi">+  }
+</span><span class="gi">+
+</span><span class="gi">+  init_fn = dlsym(handle, init_fn_name);
+</span><span class="gi">+  if(dlerror()){
+</span><span class="gi">+    h2o_config_print_error(cmd, config_file, config_node, &#34;cannot find the initialize function&#34;);
+</span><span class="gi">+    return -1;
+</span><span class="gi">+  }
+</span><span class="gi">+  return (*init_fn)(cmd, ctx, config_file, config_node);
+</span><span class="gi">+
+</span><span class="gi">+}
+</span><span class="gi">+
+</span><span class="gi"></span> static void usage_print_directives(h2o_globalconf_t *conf)
  {
      h2o_linklist_t *node;
-@@ -606,6 +646,10 @@ int main(int argc, char **argv)
-             c, &quot;num-threads&quot;, H2O_CONFIGURATOR_FLAG_GLOBAL,
+<span class="gu">@@ -606,6 +646,10 @@ int main(int argc, char **argv)
+</span><span class="gu"></span>             c, &#34;num-threads&#34;, H2O_CONFIGURATOR_FLAG_GLOBAL,
              on_config_num_threads,
-             &quot;number of worker threads (default: 1)&quot;);
-+        h2o_config_define_command(
-+            c, &quot;use&quot;, H2O_CONFIGURATOR_FLAG_GLOBAL,
-+            on_config_use,
-+            &quot;use the solution&quot;);
-     }
+             &#34;number of worker threads (default: 1)&#34;);
+<span class="gi">+        h2o_config_define_command(
+</span><span class="gi">+            c, &#34;use&#34;, H2O_CONFIGURATOR_FLAG_GLOBAL,
+</span><span class="gi">+            on_config_use,
+</span><span class="gi">+            &#34;use the solution&#34;);
+</span><span class="gi"></span>     }
  
      h2o_access_log_register_configurator(&amp;config.global_config);
-</code></pre>
-
+</code></pre></div>
 <p>こんな感じのソリューション用意して</p>
-
-<pre><code class="language-C">#include &lt;stdio.h&gt;
-#include &lt;pthread.h&gt;
-#include &quot;picrin.h&quot;
-#include &quot;picrin/pair.h&quot;
-#include &quot;picrin/string.h&quot;
-#include &quot;picrin/error.h&quot;
-#include &quot;h2o.h&quot;
-
-pic_state *pic;
-struct pic_lib *PICRIN_BASE;
-
-
-void pic_init_contrib(pic_state *);
-void pic_load_piclib(pic_state *);
-
-static pic_value
-pic_features(pic_state *pic)
-{
-  pic_get_args(pic, &quot;&quot;);
-
-  return pic-&gt;features;
-}
-
-static pic_value
-pic_libraries(pic_state *pic)
-{
-  pic_value libs = pic_nil_value(), lib;
-
-  pic_get_args(pic, &quot;&quot;);
-
-  pic_for_each (lib, pic-&gt;libs) {
-    libs = pic_cons(pic, pic_car(pic, lib), libs);
-  }
-
-  return libs;
-}
-
-void
-pic_init_picrin(pic_state *pic)
-{
-  const char *scheme =
-    &quot;(import (scheme base)&quot;
-    &quot;        (scheme write))&quot;
-    &quot;(define-syntax call-with-output-to-string&quot;
-    &quot;  (syntax-rules ()&quot;
-    &quot;    ((_ proc)&quot;
-    &quot;     (let ((s (open-output-string)))&quot;
-    &quot;       (proc s)&quot;
-    &quot;       (get-output-string s)))))&quot;
-    &quot;(define (-&gt;string e)&quot;
-    &quot;  (call-with-output-to-string&quot;
-    &quot;   (lambda (s)&quot;
-    &quot;     (display e s))))&quot;;
+<div class="highlight"><pre class="chroma"><code class="language-C" data-lang="C"><span class="cp">#include</span> <span class="cpf">&lt;stdio.h&gt;</span><span class="cp">
+</span><span class="cp">#include</span> <span class="cpf">&lt;pthread.h&gt;</span><span class="cp">
+</span><span class="cp">#include</span> <span class="cpf">&#34;picrin.h&#34;</span><span class="cp">
+</span><span class="cp">#include</span> <span class="cpf">&#34;picrin/pair.h&#34;</span><span class="cp">
+</span><span class="cp">#include</span> <span class="cpf">&#34;picrin/string.h&#34;</span><span class="cp">
+</span><span class="cp">#include</span> <span class="cpf">&#34;picrin/error.h&#34;</span><span class="cp">
+</span><span class="cp">#include</span> <span class="cpf">&#34;h2o.h&#34;</span><span class="cp">
+</span><span class="cp"></span>
+<span class="n">pic_state</span> <span class="o">*</span><span class="n">pic</span><span class="p">;</span>
+<span class="k">struct</span> <span class="n">pic_lib</span> <span class="o">*</span><span class="n">PICRIN_BASE</span><span class="p">;</span>
 
 
-  pic_add_feature(pic, &quot;r7rs&quot;);
+<span class="kt">void</span> <span class="nf">pic_init_contrib</span><span class="p">(</span><span class="n">pic_state</span> <span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span> <span class="nf">pic_load_piclib</span><span class="p">(</span><span class="n">pic_state</span> <span class="o">*</span><span class="p">);</span>
 
-  pic_deflibrary (pic, &quot;(picrin library)&quot;) {
-    pic_defun(pic, &quot;libraries&quot;, pic_libraries);
-  }
+<span class="k">static</span> <span class="n">pic_value</span>
+<span class="nf">pic_features</span><span class="p">(</span><span class="n">pic_state</span> <span class="o">*</span><span class="n">pic</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="n">pic_get_args</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="s">&#34;&#34;</span><span class="p">);</span>
 
-  pic_deflibrary (pic, &quot;(scheme base)&quot;) {
-    pic_defun(pic, &quot;features&quot;, pic_features);
+  <span class="k">return</span> <span class="n">pic</span><span class="o">-&gt;</span><span class="n">features</span><span class="p">;</span>
+<span class="p">}</span>
 
-    pic_init_contrib(pic);
-    pic_load_piclib(pic);
-  }
-  pic_deflibrary (pic, &quot;(picrin base)&quot;) {
-    pic_load_cstr(pic, scheme);
-  }
-}
+<span class="k">static</span> <span class="n">pic_value</span>
+<span class="nf">pic_libraries</span><span class="p">(</span><span class="n">pic_state</span> <span class="o">*</span><span class="n">pic</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="n">pic_value</span> <span class="n">libs</span> <span class="o">=</span> <span class="n">pic_nil_value</span><span class="p">(),</span> <span class="n">lib</span><span class="p">;</span>
 
-const char *
-pic_eval_cstr_into_cstr(pic_state *pic, const char *input)
-{
-  pic_value v;
+  <span class="n">pic_get_args</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="s">&#34;&#34;</span><span class="p">);</span>
+
+  <span class="n">pic_for_each</span> <span class="p">(</span><span class="n">lib</span><span class="p">,</span> <span class="n">pic</span><span class="o">-&gt;</span><span class="n">libs</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">libs</span> <span class="o">=</span> <span class="n">pic_cons</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">pic_car</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">lib</span><span class="p">),</span> <span class="n">libs</span><span class="p">);</span>
+  <span class="p">}</span>
+
+  <span class="k">return</span> <span class="n">libs</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kt">void</span>
+<span class="nf">pic_init_picrin</span><span class="p">(</span><span class="n">pic_state</span> <span class="o">*</span><span class="n">pic</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">scheme</span> <span class="o">=</span>
+    <span class="s">&#34;(import (scheme base)&#34;</span>
+    <span class="s">&#34;        (scheme write))&#34;</span>
+    <span class="s">&#34;(define-syntax call-with-output-to-string&#34;</span>
+    <span class="s">&#34;  (syntax-rules ()&#34;</span>
+    <span class="s">&#34;    ((_ proc)&#34;</span>
+    <span class="s">&#34;     (let ((s (open-output-string)))&#34;</span>
+    <span class="s">&#34;       (proc s)&#34;</span>
+    <span class="s">&#34;       (get-output-string s)))))&#34;</span>
+    <span class="s">&#34;(define (-&gt;string e)&#34;</span>
+    <span class="s">&#34;  (call-with-output-to-string&#34;</span>
+    <span class="s">&#34;   (lambda (s)&#34;</span>
+    <span class="s">&#34;     (display e s))))&#34;</span><span class="p">;</span>
 
 
-  v = pic_read_cstr(pic, input);
-  v = pic_eval(pic, v, PICRIN_BASE);
-  v = pic_funcall(pic, PICRIN_BASE, &quot;-&gt;string&quot;, pic_list1(pic, v));
-  return pic_str_cstr(pic_str_ptr(v));
-}
+  <span class="n">pic_add_feature</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="s">&#34;r7rs&#34;</span><span class="p">);</span>
+
+  <span class="n">pic_deflibrary</span> <span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="s">&#34;(picrin library)&#34;</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">pic_defun</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="s">&#34;libraries&#34;</span><span class="p">,</span> <span class="n">pic_libraries</span><span class="p">);</span>
+  <span class="p">}</span>
+
+  <span class="n">pic_deflibrary</span> <span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="s">&#34;(scheme base)&#34;</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">pic_defun</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="s">&#34;features&#34;</span><span class="p">,</span> <span class="n">pic_features</span><span class="p">);</span>
+
+    <span class="n">pic_init_contrib</span><span class="p">(</span><span class="n">pic</span><span class="p">);</span>
+    <span class="n">pic_load_piclib</span><span class="p">(</span><span class="n">pic</span><span class="p">);</span>
+  <span class="p">}</span>
+  <span class="n">pic_deflibrary</span> <span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="s">&#34;(picrin base)&#34;</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">pic_load_cstr</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">scheme</span><span class="p">);</span>
+  <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="k">const</span> <span class="kt">char</span> <span class="o">*</span>
+<span class="nf">pic_eval_cstr_into_cstr</span><span class="p">(</span><span class="n">pic_state</span> <span class="o">*</span><span class="n">pic</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">input</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="n">pic_value</span> <span class="n">v</span><span class="p">;</span>
+
+
+  <span class="n">v</span> <span class="o">=</span> <span class="n">pic_read_cstr</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">input</span><span class="p">);</span>
+  <span class="n">v</span> <span class="o">=</span> <span class="n">pic_eval</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">PICRIN_BASE</span><span class="p">);</span>
+  <span class="n">v</span> <span class="o">=</span> <span class="n">pic_funcall</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">PICRIN_BASE</span><span class="p">,</span> <span class="s">&#34;-&gt;string&#34;</span><span class="p">,</span> <span class="n">pic_list1</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">v</span><span class="p">));</span>
+  <span class="k">return</span> <span class="n">pic_str_cstr</span><span class="p">(</span><span class="n">pic_str_ptr</span><span class="p">(</span><span class="n">v</span><span class="p">));</span>
+<span class="p">}</span>
 
 
 
-int
-on_picrin(h2o_configurator_command_t *cmd, h2o_configurator_context_t *ctx, const char *config_file, yoml_t *config_node)
-{
-  const char *sexp;
+<span class="kt">int</span>
+<span class="nf">on_picrin</span><span class="p">(</span><span class="n">h2o_configurator_command_t</span> <span class="o">*</span><span class="n">cmd</span><span class="p">,</span> <span class="n">h2o_configurator_context_t</span> <span class="o">*</span><span class="n">ctx</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">config_file</span><span class="p">,</span> <span class="n">yoml_t</span> <span class="o">*</span><span class="n">config_node</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">sexp</span><span class="p">;</span>
   
-  switch (config_node-&gt;type) {
-  case YOML_TYPE_SCALAR:
-    sexp = config_node-&gt;data.scalar;
-    break;
-  default:
-    h2o_config_print_error(cmd, config_file, config_node, &quot;value must be a string&quot;);
-    return -1;
-  }
+  <span class="k">switch</span> <span class="p">(</span><span class="n">config_node</span><span class="o">-&gt;</span><span class="n">type</span><span class="p">)</span> <span class="p">{</span>
+  <span class="k">case</span> <span class="nl">YOML_TYPE_SCALAR</span><span class="p">:</span>
+    <span class="n">sexp</span> <span class="o">=</span> <span class="n">config_node</span><span class="o">-&gt;</span><span class="n">data</span><span class="p">.</span><span class="n">scalar</span><span class="p">;</span>
+    <span class="k">break</span><span class="p">;</span>
+  <span class="k">default</span><span class="o">:</span>
+    <span class="n">h2o_config_print_error</span><span class="p">(</span><span class="n">cmd</span><span class="p">,</span> <span class="n">config_file</span><span class="p">,</span> <span class="n">config_node</span><span class="p">,</span> <span class="s">&#34;value must be a string&#34;</span><span class="p">);</span>
+    <span class="k">return</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span>
+  <span class="p">}</span>
 
-  pic_try{
-    puts(pic_eval_cstr_into_cstr(pic, sexp));
-  }
-  pic_catch{
-    pic_print_backtrace(pic);
-    return -1;
-  }
-  return 0;
+  <span class="n">pic_try</span><span class="p">{</span>
+    <span class="n">puts</span><span class="p">(</span><span class="n">pic_eval_cstr_into_cstr</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">sexp</span><span class="p">));</span>
+  <span class="p">}</span>
+  <span class="n">pic_catch</span><span class="p">{</span>
+    <span class="n">pic_print_backtrace</span><span class="p">(</span><span class="n">pic</span><span class="p">);</span>
+    <span class="k">return</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span>
+  <span class="p">}</span>
+  <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
 
-}
-
-
-int
-init_sol_picrin(h2o_configurator_command_t *cmd, h2o_configurator_context_t *ctx, const char *config_file, yoml_t *config_node)
-{
+<span class="p">}</span>
 
 
-  h2o_configurator_t *c = cmd-&gt;configurator;
-
-  pic = pic_open(0, NULL, NULL);
-
-  pic_init_picrin(pic);
-
-  PICRIN_BASE = pic_find_library(pic, pic_read_cstr(pic, &quot;(picrin base)&quot;));
-
-  h2o_config_define_command(
-      c, &quot;picrin&quot;, H2O_CONFIGURATOR_FLAG_GLOBAL | H2O_CONFIGURATOR_FLAG_EXPECT_SCALAR,
-      on_picrin,
-      &quot;run picrin&quot;);
+<span class="kt">int</span>
+<span class="nf">init_sol_picrin</span><span class="p">(</span><span class="n">h2o_configurator_command_t</span> <span class="o">*</span><span class="n">cmd</span><span class="p">,</span> <span class="n">h2o_configurator_context_t</span> <span class="o">*</span><span class="n">ctx</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">config_file</span><span class="p">,</span> <span class="n">yoml_t</span> <span class="o">*</span><span class="n">config_node</span><span class="p">)</span>
+<span class="p">{</span>
 
 
-  return 0;
+  <span class="n">h2o_configurator_t</span> <span class="o">*</span><span class="n">c</span> <span class="o">=</span> <span class="n">cmd</span><span class="o">-&gt;</span><span class="n">configurator</span><span class="p">;</span>
 
-}
-</code></pre>
+  <span class="n">pic</span> <span class="o">=</span> <span class="n">pic_open</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">);</span>
 
+  <span class="n">pic_init_picrin</span><span class="p">(</span><span class="n">pic</span><span class="p">);</span>
+
+  <span class="n">PICRIN_BASE</span> <span class="o">=</span> <span class="n">pic_find_library</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="n">pic_read_cstr</span><span class="p">(</span><span class="n">pic</span><span class="p">,</span> <span class="s">&#34;(picrin base)&#34;</span><span class="p">));</span>
+
+  <span class="n">h2o_config_define_command</span><span class="p">(</span>
+      <span class="n">c</span><span class="p">,</span> <span class="s">&#34;picrin&#34;</span><span class="p">,</span> <span class="n">H2O_CONFIGURATOR_FLAG_GLOBAL</span> <span class="o">|</span> <span class="n">H2O_CONFIGURATOR_FLAG_EXPECT_SCALAR</span><span class="p">,</span>
+      <span class="n">on_picrin</span><span class="p">,</span>
+      <span class="s">&#34;run picrin&#34;</span><span class="p">);</span>
+
+
+  <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+
+<span class="p">}</span></code></pre></div>
 <p>んでコンフィグは</p>
-
-<pre><code class="language-yaml"># to find out the configuration commands, run: h2o --help
-
-use: picrin
-listen:
-  port:
-listen:
-  port: 8081
-  ssl:
-    certificate-file: examples/h2o/server.crt
-    key-file: examples/h2o/server.key
-picrin: &quot;(string-append \&quot;Hello, \&quot; \&quot;World\&quot;)&quot;
-hosts:
-  default:
-    paths:
-      /:
-        file.dir: examples/doc_root
-    access-log: /dev/stdout
-</code></pre>
-
+<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml"><span class="c"># to find out the configuration commands, run: h2o --help</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span>use<span class="p">:</span><span class="w"> </span>picrin<span class="w">
+</span><span class="w"></span>listen<span class="p">:</span><span class="w">
+</span><span class="w">  </span>port<span class="p">:</span><span class="w">
+</span><span class="w"></span>listen<span class="p">:</span><span class="w">
+</span><span class="w">  </span>port<span class="p">:</span><span class="w"> </span><span class="m">8081</span><span class="w">
+</span><span class="w">  </span>ssl<span class="p">:</span><span class="w">
+</span><span class="w">    </span>certificate-file<span class="p">:</span><span class="w"> </span>examples/h2o/server.crt<span class="w">
+</span><span class="w">    </span>key-file<span class="p">:</span><span class="w"> </span>examples/h2o/server.key<span class="w">
+</span><span class="w"></span>picrin<span class="p">:</span><span class="w"> </span><span class="s2">&#34;(string-append \&#34;Hello, \&#34; \&#34;World\&#34;)&#34;</span><span class="w">
+</span><span class="w"></span>hosts<span class="p">:</span><span class="w">
+</span><span class="w">  </span>default<span class="p">:</span><span class="w">
+</span><span class="w">    </span>paths<span class="p">:</span><span class="w">
+</span><span class="w">      </span>/<span class="p">:</span><span class="w">
+</span><span class="w">        </span>file.dir<span class="p">:</span><span class="w"> </span>examples/doc_root<span class="w">
+</span><span class="w">    </span>access-log<span class="p">:</span><span class="w"> </span>/dev/stdout</code></pre></div>
 <p>そして魔法のコマンドを叩いて</p>
 
 <pre><code>$ cp ~/compile/picrin/src/{init_contrib.c,load_piclib.c} ./
@@ -448,13 +438,9 @@ Hello, Wold
 <p>ごめんなさい、まだです。</p>
 
 <p><code>file.c</code>をベースにして</p>
-
-<pre><code class="language-yaml">    paths:
-      /:
-        picrin.exp: &quot;(string-append \&quot;Hello, \&quot; \&quot;World\&quot;)&quot;
-
-</code></pre>
-
+<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml"><span class="w">    </span>paths<span class="p">:</span><span class="w">
+</span><span class="w">      </span>/<span class="p">:</span><span class="w">
+</span><span class="w">        </span>picrin.exp<span class="p">:</span><span class="w"> </span><span class="s2">&#34;(string-append \&#34;Hello, \&#34; \&#34;World\&#34;)&#34;</span></code></pre></div>
 <p>とかしたかったんですけど間に合いませんでした。</p>
 
 <p>ソリューションなりモジュールなりのシステムが出来たらまたトライします</p>
