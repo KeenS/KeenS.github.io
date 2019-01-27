@@ -18,7 +18,7 @@ title: "Idris入門: リファレンス"
 ドキュメントには書かれてないのですが、コンパイラのコードを見る限り識別子に使えるのは `[a-zA-Z][a-zA-Z'_.]*` のようです。
 例えば `hog'.'e12_` は適格なIdrisの変数定義です。
 
-一応、変数に小文字始まり、型やバリアントには大文字始まりの識別子をつけるみたいです。
+変数に小文字始まり、型やバリアントには大文字始まりの識別子をつけるみたいです。
 
 ``` idris
 data Hoge = Fuga
@@ -233,10 +233,6 @@ moveHorizontal _ = 0
 名前 バターンm_1 バターンm_2 .. バターンm_n = 値
 ```
 
-## `where`
-
-TODO: 書く
-
 
 ## 中置演算子
 
@@ -252,9 +248,9 @@ infixl 4 +?
 中置演算子を定義する時は括弧で包んで関数と同じように定義します。
 
 ``` idris
-(+?): Maybe Integer -> Maybe Integer -> Maybe Integer
-(+?) (Just x) (Just y) = Just (x + y)
-(+?)  _        _       = Nothing
+(+?): Maybe Integer -> Integer -> Maybe Integer
+(+?) (Just x) y = Just (x + y)
+(+?)  _       _ = Nothing
 ```
 
 こう定義してしまえば自由に使えます。
@@ -283,7 +279,8 @@ data List a = Nil | (::) a (List a)
 
 ### 関数を中置で
 
-任意の2引数関数を `` ` `` で囲むと中置で書けます。バリアントも関数でしたからこのようにも書けます。
+任意の2引数関数を `` ` `` で囲むと中置で書けます。バックティック記法と呼ばれるようです。
+バリアントも関数でしたからこのようにも書けます。
 
 ``` idris
 1 `Two` 2
@@ -386,6 +383,7 @@ showEither (Right r) = "Right " ++ show r
 
 ## `do` 記法
 `do` 記法は[`Monad`](http://docs.idris-lang.org/en/latest/tutorial/interfaces.html#monads-and-do-notation)インターフェースのための構文糖衣です。`IO` だけでなく `Monad` を実装している型ならなんでも `do` 記法が使えます。
+インターフェースの構文糖衣なので `do` そのものには意味がないのですが、キモチとしては「中身を取り出す」ような働きをします。
 例えば `Maybe` は `Monad` を実装しているのでこう使えます。
 
 ``` idris
@@ -396,6 +394,25 @@ addMaybe x y = do
   Just $ x' + y'
 ```
 
+このコードのキモチは `Maybe` に包まれた `x` と `y` から`Integer` 型の値 `x'`, `y'` を取り出し、足し算しています。もちろん取り出せるのは `Just` のときのみで、 `Nothing` のときはすぐさま `Nothing` が返ります。
+
+### パターン
+
+`<-` で取り出した値に更にパターンマッチできます。
+`パターン <- 式 | パターン => 式 | パターン => 式 ...`の形です。
+
+荒唐無稽な例ですが受け取った値が1と2だった場合だけ足し算するにはこう書きます。
+
+``` idris
+addOneAndTwo : Maybe Integer -> Maybe Integer -> Maybe Integer
+addOneAndTwo x y = do
+  1 <- x
+    | _ => Nothing
+  2 <- y
+    | _ => Nothing
+  Just $ 1 + 2
+
+```
 
 
 ## コメントとドキュメントコメント
@@ -408,7 +425,7 @@ addMaybe x y = do
 
 Idrisのコードは以下のような形になっています。
 
-``` idris
+``` text
 <モジュールヘッダ>?
 
 <インポート文>
@@ -421,42 +438,554 @@ Idrisのコードは以下のような形になっています。
 ### モジュールヘッダ
 
 `module モジュール名` です。あってもなくてもいいです。1ファイル1モジュールです。
-ドットで区切った階層構造です。一応ファイル名とは関連がないことになってますが、`Foo/Bar.idr` には `module Foo.Bar` モジュールを定義するのが通例です。たまに `Foo.Bar` と書いて `Foo/Bar.idr` のことを指す記法もあるので注意が必要です。
+ドットで区切った階層構造です。一応ファイル名とは関連がないことになってますが、`Foo/Bar.idr` には `module Foo.Bar` モジュールを定義するのが通例です。たまに `Foo.Bar` と書いてモジュールではなくファイル `Foo/Bar.idr` のことを指す記法もあるので注意が必要です。
 
 ### インポート文
 
 `import モジュール名` です。人によっては混乱すると思いますが、 `import Data.Vect` で `Vect` モジュール内の全てのアイテムが今の名前空間にインポートされます。
 単純にモジュール名を略記したいなら `import Data.Vect as V` などで別名をつけることになります。
 
-# 値
+# 値と型
 ## 関数
 
-Idrisの関数
+関数も値です。気軽に変数を束縛できます。
 
-# 型
+``` idris
+add : Integer -> Integer -> Integer
+add = (+)
+```
 
-関数の引数の数と型
-タプルとUnit
-Maybe
-Either
-IntとInteger
-  lift
-Ordering
-String
-Char
-  ord
-List
- unpack
- foldl
- map
+Idrisの関数は1引数をとり、1返り値を返します。複数の引数を受け取りたい時は関数をネストすると複数の引数を受け取れるように見えます。
+
+例えば以下の2つの定義は同等です。
+
+``` idris
+add: Integer -> Integer -> Integer
+add = \x => \y => x + y
+
+add : Integer -> Integer -> Integer
+add x y =  x + y
+
+```
+
+同様に、関数適用も1引数の適用の連続です。
+以下の2つは同等の表現です。
+
+``` idris
+add 1 2
+(add 1) 2
+```
+
+型も、 `Integer -> Integer -> Integer` は `Integer -> (Integer -> Integer)` の意味です。
+
+複数引数関数にみえるのは実は関数の集合体なので中途半端に使うこと(部分適用)もできます。
+
+``` idris
+inc : Integer -> Integer
+inc = add 1
+```
+
+## 型の扱い
+
+Idrisでは型も第一級です。型の型は `Type` です。
+
+``` idris
+λΠ> Int
+Int : Type
+```
+
+ジェネリクスになっている型は引数を受け取ると型になる、要は型を受け取って型を返す関数なので`Type -> Type` 型になります。
+
+``` idris
+λΠ> Maybe Int
+Maybe Int : Type
+λΠ> Maybe
+Maybe : Type -> Type
+```
+
+ジェネリクスと関数適用が同じ構文な理由が理解できたかと思います。
+型エイリアスも値と同じように定義できます。
+
+``` idris
+Option : Type -> Type
+Option = Maybe
+```
+
+余談ですが `Type` の型は `Type 1` です。
+
+``` idris
+λΠ> :t Type
+Type : Type 1
+```
+
+あとは想像出来ますね。 `Type 1 : Type 2`, `Type 2 : Type 3`, .. とずっと続いていきます。
+
+## プリミティブ型
+
+Idrisのプリミティブ型は思ったより少ないです。
+
+
+* `Int` : 固定長整数
+* `Integer` : 多倍長整数
+* `Double` : 倍精度浮動小数点数
+* `Char` : 文字
+* `String` : 文字列
+* `Ptr` : FFI用
+
+あとは裏では8bitから64bitまでの整数もあるようですがドキュメントには載ってないです。
+
+真偽値などはライブラリで定義されています。
+
+``` idris
+data Bool = False | True
+```
+
 # ライブラリ
-プレリュード
-the
-$ .
-putStr
-putStrLn
-getLine
-parsePositive
+ドキュメントに記述が見つけられなかったのですが、Idrisはデフォルトでいくつかのライブラリをリンクしています。
 
-# モジュール
+* プリミティブ : 処理系組み込みの機能
+* ビルトイン : Idrisで書かれているが処理系が特別扱いする
+* [プレリュード](https://www.idris-lang.org/docs/current/prelude_doc/) : デフォルトでインポートされているライブラリ群
+* [ベース](https://www.idris-lang.org/docs/current/base_doc/) : インポートはされていないがいつでもインポートできるライブラリ群
+
+プリミティブは型のところで紹介したプリミティブ型の他に雑多な関数などがあるようです。ビルトインはタプルやユニット、 `ifThenElse` などです。
+
+プレリュードはトップレベル関数相当で、例えば何気なく使っていた `putStrLn` は[`Prelude.Interactive`](https://www.idris-lang.org/docs/current/prelude_doc/docs/Prelude.Interactive.html)で定義されています。
+
+ベースはデフォルトでリンクするライブラリで、標準ライブラリ相当です。[`Data.Complex`](https://www.idris-lang.org/docs/current/base_doc/docs/Data.Complex.html)や[`System`](https://www.idris-lang.org/docs/current/base_doc/docs/System.html)のようなものがあります。
+
+その他にもIdrisと一緒に配布されている [contrib](https://www.idris-lang.org/docs/current/contrib_doc/)や[effects](https://www.idris-lang.org/docs/current/effects_doc/)なんかもあります。[`Data.SortedMap`](https://www.idris-lang.org/docs/current/contrib_doc/docs/Data.SortedMap.html)なんかもcontribにあるのでcontribを使う機会は多いでしょう。
+
+以下に、出てきた関数やデータ型を紹介します。
+
+## プリミティブ
+
+`-` は負号ではなく、符号反転の前置演算子のようです。どのユーザ定義演算子より優先順位は高いです。
+
+`$` はプリミティブの中置演算子のようです。結合は右結合で、どのユーザ定義演算子より弱い優先順位を持ちます。
+下記2式は等価です。
+
+``` idris
+f (g (h x))
+f $ g $ h x
+```
+
+
+## プレリュード
+
+### [`Prelude`](https://www.idris-lang.org/docs/current/prelude_doc/docs/Prelude.html)
+`Prelude` にはシンプルな関数が定義されています。
+
+チュートリアルで使ったのは`shiftL` ですね
+
+``` idris
+shiftL: Int -> Int -> Int
+```
+
+
+
+
+### [`Prelude.Basics`](https://www.idris-lang.org/docs/current/prelude_doc/docs/Prelude.Basics.html)
+`Prelude.Basics` には基本的な操作が定義されています。
+
+#### `the`
+
+``` idris
+the : (a : Type) -> a -> a
+```
+
+型アノテーションを書く関数です。他言語なら型アノテーションは専用の構文になってますが、Idrisだと型も第一級なのでこういう関数が書けます。
+
+``` idris
+λΠ> the Int 1
+1 : Int
+λΠ> the Integer 1
+1 : Integer
+```
+
+指定した型になっているのが分かると思います。
+
+#### `(.)`
+
+``` idris
+(.) : (b -> c) -> (a -> b) -> a -> c
+```
+
+一瞬混乱しますが、  `(.)` は関数を合成する関数(中置演算子)です。数学で $f(g(x))$ を $f \circ g (x)$ と書くのに似せた記法ですね。
+実際にはこう定義されています。
+
+``` idris
+infixr 9 .
+
+||| Function composition
+(.) : (b -> c) -> (a -> b) -> a -> c
+(.) f g = \x => f (g x)
+```
+
+### [`Prelude.Cast`](https://www.idris-lang.org/docs/current/prelude_doc/docs/Prelude.Cast.html)
+
+`Prelude.Cast` には型変換を管理するインターフェース、 `Cast` が定義されています。
+
+``` idris
+interface Cast from to where
+    cast : (orig : from) -> to
+```
+
+いくつかの変換が用意されています。
+
+``` idris
+λΠ>  the String (cast 1)
+"1" : String
+λΠ>  the Integer (cast (the Int 1))
+1 : Integer
+λΠ> the  Double (cast 1)
+1.0 : Double
+```
+
+びっくりなことに、文字列→数値の変換もあります。しかし無効な文字列を与えると0が返ってきてしまうようです。
+
+``` idris
+λΠ> the Integer (cast "123abc")
+0 : Integer
+```
+
+
+### [`Prelude.Interfaces`](https://www.idris-lang.org/docs/current/prelude_doc/docs/Prelude.Interfaces.html)
+
+`Prelude.Interfaces` には基本的な二項演算などのインターフェースが定義されています。
+
+``` idris
+data Ordering = LT | EQ | GT
+
+infix 6 <, <=, >, >=
+interface Eq ty => Ord ty where
+    compare : ty -> ty -> Ordering
+
+    (<) : ty -> ty -> Bool
+    (<) x y with (compare x y)
+        (<) x y | LT = True
+        (<) x y | _  = False
+
+    (>) : ty -> ty -> Bool
+    (>) x y with (compare x y)
+        (>) x y | GT = True
+        (>) x y | _  = False
+
+    (<=) : ty -> ty -> Bool
+    (<=) x y = x < y || x == y
+
+    (>=) : ty -> ty -> Bool
+    (>=) x y = x > y || x == y
+
+    max : ty -> ty -> ty
+    max x y = if x > y then x else y
+
+    min : ty -> ty -> ty
+    min x y = if (x < y) then x else y
+```
+
+チュートリアルでは `Ordering` と `compare` を使いましたがその他の演算子も用意されています。
+
+同様に数値演算も定義されています。
+
+``` idris
+infixl 8 +
+infixl 9 *
+interface Num ty where
+    (+) : ty -> ty -> ty
+    (*) : ty -> ty -> ty
+    fromInteger : Integer -> ty
+
+interface Num ty => Neg ty where
+    negate : ty -> ty
+    (-) : ty -> ty -> ty
+
+infixl 9 `div`, `mod`
+interface Num ty => Integral ty where
+   div : ty -> ty -> ty
+   mod : ty -> ty -> ty
+
+```
+
+`mod` や `div` は ``n `mod` m`` の形で使われることを想定して演算子の結合性や優先順位が指定されています。
+
+### [`Prelude.Strings`](https://www.idris-lang.org/docs/current/prelude_doc/docs/Prelude.Strings.html)
+
+`Prelude.String` には文字列操作に関する関数が定義されています。
+意外にもチュートリアルで使ったのは2つだけでした。
+
+``` idris
+infixl 7 ++
+unpack : String -> List Char
+(++) : String -> String -> String
+```
+
+Idrisのようにデータ型が便利な言語だと文字列は人間とのやりとりくらいでしか使わないので思ったほど出番は多くないです。
+
+### [`Prelude.Chars`](https://www.idris-lang.org/docs/current/prelude_doc/docs/Prelude.Chars.html)
+
+`Prelude.Chars` には文字に関する関数が定義されています。文字を扱うことはあまりないと思いますが、Idrisでも操作はそんなに多くないです。
+
+今回使ったのは文字→数値変換の `ord` ですね。
+
+``` idris
+ord : Char -> Int
+```
+
+Idrisはバックエンドが複数あるのでどう変換されるかはバックエンド依存としています。
+が、REPLではユニコードのスカラ値が返っているようです。
+
+``` idris
+λΠ> ord 'κ'
+954 : Int
+```
+
+### [`Prelude.List`](https://www.idris-lang.org/docs/current/prelude_doc/docs/Prelude.List.html)
+
+`Prelude.List` にはリストに対する操作が定義されています。
+実はリストに固有の操作はチュートリアルでは使っていません。
+`map` や `foldl` などはリストに限らない汎用の関数として定義されているのです。
+
+リストはこのように定義されています。
+
+``` idris
+infixr 7 ::
+data List : (elem : Type) -> Type where
+  Nil : List elem
+  (::) : (x : elem) -> (xs : List elem) -> List elem
+```
+
+関数型言語のユーザには馴染みの在る定義ですね。以下のようにいくつかの `(::)` と末尾の `Nil` で構成されます。
+
+``` idris
+λΠ> 1 :: 2 :: 3 :: Nil
+[1, 2, 3] : List Integer
+```
+
+再帰関数を書くときも `(::)` と `Nil` で分岐します。分かりやすいですね。
+
+``` idris
+sum : List Integer -> Integer
+sum Nil = 0
+sum (x::xs) = x + (sum xs)
+```
+
+### [`Prelude.Maybe`](https://www.idris-lang.org/docs/current/prelude_doc/docs/Prelude.Maybe.html)
+
+`Prelude.Maybe` には `Maybe` 型とそれに関連する関数が定義されています。
+
+`Maybe` は以下のように定義されています。
+
+``` idris
+data Maybe : (a : Type) -> Type where
+    Nothing : Maybe a
+    Just : (x : a) -> Maybe a
+```
+
+`Maybe` はあるかないか分からない値を表すのに使います。
+チュートリアルでは `Maybe` 本体しか触らず、他の関数は使いませんでした。
+`do` 記法のところで紹介した通り、 `Maybe` にも `do` は使えますしその他 `map` なんかも使えます。
+
+### [`Prelude.Either`](https://www.idris-lang.org/docs/current/prelude_doc/docs/Prelude.Either.html)
+
+`Prelude.Either` には `Either` 型とそれに関連する関数が定義されています。
+
+`Either` は以下のように定義されています。
+
+``` idris
+data Either : (a, b : Type) -> Type where
+  Left : (l : a) -> Either a b
+  Right : (r : b) -> Either a b
+```
+
+`Either` もデータ型本体しか使わず、周辺の関数は使いませんでした。
+
+`Either` は2つの型をとるジェネリクスですが、関数と同じく部分適用できるので左の型だけ決めた `Either` なんかも作れます。
+
+``` idris
+λΠ> Either Int
+Either Int : Type -> Type
+```
+
+逆に右の型だけ決めた(左を自由にした) `Either` は作れません。
+こういう事情があるので右の型のほうが少し扱いやすくなっています。
+
+### [`Prelude.Functor`](https://www.idris-lang.org/docs/current/prelude_doc/docs/Prelude.Functor.html)
+
+`Prelude.Functor` には `Functor` インターフェースが定義されています。
+
+``` idris
+interface Functor (f : Type -> Type) where
+    map : (func : a -> b) -> f a -> f b
+```
+
+`Functor` は 「`map` 可能な型」のイメージです。 `List` にある `map` を一般化して色々な型に使えるようにしたものです。
+
+`f` はカインド `Type -> Type` を持ちます。`f` に `List` を当てはめると
+`map : (func : a -> b) -> List a -> List b` ですし、 `Maybe` をあてはめると `map : (func : a -> b) -> Maybe a -> Maybe b` です。
+左の型だけ決めた`Either Int` も `Type -> Type` でしたので `Functor` の実装がされています。
+
+因みに、 `map` を中置演算子にした `<$>` というのもあります。
+
+``` idris
+λΠ>  negate <$> (Just 1)
+Just -1 : Maybe Integer
+```
+
+### [`Prelude.Applicative`](https://www.idris-lang.org/docs/current/prelude_doc/docs/Prelude.Applicative.html)
+
+`Prelude.Applicative` には `Applicative` インターフェース と `Alternative` インターフェースが定義されています。
+
+``` idris
+infixl 3 <*>
+interface Functor f => Applicative (f : Type -> Type) where
+    pure  : a -> f a
+    (<*>) : f (a -> b) -> f a -> f b
+
+
+infixr 2 <|>
+interface Applicative f => Alternative (f : Type -> Type) where
+    empty : f a
+    (<|>) : f a -> f a -> f a
+```
+
+
+チュートリアルで使ったのは`Applicative` の `pure` です。
+
+すこし分かりづらいですが、 `Applicative` は1つの捉え方として `Functor` を多引数関数に拡張したものとみれます。
+例えば`Maybe Integer` 同士を足し算するとしましょう。
+`map` (`<$>`) を多引数関数に適用すると `Maybe (Integer -> Integer)` と `Maybe` に包まれた関数がでてきてしまいます。
+
+``` idris
+λΠ>  add <$> (Just 1)
+Just Integer : Maybe (Integer -> Integer)
+```
+
+そこで `Applicative` の `<*>` を使うと `Maybe` に包まれた関数と `Maybe` に包まれた値を計算できます。
+
+``` idris
+λΠ> add <$> (Just 1) <*> (Just 2)
+Just 3 : Maybe Integer
+```
+
+`pure` というのは何もしないコンストラクタです。`List` なら `pure x = [x]` ですし `Maybe` なら `pure x = Just x` です。
+これがあると`Maybe` に包まれた型と包まれてない型を混ぜて計算できます。
+
+``` idris
+λΠ> add <$> (Just 1) <*> (pure 2)
+Just 3 : Maybe Integer
+```
+
+`Alternative` にいついては説明を省きます。以下の例でなんとなく分かるかと思います。
+
+``` idris
+λΠ>  Nothing <|> (Just 1)
+Just 1 : Maybe Integer
+λΠ>  (Just 1) <|> Nothing
+Just 1 : Maybe Integer
+λΠ> the (Maybe Integer) empty
+Nothing : Maybe Integer
+```
+
+
+### [`Prelude.Monad`](https://www.idris-lang.org/docs/current/prelude_doc/docs/Prelude.Monad.html)
+
+`Prelude.Monad` には `Monad` インターフェースが定義されています。`do` 記法の中身ですね。
+`join` または `>>=` で実装が与えられます。相互に変換できるので本質的には両者には代わりはありません。
+
+``` idris
+infixl 1 >>=
+
+interface Applicative m => Monad (m : Type -> Type) where
+    (>>=)  : m a -> ((result : a) -> m b) -> m b
+    join : m (m a) -> m a
+
+    -- default implementations
+    (>>=) x f = join (f <$> x)
+    join x = x >>= id
+
+```
+
+`join` は `flatten` というと分かりやすいでしょうか。`Functor` では包んでる型を変えず、`Applicative` では包んでる型を増やし (`pure`) 、 `Monad` になって型を減らす(`join`)操作がでてきました。
+
+`Monad` (`>>=`)のキモチは、「前のアクション(`m a`)から結果(`a`)を受け取って次のアクション(`m b`)を作る」操作です。
+`getLine >>= putStrLn` とかですね。これを `do` 記法で書くとこうなります。
+
+``` idris
+do
+  input <- getLine
+  putStrLn input
+```
+
+
+### [`Prelude.Foldable`](https://www.idris-lang.org/docs/current/prelude_doc/docs/Prelude.Foldable.html)
+
+チュートリアル中でも紹介したとおり、 `Foldable` は関数型的内部イテレータです。
+
+``` idris
+interface Foldable (t : Type -> Type) where
+  foldr : (func : elem -> acc -> acc) -> (init : acc) -> (input : t elem) -> acc
+  foldl : (func : acc -> elem -> acc) -> (init : acc) -> (input : t elem) -> acc
+
+```
+
+コレクションならだいたい実装できそうですよね。
+
+`Functor` , `Applicative` , `Monad`, `Foldable` あたりでコレクションというかジェネリックなデータ型の操作は一通りできるんじゃないでしょうか。あとは[`Prelude.Traversable`](https://www.idris-lang.org/docs/current/prelude_doc/docs/Prelude.Traversable.html)にも多少操作があります。
+
+例えば `for_` 。
+
+``` idris
+main : IO ()
+main = for_ [1, 2, 3] $ \x =>
+  printLn x
+```
+
+### [`Prelude.Interactive`](https://www.idris-lang.org/docs/current/prelude_doc/docs/Prelude.Interactive.html)
+
+`Prelude.Interactive` には標準出入力に関わる関数が定義されています。
+
+``` idris
+putStr : String -> IO ()
+putStrLn : String -> IO ()
+```
+
+見た目の通り文字列を表示します。`Ln` が付くと改行も表示します。
+
+``` idris
+getLine : IO String
+```
+
+標準入力から文字列を取得する IO アクションです。
+
+
+### [`Prelude.File`](https://www.idris-lang.org/docs/current/base_doc/docs/Prelude.File.html)
+
+`Prelud.File` にはァイル操作関連の関数が定義されています。
+
+``` idris
+openFile : String -> Mode -> IO (Either FileError File)
+fGetChars : File -> Int -> IO (Either FileError String)
+closeFile : File -> IO ()
+data Mode = Read | WriteTruncate | Append | ReadWrite | ReadWriteTruncate | ReadAppend
+```
+
+特筆することはないですね。
+
+## Base
+Idrisはプレリュードがリッチすぎるのでチュートリアルの範囲ではBaseはほとんど使いませんでしたね。
+
+### [`Data.String`](https://www.idris-lang.org/docs/current/base_doc/docs/Data.String.html)
+
+ほんの少しだけ文字列操作関数が定義されています。
+チュートリアルではこの関数を使いました。
+
+``` idris
+parsePositive : String -> Maybe Integer
+```
+
+なんか[バグってるくさい](https://github.com/idris-lang/Idris-dev/issues/4637) のですが直される気配なし
+
 # その他
+ひとまずこれでチュートリアルシリーズは締めようと思います。
+気が向いたらEffective Idrisとかそういうのを書くかもしれません。
