@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+    <head>
+        
+        
+        <script async src="https://www.googletagmanager.com/gtag/js?id=UA-43779888-1"></script>
+        <script>
+         window.dataLayer = window.dataLayer || [];
+         function gtag(){dataLayer.push(arguments);}
+         gtag('js', new Date());
+
+         gtag('config', 'UA-43779888-1');
+        </script>
+        
+
+        <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:site" content="@blackenedgold" />
+        <meta name="twitter:title" content="GitLab CIでRustのCIとクロスコンパイル: お手軽編 | κeenのHappy Hacκing Blog"/>
+        <meta name="twitter:description" content="κeenです。ちょっとづつGitLabを使っていこうとしてます。
+RustでCIとクロスビルドができたので紹介します。" />
+
+        <title>GitLab CIでRustのCIとクロスコンパイル: お手軽編 | κeenのHappy Hacκing Blog</title>
+        <link rel="stylesheet" href='//fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css' />
+        <link rel="stylesheet" href="//KeenS.github.io/libraries/normalize.3.0.1.css" />
+        <link rel="stylesheet" href="//KeenS.github.io/css/liquorice.css" />
+        <link rel="apple-touch-icon" sizes="180x180" href="//KeenS.github.io/apple-touch-icon.png">
+        <link rel="icon" type="image/png" href="//KeenS.github.io/favicon-32x32.png" sizes="32x32">
+        <link rel="icon" type="image/png" href="//KeenS.github.io/favicon-16x16.png" sizes="16x16">
+        <link rel="manifest" href="//KeenS.github.io/manifest.json">
+        <link rel="mask-icon" href="//KeenS.github.io/safari-pinned-tab.svg" color="#5bbad5">
+        <meta name="theme-color" content="#ffffff">
+        <link rel="apple-touch-icon-precomposed" href="//KeenS.github.io/apple-touch-icon-144-precomposed.png" sizes="144x144" />
+        <link rel="alternate" href="" type="application/rss+xml" title="κeenのHappy Hacκing Blog" />
+        <link rel="stylesheet" href="//KeenS.github.io/css/syntax-monokai.css" />
+<script type="text/x-mathjax-config">
+ MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
+</script>
+<script async src="//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS_CHTML"></script>
+</script>
+<meta http-equiv="X-UA-Compatible" CONTENT="IE=EmulateIE7" />
+<link rel="stylesheet" href="//unpkg.com/mermaid@7.0.4/dist/mermaid.forest.min.css">
+
+    </head>
+    <body class="li-body">
+
+<header class="li-page-header" id="page-header">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-brand li-left">
+                <a href="//KeenS.github.io/">κeenのHappy Hacκing Blog</a> | Lispエイリアンの狂想曲</div>
+                <div class="li-menu li-right">
+                    <span class="li-menu-icon" onclick="javascript:toggle('menu');">&#9776;</span>
+                    <ul id="menu2" class="li-menu-items">
+                        
+                            <li><a href="//KeenS.github.io/about/"> About </a></li>
+                        
+                            <li><a href="//KeenS.github.io/index.xml"> Atom </a></li>
+                        
+                            <li><a href="//KeenS.github.io/post/"> Blog </a></li>
+                        
+                            <li><a href="//KeenS.github.io/slide/"> Slide </a></li>
+                        
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="sixteen columns">
+                <ul id="menu" class="li-menu-items li-menu-mobile">
+                    
+                        <li><a href="//KeenS.github.io/about/"> About </a></li>
+                    
+                        <li><a href="//KeenS.github.io/index.xml"> Atom </a></li>
+                    
+                        <li><a href="//KeenS.github.io/post/"> Blog </a></li>
+                    
+                        <li><a href="//KeenS.github.io/slide/"> Slide </a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+
+
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <article class="li-article">
+                    <header class="li-article-header">
+                        <h1 class="li-article-title">GitLab CIでRustのCIとクロスコンパイル: お手軽編</h1>
+                        <div class="li-article-meta">
+    <time class="li-article-date">2019-02-03</time>
+    <ul class="li-article-tag">
+    
+        <li>
+            <a href="//KeenS.github.io/categories/rust">Rust</a>
+        </li>
+    
+        <li>
+            <a href="//KeenS.github.io/categories/gitlab">GitLab</a>
+        </li>
+    
+</ul>
+
+</div>
+
+                    </header>
+                    <section>
+                        <p>κeenです。ちょっとづつGitLabを使っていこうとしてます。
+RustでCIとクロスビルドができたので紹介します。</p>
+
+<h1 id="gitlab-ciとは">GitLab CIとは</h1>
+
+<p>GitLabはGitHubと違って<sup class="footnote-ref" id="fnref:1"><a href="#fn:1">1</a></sup>開発からデプロイまでの面倒をみるのでCIも付属しています。
+外部サービスでない分コンフィグファイル置くだけで走り始めたり、CIの成果物をそのままバイナリリリースに置けたりします。</p>
+
+<p>また、GitLabは利用形態にサービスとオンプレがありますが私は今回サービスの方で試しているのでオンプレで使いたい方は自分に合わせて読んでください。</p>
+
+<h1 id="方針">方針</h1>
+
+<ul>
+<li>想定ケースとしてはRustで書かれたCLIツールのCI
+
+<ul>
+<li>プラットホーム依存のコードはない想定</li>
+</ul></li>
+<li>ひと目で何してるか分かる範囲で頑張る</li>
+<li>1ファイルで済ませる</li>
+<li>素性のよく分からないDockerイメージとかは使わない</li>
+</ul>
+
+<h1 id="コード">コード</h1>
+
+<p><a href="https://gitlab.com/blackenedgold/rust-simple-cross-build-gitlabci/blob/master/.gitlab-ci.yml">これ</a>。バイナリリリースの例は<a href="https://gitlab.com/blackenedgold/rust-simple-cross-build-gitlabci/releases">ここ</a>。適当にコピペしてお使い下さい。</p>
+
+<p>残念ながらmacOS向けには簡単はできそうになかったのであきらめました。SaaSでもmacOSのrunner提供してくれないかなー。
+一応Linuxからのクロスコンパイルは<a href="https://mzp.hatenablog.com/entry/2017/05/02/122348">成功例</a>があるものの、よくわからないdockerイメージを使っているのと、ベースに使われているdockerプロジェクトが更新されていないようなので避けることにしました。手軽に出来る方法がありましたら情報、マージリクエストともにお待ちしております。</p>
+
+<p>Windowsはmingwのみビルドしています。<a href="https://forge.rust-lang.org/cross-compilation/to-windows.html">クロスビルドのガイド</a>を見るにMSVCは手軽にはビルドできなそうです。
+それにバイナリを提供するという目的ではどちらか1つがあれば十分でしょう。</p>
+
+<h1 id="次回予告">次回予告</h1>
+
+<p>GitHub + Travis CIなら<a href="https://github.com/japaric/trust">trust</a>というおばけのようなプロジェクトがあります。
+さまざまな環境でビルド/テストできるように整えられています。</p>
+
+<p>それをGitLab CIに<a href="https://gitlab.com/blackenedgold/trust-gitlab">移植しようとしている</a>のですが内部で使われている<a href="https://github.com/rust-embedded/cross/issues/52">ツールの問題</a>で詰まってしまいました。
+問題が解決できたらまた紹介記事を書こうと思います。</p>
+
+<h1 id="ノート">ノート</h1>
+
+<p>GitLab 11.7からReleaseが<a href="https://about.gitlab.com/2019/01/22/gitlab-11-7-released/">リッチになりました</a>。
+しかしまだAPIレベルでのサポートで、CI/CDからスムーズに登録できるよう鋭意開発中とのことです。
+今はリリースノートにリンクを手で書いてますがいずれ自動化されると思われます。</p>
+<div class="footnotes">
+
+<hr />
+
+<ol>
+<li id="fn:1">最近だとGitHub Actionsもありますが…。
+ <a class="footnote-return" href="#fnref:1"><sup>[return]</sup></a></li>
+</ol>
+</div>
+                    </section>
+                </article>
+            </div>
+        </div>
+
+        <div class="row li-author">
+    <div class="sixteen columns">
+        Written by <strong>κeen</strong>
+    </div>
+</div>
+
+
+        <div class="row li-pagination">
+            <div class="eight columns">
+                <div class="li-pagination-previous">
+                    
+                        &nbsp;
+                    
+                </div>
+            </div>
+            <div class="eight columns">
+                <div class="li-pagination-next">
+                    
+                        Older article<br />
+                        <a href="//KeenS.github.io/blog/2019/01/25/idrisnyuumon__rifarensu/"> Idris入門: リファレンス</a>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+<footer class="li-page-footer">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-page-footer-legal">
+                    &copy; 2019. All rights reserved. 
+                </div>
+                <div class="li-page-footer-theme">
+                    <span class=""><a href="https://github.com/eliasson/liquorice/">liquorice</a> is a theme for <a href="http://hugo.spf13.com">hugo</a></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<script type="text/javascript">
+ function toggle(id) {
+     var e = document.getElementById(id);
+     e.style.display == 'block' ? e.style.display = 'none' : e.style.display = 'block';
+ }
+</script>
+<script src="https://unpkg.com/mermaid@7.0.4/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({startOnLoad:true
+     });</script>
+
+    </body>
+</html>
+
