@@ -166,7 +166,7 @@ val purchase = for {
 * async/awaitはCPS変換で実装されている
   → CPS変換でも実装できるけどもっと軽い方法があるよ
 * async/awaitよりもFutureの方が好き
-  → 直行する概念じゃないよ。Futureのためにasync/awaitがあるんだよ。
+  → 直交する概念じゃないよ。Futureのためにasync/awaitがあるんだよ。
 * 何故モナドを入れないのか
   → モナドを入れるには高カインド多相とかそれなりの機能が必要なんやで
 
