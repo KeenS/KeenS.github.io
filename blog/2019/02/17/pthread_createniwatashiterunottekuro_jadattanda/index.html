@@ -18,10 +18,11 @@
 
         <meta name="twitter:card" content="summary" />
         <meta name="twitter:site" content="@blackenedgold" />
-        <meta name="twitter:title" content="論文メモ: HHVM JIT: A Profile-Guided, Region-Based Compiler for PHP and Hack | κeenのHappy Hacκing Blog"/>
-        <meta name="twitter:description" content="G. Ottoni. &ldquo;HHVM JIT: A Profile-Guided, Region-Based Compiler for PHP and Hack,&rdquo; PLDI 2018 を読んだメモ。" />
+        <meta name="twitter:title" content="pthread_createに渡してるのってクロージャだったんだ | κeenのHappy Hacκing Blog"/>
+        <meta name="twitter:description" content="κeenです。いわれてみれば当たり前なんですが最近気づいたこと
+pthread_create に渡してるのって要するにクロージャなんですね。" />
 
-        <title>論文メモ: HHVM JIT: A Profile-Guided, Region-Based Compiler for PHP and Hack | κeenのHappy Hacκing Blog</title>
+        <title>pthread_createに渡してるのってクロージャだったんだ | κeenのHappy Hacκing Blog</title>
         <link rel="stylesheet" href='//fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css' />
         <link rel="stylesheet" href="//KeenS.github.io/libraries/normalize.3.0.1.css" />
         <link rel="stylesheet" href="//KeenS.github.io/css/liquorice.css" />
@@ -95,13 +96,13 @@
             <div class="sixteen columns">
                 <article class="li-article">
                     <header class="li-article-header">
-                        <h1 class="li-article-title">論文メモ: HHVM JIT: A Profile-Guided, Region-Based Compiler for PHP and Hack</h1>
+                        <h1 class="li-article-title">pthread_createに渡してるのってクロージャだったんだ</h1>
                         <div class="li-article-meta">
-    <time class="li-article-date">2019-02-16</time>
+    <time class="li-article-date">2019-02-17</time>
     <ul class="li-article-tag">
     
         <li>
-            <a href="//KeenS.github.io/categories/%e8%ab%96%e6%96%87%e3%83%a1%e3%83%a2">論文メモ</a>
+            <a href="//KeenS.github.io/categories/%e5%b0%8f%e3%83%8d%e3%82%bf">小ネタ</a>
         </li>
     
 </ul>
@@ -110,46 +111,28 @@
 
                     </header>
                     <section>
-                        <p>G. Ottoni. &ldquo;HHVM JIT: A Profile-Guided, Region-Based Compiler for PHP and Hack,&rdquo; PLDI 2018 を読んだメモ。</p>
+                        <p>κeenです。いわれてみれば当たり前なんですが最近気づいたこと
+<code>pthread_create</code> に渡してるのって要するにクロージャなんですね。</p>
 
-<p>PLDIのaccepted paper。FacebookよりHHVMの第2世代JITエンジンで使われている手法の紹介。
-Method JITでもTracing JITでもなくRegionベースでJITする話。</p>
+<p><code>pthread_create</code> は以下のようなシグネチャです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-C" data-lang="C"><span class="kt">int</span> <span class="nf">pthread_create</span><span class="p">(</span><span class="n">pthread_t</span> <span class="o">*</span><span class="kr">thread</span><span class="p">,</span> <span class="k">const</span> <span class="n">pthread_attr_t</span> <span class="o">*</span><span class="n">attr</span><span class="p">,</span>
+                          <span class="kt">void</span> <span class="o">*</span><span class="p">(</span><span class="o">*</span><span class="n">start_routine</span><span class="p">)</span> <span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="p">),</span> <span class="kt">void</span> <span class="o">*</span><span class="n">arg</span><span class="p">);</span></code></pre></div>
+<p>ここの <code>void *arg</code> が <code>void *(*start_routine) (void *)</code> に引数として渡されます。
+<code>void *</code> だと情報量がないですが、要はジェネリクスですよね。ML風に型を付けるとこうなるでしょうか。</p>
+<div class="highlight"><pre class="chroma"><code class="language-ml" data-lang="ml"><span class="k">val</span> <span class="n">pthread_create</span><span class="o">:</span> <span class="n">pthread_t</span> <span class="o">*</span> <span class="n">pthread_attr_t</span> <span class="o">*</span> <span class="o">(</span><span class="k">&#39;</span><span class="n">a</span> <span class="o">-&gt;</span> <span class="bp">()</span><span class="o">)</span> <span class="o">*</span> <span class="k">&#39;</span><span class="n">a</span> <span class="o">-&gt;</span> <span class="kt">int</span></code></pre></div>
+<p>しかしどちらかというと <code>start_routine</code> が引数に受け取る型を知っていて、それに合わせてデータを渡すので存在型をつけたくなります。
+引数内の存在型なのでML多相と同値ですし問題ないでしょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-ml" data-lang="ml"><span class="n">exists</span> <span class="k">&#39;</span><span class="n">a</span><span class="o">,</span> <span class="o">(</span><span class="k">&#39;</span><span class="n">a</span> <span class="o">-&gt;</span> <span class="bp">()</span><span class="o">)</span> <span class="o">*</span> <span class="k">&#39;</span><span class="n">a</span></code></pre></div>
+<p>この形、どこかで見覚えがあります。 <a href="http://prl.ccs.neu.edu/blog/2017/08/28/closure-conversion-as-coyoneda/">Closure Conversion as CoYoneda</a> に出てくるクロージャの型とそっくりですね。</p>
 
-<p>HHVMはHackとPHPを動かすが、Hackの型情報は捨ててしまう。Hackの型システムはunsoundらしい。世知辛い。</p>
+<p>\[
+A \to B \cong \exists \Gamma.\Gamma \times (\Gamma \times A \to B)
+\]</p>
 
-<p>バイトコードインタプリタとJITでOSRして相互に実行を交代できる「よくある」JITエンジン。</p>
+<p>よく考えたら高級な言語(クロージャのある言語)だとspawnの引数に渡すクロージャは <code>() -&gt; ()</code> なことが多いですね。</p>
 
-<p>HHVMのJITでは以下の4つをしている。</p>
-
-<ul>
-<li>type specialization</li>
-<li>profile-guided optimizations</li>
-<li>side exits</li>
-<li>region-based compilation</li>
-</ul>
-
-<p>このうちside exitsとregion-based compilationが私は初見だった。</p>
-
-<p>side exitsはコンパイルされたコードの途中で抜けるやつ。インタプリタに戻ったり、さらに最適化されたコードに跳んだりする。
-TraceMonkeyとかHotSpotとかで使われているらしい。</p>
-
-<p>region-based compilationはタイトルにもなっているように設計上重要な部分。JITコンパイルするときの粒度。
-メソッド単位、基本ブロック単位、トレース単位など色々にある。
-リージョンベースコンパイルについては以下を参照とのこと Richard E Hank, Wen-Mei W Hwu, and B Ramakrishna Rau. 1995. Region-based compilation: An introduction and motivation. In Pro- ceedings ofthe International Symposium on Microarchitecture. 158–168 。リージョンがなんなのか具体的な説明がないまま進んでいく…。
-恐らく任意の粒度のバイトコードかな？例えば 「<code>a</code> の型が <code>int</code> と分かっている区間」のような単位でバイトコードを切り取っていそう。</p>
-
-<p>Javaなどの静的な言語に比べて動的な言語ではよりリージョンの恩恵が大きいらしい。</p>
-
-<p>面白いのが最適化のところ。</p>
-
-<ul>
-<li>1つのトリガで全部のコンパイルをするらしい。Whole Program Optimizaionが可能になる。</li>
-<li>関数をよく呼び出す組同士で並べるとTLBミスが減ってパフォーマンスが改善するらしい</li>
-<li>Huge Pageによく呼ばれるコードを置くとやはりI-TLBミスが減って速くなるらしい。</li>
-<li>code bloatを防ぐために前提条件ゆるくしてコンパイルする</li>
-</ul>
-
-<p>自分にとって目新しい部分だけ抜き出したので気になった人は論文読んで。</p>
+<p>実装上の解釈をすると、クロージャは関数とそれが捕捉した環境の組で実装されることが多いです。その関数と環境を2つに分けて引数に渡していると考えれば納得できます。
+なるほどー。</p>
                     </section>
                 </article>
             </div>
@@ -166,8 +149,7 @@ TraceMonkeyとかHotSpotとかで使われているらしい。</p>
             <div class="eight columns">
                 <div class="li-pagination-previous">
                     
-                        Later article<br />
-                        <a href="//KeenS.github.io/blog/2019/02/17/pthread_createniwatashiterunottekuro_jadattanda/"> pthread_createに渡してるのってクロージャだったんだ</a>
+                        &nbsp;
                     
                 </div>
             </div>
@@ -175,7 +157,7 @@ TraceMonkeyとかHotSpotとかで使われているらしい。</p>
                 <div class="li-pagination-next">
                     
                         Older article<br />
-                        <a href="//KeenS.github.io/blog/2019/02/16/ronbunmemo__mison__a_fast_json_parser_for_data_analytics/"> 論文メモ: Mison: A Fast JSON Parser for Data Analytics</a>
+                        <a href="//KeenS.github.io/blog/2019/02/16/ronbunmemo__hhvm_jit__a_profile_guided__region_based_compiler_for_php_and_hack/"> 論文メモ: HHVM JIT: A Profile-Guided, Region-Based Compiler for PHP and Hack</a>
                     
                 </div>
             </div>
