@@ -22,7 +22,11 @@ menu: "main"
 - 2013 [ISUCON3](http://isucon.net) 学生賞
 - 2014 [ISUCON4](http://isucon.net) 学生賞
 
-その他いくつかのOSSの開発者/コミッタ/コントリビュータ
+いくつかのOSSの開発者/コミッタ/コントリビュータ
+
+## Publications
+
+* [実践Rust入門 ［言語仕様から開発手法まで］](https://gihyo.jp/book/2019/978-4-297-10559-4) (技術評論社) 2019年5月8日発売 κeen，河野 達也，小松礼人　著
 
 ## SNS accounts
 
