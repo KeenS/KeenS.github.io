@@ -38,6 +38,7 @@ title: "Effective Idris: Effects"
 
 * Idrisの標準添付ライブラリ
 * Algebraic Effectの実装ライブラリ
+  + Eff言語のEffectを参考に設計したらしい
 * IOとかRandomとかStateとか色々あるよ
 
 ===
