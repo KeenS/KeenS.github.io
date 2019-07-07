@@ -68,7 +68,7 @@ where
 
 ```
 
-作るときは `new` 関連関数もあるのですが `Box` から `into` でも作れます。違いは `T` に `Unpin` を要求するかどうかです。
+作るときは `new` 関連関数もあるのですが `Box` から `into` でも作れます（追記： もっと直接的な `Box::pin` というAPIもあるようです）。違いは `T` に `Unpin` を要求するかどうかです。
 
 
 さて、必要なAPIを確認したのでただ値を返すだけのFutureを実装してみましょう。
@@ -106,7 +106,49 @@ where
 
 ほぼ値を保持して返すだけですが、 `Option` を使っています。これは `&mut Self` になっているので所有権をムーブできないからです。こういうときは `Option<T>` と `Option::take` でどうにかするイディオムが知られているのでそれを使います。
 
-ここで、 `Pin<&mut Self>` から `&mut Self` を作るために `Pin::get_mut` を使っていて、さらにそのために `T` に `Unpin` を要求しています。分析してみると、 `take` で保持した値をムーブして返しているのでこれは必要な要求です。
+~~ここで、 `Pin<&mut Self>` から `&mut Self` を作るために `Pin::get_mut` を使っていて、さらにそのために `T` に `Unpin` を要求しています。分析してみると、 `take` で保持した値をムーブして返しているのでこれは必要な要求です。~~
+
+追記:  
+記述に誤りがありました。
+
+<blockquote class="twitter-tweet"><p lang="ja" dir="ltr">ReturnFutureはPin&lt;&amp;mut Self&gt;からPin&lt;&amp;mut T&gt;を構築しないので無条件にUnpinを実装します<br>参考:<a href="https://t.co/q4CEqq9wzr">https://t.co/q4CEqq9wzr</a><a href="https://t.co/EjHfwSj4nW">https://t.co/EjHfwSj4nW</a></p>&mdash; 井山梃子歴史館 (@__pandaman64__) <a href="https://twitter.com/__pandaman64__/status/1147873014635098115?ref_src=twsrc%5Etfw">July 7, 2019</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script> 
+
+
+`ReturnFuture` では `T` に `Unpin` を要求する必要はありませんでした。
+ざっくりいうと内部にフィールドに `Pin` が必要なものが存在しないし、外部にフィールドが `Pin` されていることが要求されない（= `<&mut Field>` を作るようなAPIが存在しない）から、ってことで合ってるかな？
+`Unpin` は自動トレイトですが、自分で実装を与えることもできますので、 `T` に `Unpin` を要求しないように手で実装するとこうなります。
+
+``` rust
+pub struct ReturnFuture<T>(Option<T>);
+impl<T> ReturnFuture<T> {
+    pub fn new(t: T) -> Self {
+        Self(Some(t))
+    }
+}
+
+// Unpinを手で実装する
+impl<T> Unpin for ReturnFuture<T> {}
+// 自動で導出される場合は以下のようにパラメータにも `Unpin` が要求される。今回はそれは不要だった。
+// impl<T: Unpin> Unpin for ReturnFuture<T> {}
+
+// T: Unpinの制約がなくても実装できるようになった
+impl<T> Future for ReturnFuture<T> {
+    type Output = T;
+    fn poll(self: Pin<&mut Self>, _: &mut Context) -> Poll<Self::Output> {
+        Poll::Ready(
+            self.get_mut()
+                .0
+                .take()
+                .expect("A future should never be polled after it returns Ready"),
+        )
+    }
+}
+
+```
+
+付録のコードも併せて更新しておきます。
+
+/追記  
 
 ところで `Option::expect` を呼んでいるのが気になりますね。
 しかしメッセージにも書いているように、 `Future` は `Poll::Ready` を返したらそれ以上は `poll` が呼ばれない規約になっています ([`poll`のドキュメント](https://doc.rust-lang.org/std/future/trait.Future.html#tymethod.poll)に書いてあります)。なのでここでは二度目が呼ばれたらパニックすることにしておきます。
