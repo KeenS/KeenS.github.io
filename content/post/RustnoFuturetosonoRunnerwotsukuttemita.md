@@ -667,3 +667,9 @@ Runnerも今回は1度に1 Futureだけ扱いましたが複数のFutureをま�
 
 今回は複数のFutureを組み合わせるFutureは作りませんでした。
 2つともの結果を待ってそのタプルを返す `join(f1, f2)` やどちらか早い方の結果を返す`choice(f1, f2)` 、 1つの結果を受けてさらにFutureの計算をする `and_then(f1,|ret| f2(ret))` などを実装してみると理解が深まるかもしれません。
+
+# 付録
+ソースコード全文
+
+<script src="https://gitlab.com/snippets/1872760.js"></script>
+
