@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+    <head>
+        
+        
+        <script async src="https://www.googletagmanager.com/gtag/js?id=UA-43779888-1"></script>
+        <script>
+         window.dataLayer = window.dataLayer || [];
+         function gtag(){dataLayer.push(arguments);}
+         gtag('js', new Date());
+
+         gtag('config', 'UA-43779888-1');
+        </script>
+        
+
+        <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:site" content="@blackenedgold" />
+        <meta name="twitter:title" content="RustのFutureとそのRunnerを作ってみた | κeenのHappy Hacκing Blog"/>
+        <meta name="twitter:description" content="κeenです。Rust 1.36.0がリリースされましたね。
+ここで標準ライブラリにFutureが入ったので試しに実装してみます。" />
+
+        <title>RustのFutureとそのRunnerを作ってみた | κeenのHappy Hacκing Blog</title>
+        <link rel="stylesheet" href='//fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css' />
+        <link rel="stylesheet" href="//KeenS.github.io/libraries/normalize.3.0.1.css" />
+        <link rel="stylesheet" href="//KeenS.github.io/css/liquorice.css" />
+        <link rel="apple-touch-icon" sizes="180x180" href="//KeenS.github.io/apple-touch-icon.png">
+        <link rel="icon" type="image/png" href="//KeenS.github.io/favicon-32x32.png" sizes="32x32">
+        <link rel="icon" type="image/png" href="//KeenS.github.io/favicon-16x16.png" sizes="16x16">
+        <link rel="manifest" href="//KeenS.github.io/manifest.json">
+        <link rel="mask-icon" href="//KeenS.github.io/safari-pinned-tab.svg" color="#5bbad5">
+        <meta name="theme-color" content="#ffffff">
+        <link rel="apple-touch-icon-precomposed" href="//KeenS.github.io/apple-touch-icon-144-precomposed.png" sizes="144x144" />
+        <link rel="alternate" href="" type="application/rss+xml" title="κeenのHappy Hacκing Blog" />
+        <link rel="stylesheet" href="//KeenS.github.io/css/syntax-monokai.css" />
+<script type="text/x-mathjax-config">
+ MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
+</script>
+<script async src="//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS_CHTML"></script>
+</script>
+<meta http-equiv="X-UA-Compatible" CONTENT="IE=EmulateIE7" />
+<link rel="stylesheet" href="//unpkg.com/mermaid@7.0.4/dist/mermaid.forest.min.css">
+
+    </head>
+    <body class="li-body">
+
+<header class="li-page-header" id="page-header">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-brand li-left">
+                <a href="//KeenS.github.io/">κeenのHappy Hacκing Blog</a> | Lispエイリアンの狂想曲</div>
+                <div class="li-menu li-right">
+                    <span class="li-menu-icon" onclick="javascript:toggle('menu');">&#9776;</span>
+                    <ul id="menu2" class="li-menu-items">
+                        
+                            <li><a href="//KeenS.github.io/about/"> About </a></li>
+                        
+                            <li><a href="//KeenS.github.io/index.xml"> Atom </a></li>
+                        
+                            <li><a href="//KeenS.github.io/post/"> Blog </a></li>
+                        
+                            <li><a href="//KeenS.github.io/slide/"> Slide </a></li>
+                        
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="sixteen columns">
+                <ul id="menu" class="li-menu-items li-menu-mobile">
+                    
+                        <li><a href="//KeenS.github.io/about/"> About </a></li>
+                    
+                        <li><a href="//KeenS.github.io/index.xml"> Atom </a></li>
+                    
+                        <li><a href="//KeenS.github.io/post/"> Blog </a></li>
+                    
+                        <li><a href="//KeenS.github.io/slide/"> Slide </a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+
+
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <article class="li-article">
+                    <header class="li-article-header">
+                        <h1 class="li-article-title">RustのFutureとそのRunnerを作ってみた</h1>
+                        <div class="li-article-meta">
+    <time class="li-article-date">2019-07-07</time>
+    <ul class="li-article-tag">
+    
+        <li>
+            <a href="//KeenS.github.io/categories/rust">Rust</a>
+        </li>
+    
+        <li>
+            <a href="//KeenS.github.io/categories/future">Future</a>
+        </li>
+    
+</ul>
+
+</div>
+
+                    </header>
+                    <section>
+                        <p>κeenです。Rust 1.36.0がリリースされましたね。
+ここで標準ライブラリにFutureが入ったので試しに実装してみます。</p>
+
+<p>Rust 1.36.0ではFutureとそれに関連したいくつかのアイテムが安定化されました。
+これは今までcrates.ioにあったfuturesのAPIとは異なるもので、 1.38.0 で安定化される予定の <code>async</code> / <code>await</code> 導入の布石になるものです。futuresと標準ライブラリのFutureの関係や <code>async</code> / <code>await</code> についてはここでは詳しく触れないので別の記事を参照して下さい。</p>
+
+<p>参考:</p>
+
+<ul>
+<li><a href="https://tech-blog.optim.co.jp/entry/2019/07/05/173000">Rustの未来いわゆるFuture - OPTiM TECH BLOG</a></li>
+<li><a href="https://qiita.com/qnighy/items/05c38f73ef4b9e487ced">Rustのasync/awaitの特徴4つ - Qiita</a></li>
+</ul>
+
+<h1 id="何もしないfutureの実装">何もしないFutureの実装</h1>
+
+<p>ひとまず <code>Future</code> のAPIを確認するために何もしない、ただ値を返すだけのFutureを作ってみましょう。
+<code>Future</code> と関連する型は以下のように定義されています。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="c1">// std::future
+</span><span class="c1"></span><span class="w">
+</span><span class="w"></span><span class="k">pub</span><span class="w"> </span><span class="k">trait</span><span class="w"> </span><span class="n">Future</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="k">type</span> <span class="nc">Output</span><span class="p">;</span><span class="w">
+</span><span class="w">    </span><span class="k">fn</span> <span class="nf">poll</span><span class="p">(</span><span class="bp">self</span>: <span class="nc">Pin</span><span class="o">&lt;&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">Self</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="n">cx</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">Context</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Poll</span><span class="o">&lt;</span><span class="n">Self</span>::<span class="n">Output</span><span class="o">&gt;</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="k">pub</span><span class="w"> </span><span class="k">enum</span> <span class="nc">Poll</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="n">Ready</span><span class="p">(</span><span class="n">T</span><span class="p">),</span><span class="w">
+</span><span class="w">    </span><span class="n">Pending</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p><code>poll</code> でFutureが準備できているか確認し、できていれば <code>Ready</code> を、 できていなければ <code>Pending</code> を返す仕組みです。
+準備ができていなかった際は <code>Context</code> を使ってごにょごにょするのですが、今回は待たせないので一旦無視しましょう。</p>
+
+<p>ところで <code>self</code> が <code>Pin&lt;&amp;mut Self&gt;</code> になっていますね。
+<code>Pin</code> はデータを移動できないことを示すデータ型です。 <code>async</code> / <code>await</code> を導入した際に起こる面倒事を回避するためにこうなっています。また、 <code>Pin</code> で包まれていてもデータを移動できることを表わす <code>Unpin</code> と呼ばれる自動トレイトもあります。</p>
+
+<p><code>Pin</code> のメソッドはいくつかあるのですが、さしあたって必要になるAPIを紹介しておきます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="c1">// std::pin
+</span><span class="c1"></span><span class="k">pub</span><span class="w"> </span><span class="k">struct</span> <span class="nc">Pin</span><span class="o">&lt;</span><span class="n">P</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* fields omitted */</span><span class="w"> </span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="k">impl</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="nb">From</span><span class="o">&lt;</span><span class="nb">Box</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">Pin</span><span class="o">&lt;</span><span class="nb">Box</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;&gt;</span><span class="w">
+</span><span class="w"></span><span class="k">where</span><span class="w">
+</span><span class="w">    </span><span class="n">T</span>: <span class="o">?</span><span class="nb">Sized</span><span class="p">;</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="k">impl</span><span class="o">&lt;</span><span class="n">P</span><span class="o">&gt;</span><span class="w"> </span><span class="n">Pin</span><span class="o">&lt;</span><span class="n">P</span><span class="o">&gt;</span><span class="w">
+</span><span class="w"></span><span class="k">where</span><span class="w">
+</span><span class="w">    </span><span class="n">P</span>: <span class="nc">Deref</span><span class="p">,</span><span class="w">
+</span><span class="w">    </span><span class="o">&lt;</span><span class="n">P</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">Deref</span><span class="o">&gt;</span>::<span class="n">Target</span>: <span class="nc">Unpin</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">new</span><span class="p">(</span><span class="n">pointer</span>: <span class="nc">P</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Pin</span><span class="o">&lt;</span><span class="n">P</span><span class="o">&gt;</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="k">impl</span><span class="o">&lt;</span><span class="n">P</span><span class="o">&gt;</span><span class="w"> </span><span class="n">Pin</span><span class="o">&lt;</span><span class="n">P</span><span class="o">&gt;</span><span class="w"> </span><span class="k">where</span><span class="w">
+</span><span class="w"></span><span class="k">where</span><span class="w">
+</span><span class="w">    </span><span class="n">P</span>: <span class="nc">DerefMut</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">get_mut</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kp">&amp;</span><span class="na">&#39;a</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">T</span><span class="w">
+</span><span class="w">    </span><span class="k">where</span><span class="w">
+</span><span class="w">        </span><span class="n">T</span>: <span class="nc">Unpin</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>作るときは <code>new</code> 関連関数もあるのですが <code>Box</code> から <code>into</code> でも作れます。違いは <code>T</code> に <code>Unpin</code> を要求するかどうかです。</p>
+
+<p>さて、必要なAPIを確認したのでただ値を返すだけのFutureを実装してみましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">future</span>::<span class="n">Future</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">pin</span>::<span class="n">Pin</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">task</span>::<span class="p">{</span><span class="n">Context</span><span class="p">,</span><span class="w"> </span><span class="n">Poll</span><span class="p">};</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="k">pub</span><span class="w"> </span><span class="k">struct</span> <span class="nc">ReturnFuture</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="p">(</span><span class="nb">Option</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="p">);</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="k">impl</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="n">ReturnFuture</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">new</span><span class="p">(</span><span class="n">t</span>: <span class="nc">T</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="n">Self</span><span class="p">(</span><span class="nb">Some</span><span class="p">(</span><span class="n">t</span><span class="p">))</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="k">impl</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="n">Future</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">ReturnFuture</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w">
+</span><span class="w"></span><span class="k">where</span><span class="w">
+</span><span class="w">    </span><span class="n">T</span>: <span class="nc">Unpin</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="k">type</span> <span class="nc">Output</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">T</span><span class="p">;</span><span class="w">
+</span><span class="w">    </span><span class="k">fn</span> <span class="nf">poll</span><span class="p">(</span><span class="bp">self</span>: <span class="nc">Pin</span><span class="o">&lt;&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">Self</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="n">_</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">Context</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Poll</span><span class="o">&lt;</span><span class="n">Self</span>::<span class="n">Output</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="n">Poll</span>::<span class="n">Ready</span><span class="p">(</span><span class="w">
+</span><span class="w">            </span><span class="bp">self</span><span class="p">.</span><span class="n">get_mut</span><span class="p">()</span><span class="w">
+</span><span class="w">                </span><span class="p">.</span><span class="mi">0</span><span class="w">
+</span><span class="w">                </span><span class="p">.</span><span class="n">take</span><span class="p">()</span><span class="w">
+</span><span class="w">                </span><span class="p">.</span><span class="n">expect</span><span class="p">(</span><span class="s">&#34;A future should never be polled after it returns Ready&#34;</span><span class="p">),</span><span class="w">
+</span><span class="w">        </span><span class="p">)</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>ほぼ値を保持して返すだけですが、 <code>Option</code> を使っています。これは <code>&amp;mut Self</code> になっているので所有権をムーブできないからです。こういうときは <code>Option&lt;T&gt;</code> と <code>Option::take</code> でどうにかするイディオムが知られているのでそれを使います。</p>
+
+<p>ここで、 <code>Pin&lt;&amp;mut Self&gt;</code> から <code>&amp;mut Self</code> を作るために <code>Pin::get_mut</code> を使っていて、さらにそのために <code>T</code> に <code>Unpin</code> を要求しています。分析してみると、 <code>take</code> で保持した値をムーブして返しているのでこれは必要な要求です。</p>
+
+<p>ところで <code>Option::expect</code> を呼んでいるのが気になりますね。
+しかしメッセージにも書いているように、 <code>Future</code> は <code>Poll::Ready</code> を返したらそれ以上は <code>poll</code> が呼ばれない規約になっています (<a href="https://doc.rust-lang.org/std/future/trait.Future.html#tymethod.poll"><code>poll</code>のドキュメント</a>に書いてあります)。なのでここでは二度目が呼ばれたらパニックすることにしておきます。</p>
+
+<p>試しにこのFutureを使ってみましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">future</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ReturnFuture</span>::<span class="n">new</span><span class="p">(</span><span class="mi">42</span><span class="p">);</span><span class="w">
+</span><span class="w">    </span><span class="c1">// futureを実行する
+</span><span class="c1"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>使おうと思いましたが、実行する手立てがありませんね。 <code>poll</code> を呼ぶにしても <code>Context</code> がありません。
+仕方ないのでFutureのRunnerも作りましょう。</p>
+
+<h1 id="工夫のないrunner">工夫のないRunner</h1>
+
+<p>ということでFutureを実行するために <code>Context</code> が必要なので <code>Context</code> のAPIを確認します。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="c1">// std::task
+</span><span class="c1"></span><span class="k">pub</span><span class="w"> </span><span class="k">struct</span> <span class="nc">Context</span><span class="o">&lt;</span><span class="na">&#39;a</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* fields omitted */</span><span class="w"> </span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="k">impl</span><span class="o">&lt;</span><span class="na">&#39;a</span><span class="o">&gt;</span><span class="w"> </span><span class="n">Context</span><span class="o">&lt;</span><span class="na">&#39;a</span><span class="o">&gt;</span><span class="w">
+</span><span class="w"></span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">from_waker</span><span class="p">(</span><span class="n">waker</span>: <span class="kp">&amp;</span><span class="na">&#39;a</span><span class="w"> </span><span class="n">Waker</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Context</span><span class="o">&lt;</span><span class="na">&#39;a</span><span class="o">&gt;</span><span class="p">;</span><span class="w">
+</span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">waker</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kp">&amp;</span><span class="na">&#39;a</span><span class="w"> </span><span class="n">Waker</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>なんと <code>Waker</code> を準備しないと <code>Context</code> が作れません。では <code>Waker</code> を。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="c1">// std::task
+</span><span class="c1"></span><span class="k">pub</span><span class="w"> </span><span class="k">struct</span> <span class="nc">Waker</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* fields omitted */</span><span class="w"> </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="n">Waker</span><span class="w">
+</span><span class="w"></span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">wake</span><span class="p">(</span><span class="bp">self</span><span class="p">);</span><span class="w">
+</span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">wake_by_ref</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">);</span><span class="w">
+</span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">will_wake</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">other</span>: <span class="kp">&amp;</span><span class="nc">Waker</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">bool</span><span class="p">;</span><span class="w">
+</span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">unsafe</span><span class="w"> </span><span class="k">fn</span> <span class="nf">from_raw</span><span class="p">(</span><span class="n">waker</span>: <span class="nc">RawWaker</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Waker</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p><code>Waker</code> はさらに <code>RawWaker</code> から作られます。では <code>RawWaker</code> を。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="c1">// std::task
+</span><span class="c1"></span><span class="k">pub</span><span class="w"> </span><span class="k">struct</span> <span class="nc">RawWaker</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* fields omitted */</span><span class="w"> </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="n">RawWaker</span><span class="w">
+</span><span class="w"></span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">fn</span> <span class="nf">new</span><span class="p">(</span><span class="n">data</span>: <span class="o">*</span><span class="k">const</span><span class="w"> </span><span class="p">(),</span><span class="w"> </span><span class="n">vtable</span>: <span class="kp">&amp;</span><span class="nb">&#39;static</span><span class="w"> </span><span class="n">RawWakerVTable</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">RawWaker</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p><code>RawWaker</code> さらに <code>RawWakerVTable</code> から作られます。では <code>RawWakerVTable</code> を。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="c1">// std::task
+</span><span class="c1"></span><span class="k">pub</span><span class="w"> </span><span class="k">struct</span> <span class="nc">RawWakerVTable</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* fields omitted */</span><span class="w"> </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="n">RawWakerVTable</span><span class="w">
+</span><span class="w"></span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">fn</span> <span class="nf">new</span><span class="p">(</span><span class="w">
+</span><span class="w">        </span><span class="n">clone</span>: <span class="nc">unsafe</span><span class="w"> </span><span class="k">fn</span><span class="p">(</span><span class="o">*</span><span class="k">const</span><span class="w"> </span><span class="p">())</span><span class="w"> </span>-&gt; <span class="nc">RawWaker</span><span class="p">,</span><span class="w">
+</span><span class="w">        </span><span class="n">wake</span>: <span class="nc">unsafe</span><span class="w"> </span><span class="k">fn</span><span class="p">(</span><span class="o">*</span><span class="k">const</span><span class="w"> </span><span class="p">()),</span><span class="w">
+</span><span class="w">        </span><span class="n">wake_by_ref</span>: <span class="nc">unsafe</span><span class="w"> </span><span class="k">fn</span><span class="p">(</span><span class="o">*</span><span class="k">const</span><span class="w"> </span><span class="p">()),</span><span class="w">
+</span><span class="w">        </span><span class="n">drop</span>: <span class="nc">unsafe</span><span class="w"> </span><span class="k">fn</span><span class="p">(</span><span class="o">*</span><span class="k">const</span><span class="w"> </span><span class="p">())</span><span class="w">
+</span><span class="w">    </span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">RawWakerVTable</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>ここまできてようやく作れそうです。ですが <code>unsafe</code> や生ポインタが出てきて不穏ですね。
+一旦ここまで出たデータ型を見返してみると、主な部分は <code>RawWaker</code> に渡す <code>*const ()</code> と <code>RawWakerVTable</code> の組が担います。<code>Waker</code> はそのラッパで <code>Context</code> は将来 <code>Waker</code> 以外の機能も提供するために一枚噛ませてるんですかね？</p>
+
+<p><code>*const ()</code> と <code>RawWakerVTable</code> ですが、vtableという名前を知っている人には何なのか一目で分かるでしょう。</p>
+
+<p>vtableを知らない人に軽く説明します。Rustのメソッド呼び出しは何も特別なことをしない関数呼び出しです。
+以下の3つの呼び出しは同じ挙動をします。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="c1">// 1
+</span><span class="c1"></span><span class="n">data</span><span class="p">.</span><span class="n">clone</span><span class="p">()</span><span class="w">
+</span><span class="w"></span><span class="c1">// 2
+</span><span class="c1"></span><span class="nb">Clone</span>::<span class="n">clone</span><span class="p">(</span><span class="o">&amp;</span><span class="n">data</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="c1">// 3
+</span><span class="c1"></span><span class="o">&lt;</span><span class="n">Data</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nb">Clone</span><span class="o">&gt;</span>::<span class="n">clone</span><span class="p">(</span><span class="o">&amp;</span><span class="n">data</span><span class="p">)</span><span class="w">
+</span></code></pre></div>
+<p><code>&lt;Data as Clone&gt;::clone</code> はただの関数ですので、ざっくりいうと <code>data</code> へのポインタと <code>clone</code> 関数があれば <code>clone</code> メソッドを呼び出せるのです。普段はこの関数をコンパイラが適当なものを探索して呼出してくれているのです。
+この 「<code>data</code> へのポインタ」 部分が <code>*const ()</code> で、 「<code>clone</code> 関数」が <code>RawWakerVTable</code> に渡している <code>clone</code> です。
+データ部分は普通なら <code>&amp;Data</code> のように参照を使いますが、 <code>Waker</code> はジェネリクスになっていないので型を消すためにポインタにして <code>()</code> にキャストしているのでしょう。
+具体的な型を消しつついくつかのメソッドを提供するのはやっていることは <code>Box&lt;dyn Trait&gt;</code> とあまり変わらないのですが（というか <code>dyn Trait</code> も上記と同じような仕組みで動いている）、 <code>Box</code> 部分を抽象化するためなのか <code>Sized</code> 制約の扱いの問題からなのか、それを分解したものすごく低レベルなAPIになっていますね。</p>
+
+<p>VTableに入っているメソドは、  <code>clone</code> と <code>drop</code> は <code>Waker</code> の <code>Clone</code> と <code>Drop</code> で使われ、<code>wake</code> と <code>wake_by_ref</code> はそのまま<code>Waker</code> の <code>wake</code> と <code>wake_by_ref</code> で使われるようです。</p>
+
+<p>これで <code>Waker</code> の作り方が分かったので <code>Context</code> も作れて、 Runner も作れます。
+<code>Waker</code> (<code>Context</code>) は実際は何もしないので先に Runner の方を作ります。
+あまり褒められた実装ではないですが、<code>Ready</code> が返ってくるまでビジーループで <code>poll</code> し続けるRunner、 <code>SpinRunner</code> を実装します。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">struct</span> <span class="nc">SpinRunner</span><span class="p">;</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">ops</span>::<span class="p">{</span><span class="n">Deref</span><span class="p">,</span><span class="w"> </span><span class="n">DerefMut</span><span class="p">};</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="n">SpinRunner</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">new</span><span class="p">()</span><span class="w"> </span>-&gt; <span class="nc">Self</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="n">Self</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">run</span><span class="o">&lt;</span><span class="n">F</span><span class="o">&gt;</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">future</span>: <span class="nc">F</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">F</span>::<span class="n">Output</span><span class="w">
+</span><span class="w">    </span><span class="k">where</span><span class="w">
+</span><span class="w">        </span><span class="n">F</span>: <span class="nc">Future</span><span class="p">,</span><span class="w">
+</span><span class="w">    </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">future</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Pin</span>::<span class="n">from</span><span class="p">(</span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="n">future</span><span class="p">));</span><span class="w">
+</span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">run_pin</span><span class="p">(</span><span class="n">future</span><span class="p">.</span><span class="n">as_mut</span><span class="p">())</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">run_pin</span><span class="o">&lt;</span><span class="n">F</span><span class="o">&gt;</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">future</span>: <span class="nc">Pin</span><span class="o">&lt;</span><span class="n">F</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="o">&lt;&lt;</span><span class="n">F</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">Deref</span><span class="o">&gt;</span>::<span class="n">Target</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">Future</span><span class="o">&gt;</span>::<span class="n">Output</span><span class="w">
+</span><span class="w">    </span><span class="k">where</span><span class="w">
+</span><span class="w">        </span><span class="n">F</span>: <span class="nc">DerefMut</span><span class="p">,</span><span class="w">
+</span><span class="w">        </span><span class="o">&lt;</span><span class="n">F</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">Deref</span><span class="o">&gt;</span>::<span class="n">Target</span>: <span class="nc">Future</span><span class="p">,</span><span class="w">
+</span><span class="w">    </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">waker</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">SpinWaker</span>::<span class="n">waker</span><span class="p">();</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">cx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Context</span>::<span class="n">from_waker</span><span class="p">(</span><span class="o">&amp;</span><span class="n">waker</span><span class="p">);</span><span class="w">
+</span><span class="w">        </span><span class="c1">// loopでpollするだけ
+</span><span class="c1"></span><span class="w">        </span><span class="k">loop</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">            </span><span class="k">match</span><span class="w"> </span><span class="n">future</span><span class="p">.</span><span class="n">as_mut</span><span class="p">().</span><span class="n">poll</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">cx</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">                </span><span class="n">Poll</span>::<span class="n">Ready</span><span class="p">(</span><span class="n">ret</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">                    </span><span class="k">return</span><span class="w"> </span><span class="n">ret</span><span class="p">;</span><span class="w">
+</span><span class="w">                </span><span class="p">}</span><span class="w">
+</span><span class="w">                </span><span class="n">Poll</span>::<span class="n">Pending</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="k">continue</span><span class="p">,</span><span class="w">
+</span><span class="w">            </span><span class="p">}</span><span class="w">
+</span><span class="w">        </span><span class="p">}</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>ここでは<code>waker</code> から <code>cx</code> を作ってはいますがそのあと <code>Future</code> に渡すだけで何もしていませんね。
+ということで何もしない <code>Waker</code> を作りましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">task</span>::<span class="p">{</span><span class="n">RawWaker</span><span class="p">,</span><span class="w"> </span><span class="n">RawWakerVTable</span><span class="p">,</span><span class="w"> </span><span class="n">Waker</span><span class="p">};</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="cp">#[derive(Debug, Clone)]</span><span class="w">
+</span><span class="w"></span><span class="k">struct</span> <span class="nc">SpinWaker</span><span class="p">;</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="k">static</span><span class="w"> </span><span class="n">SPIN_WAKER_VTABLE</span>: <span class="nc">RawWakerVTable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">RawWakerVTable</span>::<span class="n">new</span><span class="p">(</span><span class="w">
+</span><span class="w">    </span><span class="n">SpinWaker</span>::<span class="n">unsafe_clone</span><span class="p">,</span><span class="w">
+</span><span class="w">    </span><span class="n">SpinWaker</span>::<span class="n">unsafe_wake</span><span class="p">,</span><span class="w">
+</span><span class="w">    </span><span class="n">SpinWaker</span>::<span class="n">unsafe_wake_by_ref</span><span class="p">,</span><span class="w">
+</span><span class="w">    </span><span class="n">SpinWaker</span>::<span class="n">unsafe_drop</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="p">);</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="n">SpinWaker</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="k">fn</span> <span class="nf">waker</span><span class="p">()</span><span class="w"> </span>-&gt; <span class="nc">Waker</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="c1">// this is safe because waker&#39;s data and vtable is consistent
+</span><span class="c1"></span><span class="w">        </span><span class="k">unsafe</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">Waker</span>::<span class="n">from_raw</span><span class="p">(</span><span class="n">Self</span>::<span class="n">new</span><span class="p">().</span><span class="n">into_raw_waker</span><span class="p">())</span><span class="w"> </span><span class="p">}</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w">    </span><span class="k">fn</span> <span class="nf">new</span><span class="p">()</span><span class="w"> </span>-&gt; <span class="nc">Self</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="n">Self</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w">    </span><span class="k">unsafe</span><span class="w"> </span><span class="k">fn</span> <span class="nf">into_raw_waker</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">RawWaker</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ptr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Box</span>::<span class="n">into_raw</span><span class="p">(</span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="bp">self</span><span class="p">))</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="o">*</span><span class="k">const</span><span class="w"> </span><span class="p">();</span><span class="w">
+</span><span class="w">        </span><span class="n">RawWaker</span>::<span class="n">new</span><span class="p">(</span><span class="n">ptr</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">SPIN_WAKER_VTABLE</span><span class="p">)</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w">    </span><span class="k">unsafe</span><span class="w"> </span><span class="k">fn</span> <span class="nf">unsafe_clone</span><span class="p">(</span><span class="n">this</span>: <span class="o">*</span><span class="k">const</span><span class="w"> </span><span class="p">())</span><span class="w"> </span>-&gt; <span class="nc">RawWaker</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ptr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="o">*</span><span class="k">const</span><span class="w"> </span><span class="n">Self</span><span class="p">;</span><span class="w">
+</span><span class="w">        </span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="n">ptr</span><span class="p">.</span><span class="n">as_ref</span><span class="p">().</span><span class="n">unwrap</span><span class="p">().</span><span class="n">clone</span><span class="p">()).</span><span class="n">into_raw_waker</span><span class="p">()</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w">    </span><span class="k">fn</span> <span class="nf">wake</span><span class="p">(</span><span class="bp">self</span>: <span class="nc">Self</span><span class="p">)</span><span class="w"> </span><span class="p">{}</span><span class="w">
+</span><span class="w">    </span><span class="k">unsafe</span><span class="w"> </span><span class="k">fn</span> <span class="nf">unsafe_wake</span><span class="p">(</span><span class="n">this</span>: <span class="o">*</span><span class="k">const</span><span class="w"> </span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ptr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="o">*</span><span class="k">mut</span><span class="w"> </span><span class="n">Self</span><span class="p">;</span><span class="w">
+</span><span class="w">        </span><span class="nb">Box</span>::<span class="n">from_raw</span><span class="p">(</span><span class="n">ptr</span><span class="p">).</span><span class="n">wake</span><span class="p">()</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w">    </span><span class="k">fn</span> <span class="nf">wake_by_ref</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">clone</span><span class="p">()).</span><span class="n">wake</span><span class="p">()</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w">    </span><span class="k">unsafe</span><span class="w"> </span><span class="k">fn</span> <span class="nf">unsafe_wake_by_ref</span><span class="p">(</span><span class="n">this</span>: <span class="o">*</span><span class="k">const</span><span class="w"> </span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ptr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="o">*</span><span class="k">const</span><span class="w"> </span><span class="n">Self</span><span class="p">;</span><span class="w">
+</span><span class="w">        </span><span class="n">ptr</span><span class="p">.</span><span class="n">as_ref</span><span class="p">().</span><span class="n">unwrap</span><span class="p">().</span><span class="n">wake_by_ref</span><span class="p">()</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w">    </span><span class="k">unsafe</span><span class="w"> </span><span class="k">fn</span> <span class="nf">unsafe_drop</span><span class="p">(</span><span class="n">this</span>: <span class="o">*</span><span class="k">const</span><span class="w"> </span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ptr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="o">*</span><span class="k">mut</span><span class="w"> </span><span class="n">Self</span><span class="p">;</span><span class="w">
+</span><span class="w">        </span><span class="nb">Box</span>::<span class="n">from_raw</span><span class="p">(</span><span class="n">ptr</span><span class="p">);</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p><code>*const ()</code> の部分は <code>Box::into_raw</code> で作っています。
+これは <code>unsafe_drop</code> の <code>Box::from_raw</code> で復元し、Rustに開放させています。
+実は今回の <code>SpinWaker</code> はデータを持たないので <code>Box</code> を使わなくてもNULLポインタでも差し支えないのですが例示として <code>Box</code> のポインタを使っています。</p>
+
+<p><code>wake_by_ref</code> は <code>clone</code> を使う実装にしておきます。
+<code>wake</code> は何もしないメソッドとして定義します。
+<code>unsafe_*</code> 関数は主には <code>*const ()</code> から <code>Self</code> を復元する役目を負います。
+全て同じ <code>*const ()</code> ですが、実際は呼出した側からすると <code>&amp;self</code> のつもりだったり <code>Box&lt;Self&gt;</code> のつもりだったりするので適切に状況判断をして <code>Self</code> を復元しましょう。</p>
+
+<p>これで役者が揃ったので <code>Future</code> を実行してみましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">runner</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">SpinRunner</span>::<span class="n">new</span><span class="p">();</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">future</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ReturnFuture</span>::<span class="n">new</span><span class="p">(</span><span class="mi">42</span><span class="p">);</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">ret</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">runner</span><span class="p">.</span><span class="n">run</span><span class="p">(</span><span class="n">future</span><span class="p">);</span><span class="w">
+</span><span class="w">    </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;answer is {}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">ret</span><span class="p">);</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div><div class="highlight"><pre class="chroma"><code class="language-console" data-lang="console">answer is 42</code></pre></div>
+<p>結果を取り出せました。
+しかしビジーループで実装されています。
+今扱っているFutureはすぐに返りますが全てがそうではありません。
+これでは結果が出てくるまでCPUを使いっきりですね。
+それに、 <code>poll</code> を何度も呼ぶと結果の確認にコストのかかるFutureだったらFutureの計算自体も遅くなりかねません。</p>
+
+<p>結果が出てくるまでは休むようにできないでしょうか。
+これは <code>Waker</code> をちゃんと実装してあげるとできるようになります。
+そのために、もう少しまともな Runnerを実装しましょう。</p>
+
+<h1 id="工夫のあるrunner">工夫のあるRunner</h1>
+
+<p>条件を満たすまで待つには、channelを使う方法もありますがここでは<a href="https://ja.wikipedia.org/wiki/%E3%83%A2%E3%83%8B%E3%82%BF_(%E5%90%8C%E6%9C%9F)#%E6%9D%A1%E4%BB%B6%E5%A4%89%E6%95%B0">条件変数</a>を使ってみましょう。</p>
+
+<p>条件変数（<a href="https://doc.rust-lang.org/std/sync/struct.Condvar.html"><code>Condvar</code></a>） はロックと組で使います。</p>
+
+<p>待つ側は以下のように、ロックに対してそれが通知されるのを <code>Condvar::wait</code> で待ちます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="kd">let</span><span class="w"> </span><span class="n">lock</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mutex</span><span class="p">.</span><span class="n">lock</span><span class="p">().</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
+</span><span class="w"></span><span class="n">condvar</span><span class="p">.</span><span class="n">wait</span><span class="p">(</span><span class="n">lock</span><span class="p">).</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
+</span></code></pre></div>
+<p>通知する側は適当に <code>Condvar::notify_all</code> などを呼びます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="n">condvar</span><span class="p">.</span><span class="n">notify_all</span><span class="p">();</span><span class="w">
+</span></code></pre></div>
+<p>これを使って <code>Future</code> を <code>poll</code> して <code>Poll::Pending</code> なら <code>wait</code> する Runnerを書いてみましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">sync</span>::<span class="p">{</span><span class="n">Arc</span><span class="p">,</span><span class="w"> </span><span class="n">Mutex</span><span class="p">,</span><span class="w"> </span><span class="n">Condvar</span><span class="p">};</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="k">struct</span> <span class="nc">CondRunner</span><span class="p">(</span><span class="n">Arc</span><span class="o">&lt;</span><span class="p">(</span><span class="n">Mutex</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="n">Condvar</span><span class="p">)</span><span class="o">&gt;</span><span class="p">);</span><span class="w">
+</span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="n">CondRunner</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="c1">// 略
+</span><span class="c1"></span><span class="w">
+</span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">run_pin</span><span class="o">&lt;</span><span class="n">F</span><span class="o">&gt;</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">future</span>: <span class="nc">Pin</span><span class="o">&lt;</span><span class="n">F</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="o">&lt;&lt;</span><span class="n">F</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">Deref</span><span class="o">&gt;</span>::<span class="n">Target</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">Future</span><span class="o">&gt;</span>::<span class="n">Output</span><span class="w">
+</span><span class="w">    </span><span class="k">where</span><span class="w">
+</span><span class="w">        </span><span class="n">F</span>: <span class="nc">DerefMut</span><span class="p">,</span><span class="w">
+</span><span class="w">        </span><span class="o">&lt;</span><span class="n">F</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">Deref</span><span class="o">&gt;</span>::<span class="n">Target</span>: <span class="nc">Future</span><span class="p">,</span><span class="w">
+</span><span class="w">    </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">waker</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CondWaker</span>::<span class="n">waker</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="mf">0.</span><span class="n">clone</span><span class="p">());</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">cx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Context</span>::<span class="n">from_waker</span><span class="p">(</span><span class="o">&amp;</span><span class="n">waker</span><span class="p">);</span><span class="w">
+</span><span class="w">        </span><span class="k">loop</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">            </span><span class="k">match</span><span class="w"> </span><span class="n">future</span><span class="p">.</span><span class="n">as_mut</span><span class="p">().</span><span class="n">poll</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">cx</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">                </span><span class="n">Poll</span>::<span class="n">Ready</span><span class="p">(</span><span class="n">ret</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">                    </span><span class="k">return</span><span class="w"> </span><span class="n">ret</span><span class="p">;</span><span class="w">
+</span><span class="w">                </span><span class="p">}</span><span class="w">
+</span><span class="w">                </span><span class="n">Poll</span>::<span class="n">Pending</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">                    </span><span class="c1">// 一回pollしてまだだったら条件変数の通知を待つ
+</span><span class="c1"></span><span class="w">                    </span><span class="kd">let</span><span class="w"> </span><span class="n">lock</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="mi">0</span><span class="p">).</span><span class="mf">0.</span><span class="n">lock</span><span class="p">().</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
+</span><span class="w">                    </span><span class="o">*</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="mi">0</span><span class="p">).</span><span class="mf">1.</span><span class="n">wait</span><span class="p">(</span><span class="n">lock</span><span class="p">).</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
+</span><span class="w">                    </span><span class="c1">// 条件が通知されたら再度pollする
+</span><span class="c1"></span><span class="w">                </span><span class="p">}</span><span class="w">
+</span><span class="w">            </span><span class="p">};</span><span class="w">
+</span><span class="w">        </span><span class="p">}</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>ビジーループに <code>Condvar::wait</code> が足されました。
+<code>Mutex</code> は実際にはデータを使ってないので <code>()</code> を持たせています。
+<code>wait</code> したあとに <code>poll</code> したら結果が返ってくることが保証されてもよさそうな気がしますが、Futureの計算が多段階に分かれる場合などは <code>wake</code> のあとにさらに計算があることもあるので結果が返ってくるとは限りません。</p>
+
+<p>これに対応する <code>Waker</code> を作ります。
+今度は <code>Runner</code> と <code>Waker</code> でデータを共有するので <code>Box</code> ではなく <code>Arc</code> を使います。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#[derive(Debug)]</span><span class="w">
+</span><span class="w"></span><span class="k">struct</span> <span class="nc">CondWaker</span><span class="p">(</span><span class="n">Arc</span><span class="o">&lt;</span><span class="p">(</span><span class="n">Mutex</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="n">Condvar</span><span class="p">)</span><span class="o">&gt;</span><span class="p">);</span><span class="w">
+</span></code></pre></div>
+<p>先程は <code>Box&lt;SpinWaker&gt;</code> と外側でポインタを扱ってましたが今度は <code>CondWaker</code> の中にポインタ型があるので混乱しないで下さいね。</p>
+
+<p>それでは <code>CondWaker</code> を実装していきます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">static</span><span class="w"> </span><span class="n">COND_WAKER_VTABLE</span>: <span class="nc">RawWakerVTable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">RawWakerVTable</span>::<span class="n">new</span><span class="p">(</span><span class="w">
+</span><span class="w">    </span><span class="n">CondWaker</span>::<span class="n">unsafe_clone</span><span class="p">,</span><span class="w">
+</span><span class="w">    </span><span class="n">CondWaker</span>::<span class="n">unsafe_wake</span><span class="p">,</span><span class="w">
+</span><span class="w">    </span><span class="n">CondWaker</span>::<span class="n">unsafe_wake_by_ref</span><span class="p">,</span><span class="w">
+</span><span class="w">    </span><span class="n">CondWaker</span>::<span class="n">unsafe_drop</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="p">);</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="n">CondWaker</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="k">fn</span> <span class="nf">waker</span><span class="p">(</span><span class="n">inner</span>: <span class="nc">Arc</span><span class="o">&lt;</span><span class="p">(</span><span class="n">Mutex</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="n">Condvar</span><span class="p">)</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Waker</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="c1">// this is safe because waker&#39;s data and vtable is consistent
+</span><span class="c1"></span><span class="w">        </span><span class="k">unsafe</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">Waker</span>::<span class="n">from_raw</span><span class="p">(</span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="n">Self</span>::<span class="n">new</span><span class="p">(</span><span class="n">inner</span><span class="p">)).</span><span class="n">into_raw_waker</span><span class="p">())</span><span class="w"> </span><span class="p">}</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w">    </span><span class="k">fn</span> <span class="nf">new</span><span class="p">(</span><span class="n">inner</span>: <span class="nc">Arc</span><span class="o">&lt;</span><span class="p">(</span><span class="n">Mutex</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="n">Condvar</span><span class="p">)</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="n">Self</span><span class="p">(</span><span class="n">inner</span><span class="p">)</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w">    </span><span class="k">unsafe</span><span class="w"> </span><span class="k">fn</span> <span class="nf">into_raw_waker</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">RawWaker</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ptr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Arc</span>::<span class="n">into_raw</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="o">*</span><span class="k">const</span><span class="w"> </span><span class="p">();</span><span class="w">
+</span><span class="w">        </span><span class="n">RawWaker</span>::<span class="n">new</span><span class="p">(</span><span class="n">ptr</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">COND_WAKER_VTABLE</span><span class="p">)</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w">    </span><span class="k">unsafe</span><span class="w"> </span><span class="k">fn</span> <span class="nf">unsafe_clone</span><span class="p">(</span><span class="n">this</span>: <span class="o">*</span><span class="k">const</span><span class="w"> </span><span class="p">())</span><span class="w"> </span>-&gt; <span class="nc">RawWaker</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ptr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="o">*</span><span class="k">const</span><span class="w"> </span><span class="p">(</span><span class="n">Mutex</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="n">Condvar</span><span class="p">);</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">arc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Arc</span>::<span class="n">from_raw</span><span class="p">(</span><span class="n">ptr</span><span class="p">);</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ret</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Self</span>::<span class="n">new</span><span class="p">(</span><span class="n">arc</span><span class="p">.</span><span class="n">clone</span><span class="p">()).</span><span class="n">into_raw_waker</span><span class="p">();</span><span class="w">
+</span><span class="w">        </span><span class="n">std</span>::<span class="n">mem</span>::<span class="n">forget</span><span class="p">(</span><span class="n">arc</span><span class="p">);</span><span class="w">
+</span><span class="w">        </span><span class="n">ret</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w">    </span><span class="k">fn</span> <span class="nf">wake</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="mi">0</span><span class="p">).</span><span class="mf">1.</span><span class="n">notify_all</span><span class="p">()</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w">    </span><span class="k">unsafe</span><span class="w"> </span><span class="k">fn</span> <span class="nf">unsafe_wake</span><span class="p">(</span><span class="n">this</span>: <span class="o">*</span><span class="k">const</span><span class="w"> </span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ptr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="o">*</span><span class="k">const</span><span class="w"> </span><span class="p">(</span><span class="n">Mutex</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="n">Condvar</span><span class="p">);</span><span class="w">
+</span><span class="w">        </span><span class="n">Self</span>::<span class="n">new</span><span class="p">(</span><span class="n">Arc</span>::<span class="n">from_raw</span><span class="p">(</span><span class="n">ptr</span><span class="p">)).</span><span class="n">wake</span><span class="p">()</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w">    </span><span class="k">unsafe</span><span class="w"> </span><span class="k">fn</span> <span class="nf">unsafe_wake_by_ref</span><span class="p">(</span><span class="n">this</span>: <span class="o">*</span><span class="k">const</span><span class="w"> </span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ptr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="o">*</span><span class="k">const</span><span class="w"> </span><span class="p">(</span><span class="n">Mutex</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="n">Condvar</span><span class="p">);</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">arc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Arc</span>::<span class="n">from_raw</span><span class="p">(</span><span class="n">ptr</span><span class="p">);</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ret</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Self</span>::<span class="n">new</span><span class="p">(</span><span class="n">arc</span><span class="p">.</span><span class="n">clone</span><span class="p">());</span><span class="w">
+</span><span class="w">        </span><span class="n">std</span>::<span class="n">mem</span>::<span class="n">forget</span><span class="p">(</span><span class="n">arc</span><span class="p">);</span><span class="w">
+</span><span class="w">        </span><span class="n">ret</span><span class="p">.</span><span class="n">wake</span><span class="p">()</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w">    </span><span class="k">unsafe</span><span class="w"> </span><span class="k">fn</span> <span class="nf">unsafe_drop</span><span class="p">(</span><span class="n">this</span>: <span class="o">*</span><span class="k">const</span><span class="w"> </span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ptr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="o">*</span><span class="k">const</span><span class="w"> </span><span class="p">(</span><span class="n">Mutex</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="n">Condvar</span><span class="p">);</span><span class="w">
+</span><span class="w">        </span><span class="n">Self</span>::<span class="n">new</span><span class="p">(</span><span class="n">Arc</span>::<span class="n">from_raw</span><span class="p">(</span><span class="n">ptr</span><span class="p">));</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>いくつか目立ったところを解説します。
+まず、 <code>wake</code> で <code>notify_all</code> を呼んでいますね。
+ポインタの操作は <code>Arc</code> にも <code>from_raw</code> と <code>into_raw</code> があるので <code>SpinRunner</code> のときとさほど変わりません。
+唯一違うのは <code>unsafe_clone</code> です。 <code>SpinRunner</code> と違って <code>Mutex</code> などは <code>clone</code> できないので <code>Arc</code> の <code>clone</code> を呼びます。
+そのために一旦ポインタから <code>Arc</code> を復元するのですがそのままにすると <code>drop</code> が走ってデクリメント、開放されてしまうので <code>forget</code> で <code>drop</code> が走らないようにしています。</p>
+
+<p>さて、このRunnerを使ってみましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">runner</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CondRunner</span>::<span class="n">new</span><span class="p">();</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">future</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ReturnFuture</span>::<span class="n">new</span><span class="p">(</span><span class="mi">42</span><span class="p">);</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">ret</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">runner</span><span class="p">.</span><span class="n">run</span><span class="p">(</span><span class="n">future</span><span class="p">);</span><span class="w">
+</span><span class="w">    </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;answer is {}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">ret</span><span class="p">);</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div><div class="highlight"><pre class="chroma"><code class="language-console" data-lang="console">answer is 42</code></pre></div>
+<p>計算できました。
+しかし思い出すと <code>ReturnFuture</code> は <code>Context</code> を呼び出さなかったので条件変数は使われていませんね。
+これでは正しく実装できているか分かりません。
+ちゃんと別スレッドで計算して <code>Context</code> も使うFutureを作りましょう。</p>
+
+<h1 id="スレッドを使うfuture">スレッドを使うFuture</h1>
+
+<p><code>Waker</code> を使う例を見るためにスレッドを使うFutureを作ります。今回は結果のやりとりにchannelを使いましょう。
+Wakerは計算スレッドと呼び出し側で共有するので <code>Arc&lt;Mutex&lt;_&gt;&gt;</code> を使います。
+さらに <code>poll</code> されるまでは <code>Waker</code> は存在しないので <code>Option&lt;_&gt;</code> に包まれます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">sync</span>::<span class="n">mpsc</span>::<span class="p">{</span><span class="n">channel</span><span class="p">,</span><span class="w"> </span><span class="n">Receiver</span><span class="p">};</span><span class="w">
+</span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">thread</span><span class="p">;</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="k">pub</span><span class="w"> </span><span class="k">struct</span> <span class="nc">ThreadFuture</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="n">rx</span>: <span class="nc">Receiver</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="p">,</span><span class="w">
+</span><span class="w">    </span><span class="n">waker</span>: <span class="nc">Arc</span><span class="o">&lt;</span><span class="n">Mutex</span><span class="o">&lt;</span><span class="nb">Option</span><span class="o">&lt;</span><span class="n">Waker</span><span class="o">&gt;&gt;&gt;</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>このFutureの開始でスレッドをスタートします。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">impl</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="n">ThreadFuture</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w">
+</span><span class="w"></span><span class="k">where</span><span class="w">
+</span><span class="w">    </span><span class="n">T</span>: <span class="nb">Send</span> <span class="o">+</span><span class="w"> </span><span class="nb">&#39;static</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">start</span><span class="o">&lt;</span><span class="n">F</span><span class="o">&gt;</span><span class="p">(</span><span class="n">f</span>: <span class="nc">F</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span><span class="w">
+</span><span class="w">    </span><span class="k">where</span><span class="w">
+</span><span class="w">        </span><span class="n">F</span>: <span class="nb">FnOnce</span><span class="p">()</span><span class="w"> </span>-&gt; <span class="nc">T</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nb">Send</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nb">&#39;static</span><span class="p">,</span><span class="w">
+</span><span class="w">    </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="p">(</span><span class="n">tx</span><span class="p">,</span><span class="w"> </span><span class="n">rx</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">channel</span><span class="p">();</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">waker</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Arc</span>::<span class="n">new</span><span class="p">(</span><span class="n">Mutex</span>::<span class="n">new</span><span class="p">(</span><span class="nb">None</span>::<span class="o">&lt;</span><span class="n">Waker</span><span class="o">&gt;</span><span class="p">));</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">w</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">waker</span><span class="p">.</span><span class="n">clone</span><span class="p">();</span><span class="w">
+</span><span class="w">        </span><span class="n">thread</span>::<span class="n">spawn</span><span class="p">(</span><span class="k">move</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">            </span><span class="n">tx</span><span class="p">.</span><span class="n">send</span><span class="p">(</span><span class="n">f</span><span class="p">()).</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
+</span><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="kd">let</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="n">waker</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;*</span><span class="n">w</span><span class="p">.</span><span class="n">lock</span><span class="p">().</span><span class="n">unwrap</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">                </span><span class="n">waker</span><span class="p">.</span><span class="n">wake_by_ref</span><span class="p">()</span><span class="w">
+</span><span class="w">            </span><span class="p">}</span><span class="w">
+</span><span class="w">        </span><span class="p">});</span><span class="w">
+</span><span class="w">
+</span><span class="w">        </span><span class="n">Self</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">rx</span><span class="p">,</span><span class="w"> </span><span class="n">waker</span><span class="w"> </span><span class="p">}</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>スレッドの中身は <code>f</code> の計算結果をチャネルに突っ込んだら <code>waker</code> を使って計算が終わったことを通知します。
+<code>waker</code> がなかったときか気になるかもしれませんが、そのときはまだ <code>poll</code> が呼ばれていないので特に <code>wake</code> を呼ぶ必要はありません。</p>
+
+<p>これのFuture側の実装はこうです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">impl</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="n">Future</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">ThreadFuture</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w">
+</span><span class="w"></span><span class="k">where</span><span class="w">
+</span><span class="w">    </span><span class="n">T</span>: <span class="nb">Send</span> <span class="o">+</span><span class="w"> </span><span class="nb">Sync</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nb">&#39;static</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="k">type</span> <span class="nc">Output</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">T</span><span class="p">;</span><span class="w">
+</span><span class="w">
+</span><span class="w">    </span><span class="k">fn</span> <span class="nf">poll</span><span class="p">(</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span>: <span class="nc">Pin</span><span class="o">&lt;&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">Self</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="n">cx</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">Context</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Poll</span><span class="o">&lt;</span><span class="n">Self</span>::<span class="n">Output</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="o">*</span><span class="bp">self</span><span class="p">.</span><span class="n">waker</span><span class="p">.</span><span class="n">lock</span><span class="p">().</span><span class="n">unwrap</span><span class="p">()</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="n">cx</span><span class="p">.</span><span class="n">waker</span><span class="p">().</span><span class="n">clone</span><span class="p">());</span><span class="w">
+</span><span class="w">        </span><span class="k">match</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">rx</span><span class="p">.</span><span class="n">try_recv</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">            </span><span class="nb">Ok</span><span class="p">(</span><span class="n">t</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">Poll</span>::<span class="n">Ready</span><span class="p">(</span><span class="n">t</span><span class="p">),</span><span class="w">
+</span><span class="w">            </span><span class="nb">Err</span><span class="p">(</span><span class="n">_</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">Poll</span>::<span class="n">Pending</span><span class="p">,</span><span class="w">
+</span><span class="w">        </span><span class="p">}</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>受け取った <code>Waker</code> をスレッドに共有してから <code>try_recv</code> を呼びます。
+<code>Waker</code> は何度も <code>poll</code> が呼ばれた場合は最新の <code>Waker</code> を使って <code>wake</code> する規約なので呼ばれる度に上書きます。
+<code>try_recv</code> はブロックせず、 <code>Ok</code> が返れば値が準備できていて、 <code>Err</code> なら値は（まだ）ありません。</p>
+
+<p>因みにスレッドのチャネルに <code>send</code> して <code>waker</code> の確認、Futureの <code>waker</code> をセットしてから <code>try_recv</code> の順番は重要です。これが逆だと二度と <code>poll</code> されない場合が出てきます。具体的には以下のようなトレースです。</p>
+
+<p>futureがpollしてからwakerをsetする場合:</p>
+
+<ol>
+<li>[Future]: pollされたので <code>try_recv</code> する。まだ値がない</li>
+<li>[スレッド]: 計算が終わったので値を <code>send</code> する</li>
+<li>[スレッド]: <code>waker</code> を取り出そうとするが、まだない。これでスレッドは終了する</li>
+<li>[Future]: <code>waker</code> をセットし、 <code>Pending</code> を返す。<code>wake</code> が呼ばれるまで <code>poll</code> は呼ばれない</li>
+</ol>
+
+<p>スレッドがwakeしてから計算をsendする場合:</p>
+
+<ol>
+<li>[スレッド]: 計算が終わったので <code>waker</code> を取り出そうとするがまだない。スルーする</li>
+<li>[Future]: pollされたので <code>waker</code> をセットする</li>
+<li>[Future]: <code>try_recv</code> する。まだ値はないので <code>Pending</code> を返す。<code>wake</code> が呼ばれるまで <code>poll</code> は呼ばれない</li>
+<li>[スレッド]: チャネルに値を <code>send</code> する。これでスレッドは終了する</li>
+</ol>
+
+<p>どちらの場合もタイミングによってはFutureが <code>Pending</code> を返したあとに <code>wake</code> が呼ばれないままスレッドが終了しており、このまま <code>poll</code> が呼ばれないようなトレースが存在します。注意しましょう。</p>
+
+<p>さて、これを使ってみましょう。適当なワークロードとして <code>fib</code> 関数を置いておきます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">fib</span><span class="p">(</span><span class="n">n</span>: <span class="kt">u64</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">u64</span> <span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="mi">1</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="n">fib</span><span class="p">(</span><span class="n">n</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">fib</span><span class="p">(</span><span class="n">n</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>それでは走らせてみます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">runner</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CondRunner</span>::<span class="n">new</span><span class="p">();</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">future</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ThreadFuture</span>::<span class="n">start</span><span class="p">(</span><span class="o">||</span><span class="w"> </span><span class="n">fib</span><span class="p">(</span><span class="mi">42</span><span class="p">));</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">ret</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">runner</span><span class="p">.</span><span class="n">run</span><span class="p">(</span><span class="n">future</span><span class="p">);</span><span class="w">
+</span><span class="w">    </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;answer is {}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">ret</span><span class="p">);</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div><div class="highlight"><pre class="chroma"><code class="language-console" data-lang="console">answer is 433494437</code></pre></div>
+<p>ひとまず走ることは確認しました。でも、ちゃんとwaitできてるか不安ですよね。
+Runnerをすこし弄って<code>poll</code> した回数を測ってみましょう。
+2つのRunnerのループの部分でカウンタを設け、 <code>poll</code> で <code>Poll::Ready</code> が返ったときにカウンタを表示してみましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">run_pin</span><span class="p">(...)</span><span class="w">
+</span><span class="w">   </span><span class="c1">// ...
+</span><span class="c1"></span><span class="w">   </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
+</span><span class="w">   </span><span class="k">loop</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">       </span><span class="n">i</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span><span class="w">       </span><span class="k">match</span><span class="w"> </span><span class="n">future</span><span class="p">.</span><span class="n">as_mut</span><span class="p">().</span><span class="n">poll</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">cx</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">           </span><span class="n">Poll</span>::<span class="n">Ready</span><span class="p">(</span><span class="n">ret</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">               </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">);</span><span class="w">
+</span><span class="w">               </span><span class="k">return</span><span class="w"> </span><span class="n">ret</span><span class="p">;</span><span class="w">
+</span><span class="w">           </span><span class="p">},</span><span class="w">
+</span><span class="w">           </span><span class="c1">// ...
+</span><span class="c1"></span><span class="w">       </span><span class="p">}</span><span class="w">
+</span><span class="w">       </span><span class="c1">// ....
+</span><span class="c1"></span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>2つとも書き換えたら走らせてみます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">runner</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CondRunner</span>::<span class="n">new</span><span class="p">();</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">future</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ThreadFuture</span>::<span class="n">start</span><span class="p">(</span><span class="o">||</span><span class="w"> </span><span class="n">fib</span><span class="p">(</span><span class="mi">42</span><span class="p">));</span><span class="w">
+</span><span class="w">    </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;cond runner&#34;</span><span class="p">);</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">ret</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">runner</span><span class="p">.</span><span class="n">run</span><span class="p">(</span><span class="n">future</span><span class="p">);</span><span class="w">
+</span><span class="w">    </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;answer is {}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">ret</span><span class="p">);</span><span class="w">
+</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">runner</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">SpinRunner</span>::<span class="n">new</span><span class="p">();</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">future</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ThreadFuture</span>::<span class="n">start</span><span class="p">(</span><span class="o">||</span><span class="w"> </span><span class="n">fib</span><span class="p">(</span><span class="mi">42</span><span class="p">));</span><span class="w">
+</span><span class="w">    </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;spin runner&#34;</span><span class="p">);</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">ret</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">runner</span><span class="p">.</span><span class="n">run</span><span class="p">(</span><span class="n">future</span><span class="p">);</span><span class="w">
+</span><span class="w">    </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;answer is {}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">ret</span><span class="p">);</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div><div class="highlight"><pre class="chroma"><code class="language-console" data-lang="console">cond runner
+2
+answer is 433494437
+spin runner
+49128182
+answer is 433494437</code></pre></div>
+<p>はい、 <code>CondRunner</code> は2回しか <code>poll</code> してませんが <code>SpinRunner</code> は 49,128,182 回 <code>poll</code> したようです。ちゃんと <code>wait</code> できてますね。めでたしめでたし。</p>
+
+<h1 id="まとめ">まとめ</h1>
+
+<p>単純なFutureとスレッドを使うFuture、単純なRunnerと同期プリミティブを使ったRunnerを実装してみました。
+その過程で、関連するデータ型の使い方も示しました。</p>
+
+<p>今回作ったFutureとRunnerはどちらも単純なものでしたので、実際はもう少し複雑なものになるでしょう。
+Futureはスレッドを使うにしてもスレッドプールを用意した方が効率的でしょうし、IO待ちの場合は <code>select</code> や <code>poll</code> 、 <code>epoll</code> 、 <code>kqueue</code> などのシステムコールを使うケースが多いでしょう。
+Runnerも今回は1度に1 Futureだけ扱いましたが複数のFutureをまとめて処理できた方がよさそうです。
+そうするとFutureのpollのスケジューラを実装することになるでしょう。</p>
+
+<p>今回は複数のFutureを組み合わせるFutureは作りませんでした。
+2つともの結果を待ってそのタプルを返す <code>join(f1, f2)</code> やどちらか早い方の結果を返す<code>choice(f1, f2)</code> 、 1つの結果を受けてさらにFutureの計算をする <code>and_then(f1,|ret| f2(ret))</code> などを実装してみると理解が深まるかもしれません。</p>
+                    </section>
+                </article>
+            </div>
+        </div>
+
+        <div class="row li-author">
+    <div class="sixteen columns">
+        Written by <strong>κeen</strong>
+    </div>
+</div>
+
+
+        <div class="row li-pagination">
+            <div class="eight columns">
+                <div class="li-pagination-previous">
+                    
+                        &nbsp;
+                    
+                </div>
+            </div>
+            <div class="eight columns">
+                <div class="li-pagination-next">
+                    
+                        Older article<br />
+                        <a href="//KeenS.github.io/blog/2019/06/27/keizokutokanowadaisa_bei/"> 継続とかの話題サーベイ</a>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+<footer class="li-page-footer">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-page-footer-legal">
+                    &copy; 2019. All rights reserved. 
+                </div>
+                <div class="li-page-footer-theme">
+                    <span class=""><a href="https://github.com/eliasson/liquorice/">liquorice</a> is a theme for <a href="http://hugo.spf13.com">hugo</a></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<script type="text/javascript">
+ function toggle(id) {
+     var e = document.getElementById(id);
+     e.style.display == 'block' ? e.style.display = 'none' : e.style.display = 'block';
+ }
+</script>
+<script src="https://unpkg.com/mermaid@7.0.4/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({startOnLoad:true
+     });</script>
+
+    </body>
+</html>
+
