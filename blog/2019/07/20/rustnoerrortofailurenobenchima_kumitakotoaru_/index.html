@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+    <head>
+        
+        
+        <script async src="https://www.googletagmanager.com/gtag/js?id=UA-43779888-1"></script>
+        <script>
+         window.dataLayer = window.dataLayer || [];
+         function gtag(){dataLayer.push(arguments);}
+         gtag('js', new Date());
+
+         gtag('config', 'UA-43779888-1');
+        </script>
+        
+
+        <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:site" content="@blackenedgold" />
+        <meta name="twitter:title" content="RustのErrorとFailureのベンチマーク見たことある？ | κeenのHappy Hacκing Blog"/>
+        <meta name="twitter:description" content="κeenです。最近ちょくちょく標準ライブラリの Error とfailureライブラリの Fail が比べられる（というより Fail を推奨する）のが増えてきたようです。
+個人的にちょっと気になってる点があって、みんなそれを抜きに議論してるようなので少しお話します。" />
+
+        <title>RustのErrorとFailureのベンチマーク見たことある？ | κeenのHappy Hacκing Blog</title>
+        <link rel="stylesheet" href='//fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css' />
+        <link rel="stylesheet" href="//KeenS.github.io/libraries/normalize.3.0.1.css" />
+        <link rel="stylesheet" href="//KeenS.github.io/css/liquorice.css" />
+        <link rel="apple-touch-icon" sizes="180x180" href="//KeenS.github.io/apple-touch-icon.png">
+        <link rel="icon" type="image/png" href="//KeenS.github.io/favicon-32x32.png" sizes="32x32">
+        <link rel="icon" type="image/png" href="//KeenS.github.io/favicon-16x16.png" sizes="16x16">
+        <link rel="manifest" href="//KeenS.github.io/manifest.json">
+        <link rel="mask-icon" href="//KeenS.github.io/safari-pinned-tab.svg" color="#5bbad5">
+        <meta name="theme-color" content="#ffffff">
+        <link rel="apple-touch-icon-precomposed" href="//KeenS.github.io/apple-touch-icon-144-precomposed.png" sizes="144x144" />
+        <link rel="alternate" href="" type="application/rss+xml" title="κeenのHappy Hacκing Blog" />
+        <link rel="stylesheet" href="//KeenS.github.io/css/syntax-monokai.css" />
+<script type="text/x-mathjax-config">
+ MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
+</script>
+<script async src="//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS_CHTML"></script>
+</script>
+<meta http-equiv="X-UA-Compatible" CONTENT="IE=EmulateIE7" />
+<link rel="stylesheet" href="//unpkg.com/mermaid@7.0.4/dist/mermaid.forest.min.css">
+
+    </head>
+    <body class="li-body">
+
+<header class="li-page-header" id="page-header">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-brand li-left">
+                <a href="//KeenS.github.io/">κeenのHappy Hacκing Blog</a> | Lispエイリアンの狂想曲</div>
+                <div class="li-menu li-right">
+                    <span class="li-menu-icon" onclick="javascript:toggle('menu');">&#9776;</span>
+                    <ul id="menu2" class="li-menu-items">
+                        
+                            <li><a href="//KeenS.github.io/about/"> About </a></li>
+                        
+                            <li><a href="//KeenS.github.io/index.xml"> Atom </a></li>
+                        
+                            <li><a href="//KeenS.github.io/post/"> Blog </a></li>
+                        
+                            <li><a href="//KeenS.github.io/slide/"> Slide </a></li>
+                        
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="sixteen columns">
+                <ul id="menu" class="li-menu-items li-menu-mobile">
+                    
+                        <li><a href="//KeenS.github.io/about/"> About </a></li>
+                    
+                        <li><a href="//KeenS.github.io/index.xml"> Atom </a></li>
+                    
+                        <li><a href="//KeenS.github.io/post/"> Blog </a></li>
+                    
+                        <li><a href="//KeenS.github.io/slide/"> Slide </a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+
+
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <article class="li-article">
+                    <header class="li-article-header">
+                        <h1 class="li-article-title">RustのErrorとFailureのベンチマーク見たことある？</h1>
+                        <div class="li-article-meta">
+    <time class="li-article-date">2019-07-20</time>
+    <ul class="li-article-tag">
+    
+        <li>
+            <a href="//KeenS.github.io/categories/rust">Rust</a>
+        </li>
+    
+</ul>
+
+</div>
+
+                    </header>
+                    <section>
+                        <p>κeenです。最近ちょくちょく標準ライブラリの <code>Error</code> とfailureライブラリの <code>Fail</code> が比べられる（というより <code>Fail</code> を推奨する）のが増えてきたようです。
+個人的にちょっと気になってる点があって、みんなそれを抜きに議論してるようなので少しお話します。</p>
+
+<p>タイトルにあるとおり、ベンチマークの話なのでいきなりですがベンチマークを使いましょう。
+<code>Box&lt;dyn Error&gt;</code> を作るコストと failureライブラリの <code>Error</code> を作るコストを比べます。
+何故 <code>Fail</code> ではなくfailureの <code>Error</code> かというと <code>Fail</code> は少し込み入ったベストプラクティスがあり、コードが長くなるからです。
+ベンチマーク的にはベストプラクティスを使った <code>Fail</code> とfailureの <code>Error</code> は変わらないと思います。ベストプラクティスについては以下を参照して下さい。</p>
+
+<p><a href="https://qiita.com/legokichi/items/d76b6aa5dac2ad781bda">rust のエラーライブラリは failure を使え！ - Qiita</a></p>
+
+<p>さて、ベンチマークには<a href="https://docs.rs/bencher/0.1.5/bencher/">bencher</a>を使いましょう。</p>
+
+<p>Cargo.toml</p>
+<div class="highlight"><pre class="chroma"><code class="language-toml" data-lang="toml"><span class="p">[</span><span class="nx">package</span><span class="p">]</span>
+<span class="c"># ....</span>
+
+
+
+<span class="p">[[</span><span class="nx">bench</span><span class="p">]]</span>
+<span class="nx">name</span> <span class="p">=</span> <span class="s2">&#34;bench&#34;</span>
+<span class="nx">harness</span> <span class="p">=</span> <span class="kc">false</span>
+
+<span class="p">[</span><span class="nx">dependencies</span><span class="p">]</span>
+<span class="nx">failure</span> <span class="p">=</span> <span class="s2">&#34;0.1.5&#34;</span>
+
+<span class="p">[</span><span class="nx">dev</span><span class="err">-</span><span class="nx">dependencies</span><span class="p">]</span>
+<span class="nx">bencher</span> <span class="p">=</span> <span class="s2">&#34;0.1.5&#34;</span></code></pre></div>
+<p>benches/bench.rs</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">failure</span>::<span class="n">Error</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">FailureError</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">error</span>::<span class="n">Error</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">StdError</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">fmt</span><span class="p">;</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="c1">// エラー型を準備
+</span><span class="c1"></span><span class="cp">#[derive(Debug)]</span><span class="w">
+</span><span class="w"></span><span class="k">struct</span> <span class="nc">MyError</span><span class="p">;</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="n">fmt</span>::<span class="n">Display</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">MyError</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="k">fn</span> <span class="nf">fmt</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">f</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">fmt</span>::<span class="n">Formatter</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">fmt</span>::<span class="nb">Result</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="n">write</span><span class="o">!</span><span class="p">(</span><span class="n">f</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;My Error&#34;</span><span class="p">)</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="n">StdError</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">MyError</span><span class="w"> </span><span class="p">{}</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="c1">// ベンチマークコード
+</span><span class="c1"></span><span class="k">use</span><span class="w"> </span><span class="n">bencher</span>::<span class="p">{</span><span class="n">benchmark_group</span><span class="p">,</span><span class="w"> </span><span class="n">benchmark_main</span><span class="p">,</span><span class="w"> </span><span class="n">Bencher</span><span class="p">};</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="k">fn</span> <span class="nf">bench_error</span><span class="p">(</span><span class="n">b</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">Bencher</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="n">b</span><span class="p">.</span><span class="n">iter</span><span class="p">(</span><span class="o">||</span><span class="w"> </span>-&gt; <span class="nb">Box</span><span class="o">&lt;</span><span class="n">dyn</span><span class="w"> </span><span class="n">StdError</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="n">MyError</span><span class="p">)</span><span class="w"> </span><span class="p">})</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="k">fn</span> <span class="nf">bench_fail</span><span class="p">(</span><span class="n">b</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">Bencher</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="n">b</span><span class="p">.</span><span class="n">iter</span><span class="p">(</span><span class="o">||</span><span class="w"> </span>-&gt; <span class="nc">FailureError</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">MyError</span><span class="p">.</span><span class="n">into</span><span class="p">()</span><span class="w"> </span><span class="p">})</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="c1">// セットアップ
+</span><span class="c1"></span><span class="n">benchmark_group</span><span class="o">!</span><span class="p">(</span><span class="n">benches</span><span class="p">,</span><span class="w"> </span><span class="n">bench_error</span><span class="p">,</span><span class="w"> </span><span class="n">bench_fail</span><span class="p">);</span><span class="w">
+</span><span class="w"></span><span class="n">benchmark_main</span><span class="o">!</span><span class="p">(</span><span class="n">benches</span><span class="p">);</span><span class="w">
+</span></code></pre></div>
+<p>シンプルに <code>Box&lt;dyn Error&gt;</code> と <code>Error</code> を作ります。
+bencherは対象の実行速度を見てイテレーション回数を勝手に増やしてくれるので「何回実行したら有意な数値が取れるかな」とか考えなくてもよいのが利点です。</p>
+
+<p>これをベンチマークしてみます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-console" data-lang="console">$ cargo bench
+running 2 tests
+test bench_error ... bench:           1 ns/iter (+/- 0)
+test bench_fail  ... bench:          18 ns/iter (+/- 1)
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 2 measured</code></pre></div>
+<p><code>Box&lt;dyn Error&gt;</code> が1ns（ナノ秒）、failureの <code>Error</code> が 18ns。
+failureライブラリの方が18倍遅いという結果です。
+単位が <code>ns</code> なので誤差ではと思うかもしれませんが右の括弧書きで書かれている測定誤差をみてもせいぜい1nsくらいです。</p>
+
+<p>これ、どうしてか分かる方いますか？</p>
+
+<p>ヒントというかほぼ答えですが追加のベンチマークを取ってみましょう。コールスタックの深いところでエラー値を作ってみます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="c1">// スタックを深くする関数
+</span><span class="c1"></span><span class="k">fn</span> <span class="nf">deep_stack_call</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="p">(</span><span class="n">n</span>: <span class="kt">u32</span><span class="p">,</span><span class="w"> </span><span class="n">f</span>: <span class="nc">impl</span><span class="w"> </span><span class="nb">FnOnce</span><span class="p">()</span><span class="w"> </span>-&gt; <span class="nc">T</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">T</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="n">f</span><span class="p">()</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="n">deep_stack_call</span><span class="p">(</span><span class="n">n</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">f</span><span class="p">)</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="c1">//コールスタックを100掘ってからエラー値を作る
+</span><span class="c1"></span><span class="k">fn</span> <span class="nf">bench_error_stack</span><span class="p">(</span><span class="n">b</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">Bencher</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="n">b</span><span class="p">.</span><span class="n">iter</span><span class="p">(</span><span class="o">||</span><span class="w"> </span>-&gt; <span class="nb">Box</span><span class="o">&lt;</span><span class="n">dyn</span><span class="w"> </span><span class="n">StdError</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">deep_stack_call</span><span class="p">(</span><span class="mi">100</span><span class="p">,</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="n">MyError</span><span class="p">))</span><span class="w"> </span><span class="p">})</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="k">fn</span> <span class="nf">bench_fail_stack</span><span class="p">(</span><span class="n">b</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">Bencher</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="n">b</span><span class="p">.</span><span class="n">iter</span><span class="p">(</span><span class="o">||</span><span class="w"> </span>-&gt; <span class="nc">FailureError</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">deep_stack_call</span><span class="p">(</span><span class="mi">100</span><span class="p">,</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">MyError</span><span class="p">.</span><span class="n">into</span><span class="p">())</span><span class="w"> </span><span class="p">})</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="n">benchmark_group</span><span class="o">!</span><span class="p">(</span><span class="n">deep_stack_bench</span><span class="p">,</span><span class="w"> </span><span class="n">bench_error_stack</span><span class="p">,</span><span class="w"> </span><span class="n">bench_fail_stack</span><span class="p">);</span><span class="w">
+</span><span class="w"></span><span class="n">benchmark_main</span><span class="o">!</span><span class="p">(</span><span class="n">deep_stack_bench</span><span class="p">);</span><span class="w">
+</span></code></pre></div>
+<p>これを測ります。</p>
+<div class="highlight"><pre class="chroma"><code class="language-console" data-lang="console">$ cargo bench
+running 2 tests
+test bench_error_stack ... bench:           1 ns/iter (+/- 0)
+test bench_fail_stack  ... bench:         131 ns/iter (+/- 12)
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 2 measured</code></pre></div>
+<p><code>Box&lt;dyn Error&gt;</code> が変わらず1ns（ナノ秒）、failureの <code>Error</code> が 131ns。failureの <code>Error</code> は7倍以上コストが上がってます。</p>
+
+<p>このあたりでもうお分かりでしょうか。プロファイルまで取った訳ではないので多少推測ですが、failureの <code>Error</code> はバックトレースを取るのでその分のコストが乗るのです。</p>
+
+<p>実際、<code>impl&lt;F: Fail&gt; From&lt;F&gt; for failure::Error</code> の実装を辿っていくとこういうコードにいきつきます(failure 0.1.5)。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">impl</span><span class="o">&lt;</span><span class="n">F</span>: <span class="nc">Fail</span><span class="o">&gt;</span><span class="w"> </span><span class="nb">From</span><span class="o">&lt;</span><span class="n">F</span><span class="o">&gt;</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">ErrorImpl</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="k">fn</span> <span class="nf">from</span><span class="p">(</span><span class="n">failure</span>: <span class="nc">F</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">ErrorImpl</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">inner</span>: <span class="nc">Inner</span><span class="o">&lt;</span><span class="n">F</span><span class="o">&gt;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">backtrace</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">failure</span><span class="p">.</span><span class="n">backtrace</span><span class="p">().</span><span class="n">is_none</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">                </span><span class="n">Backtrace</span>::<span class="n">new</span><span class="p">()</span><span class="w">
+</span><span class="w">            </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">Backtrace</span>::<span class="n">none</span><span class="p">()</span><span class="w"> </span><span class="p">};</span><span class="w">
+</span><span class="w">            </span><span class="n">Inner</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">failure</span><span class="p">,</span><span class="w"> </span><span class="n">backtrace</span><span class="w"> </span><span class="p">}</span><span class="w">
+</span><span class="w">        </span><span class="p">};</span><span class="w">
+</span><span class="w">        </span><span class="n">ErrorImpl</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">inner</span>: <span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="n">inner</span><span class="p">)</span><span class="w"> </span><span class="p">}</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>ここまでが測定結果のお話。ここから個人的な意見です。</p>
+
+<p>Rustのコードはエラー値を作るのが軽いのを前提に作られているものがちょくちょくあります。
+例えばバリデーションの結果を <code>Result</code> 型で返すだとか。これは例外ではなく値でエラーを表わすことの利点の1つだと思ってます。
+そういう所でもfailureを使ってると意図しないパフォーマンスの劣化を招きかねません。
+必要なところで使う分には全く問題ないのですが無闇矢鱈に使うのはいただけないなと思っています。</p>
+
+<p>もちろん、コストが掛かるといってもせいぜい100ns程度ですしスタックトレースが取れるメリットに比べたら大した問題ではないでしょう。
+臆せず使って下さい。</p>
+
+<p>余談:</p>
+
+<ul>
+<li>今回のコードはGitLabに<a href="https://gitlab.com/blackenedgold/error-bench">あります</a></li>
+<li><code>bench_error_stack</code> が <code>bench_error</code> とパフォーマンス変わらないのは末尾呼び出しの最適化が効いたか、インライン化されたんじゃないかと思いますが定かではないです。</li>
+<li><code>bench_fail_stack</code> と <code>bench_fail</code> のパフォーマンスが大きく異なるのはスタックトレースを取得している部分があるのでその手の最適化が効かなかったんじゃないかと思いますが定かではないです。</li>
+<li>非常に個人的な話ですがバックトレースはそんなに好きじゃないです。どうせ見てもフレームワークのトレースが多かったりクロージャがあると問題の箇所とずれたりしてあんまり役に立たないので。その割にターミナルの画面を吹き飛ばして迷惑ですし。</li>
+</ul>
+                    </section>
+                </article>
+            </div>
+        </div>
+
+        <div class="row li-author">
+    <div class="sixteen columns">
+        Written by <strong>κeen</strong>
+    </div>
+</div>
+
+
+        <div class="row li-pagination">
+            <div class="eight columns">
+                <div class="li-pagination-previous">
+                    
+                        &nbsp;
+                    
+                </div>
+            </div>
+            <div class="eight columns">
+                <div class="li-pagination-next">
+                    
+                        Older article<br />
+                        <a href="//KeenS.github.io/blog/2019/07/07/rustnofuturetosonorunnerwotsukuttemita/"> RustのFutureとそのRunnerを作ってみた</a>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+<footer class="li-page-footer">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-page-footer-legal">
+                    &copy; 2019. All rights reserved. 
+                </div>
+                <div class="li-page-footer-theme">
+                    <span class=""><a href="https://github.com/eliasson/liquorice/">liquorice</a> is a theme for <a href="http://hugo.spf13.com">hugo</a></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<script type="text/javascript">
+ function toggle(id) {
+     var e = document.getElementById(id);
+     e.style.display == 'block' ? e.style.display = 'none' : e.style.display = 'block';
+ }
+</script>
+<script src="https://unpkg.com/mermaid@7.0.4/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({startOnLoad:true
+     });</script>
+
+    </body>
+</html>
+
