@@ -64,12 +64,14 @@ $ ./hello
 
 ```idris
 data Vect :
-  (len : Nat) ->
-  (elem : Type) ->
-  Type
+  (len : Nat)
+  -> (elem : Type)
+  -> Type
 where
   Nil  : Vect Z elem
-  (::) : (x : elem) -> (xs : Vect len elem) -> Vect (S len) elem
+  (::) : (x : elem)
+         -> (xs : Vect len elem)
+         -> Vect (S len) elem
 ```
 
 ---
@@ -87,7 +89,9 @@ v = [1, 2, 3]
 * 型で計算がでる
 
 ```console
-append: Vect n a -> Vect m a -> Vect (n+m) a
+append: Vect n a
+        -> Vect m a
+        -> Vect (n+m) a
 append [] y = y
 append (x :: xs) y = x :: append xs y
 ```
@@ -105,15 +109,15 @@ the : (a : Type) -> a -> a
 ---
 
 ``` idris
-1
--- 1 : Integer
+λΠ> 1
+1 : Integer
 ```
 
 ---
 
 ``` idris
-the Double 1
--- 1.0 : Double
+λΠ> the Double 1
+1.0 : Double1
 ```
 
 ===
@@ -138,26 +142,14 @@ the Double 1
   + → `Type 1`
 * `Type 0` (=`Type`), `Type 1` , `Type 2` … と続く
   + Idrisの文法上は `Type n` とは書けない
+* (Demo1.idr)
 
-```console
-λΠ> :type 1
-1 : Integer
-λΠ> :type Integer
-Integer : Type
-λΠ> :type Type
-Type : Type 1
-λΠ> :type Type 1
-builtin:Type mismatch between
-        Type (Type of Type)
-and
-        _ -> _ (Is Type applied to too many arguments?)
-```
 ===
 # 証明の話
 ----------
 
 * もちろんカリー・ハワード対応で証明が書ける
-  + ざっくりプログラミング言語と数学の証明に対応関係がある
+  + プログラミング言語と論理学に対応関係がある
   + 型 ⇔ 命題
   + プログラム ⇔ 証明
   + …
@@ -173,7 +165,10 @@ and
 
 ```idris
 total
-modusPonens : {A, B: Type} -> A -> (A -> B) -> B
+modusPonens : {A, B: Type}
+              -> A
+              -> (A -> B)
+              -> B
 modusPonens a ab = ab a
 ```
 
@@ -209,7 +204,9 @@ specialTheorem : {A, B: Type} -> A -> B
 specialTheorem x = specialTheorem x
 ```
 
-``` idris
+---
+
+```console
    |
 21 | specialTheorem x = specialTheorem x
    | ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -225,7 +222,9 @@ Main.specialTheorem is possibly not total due to recursive path Main.specialTheo
 
 ``` idris
 total
-append: Vect n a -> Vect m a -> Vect (n+m) a
+append: Vect n a
+        -> Vect m a
+        -> Vect (n+m) a
 append [] y = y
 append (x :: xs) y = x :: append xs y
 ```
@@ -234,11 +233,12 @@ append (x :: xs) y = x :: append xs y
 # 型環境とHole
 --------------
 
+* プログラムの一部を未完成のまま(=Hole)コンパイルできる
 * `?ident` でHoleを作れる
-  ```idr
-  map : List a -> (a -> b) -> List b
-  map xs f = ?hole
-  ```
+    ```idr
+    map : List a -> (a -> b) -> List b
+    map xs f = ?hole
+    ```
 * IdrisがHoleの型を教えてくれる
 
 ===
@@ -249,6 +249,8 @@ append (x :: xs) y = x :: append xs y
 map : List a -> (a -> b) -> List b
 map xs f = ?hole
 ```
+
+---
 
 ```console
               b : Type
@@ -274,7 +276,9 @@ map xs f = ?hole
 -------------------
 
 ```idris
-append : Vect n a -> Vect m a -> Vect (n + m) a
+append : Vect n a
+         -> Vect m a
+         -> Vect (n + m) a
 ```
 
 ===
@@ -284,7 +288,9 @@ append : Vect n a -> Vect m a -> Vect (n + m) a
 型定義から本体の雛形を作る
 
 ```idris
-append : Vect n a -> Vect m a -> Vect (n + m) a
+append : Vect n a
+         -> Vect m a
+         -> Vect (n + m) a
 append xs ys = ?append_rhs
 ```
 
@@ -295,7 +301,9 @@ append xs ys = ?append_rhs
 引数 `xy` でパターンマッチする
 
 ```idris
-append : Vect n a -> Vect m a -> Vect (n + m) a
+append : Vect n a
+         -> Vect m a
+         -> Vect (n + m) a
 append [] ys = ?append_rhs_1
 append (x :: xs) ys = ?append_rhs_2
 ```
@@ -306,7 +314,9 @@ append (x :: xs) ys = ?append_rhs_2
 Hole `append_rhs_1` をいい感じに埋める
 
 ```idris
-append : Vect n a -> Vect m a -> Vect (n + m) a
+append : Vect n a
+         -> Vect m a
+         -> Vect (n + m) a
 append [] ys = ys
 append (x :: xs) ys = ?append_rhs_2
 ```
@@ -318,7 +328,9 @@ append (x :: xs) ys = ?append_rhs_2
 Hole `append_rhs_2` をいい感じに埋める
 
 ```idris
-append : Vect n a -> Vect m a -> Vect (n + m) a
+append : Vect n a
+         -> Vect m a
+         -> Vect (n + m) a
 append [] ys = ys
 append (x :: xs) ys = x :: append xs ys
 ```
@@ -329,20 +341,20 @@ append (x :: xs) ys = x :: append xs ys
 ----------------
 
 * 述語論理だから $\forall$ と $\exists$ が書きたいよね
-* $\forall x \in T, P(x)$ : `(x: T) -> P x`
+* $\forall x \in T, P(x)$ ⇔ `(x: T) -> P x`
   + こっちは組み込みの機能
-* $\exists x \in T, P(x)$ : `x: T ** P x`
+* $\exists x \in T, P(x)$ ⇔ `x: T ** P x`
   + こっちはユーザランドで定義
-  ```idris
-  data DPair : (a : Type) -> (P : a -> Type) -> Type where
+    ```idris
+    data DPair : (a : Type) -> (P : a -> Type) -> Type where
       MkDPair : .{P : a -> Type} -> (x : a) -> (pf : P x) -> DPair a P
-  ```
+    ```
 
 ===
 # Dependent Pair
 ----------------
 
-* ${}^\exists n \in \mathbf{\N} \to \mathbf{Vect} n \mathbf{Int$}
+* ${}^\exists n \in \mathbf{N} \to$ `Vect n Int`
 
 ```idris
 someVect: (n: Nat ** Vect n Int)
@@ -357,10 +369,13 @@ someVect = (_ ** [1, 2, 3])
 * `filter` したあとの長さは分からないのでDPairを使う
 
 ```idris
-filter: (a -> Bool) -> Vect n a -> (p ** Vect p a)
-filter p [] = (_ ** [])
-filter p (x :: xs) with (filter p xs)
-   | (_ ** xs') = if p x then (_ ** x :: xs') else (_ ** xs')
+filter: (a -> Bool)
+        -> Vect n a
+        -> (p ** Vect p a)
+filter p [] = (\_ ** [])
+filter p (x :: xs) with (p x, filter p xs)
+   filter p (x :: xs) | (True, (_ ** xs')) = (_ ** x :: xs')
+   filter p (x :: xs) | (False, (_ ** xs')) = (_ ** xs')
 ```
 
 
@@ -380,9 +395,9 @@ length {n=n} _ = n
 # 証明っぽい証明
 ---------------
 
-* `total` があれば証明ができることは分かった
- + 簡単な命題なら証明できるはず
-* 証明特有の書き方みたいなのがある
+* 簡単な命題の書き方は分かった
+* もう少し証明らしい証明を書いてみる
+  + 証明特有の書き方みたいなのがある
 
 ===
 # 1 + 1 = 2
@@ -412,7 +427,7 @@ onePlusOneEqualsTwo = Refl
 --------
 
 * 自然数もデータ型で定義
-  + 1進数(`S` の数 = 数値、)
+  + 1進数(`S` の数 = 数値)
 * 最適化で多倍長整数になるらしい
 
 ``` idris
@@ -422,6 +437,11 @@ data Nat =
   ||| Successor
   S Nat
 
+```
+
+---
+
+```idris
 three : 3
 three = S (S (S Z))
 ```
@@ -457,8 +477,8 @@ plus (S left) right = S (plus left right)
 %default total
 
 plus_commutes_Z : Z + m = m + Z
-plus_commutes_Z {m=Z}= Refl
-plus_commutes_Z {m=(S k)}=
+plus_commutes_Z {m=Z} = Refl
+plus_commutes_Z {m=(S k)} =
     rewrite plus_commutes_Z {m=k} in
     Refl
 ```
@@ -546,6 +566,17 @@ modusPonens' = %runElab (do
   + 値が何回使えるかが型に付く
 * 正直まだ書けない
   + IDEプロトコルが未完成
+
+===
+# 他の定理証明支援系との比較
+---------------------
+
+* Agda vs Idris: 違いが分からん
+  + meta varやimplicit argumentsの扱いが違うらしい
+* Coq vs Idris: 言語が3つに分かれてない
+* Lean vs Idris: 違いが分からん
+* Haskell vs Idris: Idrisはトップレベルの型をユーザに書かせるのであんまり複雑にならないらしい
+* **Idrisはプログラミング言語**
 
 ===
 # まとめ
