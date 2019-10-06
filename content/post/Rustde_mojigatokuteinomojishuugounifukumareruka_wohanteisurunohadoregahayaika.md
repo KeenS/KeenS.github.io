@@ -61,10 +61,9 @@ fn contains_binary_search(bench: &mut Bencher) {
 }
 
 fn is_alphanumeric(bench: &mut Bencher) {
-    // 今回は小文字しか扱わないので `is_alphanumeric` は直接には使わない
-    // 細かいこというと `alphabetic` も挙動違うけどまあいいや。
+    // 今回は小文字しか扱わないので `is_ascii_alphanumeric` は直接には使わない
     bench.iter(|| {
-        (CHAR.is_alphabetic() && CHAR.is_lowercase())
+        (CHAR.is_ascii_alphabetic() && CHAR.is_ascii_lowercase())
             || CHAR.is_digit(10)
             || CHAR == '_'
             || CHAR == '!'
@@ -94,6 +93,12 @@ benchmark_group!(
 benchmark_main!(benches);
 
 ```
+
+追記:
+コードを修正しました。
+<blockquote class="twitter-tweet"><p lang="ja" dir="ltr">is_alphanumeric() よりも is_ascii_alphanumeric() などの方がこの場合適切なのでは (is_lowercase() と is_ascii_lowercase() も同様)</p>&mdash; らりお・ザ・何らかの🈗然㊌㋞㋰㋷㋓ (Mastodon に引っ越しました) (@lo48576) <a href="https://twitter.com/lo48576/status/1180805193887354881?ref_src=twsrc%5Etfw">October 6, 2019</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script> 
+
+/追記
 
 HashSetや正規表現などは事前に準備してからベンチマークにかけています。
 
