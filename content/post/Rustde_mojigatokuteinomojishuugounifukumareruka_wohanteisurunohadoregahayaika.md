@@ -1,5 +1,5 @@
 ---
-categories: ["Rust"]
+categories: ["Rust", "小ネタ"]
 date: 2019-10-06T19:00:53+09:00
 title: "Rustで「文字が特定の文字集合に含まれるか」を判定するのはどれが速いか"
 ---
