@@ -4,15 +4,28 @@ date: 2019-10-18T02:47:52+09:00
 description: "Regex Festa での発表用。SATySFiの多段階計算を使って正規表現をコンパイルする話"
 title: "その正規表現エンジン、インタプリタで満足してる？！"
 ---
+<style>
+.narrow {
+  letter-spacing: -30px;
+}
+
+.narrow span {
+  transform: scaleX(0.7);
+  transform-origin: left;
+  display: inline-block;
+}
+</style>
+
 <section data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
 <script type="text/template">
-# その正規表現エンジン、インタプリタで<ruby>満足<rp>(</rp><rt>サティスファイ</rt><rp>)</rp></ruby>してる？！
+# その正規表現エンジン、<br /><span class="narrow"><span>イ</span><span>ン</span><span>タ</span><span>プ</span><span>リ</span><span>タ</span></span>で<ruby>満足<rp>(</rp><rt>サティスファイ</rt><rp>)</rp></ruby>してる？！
 ----------------------
 [Regex Festa - connpass](https://opt.connpass.com/event/140566/)
 <!-- .slide: class="center" -->
+<div class="narrow">インタプリタ</div>
 ===
 # About Me
 ---------
@@ -38,7 +51,7 @@ title: "その正規表現エンジン、インタプリタで満足してる？
 # SATySFi
 ---------
 
-* 日本政府の支援を受けてTeXを倒すために作られた組版処理系
+* 政府の支援によりTeXを倒すために作られた組版処理系
   + ※多少の誇張を含みます
 * 日本語が扱えて、PDFを直接吐ける
 * ML系の言語で拡張ができる
@@ -83,7 +96,7 @@ hello.pdf  hello.saty  hello.satysfi-aux
 
 
 ===
-# インタプリタとコンパイラの関係
+# <span class="narrow"><span>イ</span><span>ン</span><span>タ</span><span>プ</span><span>リ</span><span>タ</span></span>と<span class="narrow"><span>コ</span><span>ン</span><span>パ</span><span>イ</span><span>ラ</span></span>の関係
 ------------------------------
 
 * インタプリタとコンパイラって似てない？？
@@ -93,7 +106,7 @@ hello.pdf  hello.saty  hello.satysfi-aux
 * インタプリタの「計算をする」部分をそのまま吐き出せればコンパイラになりそう
 
 ===
-# インタプリタとコンパイラの関係
+# <span class="narrow"><span>イ</span><span>ン</span><span>タ</span><span>プ</span><span>リ</span><span>タ</span></span>と<span class="narrow"><span>コ</span><span>ン</span><span>パ</span><span>イ</span><span>ラ</span></span>の関係
 ------------------------------
 
 * Q: インタプリタからコンパイラって作れないの？
@@ -274,7 +287,7 @@ let ( &&& ) b1 b2 = &(if ~b1 then ~b2 else false)
 (* stage 1 *)
 ~(&(1 + 1 = 2) &&& &(2 + 3 = 4))
 ```
-
+↓
 ``` ml
 ~&(if ~(&(1 + 1 = 2)) then ~(&(2 + 3 = 4)) else false)
 ~&(if (1 + 1 = 2) then (2 + 3 = 4) else false)
@@ -303,7 +316,7 @@ if (1 + 1 = 2) then (2 + 3 = 4) else false
 * SATySFiの多段階を使って正規表現をコンパイルする
 
 ===
-# 正規表現インタプリタ
+# 正規表現<span class="narrow"><span>イ</span><span>ン</span><span>タ</span><span>プ</span><span>リ</span><span>タ</span></span>
 --------------------
 
 * 数十行で書ける
@@ -320,7 +333,7 @@ type vm-inst =
 ```
 
 ===
-# 正規表現インタプリタ
+# 正規表現<span class="narrow"><span>イ</span><span>ン</span><span>タ</span><span>プ</span><span>リ</span><span>タ</span></span>
 --------------------
 
 ```ml
@@ -337,7 +350,7 @@ let run iseq =
 ```
 
 ===
-# 正規表現インタプリタ
+# 正規表現<span class="narrow"><span>イ</span><span>ン</span><span>タ</span><span>プ</span><span>リ</span><span>タ</span></span>
 --------------------
 
 CHAR
@@ -354,7 +367,7 @@ CHAR
 
 
 ===
-# 正規表現インタプリタ
+# 正規表現<span class="narrow"><span>イ</span><span>ン</span><span>タ</span><span>プ</span><span>リ</span><span>タ</span></span>
 --------------------
 
 KLEENE(強欲マッチ)
@@ -371,7 +384,7 @@ KLEENE(強欲マッチ)
 ```
 
 ===
-# 正規表現インタプリタ
+# 正規表現<span class="narrow"><span>イ</span><span>ン</span><span>タ</span><span>プ</span><span>リ</span><span>タ</span></span>
 --------------------
 
 ```
@@ -382,7 +395,7 @@ KLEENE(強欲マッチ)
 ```
 
 ===
-# 正規表現インタプリタ
+# 正規表現<span class="narrow"><span>イ</span><span>ン</span><span>タ</span><span>プ</span><span>リ</span><span>タ</span></span>
 --------------------
 
 ```ml
@@ -403,10 +416,11 @@ match result with
 
 * これらを多段階計算を使ってコンパイルしたい。
 * 基本は全部 `&` で、 静的なものだけを `~` するとよい
+  + ここでは静的なものはiseqのみ
 * ほとんどインタプリタと変わらない
 
 ===
-# 正規表現コンパイル
+# 正規表現の<span>コ</span><span>ン</span><span>パ</span><span>イ</span><span>ル</span></span>
 -------------------
 
 ```ml
@@ -423,7 +437,7 @@ let compile iseq =
 ```
 
 ===
-# 正規表現コンパイル
+# 正規表現の<span>コ</span><span>ン</span><span>パ</span><span>イ</span><span>ル</span></span>
 -------------------
 KLEENE
 
@@ -441,7 +455,7 @@ KLEENE
 ```
 
 ===
-# 正規表現コンパイル
+# 正規表現の<span>コ</span><span>ン</span><span>パ</span><span>イ</span><span>ル</span></span>
 -------------------
 
 OR
@@ -457,7 +471,7 @@ OR
 ```
 
 ===
-# 正規表現コンパイル
+# 正規表現の<span>コ</span><span>ン</span><span>パ</span><span>イ</span><span>ル</span></span>
 -------------------
 CHAR
 
@@ -498,7 +512,7 @@ $ satysfi main.saty
 <blockquote class="twitter-tweet"><p lang="ja" dir="ltr">一応 dev-macro-on-multi-stage というbranchで開発中のものには lift-int や lift-string などのリフト用のプリミティヴをいくつか入れています</p>&mdash; 画力・博士号・油田 (@bd_gfngfn) <a href="https://twitter.com/bd_gfngfn/status/1183787593755852810?ref_src=twsrc%5Etfw">October 14, 2019</a></blockquote>
 
 ===
-# 正規表現コンパイル
+# 正規表現の<span>コ</span><span>ン</span><span>パ</span><span>イ</span><span>ル</span></span>
 -------------------
 CHAR
 
@@ -514,7 +528,7 @@ CHAR
 ```
 
 ===
-# 正規表現コンパイル
+# 正規表現の<span>コ</span><span>ン</span><span>パ</span><span>イ</span><span>ル</span></span>
 --------------------
 
 ```ml
