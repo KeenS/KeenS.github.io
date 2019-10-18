@@ -25,7 +25,6 @@ title: "その正規表現エンジン、インタプリタで満足してる？
 ----------------------
 [Regex Festa - connpass](https://opt.connpass.com/event/140566/)
 <!-- .slide: class="center" -->
-<div class="narrow">インタプリタ</div>
 ===
 # About Me
 ---------
