@@ -28,19 +28,19 @@ uimの内部コーディングはEUC-JPなんですが、「⸜( ¯⌓¯ )⸝」
 
 ```sh
 cd /usr/share/uim
-for f in japanese-act.scm japanese-azik.scm japanese-custom.scm japanese-kzik.scm japanese.scm skk.scm skk-custom.scm
+for f in japanese-act.scm japanese-azik.scm japanese-custom.scm japanese-kana.scm japanese-kzik.scm japanese.scm skk.scm skk-custom.scm
  do
   new="$(echo $f | sed 's/\.scm$/-utf8.scm/')"
-  iconv -f EUC-JP -t UTF-8 < "$f" | sudo tee "$new"
+  iconv -f EUC-JP -t UTF-8 < "$f" | sudo tee "$new" > /dev/null
 done
 wget -O /tmp/uim-skk-1.8.8-utf8.patch https://gitlab.com/snippets/1905594/raw
-cat /tmp/uim-skk-1.8.8-utf8.patch | patch -p0 -b --follow-symlink
+cat /tmp/uim-skk-1.8.8-utf8.patch | sudo patch -p0 -b --follow-symlink
 sudo mv skk.scm skk.scm.orig && sudo mv skk-utf8.scm skk.scm
 sudo mv skk-custom.scm skk-custom.scm.orig && sudo mv skk-custom-utf8.scm skk-custom.scm
 sudo rm japanese-custom-utf8.scm.orig japanese-utf8.scm.orig skk-utf8.scm.orig
 ```
 
-ここで一旦再起動して、UIMでひらがなが入力できるかくらいは確認した方が良いでしょう。
+ここで一旦再起動して、uimでひらがなが入力できるかくらいは確認した方が良いでしょう。
 
 # 辞書のUTF-8化
 
@@ -50,7 +50,7 @@ sudo rm japanese-custom-utf8.scm.orig japanese-utf8.scm.orig skk-utf8.scm.orig
 yaskkservはEUC-JPにハードコードされている[らしい](https://github.com/wachikun/yaskkserv/issues/2)のでyaskkservはやめて辞書ファイルに移行することにします。
 uimは1つの辞書ファイルしかサポートしていないので辞書ファイルを結合する処理もします。
 
-uim-のGUIから設定する人は[SKK 辞書]からskkservを使わないようにし、、テキストで設定する人は`~/.uim.d/customs/custom-skk-dict.scm` の `skk-use-skkserv` を `#f` に設定しましょう。
+uimのGUIから設定する人は[SKK 辞書]からskkservを使わないようにし、テキストで設定する人は`~/.uim.d/customs/custom-skk-dict.scm` の `skk-use-skkserv` を `#f` に設定しましょう。
 
 さて、これで辞書を変換にかかります。
 `/usr/share/skk` に辞書ファイルが並んでる筈なので、一旦これらを `*.utf8` 変換したあと、全部入りの辞書ファイル `SKK-JISYO.all.utf8` を作ります。
