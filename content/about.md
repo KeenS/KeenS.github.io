@@ -26,7 +26,8 @@ menu: "main"
 
 ## Publications
 
-* [実践Rust入門 ［言語仕様から開発手法まで］](https://gihyo.jp/book/2019/978-4-297-10559-4) (技術評論社) 2019年5月8日発売 κeen，河野 達也，小松礼人　著
+* [実践Rust入門 ［言語仕様から開発手法まで］](https://gihyo.jp/book/2019/978-4-297-10559-4) (技術評論社) 2019年5月8日発売 κeen，河野 達也，小松礼人 著
+* [n月刊ラムダノート](https://www.lambdanote.com/collections/n/products/nmonthly-vol-1-no-3-2019) (ラムダノート) 2019年11月1日発売 κeen, 辻本和樹 著
 
 ## SNS accounts
 
