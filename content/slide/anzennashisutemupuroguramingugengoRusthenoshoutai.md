@@ -71,6 +71,9 @@ title: "安全なシステムプログラミング言語Rustへの招待"
 
 この構造体のサイズは？
 
+[run](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=fd32ac47011842c8f12c0fc1425131c1)
+
+
 ```rust
 use std::mem;
 
@@ -83,7 +86,6 @@ struct Hoge {
 println!("{}", mem::size_of::<Hoge>());
 ```
 
-[run](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=fd32ac47011842c8f12c0fc1425131c1)
 
 ===
 # メモリ配置
@@ -103,6 +105,8 @@ println!("{}", mem::size_of::<Hoge>());
 
 この構造体のサイズは？
 
+[run](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=d4290de0065ba2951a486676fafe2ecf)
+
 ```rust
 use std::mem;
 
@@ -116,7 +120,6 @@ struct Hoge {
 println!("{}", mem::size_of::<Hoge>());
 ```
 
-[run](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=d4290de0065ba2951a486676fafe2ecf)
 
 ===
 # メモリ配置
@@ -142,6 +145,9 @@ println!("{}", mem::size_of::<Hoge>());
 * 便利なイテレータ
 * 素数最初の25個を列挙
 
+[run](https://is.gd/Hh0H42)
+[asm](https://godbolt.org/z/JC-DRx)
+
 
 ```rust
 fn main() {
@@ -152,8 +158,6 @@ fn main() {
 }
 ```
 
-[run](https://is.gd/Hh0H42)
-[asm](https://godbolt.org/z/JC-DRx)
 
 ===
 # 普通のRust
@@ -171,6 +175,8 @@ fn main() {
 # 普通のRust
 ------------
 トレイト
+
+[run](https://play.rust-lang.org/?version=stable&mode=debug&edition=2015&gist=e9ba56aa24da63eed8eb3787f2b10ac5)
 
 ```rust
 // `derive(トレイト)` アトリビュートをつけると
@@ -215,7 +221,6 @@ fn main() {
 }
 ```
 
-[run](https://play.rust-lang.org/?version=stable&mode=debug&edition=2015&gist=e9ba56aa24da63eed8eb3787f2b10ac5)
 
 ===
 # 普通のRust
@@ -240,6 +245,9 @@ fn print_point<P>(p: P) {
 * 便利な `enum` (代数的データ型)
 * [`Ordering`](https://doc.rust-lang.org/std/cmp/enum.Ordering.html) も便利
 * `impl` ブロックでデータ型にメソッドを生やせる
+
+
+[run](https://is.gd/Cpgdpo)
 
 
 ```rust
@@ -275,8 +283,6 @@ impl<T: Ord> Tree<T> {
 }
 ```
 
-
-[run](https://is.gd/Cpgdpo)
 
 ===
 # 普通のRust
@@ -438,7 +444,7 @@ v[3]
 
 ```console
 error: index out of bounds: the len is 3 but the index is 3
- --> src/main.rs:5:1
+ --&gt; src/main.rs:5:1
   |
 5 | v[3];
   | ^^^^
@@ -605,6 +611,8 @@ fn func(a: &mut i32, b: &mut i32) -> i32 {
 
 * 不変な借用があるときに可変な参照も作れない
 
+[run](https://play.rust-lang.org/?version=stable&mode=debug&edition=2015&gist=2d2d3e2fbb67247147ef1cbde75fcbbc)
+
 
 ```rust
 let v = vec![1, 2, 3];
@@ -615,7 +623,7 @@ for e in &v {
 
 ```console
 error[E0596]: cannot borrow `v` as mutable, as it is not declared as mutable
- --> src/main.rs:4:9
+ --&gt; src/main.rs:4:9
   |
 2 |     let v = vec![1, 2, 3];
   |         - help: consider changing this to be mutable: `mut v`
@@ -624,7 +632,6 @@ error[E0596]: cannot borrow `v` as mutable, as it is not declared as mutable
   |         ^ cannot borrow as mutable
 ```
 
-[run](https://play.rust-lang.org/?version=stable&mode=debug&edition=2015&gist=2d2d3e2fbb67247147ef1cbde75fcbbc)
 
 ===
 # Nullableな値
@@ -656,7 +663,7 @@ pub enum Option<T> {
 * [`Copy`](https://doc.rust-lang.org/std/marker/trait.Copy.html)トレイトを実装した型は勝手にコピーしてくれる
   + よくRustで所有権を試そうとしてる人がはまりがち
 
-```
+```rust
 fn take_i32(_: i32) {}
 let a = 1;
 take_i32(a);
@@ -702,6 +709,9 @@ take_i32(a);
   + 取り出したいのが不変の参照か可変の参照かでメソッドが分かれてるのが普通
 * データを取り出したいときは `remove` を使う
 
+[run](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=c633e1e2a6935a12238795f68c22b156)
+
+
 ```rust
 use std::collections::HashMap;
 let mut map = vec![
@@ -718,7 +728,6 @@ match map.remove(&3) {
 }
 ```
 
-[run](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=c633e1e2a6935a12238795f68c22b156)
 
 ===
 # 所有権小話2
@@ -729,7 +738,9 @@ match map.remove(&3) {
   + `Lock` の `lock` はあるけど `free` はない
 * RAIIで管理されるのでデータの `free` のときに一緒に開放される
 
-```
+[run](https://is.gd/KKm9Vb)
+
+```run
 use std::io::{self, Write};
 use std::fs::File;
 
@@ -742,7 +753,6 @@ fn write_string(filename: &str, content: &str) -> io::Result<()> {
 }
 ```
 
-[run](https://is.gd/KKm9Vb)
 
 ===
 # Rustの進歩
@@ -762,6 +772,9 @@ fn write_string(filename: &str, content: &str) -> io::Result<()> {
   - 昔 = 1年前
 * 最近は制御フローまで見て問題なければコンパイルを通す
 
+[run](https://is.gd/ALWpec)
+
+
 ```rust
 use std::collections::HashMap;
 fn insert_or_update(map: &mut HashMap<i32, i32>, key: i32, value: i32)  {
@@ -776,7 +789,6 @@ fn insert_or_update(map: &mut HashMap<i32, i32>, key: i32, value: i32)  {
 }
 ```
 
-[run](https://is.gd/ALWpec)
 
 ===
 # 所有権をopt out
@@ -794,6 +806,8 @@ fn insert_or_update(map: &mut HashMap<i32, i32>, key: i32, value: i32)  {
 
 * Rustだけど「何でもあり」にできてしまう例
 
+[run](https://play.rust-lang.org/?version=stable&mode=debug&edition=2015&gist=f7b7e132be264a3de565669565c4e454)
+
 ```rust
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -809,7 +823,6 @@ let data2 = data.clone();
 assert_eq!(*data.borrow(), 2);
 ```
 
-[run](https://play.rust-lang.org/?version=stable&mode=debug&edition=2015&gist=f7b7e132be264a3de565669565c4e454)
 
 ===
 # 並列
@@ -817,6 +830,8 @@ assert_eq!(*data.borrow(), 2);
 
 * Rustはスレッドセーフでないプログラムをマルチスレッドで使うとエラーにする
 * 例えば `Rc` はスレッドアンセーフ(裏でcountの変更があるため)
+
+[run](https://play.rust-lang.org/?version=stable&mode=debug&edition=2015&gist=9198d0f301cc24e503992ed9b127ef59)
 
 ```rust
 use std::rc::Rc;
@@ -834,7 +849,7 @@ assert_eq!(*data.borrow(), 2);
 ```
 
 ```console
-   --> src/main.rs:9:14
+   --&gt; src/main.rs:9:14
     |
 9   | let handle = thread::spawn(|| {
     |              ^^^^^^^^^^^^^ `std::rc::Rc<std::cell::RefCell<i32>>` cannot be shared between threads safely
@@ -844,7 +859,6 @@ assert_eq!(*data.borrow(), 2);
     = note: required because it appears within the type `[closure@src/main.rs:9:28: 14:2 data2:&std::rc::Rc<std::cell::RefCell<i32>>]`
 ```
 
-[run](https://play.rust-lang.org/?version=stable&mode=debug&edition=2015&gist=9198d0f301cc24e503992ed9b127ef59)
 
 ===
 # 並列
@@ -853,6 +867,8 @@ assert_eq!(*data.borrow(), 2);
 * スレッドセーフなAPIにしたり `Mutex` を使ったりするとコンパイルが通る
   + `Arc` = Atomic Reference Count
   + `Mutex` = mutual exclution、要はロック
+
+[run](https://play.rust-lang.org/?version=stable&mode=debug&edition=2015&gist=13757c7015d10f5954a4978baa8d17e5)
 
 ```rust
 use std::sync::{Arc, Mutex};
@@ -868,7 +884,6 @@ handle.join().unwrap();
 assert_eq!(*data.lock().unwrap(), 2);
 ```
 
-[run](https://play.rust-lang.org/?version=stable&mode=debug&edition=2015&gist=13757c7015d10f5954a4978baa8d17e5)
 
 ===
 # 並列の安全性の舞台裏
@@ -899,6 +914,9 @@ assert_eq!(*data.lock().unwrap(), 2);
 
 * `unsafe` で囲むとやりたい放題できる
 
+[run](https://play.rust-lang.org/?version=stable&mode=debug&edition=2015&gist=6a04ca87dc616a2dfece0aae00e9e981)
+
+
 ```rust
 use std::ffi::c_void;
 use std::ptr::null_mut;
@@ -924,7 +942,6 @@ fn main() {
 }
 ```
 
-[run](https://play.rust-lang.org/?version=stable&mode=debug&edition=2015&gist=6a04ca87dc616a2dfece0aae00e9e981)
 
 ===
 # `unsafe` の仕組み
@@ -934,6 +951,8 @@ fn main() {
   + 関数は自分で `unsafe` とマークできる
 * `unsafe` な操作は `unsafe` の内側でしかできないようになっている
   + `unsafe` の境界の安全性はユーザが保証する
+
+[run](https://play.rust-lang.org/?version=stable&mode=debug&edition=2015&gist=3e1c98392da16fea45ed23e0d945ff72)
 
 ```rust
 use std::ptr::null_mut;
@@ -948,7 +967,7 @@ fn main() {
 
 ```console
 error[E0133]: dereference of raw pointer is unsafe and requires unsafe function or block
- --> src/main.rs:7:5
+ --&gt; src/main.rs:7:5
   |
 7 |     *p = 1;
   |     ^^^^^^ dereference of raw pointer
@@ -957,7 +976,6 @@ error[E0133]: dereference of raw pointer is unsafe and requires unsafe function 
 
 ```
 
-[run](https://play.rust-lang.org/?version=stable&mode=debug&edition=2015&gist=3e1c98392da16fea45ed23e0d945ff72)
 
 ===
 # `unsafe` の使いどころ
