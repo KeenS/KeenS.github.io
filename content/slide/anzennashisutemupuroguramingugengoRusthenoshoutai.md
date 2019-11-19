@@ -47,7 +47,7 @@ title: "安全なシステムプログラミング言語Rustへの招待"
 
 * [firecracker](https://github.com/firecracker-microvm/firecracker): AWS Lambdaのセキュアコンテナ
 * [Magick Pocket](https://www.wired.com/2016/03/epic-story-dropboxs-exodus-amazon-cloud-empire/): DropBoxのストレージマネージャ。
-* [Server](https://servo.org/): Mozillaの新ブラウザエンジンの実験プロジェクト。一部の成果がFirefoxに反映されている。
+* [Servo](https://servo.org/): Mozillaの新ブラウザエンジンの実験プロジェクト。一部の成果がFirefoxに反映されている。
 * [Redox](https://redox-os.org/): OS
 * [TiKV](https://github.com/tikv/tikv): KVS
 
@@ -425,10 +425,14 @@ let v = vec![1, 2, 3];
 v[3]
 ```
 
+
+<pre>
 ```console
 thread 'main' panicked at 'index out of bounds: the len is 3 but the index is 3', /rustc/4560ea788cb760f0a34127156c78e2552949f734/src/libcore/slice/mod.rs:2717:10
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace.
 ```
+</pre>
+
 
 ===
 # 範囲外アクセス
@@ -442,6 +446,8 @@ let v = [1, 2, 3];
 v[3]
 ```
 
+<pre>
+
 ```console
 error: index out of bounds: the len is 3 but the index is 3
  --&gt; src/main.rs:5:1
@@ -452,6 +458,7 @@ error: index out of bounds: the len is 3 but the index is 3
   = note: `#[deny(const_err)]` on by default
 ```
 
+</pre>
 
 ===
 # 所有権
@@ -621,6 +628,8 @@ for e in &v {
 }
 ```
 
+<pre>
+
 ```console
 error[E0596]: cannot borrow `v` as mutable, as it is not declared as mutable
  --&gt; src/main.rs:4:9
@@ -632,6 +641,7 @@ error[E0596]: cannot borrow `v` as mutable, as it is not declared as mutable
   |         ^ cannot borrow as mutable
 ```
 
+</pre>
 
 ===
 # Nullableな値
@@ -848,6 +858,8 @@ handle.join().unwrap();
 assert_eq!(*data.borrow(), 2);
 ```
 
+<pre>
+
 ```console
    --&gt; src/main.rs:9:14
     |
@@ -858,6 +870,8 @@ assert_eq!(*data.borrow(), 2);
     = note: required because of the requirements on the impl of `std::marker::Send` for `&std::rc::Rc<std::cell::RefCell<i32>>`
     = note: required because it appears within the type `[closure@src/main.rs:9:28: 14:2 data2:&std::rc::Rc<std::cell::RefCell<i32>>]`
 ```
+
+</pre>
 
 
 ===
@@ -965,6 +979,9 @@ fn main() {
 }
 ```
 
+<pre>
+
+
 ```console
 error[E0133]: dereference of raw pointer is unsafe and requires unsafe function or block
  --&gt; src/main.rs:7:5
@@ -975,6 +992,8 @@ error[E0133]: dereference of raw pointer is unsafe and requires unsafe function 
   = note: raw pointers may be NULL, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
 
 ```
+
+</pre>
 
 
 ===
