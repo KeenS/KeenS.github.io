@@ -222,9 +222,9 @@ insert (Node l v r) x = -- ...
 
 \\\[
 \begin{align}
-0! & = & 0 \\
+0! & = & 0 \\\\\\
 n! & = & n * (n-1)!
-\end{algin}
+\end{align}
 \\\]
 
 ### 余談: エディタサポート
