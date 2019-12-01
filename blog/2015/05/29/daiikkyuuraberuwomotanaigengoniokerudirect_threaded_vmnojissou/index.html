@@ -117,18 +117,26 @@ SMLのようにgotoがない言語だとDT VMの実装出来ないよなー、�
                     <section>
                         <p>こんにちは。κeenです。このブログでちょくちょく出てくるDirect Threaded VMについて。
 SMLのようにgotoがない言語だとDT VMの実装出来ないよなー、と思ってた所、ふとアイディアが浮かんだのでそれについて。</p>
-<h1 id="heading">序論</h1>
+
+<h1 id="序論">序論</h1>
+
 <p>DSL、例えば正規表現などの処理系を実装することを考えてみて下さい。</p>
+
 <p>言語処理系において最も素朴な実装はインタプリタですが、速度面で不利なので一旦仮想命令にコンパイルして仮想命令実行器(VM)で実行することが一般的です。
 コンパイラのように複雑な記号処理をするプログラムはCommon LispやMLのような記号処理に強い高級言語が得意とする分野です。
 一方、ランタイムには低レベルなことが出来て処理速度の速いCommon LispやCを使いたくなるでしょう。</p>
+
 <p>Common Lisp以外の言語ではコンパイラとランタイムを分離するのが妥当な選択肢のようですが、高級言語とcの間のブッジングが必要になり、少なからぬコストを支払う必要があります。
 また、ffiを持たない言語ではブリッジ出来ないのでランタイムもその言語で実装する必要があります。つまり、高級言語でVMを実装する必要があるケースが存在します。</p>
+
 <p>VMの実行を高速化する技術の一つとしてDirect Threadingというものがあります。
 命令ディスパッチのループを短絡することで余計なオーバーヘッドが減り、また、命令毎にジャンプ命令を持つことで分岐予測も効きやすくなるのでVMが高速化します。
 しかしDTの実装にはgotoのラベルを第一級オブジェクトとして保存する必要があり、gccやclangのように拡張されたcコンパイラなど、限られた言語でしか実現出来ません。まあ、Common Lispなら<code>eval</code>と<code>compile</code>を使えばJITが出来るので不要ですが。</p>
+
 <p>そこで、gotoのない言語でDirect Threadingを実現してみたいと思います。</p>
+
 <h1 id="direct-threading">Direct Threading</h1>
+
 <p>Direct Threaded <em>でない</em> VMは大抵次のような構造をしています。</p>
 <pre><code>loop {
   op = fetchNextOp
@@ -141,8 +149,9 @@ SMLのようにgotoがない言語だとDT VMの実装出来ないよなー、�
      break
     ....
   }
-}
-</code></pre><p>つまり、</p>
+}</code></pre>
+<p>つまり、</p>
+
 <ol>
 <li>次の命令を取得する</li>
 <li>命令でディスパッチする</li>
@@ -150,24 +159,15 @@ SMLのようにgotoがない言語だとDT VMの実装出来ないよなー、�
 <li>ディスパッチを抜ける</li>
 <li>1.に戻る</li>
 </ol>
+
 <p>という動きをします。自然に思えるかもしれませんが、</p>
+
 <ul>
 <li>命令のディスパッチはlogオーダの時間が掛かる（可能性がある）。</li>
-<li>
-<ol start="4">
-<li>
-<ol start="5">
-<li>のステップが不要</li>
-</ol>
-</li>
-</ol>
-</li>
-<li>
-<ol start="2">
-<li>で毎回違う命令にディスパッチするので分岐予測がほぼ意味を成さない</li>
-</ol>
-</li>
+<li>4. 5. のステップが不要</li>
+<li>2. で毎回違う命令にディスパッチするので分岐予測がほぼ意味を成さない</li>
 </ul>
+
 <p>という無駄があります。それを改良したのがDirect Threaded VMで、オペコードではなくgotoのラベルを使うことで</p>
 <pre><code>label = fetchNextLabel
 goto label
@@ -179,21 +179,27 @@ label2:
   ...
   label = fetchNextLabel
   goto label
-...
-</code></pre><ol>
+...</code></pre>
+<ol>
 <li>次のラベルを取得する</li>
 <li>ラベルにgotoする</li>
 <li>命令に対応するコードを実行する</li>
 <li>次のラベルを取得する</li>
 <li>ラベルにgotoする(次の処理は3. 相当)</li>
 </ol>
+
 <p>と、ループ内の2ステップを飛ばした他、ディスパッチもなくなるので高速になります。
 また、ラベル毎にgotoがついていて、それぞれのgotoに分岐予測があるので普通のVMに比べて分岐予測がある程度効きます。</p>
-<h1 id="direct-threaded-vm">第一級ラベルを持たない言語におけるDirect Threaded VM</h1>
+
+<h1 id="第一級ラベルを持たない言語におけるdirect-threaded-vm">第一級ラベルを持たない言語におけるDirect Threaded VM</h1>
+
 <p>結論から言うと関数の配列を使います。ラベルの代わりに配列のインデックス、gotoの代わりに配列へのアクセスとcallを使います。
 ランダムアクセスでアドレスの取得をするために配列を、任意コードへのジャンプのために関数を使えばエミュレート出来るよねって発想です。</p>
-<h1 id="heading1">実装</h1>
+
+<h1 id="実装">実装</h1>
+
 <p><a href="https://github.com/KeenS/SML-VM">ソースコード全体</a>はGithuに上げてます。SML/NJで動きます。SML#向けのインターフェースファイルを書いていますが何故かコンパイルが通りません。</p>
+
 <p>次のようなASTを実行するインタプリタ、VM、Direct Threaded VMを実装しました。但し、VMとDTVMはクロージャをサポートしていません。</p>
 <pre><code class="language-sml" data-lang="sml">datatype monoop
   = Not
@@ -213,51 +219,52 @@ datatype t
   | Var of string
   | Lambda of t list * t
   | Call of t * t list
-  | Progn of t list
-</code></pre><p>インタプリタはこのASTを解釈実行、VMはいくつかの中間表現を経てオペコードにコンパイルし、それを実行します。尚、最適化は行いません。</p>
+  | Progn of t list</code></pre>
+<p>インタプリタはこのASTを解釈実行、VMはいくつかの中間表現を経てオペコードにコンパイルし、それを実行します。尚、最適化は行いません。</p>
+
 <p>VMのディスパッチ部分は次のような実装になっています。</p>
 <pre><code class="language-sml" data-lang="sml">    fun aux () = (
         case  (Array.sub(ops, !pc)) of
-            O.Not =&gt; (case pop vm of
-                         V.Bool x =&gt; push vm (V.Bool (not x))
-                       | _ =&gt; raise Type)
-          | O.Add =&gt; (case (pop vm, pop vm) of
-                         (V.Int x, V.Int y) =&gt; push vm (V.Int (x + y))
-                       | _ =&gt; raise Type)
-          | O.Eq =&gt; (case (pop vm, pop vm) of
-                        (V.Int x, V.Int y) =&gt; push vm (V.Bool (x = y))
-                      | (V.Bool x, V.Bool y) =&gt; push vm (V.Bool (x = y))
-                      | _ =&gt; raise Type)
-          | O.Gt =&gt; (case (pop vm, pop vm) of
-                        (V.Int x, V.Int y) =&gt; push vm (V.Bool (x &lt; y))
-                      | _ =&gt; raise Type)
-          | O.Jump label =&gt; pc := (label - 1)
-          | O.Jtrue label =&gt; (case pop vm of
-                                 V.Bool true =&gt; pc := (label - 1)
-                               | V.Bool false =&gt; ()
-                               | _ =&gt; raise Type)
-          | O.Call i =&gt; (case (pop vm) of
-                            V.Lambda label =&gt; (
+            O.Not => (case pop vm of
+                         V.Bool x => push vm (V.Bool (not x))
+                       | _ => raise Type)
+          | O.Add => (case (pop vm, pop vm) of
+                         (V.Int x, V.Int y) => push vm (V.Int (x + y))
+                       | _ => raise Type)
+          | O.Eq => (case (pop vm, pop vm) of
+                        (V.Int x, V.Int y) => push vm (V.Bool (x = y))
+                      | (V.Bool x, V.Bool y) => push vm (V.Bool (x = y))
+                      | _ => raise Type)
+          | O.Gt => (case (pop vm, pop vm) of
+                        (V.Int x, V.Int y) => push vm (V.Bool (x < y))
+                      | _ => raise Type)
+          | O.Jump label => pc := (label - 1)
+          | O.Jtrue label => (case pop vm of
+                                 V.Bool true => pc := (label - 1)
+                               | V.Bool false => ()
+                               | _ => raise Type)
+          | O.Call i => (case (pop vm) of
+                            V.Lambda label => (
                              pushCi vm;
                              fp := (!fp) - i;
                              pc := (label - 1))
-                          | _ =&gt; raise Type)
-          | O.Ret =&gt; (Array.update(stack, !fp, Array.sub(stack, (!sp) - 1));
+                          | _ => raise Type)
+          | O.Ret => (Array.update(stack, !fp, Array.sub(stack, (!sp) - 1));
                      popCi vm;
                      pc := (!pc))
-          | O.Push v =&gt; push vm v
-          | O.Pop =&gt; (pop vm;())
-          | O.Lref i =&gt; push vm (Array.sub(stack, (!fp) + i))
-          | O.Lset i =&gt;  ((Array.update(stack, (!fp) + i, pop vm));
+          | O.Push v => push vm v
+          | O.Pop => (pop vm;())
+          | O.Lref i => push vm (Array.sub(stack, (!fp) + i))
+          | O.Lset i =>  ((Array.update(stack, (!fp) + i, pop vm));
                          push vm (V.Bool true))
-          | O.Gref i =&gt; push vm (Array.sub(pool, i))
-          | O.Gset i =&gt;  (Array.update(pool, i, pop vm); push vm (V.Bool true))
-          | O.Nop =&gt; ()
-          | O.End =&gt; raise Exit
+          | O.Gref i => push vm (Array.sub(pool, i))
+          | O.Gset i =>  (Array.update(pool, i, pop vm); push vm (V.Bool true))
+          | O.Nop => ()
+          | O.End => raise Exit
       ;
         pc := (!pc) + 1;
-      aux ())
-</code></pre><p>DT VMではこれを次のように書き換えました。</p>
+      aux ())</code></pre>
+<p>DT VMではこれを次のように書き換えました。</p>
 <pre><code class="language-sml" data-lang="sml">fun next () = let
     val () = pc := (!pc) + 1;
     val (index, arg) = Array.sub(cops, !pc) in
@@ -266,119 +273,126 @@ end
 
 Array.fromList [
             (* Not *)
-            fn _ =&gt;
+            fn _ =>
                 (case pop vm of
-                    V.Bool x =&gt; push vm (V.Bool (not x))
-                  | _ =&gt; raise Type;
+                    V.Bool x => push vm (V.Bool (not x))
+                  | _ => raise Type;
                 next ()),
             (* Add *)
-            fn _ =&gt;
+            fn _ =>
                 (case (pop vm, pop vm) of
-                    (V.Int x, V.Int y) =&gt; push vm (V.Int (x + y))
-                  | _ =&gt; raise Type;
+                    (V.Int x, V.Int y) => push vm (V.Int (x + y))
+                  | _ => raise Type;
                  next ()),
             (* Eq *)
-            fn _ =&gt;
+            fn _ =>
                 (case (pop vm, pop vm) of
-                    (V.Int x, V.Int y) =&gt; push vm (V.Bool (x = y))
-                  | (V.Bool x, V.Bool y) =&gt; push vm (V.Bool (x = y))
-                  | _ =&gt; raise Type;
+                    (V.Int x, V.Int y) => push vm (V.Bool (x = y))
+                  | (V.Bool x, V.Bool y) => push vm (V.Bool (x = y))
+                  | _ => raise Type;
                   next ()),
             (* Gt *)
-            fn _ =&gt;
+            fn _ =>
                 (case (pop vm, pop vm) of
-                    (V.Int x, V.Int y) =&gt; push vm (V.Bool (x &lt; y))
-                  | _ =&gt; raise Type;
+                    (V.Int x, V.Int y) => push vm (V.Bool (x < y))
+                  | _ => raise Type;
                  next ()),
             (* Jump *)
-            fn ({int = label, ...}: oparg) =&gt;
+            fn ({int = label, ...}: oparg) =>
                (pc := (label - 1);
                next ()),
             (* Jtrue *)
-            fn ({int = label, ...}: oparg) =&gt;
+            fn ({int = label, ...}: oparg) =>
                 (case pop vm of
-                    V.Bool true =&gt; pc := (label - 1)
-                  | V.Bool false =&gt; ()
-                  | _ =&gt; raise Type;
+                    V.Bool true => pc := (label - 1)
+                  | V.Bool false => ()
+                  | _ => raise Type;
                 next ()),
             (* Call *)
-            fn ({int = i, ...}: oparg) =&gt;
+            fn ({int = i, ...}: oparg) =>
                 (case (pop vm) of
-                    V.Lambda label =&gt; (
+                    V.Lambda label => (
                      pushCi vm;
                      fp := (!fp) - i;
                      pc := (label - 1))
-                  | _ =&gt; raise Type;
+                  | _ => raise Type;
                 next ()),
             (* Ret *)
-            fn _ =&gt;
+            fn _ =>
                 (Array.update(stack, !fp, Array.sub(stack, (!sp) - 1));
                  popCi vm;
                  pc := (!pc);
                 next ()),
             (* Push *)
-            fn ({vmvalue = v, ...}: oparg) =&gt;
+            fn ({vmvalue = v, ...}: oparg) =>
                (push vm v;
                next ()),
             (* Pop *)
-            fn _ =&gt;
+            fn _ =>
                (pop vm;
                 next ()),
             (* Lref *)
-            fn ({int = i, ...}: oparg) =&gt;
+            fn ({int = i, ...}: oparg) =>
                (push vm (Array.sub(stack, (!fp) + i));
                next ()),
             (* Lset *)
-            fn ({int = i, ...}: oparg) =&gt;
+            fn ({int = i, ...}: oparg) =>
                 ((Array.update(stack, (!fp) + i, pop vm));
                  push vm (V.Bool true);
                 next ()),
             (* Gref *)
-            fn ({int = i, ...}: oparg) =&gt;
+            fn ({int = i, ...}: oparg) =>
                (push vm (Array.sub(pool, i));
                next ()),
             (* Gset *)
-            fn ({int = i, ...}: oparg) =&gt;
+            fn ({int = i, ...}: oparg) =>
                (Array.update(pool, i, pop vm);
                 push vm (V.Bool true);
                next ()),
             (* Nop *)
-            (fn _ =&gt;
+            (fn _ =>
                 next ()),
-            (fn _ =&gt;
+            (fn _ =>
                 raise Exit)
         ]
 
 fun aux () = let val (index, arg) = Array.sub(cops, !pc) in
                  Array.sub(opArray, index) arg
-             end
-</code></pre><p>1引数を受け取ってunitを返す関数の配列としてVMを表しています。
+             end</code></pre>
+<p>1引数を受け取ってunitを返す関数の配列としてVMを表しています。
 1つ注意点として、前処理としてタグ付き共用体として表されている命令をタグ(配列のインデックス)と共用体に分解するのですが、SMLに共用体はないので構造体で代用しています。 <code>oparg</code> 型がそれにあたります。</p>
+
 <p>ディスパッチを関数<code>next</code>に括り出していて、一見すると分岐予測に関する利点が失われるように思われますが、
 <code>next</code>は小さいのでインライン化されるだろうと踏んでそのままにしています。実際、手動でインライン化しても速度に変化はありませんでした。</p>
+
 <p>今回のメインの話はVMなのでインタプリタについては省略します。</p>
-<h1 id="heading2">実行速度</h1>
-<h2 id="heading3">予測</h2>
+
+<h1 id="実行速度">実行速度</h1>
+
+<h2 id="予測">予測</h2>
+
 <p>普通のVMはディスパッチをlogオーダーの時間で行ないますがDT VMは定数オーダーの時間で行ないます。しかし配列の参照と関数呼び出しを挟むので定数倍の部分は大きくなります。
 どちらが速いでしょうか。</p>
-<h2 id="heading4">計測</h2>
+
+<h2 id="計測">計測</h2>
+
 <p>今回、次のようなフィボナッチ数列を計算するコードの実行速度を計測しました。</p>
 <pre><code class="language-sml" data-lang="sml">fun fib n = (Progn [
-                Bind (Var &quot;fib&quot;,
-                      Lambda([Var &quot;n&quot;],
+                Bind (Var "fib",
+                      Lambda([Var "n"],
                                (If (BinOp(GreaterThan,
                                           (Int 2),
-                                          (Var &quot;n&quot;)),
+                                          (Var "n")),
                                     Int(1),
                                     BinOp(Add,
-                                          Call(Var &quot;fib&quot;, [BinOp(Add,
-                                                                 Var &quot;n&quot;,
+                                          Call(Var "fib", [BinOp(Add,
+                                                                 Var "n",
                                                                  Int ~1)]),
-                                          Call(Var &quot;fib&quot;, [BinOp(Add,
-                                                                 Var &quot;n&quot;,
+                                          Call(Var "fib", [BinOp(Add,
+                                                                 Var "n",
                                                                  Int ~2)])))))),
-                Call(Var &quot;fib&quot;, [Int n])])
-</code></pre><p>コンパイラは以下のような命令列を吐きます。命令の内部表現が違うだけで命令列自体はVMとDTVMで共通です。
+                Call(Var "fib", [Int n])])</code></pre>
+<p>コンパイラは以下のような命令列を吐きます。命令の内部表現が違うだけで命令列自体はVMとDTVMで共通です。
 繰り返しますが、最適化はしてないのでL25で次の命令にジャンプしてるだとか目に見えて無駄なコードもあります。</p>
 <pre><code>0	Push Lambda 7
 1	Gset 0
@@ -406,35 +420,42 @@ fun aux () = let val (index, arg) = Array.sub(cops, !pc) in
 23	Call 1
 24	Add
 25	Jump 26
-26	Ret
-</code></pre><p>計測には次のようなコードを使いました。コンパイラは実行効率を無視して書いたのでベンチマークには含めていません。</p>
+26	Ret</code></pre>
+<p>計測には次のようなコードを使いました。コンパイラは実行効率を無視して書いたのでベンチマークには含めていません。</p>
 <pre><code class="language-sml" data-lang="sml">val target = (AST.fib 35)
 val compiled = VM.compile target
 val dtcompiled = DTVM.compile target
 val vm = VM.new ()
 val dtvm = DTVM.new ()
 
-val _ = Benchmark.benchset &quot;fib 35&quot; 1 [
-        (&quot;Interpreter&quot;,
-         fn () =&gt; (Interp.run target; ())),
-        (&quot;Normal VM&quot;,
-         fn () =&gt; (VM.run vm compiled; ())),
-        (&quot;Direct Threaded VM&quot;,
-         fn () =&gt; (DTVM.run dtvm dtcompiled; ()))
-    ]
-</code></pre><h2 id="heading5">結果</h2>
+val _ = Benchmark.benchset "fib 35" 1 [
+        ("Interpreter",
+         fn () => (Interp.run target; ())),
+        ("Normal VM",
+         fn () => (VM.run vm compiled; ())),
+        ("Direct Threaded VM",
+         fn () => (DTVM.run dtvm dtcompiled; ()))
+    ]</code></pre>
+<h2 id="結果">結果</h2>
+
 <p>Intel Core i5 M450 2.4GHz 2コア4スレッド、Ubunt 15.04、SML/NJ v110.77で実行しました。</p>
 <pre><code>-------------------+---------------------------------------------------
  Interpreter       |********************************************* 47170ms
  Normal VM         |****************** 19170ms
  Direct Threaded VM|************************************************** 51460ms
--------------------+---------------------------------------------------
-</code></pre><p>ダントツで速いのがVMで、インタプリタに比べてかなりの性能向上が見られます。一方DT VMはインタプリタより遅いという結果になりました。</p>
-<h1 id="heading6">考察</h1>
+-------------------+---------------------------------------------------</code></pre>
+<p>ダントツで速いのがVMで、インタプリタに比べてかなりの性能向上が見られます。一方DT VMはインタプリタより遅いという結果になりました。</p>
+
+<h1 id="考察">考察</h1>
+
 <p>冷静に考えたらインタプリタは毎回関数呼び出して遅いよねってことからループで処理を済ませるのがVMなのにVMで毎回関数を呼び出してたら遅いに決まってるじゃん。
 というかこれ、Direct Threaded VMじゃないじゃん。死にたい。</p>
-<h1 id="heading7">余談</h1>
-<!-- raw HTML omitted -->
+
+<h1 id="余談">余談</h1>
+
+<p><blockquote class="twitter-tweet" lang="ja"><p lang="ja" dir="ltr">ループ内でExceptionをhandleしてる所為だった。ループの外に出したら超速になってインタプリタの方が20倍遅くなった。</p>&mdash; κeen (@blackenedgold) <a href="https://twitter.com/blackenedgold/status/604235677337714689">2015, 5月 29</a></blockquote>
+<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script></p>
+
 <p>尚、このつぶやきはfibの引数を小さくして繰り返しを増やした時のものです。多分コンパイルを外に出してるので繰り返しが多いとその分のオーバーヘッドの差が効いてくるのでしょう。</p>
 <pre><code class="language-sml" data-lang="sml">val target = (AST.fib 24)
 val compiled = VM.compile target
@@ -442,20 +463,18 @@ val dtcompiled = DTVM.compile target
 val vm = VM.new ()
 val dtvm = DTVM.new ()
 
-val _ = Benchmark.benchset &quot;fib 24&quot; 10 [
-        (&quot;Interpreter&quot;,
-         fn () =&gt; (Interp.run target; ())),
-        (&quot;Normal VM&quot;,
-         fn () =&gt; (VM.run vm compiled; ())),
-        (&quot;Direct Threaded VM&quot;,
-         fn () =&gt; (DTVM.run dtvm dtcompiled; ()))
-    ]
-</code></pre><pre><code>-------------------+---------------------------------------------------
+val _ = Benchmark.benchset "fib 24" 10 [
+        ("Interpreter",
+         fn () => (Interp.run target; ())),
+        ("Normal VM",
+         fn () => (VM.run vm compiled; ())),
+        ("Direct Threaded VM",
+         fn () => (DTVM.run dtvm dtcompiled; ()))
+    ]</code></pre><pre><code>-------------------+---------------------------------------------------
  Interpreter       |************************************************** 2052ms
  Normal VM         |** 104ms
  Direct Threaded VM|***** 238ms
--------------------+---------------------------------------------------
-</code></pre>
+-------------------+---------------------------------------------------</code></pre>
                     </section>
                 </article>
             </div>

@@ -20,6 +20,7 @@
         <meta name="twitter:site" content="@blackenedgold" />
         <meta name="twitter:title" content="改めましてRocksDBさん | κeenのHappy Hacκing Blog"/>
         <meta name="twitter:description" content="κeenです。寝れない。前回のエントリでRocksDBのことを勘違いしていたようだったので改めてRocksDBについて書きます。
+
 個人的理解をメモした雑多な記述です。" />
 
         <title>改めましてRocksDBさん | κeenのHappy Hacκing Blog</title>
@@ -120,43 +121,62 @@
                     </header>
                     <section>
                         <p>κeenです。寝れない。<a href="https://keens.github.io/blog/2018/02/05/hello__rocksdb/">前回のエントリ</a>でRocksDBのことを勘違いしていたようだったので改めてRocksDBについて書きます。</p>
+
 <p>個人的理解をメモした雑多な記述です。</p>
-<h1 id="lsmtree">LSM-Tree</h1>
+
+<h1 id="lsm-tree">LSM-Tree</h1>
+
 <p>まず、私は勝手にRocksDBはロックフリーな<a href="https://ja.wikipedia.org/wiki/%E3%82%B9%E3%82%AD%E3%83%83%E3%83%97%E3%83%AA%E3%82%B9%E3%83%88">スキップリスト</a>を使って並列性能をあげたDBだと思ってたんですが間違ってました。
 使っているのは<a href="https://en.wikipedia.org/wiki/Log-structured_merge-tree">Log-Structured_Merge-Tree</a>のようです。
 <a href="https://en.wikipedia.org/wiki/Log-structured_file_system">Log Structured File System</a>に名前が似てるな〜思ったらやはりそこ由来のデータ構造のようです。
 ファイルシステムも一貫性が必要なKVSですからまあ、参考になりますよね。
 LSM-Treeについては<a href="https://www.cs.umb.edu/~poneil/lsmtree.pdf">元論文</a>の他<a href="https://www.slideshare.net/ssuser7e134a/log-structured-merge-tree">このスライド</a>が多少参考になります。</p>
+
 <p>重要なのは</p>
+
 <ul>
 <li>削除や更新は論理操作。ストレージのデータは基本はイミュータブル</li>
 <li>メモリのデータとストレージのデータ2つ合わせて完全</li>
 <li>読み取りはメモリとストレージなど複数箇所から読んで複数値をマージする</li>
 <li>ストレージのデータは時々コンパクションされる</li>
 </ul>
+
 <p>この辺がRocksDBのAPIに反映されています。</p>
+
 <h1 id="rocksdb">RocksDB</h1>
+
 <p>LSM-Treeベースの実装が色々ある中RocksDBはかなり実装上の工夫を加えたらしいです。
 <a href="https://github.com/facebook/rocksdb/wiki/Features-Not-in-LevelDB">ここ</a>にすごい量載っています。これはLevelDBとの差分だけなのでLevelDBでの工夫も加えたらすごいことになるんですかね。
 RangeやPrefixクエリにbloom filterが使えたりトランザクションをサポートしていたりRDBのバックエンドとして使うには嬉しそうな機能が一杯ですね。</p>
-<h1 id="heading">勘違いとか</h1>
+
+<h1 id="勘違いとか">勘違いとか</h1>
+
 <p>前回の記事の勘違いを指摘していきます。</p>
+
 <blockquote>
 <p>RocksDBの<a href="https://github.com/facebook/rocksdb/blob/master/db/db_impl.h#L86"><code>Delete</code></a>自体は <code>Status</code> を返すので判別可能</p>
 </blockquote>
+
 <p>これはDelete操作がエラーになったかどうかしかわかりません。多分論理削除なので元の値が存在したかどうかは高速には判断できないんでしょう。putが存在したかどうか判定できないのも恐らく同じ理由。</p>
+
 <blockquote>
 <p><a href="https://github.com/facebook/rocksdb/blob/master/db/db_impl.h#L135"><code>keyMayExist</code></a>のラッパも存在しないので</p>
 </blockquote>
+
 <p>KeyMayExistは<code>May</code>があるようにtrueを返したところで値が存在することは保証しません。falseだったら存在しないのは確実。恐らくbloom filterしか見ないんでしょう。因みに実装見に行ったら常にtrue返すように見えたんですが気のせいですかね？だとしても仕様には違反しませんが。</p>
+
 <blockquote>
 <ul>
 <li>どうやら非同期クエリもできるらしい？だったらTokioと相性よさそう</li>
 </ul>
 </blockquote>
+
 <p>これは <code>WriteOptions</code> の <code>sync</code> を見て言ったのですがこの <code>sync</code> の意味はOSのバッファリングもストレージに同期する、つまりシステムコールの <code>sync</code> の意味でした。</p>
-<h1 id="api">その他APIについて</h1>
+
+<h1 id="その他apiについて">その他APIについて</h1>
+
 <p>APIでなんかよくわからない概念があったりこれなんだろみたいな関数があったりしたのがよく調べたらわかったのでメモ</p>
+
 <ul>
 <li>ColumnFamilyはただの名前空間</li>
 <li>SnapShotが気軽に取れるのに納得。</li>

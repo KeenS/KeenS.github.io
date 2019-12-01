@@ -115,197 +115,210 @@
     </header>
     <div class="reveal">
         <div class="slides">
-            <!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
-<p>===</p>
-<h1 id="about-me">About Me</h1>
-<hr>
-<p><img src="//KeenS.github.io/images/kappa.png" alt="κeenのアイコン"> <!-- raw HTML omitted --></p>
-<ul>
-<li>κeen</li>
-<li><a href="https://twitter.com/blackenedgold">@blackenedgold</a></li>
-<li>Github: <a href="https://github.com/KeenS">KeenS</a></li>
-<li><a href="https://idein.jp/">Idein Inc.</a>のエンジニア</li>
-<li>Lisp, ML, Rust, Shell Scriptあたりを書きます</li>
-<li>言語処理系が好き</li>
-</ul>
-<p>===</p>
-<h1 id="gc">GCと(メタ)情報</h1>
-<hr>
-<ul>
-<li>レジスタ/スタック上の値のpointer or not</li>
-<li>Mark and Sweepのマーク</li>
-<li>ヒープ上オブジェクトの「どこにポインタがいるか」</li>
-</ul>
-<p>これらを節約する話</p>
-<p>===</p>
-<h1 id="heading">レジスタ中のポインタ</h1>
-<hr>
-<ul>
-<li>レジスタ上の値がポインタか数値か
-<ul>
-<li>GCのrootsetなので判断が必要</li>
-<li>1bitの情報量が必要</li>
-</ul>
-</li>
-<li>多くはLSBをタグに使う
-<ul>
-<li>ポインタは0
-<ul>
-<li>4バイトアラインメントされてると自然にそうなる</li>
-</ul>
-</li>
-<li>数値は1にする
-<ul>
-<li>数値が31bit/63bitになる</li>
-<li>タグを外して計算して戻すので遅い</li>
-</ul>
-</li>
-</ul>
-</li>
-<li>bit stealしない方法は？</li>
-</ul>
-<p>===</p>
-<h2 id="heading1">レジスタ分別</h2>
-<hr>
-<ul>
-<li>レジスタを半分に分ける
-<ul>
-<li>片方はポインタ用</li>
-<li>もう片方は値用</li>
-</ul>
-</li>
-<li>物理的に1bit取らなくても1bitの情報量が確保できる</li>
-<li>ただしレジスタが多いアーキじゃないと死ぬ</li>
-</ul>
-<p>===</p>
-<h1 id="mark-bit">Mark Bit</h1>
-<hr>
-<ul>
-<li>マーク済みかどうかのメタデータ
-<ul>
-<li>1bitの情報量</li>
-</ul>
-</li>
-<li>素朴にはセルのメタデータに1byte確保</li>
-</ul>
-<pre><code>+---+-------+---+-------+--
+            <section data-markdown
+    data-separator="\n===\n"
+    data-vertical="\n---\n"
+    data-notes="^Note:">
+<script type="text/template">
+# GCと1bit
+----------------------
+[TCFMミートアップ](https://techplay.jp/event/680870)
+
+<!-- .slide: class="center" -->
+===
+# About Me
+---------
+![κeenのアイコン](/images/kappa.png) <!-- .element: style="position:absolute;right:0;z-index:-1" width="20%" -->
+
+ * κeen
+ * [@blackenedgold](https://twitter.com/blackenedgold)
+ * Github: [KeenS](https://github.com/KeenS)
+ * [Idein Inc.](https://idein.jp/)のエンジニア
+ * Lisp, ML, Rust, Shell Scriptあたりを書きます
+ * 言語処理系が好き
+
+===
+
+# GCと(メタ)情報
+--------------
+
+* レジスタ/スタック上の値のpointer or not
+* Mark and Sweepのマーク
+* ヒープ上オブジェクトの「どこにポインタがいるか」
+
+これらを節約する話
+
+===
+
+# レジスタ中のポインタ
+-------------
+
+* レジスタ上の値がポインタか数値か
+  + GCのrootsetなので判断が必要
+  + 1bitの情報量が必要
+* 多くはLSBをタグに使う
+  + ポインタは0
+    + 4バイトアラインメントされてると自然にそうなる
+  + 数値は1にする
+    - 数値が31bit/63bitになる
+    - タグを外して計算して戻すので遅い
+* bit stealしない方法は？
+
+===
+## レジスタ分別
+---------------
+
+* レジスタを半分に分ける
+  + 片方はポインタ用
+  + もう片方は値用
+* 物理的に1bit取らなくても1bitの情報量が確保できる
+* ただしレジスタが多いアーキじゃないと死ぬ
+
+
+===
+# Mark Bit
+----------
+
+* マーク済みかどうかのメタデータ
+  + 1bitの情報量
+* 素朴にはセルのメタデータに1byte確保
+
+```
++---+-------+---+-------+--
 | 0 |  ...  | 1 |  ...  |
 +---+-------+---+-------+--
 +---+-------+---+-------+--
 | 1 |  ...  | 0 |  ...  |
 +---+-------+---+-------+--
-</code></pre><ul>
-<li>1bitに1byte？</li>
-<li>1byteって中途半端では？
-<ul>
-<li>4byteアラインメントすると3byteのpadが入るのでは</li>
-</ul>
-</li>
-</ul>
-<p>===</p>
-<h2 id="bitmap">BitMap</h2>
-<hr>
-<ul>
-<li>MarkBitだけを集めて効率化</li>
-</ul>
-<pre><code>+------+-------+-------+--
-| 0110 |  ...  |  ...  |
-+------+-------+-------+--
-+-------+-------+--
-|  ...  |  ...  |
-+-------+-------+--
-</code></pre><ul>
-<li>省スベース</li>
-<li>キャッシュ効率がいい</li>
-<li>bit演算で扱える</li>
-<li>allocatedフラグも同じ仕組みで出来る</li>
-</ul>
-<p>===</p>
-<h2 id="bitmap1">BitMap</h2>
-<hr>
-<ul>
-<li>どうやってオブジェクトからマークを探す？</li>
-<li>ページを $2^n$ バイトアラインメント</li>
-<li>オブジェクトアドレスの下位 $n$ bitをクリア</li>
-<li>いつでもページの先頭に飛べる</li>
-</ul>
-<pre><code>0xab00         0xab08
+```
+
+* 1bitに1byte？
+* 1byteって中途半端では？
+  + 4byteアラインメントすると3byteのpadが入るのでは
+
+===
+## BitMap
+---------
+
+* MarkBitだけを集めて効率化
+
+
+```
 +------+-------+-------+--
 | 0110 |  ...  |  ...  |
 +------+-------+-------+--
 +-------+-------+--
 |  ...  |  ...  |
 +-------+-------+--
-</code></pre><p>===</p>
-<h1 id="-element-stylefontsize-calcvartitlefontsize--08">オブジェクト中のポインタ&lt;!&ndash; .element: style=&quot;font-size: calc(var(&ndash;title-font-size) * 0.8)&quot;&ndash;&gt;</h1>
-<hr>
-<ul>
-<li>オブジェクトをマークするときにどこにポインタがあるか？</li>
-</ul>
-<pre><code class="language-standard-ml" data-lang="standard-ml">type t = {a: string, b: int, c: int list}
-</code></pre><p>↓</p>
-<pre><code>+--------+
+```
+
+* 省スベース
+* キャッシュ効率がいい
+* bit演算で扱える
+* allocatedフラグも同じ仕組みで出来る
+
+===
+## BitMap
+---------
+
+* どうやってオブジェクトからマークを探す？
+* ページを $2^n$ バイトアラインメント
+* オブジェクトアドレスの下位 $n$ bitをクリア
+* いつでもページの先頭に飛べる
+
+```
+0xab00         0xab08
++------+-------+-------+--
+| 0110 |  ...  |  ...  |
++------+-------+-------+--
++-------+-------+--
+|  ...  |  ...  |
++-------+-------+--
+```
+
+===
+# オブジェクト中のポインタ<!-- .element: style="font-size: calc(var(--title-font-size) * 0.8)"-->
+-----------------------
+
+* オブジェクトをマークするときにどこにポインタがあるか？
+
+```standard-ml
+type t = {a: string, b: int, c: int list}
+```
+
+↓
+
+```
++--------+
 | 20byte |
 +--------+
-</code></pre><p>===</p>
-<h2 id="type-id">Type Id</h2>
-<hr>
-<ul>
-<li>Typeデータをランタイムにも持っておき、メタデータにIDを付ける</li>
-</ul>
-<pre><code>{1 = {a: string, b: int, c: int list}}
+```
+
+===
+## Type Id
+----------
+
+* Typeデータをランタイムにも持っておき、メタデータにIDを付ける
+
+```
+{1 = {a: string, b: int, c: int list}}
 
 +------+--------+------+--------+--
 | id=1 | 20byte | id=1 | 20byte |
 +------+--------+------+--------+--
-</code></pre><ul>
-<li>素直</li>
-<li>動的型付言語やオブジェクト指向言語なら自然</li>
-<li>リフレクションに使える</li>
-<li>GCにしたら少し遠回り</li>
-</ul>
-<p>===</p>
-<h2 id="big-bag-of-pages">Big Bag of Pages</h2>
-<hr>
-<ul>
-<li>ヒープページ全体で1つの型のみを扱う</li>
-</ul>
-<pre><code>{1 = {a: string, b: int, c: int list}}
+```
+
+* 素直
+* 動的型付言語やオブジェクト指向言語なら自然
+* リフレクションに使える
+* GCにしたら少し遠回り
+
+===
+## Big Bag of Pages
+-------------------
+
+
+* ヒープページ全体で1つの型のみを扱う
+
+```
+{1 = {a: string, b: int, c: int list}}
 
 +------+--------+--------+--
 | id=1 | 20byte | 20byte |
 +------+--------+--------+--
-</code></pre><ul>
-<li>ページが無駄になるかも？</li>
-<li>アロケーションが遅いかも？</li>
-</ul>
-<p>===</p>
-<h2 id="heading2">双方向レイアウト</h2>
-<hr>
-<ul>
-<li>オブジェクトのフィールドをポインタと値に分ける</li>
-<li>ポインタをオブジェクトポインタの前、値を後に置く
-<ul>
-<li>物理で1bit使わなくても情報を持てる</li>
-</ul>
-</li>
-</ul>
-<pre><code>        +-- ptr
+```
+
+* ページが無駄になるかも？
+* アロケーションが遅いかも？
+
+===
+## 双方向レイアウト
+-------------
+
+* オブジェクトのフィールドをポインタと値に分ける
+* ポインタをオブジェクトポインタの前、値を後に置く
+  + 物理で1bit使わなくても情報を持てる
+
+```
+        +-- ptr
         v
 +-------+---+
 | a | c | b |
 +---+---+---+
-</code></pre><p>===</p>
-<h1 id="heading3">まとめ</h1>
-<hr>
-<ul>
-<li>情報の持ち方は色々あるよ</li>
-<li>ランタイムの表現も工夫が色々あるよ</li>
-<li>ランタイムとデータ表現面白いよ</li>
-</ul>
-<p><!-- raw HTML omitted --></p>
-<!-- raw HTML omitted -->
+```
+
+===
+
+# まとめ
+--------
+
+* 情報の持ち方は色々あるよ
+* ランタイムの表現も工夫が色々あるよ
+* ランタイムとデータ表現面白いよ
+
+
+</script>
+</section>
 
         </div>
     </div>

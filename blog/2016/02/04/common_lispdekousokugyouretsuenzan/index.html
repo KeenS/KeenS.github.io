@@ -115,10 +115,15 @@
                     </header>
                     <section>
                         <p>κeenです。Common Lispから線形代数ライブラリを使うポストで比較にCommon Lispのコードが出されていたのですがもう少し改良出来そうだったので少しばかり高速化してみました。</p>
+
 <p>そのポストはこちら。</p>
+
 <p><a href="http://d.hatena.ne.jp/masatoi/20160204/1454519281">Common Lispで行列演算: LLA(Lisp Linear Algebra)を使う - 翡翠はコンピュータに卵を生むか</a></p>
+
 <p>圧倒的にCommon Lispが遅いですね。そのコードはこちらから。</p>
+
 <p><a href="http://tanakahx.hatenablog.com/entry/2015/09/25/070000">Python (NumPy) と Common Lisp (LLA) で行列積の実行速度を比較する - 不確定特異点</a></p>
+
 <p>行列計算(GEMM)部分を抜き出すとこうなっています。</p>
 <div class="highlight"><pre class="chroma"><code class="language-lisp" data-lang="lisp"><span class="p">(</span><span class="nb">defun</span> <span class="nv">simple-gemm</span> <span class="p">(</span><span class="nv">ma</span> <span class="nv">mb</span><span class="p">)</span>
   <span class="s">&#34;Common Lispのみを使った行列積の計算&#34;</span>
@@ -134,27 +139,29 @@
           <span class="p">(</span><span class="nb">dotimes</span> <span class="p">(</span><span class="nv">k</span> <span class="nv">cols</span><span class="p">)</span>
             <span class="p">(</span><span class="nb">incf</span> <span class="p">(</span><span class="nf">aref</span> <span class="nv">result</span> <span class="nv">row</span> <span class="nv">col</span><span class="p">)</span>
                   <span class="p">(</span><span class="nf">*</span> <span class="p">(</span><span class="nf">aref</span> <span class="nv">ma</span> <span class="nv">row</span> <span class="nv">k</span><span class="p">)</span> <span class="p">(</span><span class="nf">aref</span> <span class="nv">mb</span> <span class="nv">k</span> <span class="nv">col</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
-      <span class="nv">result</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
-</code></pre></div><p>これを<code>*N*</code> = 256, で100回繰り返したら</p>
+      <span class="nv">result</span><span class="p">)</span><span class="p">)</span><span class="p">)</span></code></pre></div>
+<p>これを<code>*N*</code> = 256, で100回繰り返したら</p>
 <pre><code>;; Evaluation took:
 ;;   4.688 seconds of real time
 ;;   4.692000 seconds of total run time (4.688000 user, 0.004000 system)
 ;;   100.09% CPU
 ;;   13,564,728,093 processor cycles
-;;   26,216,000 bytes consed
+;;   26,216,000 bytes consed</code></pre>
+<p>とのこと。まあ、まだ高速化の余地はありそうです。</p>
 
-</code></pre><p>とのこと。まあ、まだ高速化の余地はありそうです。</p>
-<h1 id="heading">キャッシュする</h1>
+<h1 id="キャッシュする">キャッシュする</h1>
+
 <p>内側のループをみるとこうなっています。</p>
 <div class="highlight"><pre class="chroma"><code class="language-lisp" data-lang="lisp">          <span class="p">(</span><span class="nb">dotimes</span> <span class="p">(</span><span class="nv">k</span> <span class="nv">cols</span><span class="p">)</span>
             <span class="p">(</span><span class="nb">incf</span> <span class="p">(</span><span class="nf">aref</span> <span class="nv">result</span> <span class="nv">row</span> <span class="nv">col</span><span class="p">)</span>
-                  <span class="p">(</span><span class="nf">*</span> <span class="p">(</span><span class="nf">aref</span> <span class="nv">ma</span> <span class="nv">row</span> <span class="nv">k</span><span class="p">)</span> <span class="p">(</span><span class="nf">aref</span> <span class="nv">mb</span> <span class="nv">k</span> <span class="nv">col</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
-</code></pre></div><p><code>incf</code>をばらすとこうなります。</p>
+                  <span class="p">(</span><span class="nf">*</span> <span class="p">(</span><span class="nf">aref</span> <span class="nv">ma</span> <span class="nv">row</span> <span class="nv">k</span><span class="p">)</span> <span class="p">(</span><span class="nf">aref</span> <span class="nv">mb</span> <span class="nv">k</span> <span class="nv">col</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span></code></pre></div>
+<p><code>incf</code>をばらすとこうなります。</p>
 <div class="highlight"><pre class="chroma"><code class="language-lisp" data-lang="lisp">          <span class="p">(</span><span class="nb">dotimes</span> <span class="p">(</span><span class="nv">k</span> <span class="nv">cols</span><span class="p">)</span>
             <span class="p">(</span><span class="nb">setf</span> <span class="p">(</span><span class="nf">aref</span> <span class="nv">result</span> <span class="nv">row</span> <span class="nv">col</span><span class="p">)</span>
-                  <span class="p">(</span><span class="nf">+</span> <span class="p">(</span><span class="nf">aref</span> <span class="nv">result</span> <span class="nv">row</span> <span class="nv">col</span><span class="p">)</span> <span class="p">(</span><span class="nf">*</span> <span class="p">(</span><span class="nf">aref</span> <span class="nv">ma</span> <span class="nv">row</span> <span class="nv">k</span><span class="p">)</span> <span class="p">(</span><span class="nf">aref</span> <span class="nv">mb</span> <span class="nv">k</span> <span class="nv">col</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
-</code></pre></div><p>値として参照している方の<code>(aref result row col)</code>は<code>k</code>に依存しないのでループの外に出せます。
+                  <span class="p">(</span><span class="nf">+</span> <span class="p">(</span><span class="nf">aref</span> <span class="nv">result</span> <span class="nv">row</span> <span class="nv">col</span><span class="p">)</span> <span class="p">(</span><span class="nf">*</span> <span class="p">(</span><span class="nf">aref</span> <span class="nv">ma</span> <span class="nv">row</span> <span class="nv">k</span><span class="p">)</span> <span class="p">(</span><span class="nf">aref</span> <span class="nv">mb</span> <span class="nv">k</span> <span class="nv">col</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span></code></pre></div>
+<p>値として参照している方の<code>(aref result row col)</code>は<code>k</code>に依存しないのでループの外に出せます。
 書き込んでいる方は場所だから仕方ない。</p>
+
 <p>これをキャッシュするようにすると</p>
 <div class="highlight"><pre class="chroma"><code class="language-lisp" data-lang="lisp"><span class="p">(</span><span class="nb">defun</span> <span class="nv">caching-gemm</span> <span class="p">(</span><span class="nv">ma</span> <span class="nv">mb</span><span class="p">)</span>
   <span class="s">&#34;Common Lispのみを使った行列積の計算&#34;</span>
@@ -173,19 +180,25 @@
              <span class="p">(</span><span class="nb">setf</span> <span class="p">(</span><span class="nf">aref</span> <span class="nv">result</span> <span class="nv">row</span> <span class="nv">col</span><span class="p">)</span>
               <span class="p">(</span><span class="nf">+</span> <span class="nv">cell</span> <span class="p">(</span><span class="nf">*</span> <span class="p">(</span><span class="nf">aref</span> <span class="nv">ma</span> <span class="nv">row</span> <span class="nv">k</span><span class="p">)</span> <span class="p">(</span><span class="nf">aref</span> <span class="nv">mb</span> <span class="nv">k</span> <span class="nv">col</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
            <span class="p">)</span><span class="p">)</span><span class="p">)</span>
-      <span class="nv">result</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
-</code></pre></div><p>同じパラメータでベンチマークをとると</p>
+      <span class="nv">result</span><span class="p">)</span><span class="p">)</span><span class="p">)</span></code></pre></div>
+<p>同じパラメータでベンチマークをとると</p>
 <pre><code>;; 3.971 seconds of real time
 ;; 3.972000 seconds of total run time (3.972000 user, 0.000000 system)
 ;; 100.03% CPU
 ;; 11,491,319,119 processor cycles
-;; 26,216,000 bytes consed
-</code></pre><p>2016-02-28 追記:</p>
-<!-- raw HTML omitted -->
+;; 26,216,000 bytes consed</code></pre>
+<p>2016-02-28 追記:</p>
+
+<p><blockquote class="twitter-tweet" data-conversation="none" data-lang="ja"><p lang="ja" dir="ltr"><a href="https://twitter.com/blackenedgold">@blackenedgold</a> キャッシュのところ、resultのインデックスにkは使ってないけど、kが進むごとに対象の要素は変化してるはずなので、このキャッシュのしかたはまずいのでは?</p>&mdash; goskevich (@gos_k) <a href="https://twitter.com/gos_k/status/700622885933613056">2016年2月19日</a></blockquote>
+<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script></p>
+
 <p>ということでこれは間違ってました。</p>
-<h1 id="heading1">ループアンローリング</h1>
+
+<h1 id="ループアンローリング">ループアンローリング</h1>
+
 <p>さて、先程の内側のループ、仕事が少ないですね。小さな仕事をチマチマループしてるとイテレーションコストが嵩みます。
 1回のイテレーションでの仕事を増やすべく、ループアンローリングをしましょう。</p>
+
 <p>コピペはダルいのでまずはマクロを。</p>
 <div class="highlight"><pre class="chroma"><code class="language-lisp" data-lang="lisp"><span class="p">(</span><span class="nb">defmacro</span> <span class="nv">dotimes-unroll</span> <span class="p">(</span><span class="p">(</span><span class="nv">i</span> <span class="nv">n</span> <span class="nv">unroll</span><span class="p">)</span> <span class="k">&amp;body</span> <span class="nv">body</span><span class="p">)</span>
   <span class="p">(</span><span class="k">let</span> <span class="p">(</span><span class="p">(</span><span class="nv">n_</span>      <span class="p">(</span><span class="nf">gensym</span> <span class="s">&#34;n&#34;</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
@@ -196,8 +209,8 @@
                 <span class="p">(</span><span class="p">(</span><span class="nf">&lt;</span> <span class="o">,</span><span class="nv">n_</span> <span class="p">(</span><span class="k">the</span> <span class="kt">fixnum</span> <span class="p">(</span><span class="nf">1+</span> <span class="o">,</span><span class="nv">i</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
               <span class="o">,@</span><span class="nv">body</span>
               <span class="p">)</span><span class="p">)</span>
-         <span class="o">,@</span><span class="p">(</span><span class="nb">loop</span> <span class="ss">:repeat</span> <span class="nv">unroll</span> <span class="ss">:append</span> <span class="p">(</span><span class="nf">append</span> <span class="nv">body</span> <span class="o">`</span><span class="p">(</span><span class="p">(</span><span class="k">setq</span> <span class="o">,</span><span class="nv">i</span> <span class="p">(</span><span class="k">the</span> <span class="kt">fixnum</span> <span class="p">(</span><span class="nf">1+</span> <span class="o">,</span><span class="nv">i</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
-</code></pre></div><p>少し試してみましょう。</p>
+         <span class="o">,@</span><span class="p">(</span><span class="nb">loop</span> <span class="ss">:repeat</span> <span class="nv">unroll</span> <span class="ss">:append</span> <span class="p">(</span><span class="nf">append</span> <span class="nv">body</span> <span class="o">`</span><span class="p">(</span><span class="p">(</span><span class="k">setq</span> <span class="o">,</span><span class="nv">i</span> <span class="p">(</span><span class="k">the</span> <span class="kt">fixnum</span> <span class="p">(</span><span class="nf">1+</span> <span class="o">,</span><span class="nv">i</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span></code></pre></div>
+<p>少し試してみましょう。</p>
 <div class="highlight"><pre class="chroma"><code class="language-lisp" data-lang="lisp"><span class="p">(</span><span class="nv">dotimes-unroll</span> <span class="p">(</span><span class="nv">i</span> <span class="mi">10</span> <span class="mi">3</span><span class="p">)</span>
   <span class="p">(</span><span class="nf">format</span> <span class="no">t</span> <span class="s">&#34;~%~a&#34;</span><span class="p">)</span> <span class="nv">i</span><span class="p">)</span>
 <span class="mi">0</span>
@@ -209,8 +222,9 @@
 <span class="mi">6</span>
 <span class="mi">7</span>
 <span class="mi">8</span>
-<span class="mi">9</span>
-</code></pre></div><p>よしよし。</p>
+<span class="nv">9</span></code></pre></div>
+<p>よしよし。</p>
+
 <p>それではこれを使ってアンロールします。</p>
 <div class="highlight"><pre class="chroma"><code class="language-lisp" data-lang="lisp"><span class="p">(</span><span class="nb">defun</span> <span class="nv">loop-unroll-gemm</span> <span class="p">(</span><span class="nv">ma</span> <span class="nv">mb</span><span class="p">)</span>
   <span class="s">&#34;Common Lispのみを使った行列積の計算&#34;</span>
@@ -228,8 +242,9 @@
            <span class="p">(</span><span class="nv">dotimes-unroll</span> <span class="p">(</span><span class="nv">k</span> <span class="nv">cols</span> <span class="mi">16</span><span class="p">)</span>
              <span class="p">(</span><span class="nb">setf</span> <span class="p">(</span><span class="nf">aref</span> <span class="nv">result</span> <span class="nv">row</span> <span class="nv">col</span><span class="p">)</span>
               <span class="p">(</span><span class="nf">+</span> <span class="nv">cell</span> <span class="p">(</span><span class="nf">*</span> <span class="p">(</span><span class="nf">aref</span> <span class="nv">ma</span> <span class="nv">row</span> <span class="nv">k</span><span class="p">)</span> <span class="p">(</span><span class="nf">aref</span> <span class="nv">mb</span> <span class="nv">k</span> <span class="nv">col</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
-      <span class="nv">result</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
-</code></pre></div><p>アンロール数は16が一番パフォーマンス出たようでした。</p>
+      <span class="nv">result</span><span class="p">)</span><span class="p">)</span><span class="p">)</span></code></pre></div>
+<p>アンロール数は16が一番パフォーマンス出たようでした。</p>
+
 <p>さて、ベンチマークをしてみます。</p>
 <pre><code>;; Evaluation took:
 ;;   3.847 seconds of real time
@@ -237,17 +252,19 @@
 ;;   [ Run times consist of 0.012 seconds GC time, and 3.836 seconds non-GC time. ]
 ;;   100.03% CPU
 ;;   11,128,993,432 processor cycles
-;;   26,216,000 bytes consed
-</code></pre><p>辛うじて速くなってる…。因みにこれのパフォーマンスはCPUの命令キャッシュの状況に依存するので何度か試すとこれより速いスコアが出ることもあります。</p>
+;;   26,216,000 bytes consed</code></pre>
+<p>辛うじて速くなってる…。因みにこれのパフォーマンスはCPUの命令キャッシュの状況に依存するので何度か試すとこれより速いスコアが出ることもあります。</p>
 <pre><code>Evaluation took:
   3.338 seconds of real time
   3.340000 seconds of total run time (3.332000 user, 0.008000 system)
   [ Run times consist of 0.020 seconds GC time, and 3.320 seconds non-GC time. ]
   100.06% CPU
   9,657,259,219 processor cycles
-  26,248,768 bytes consed
-</code></pre><h1 id="heading2">メモリアクセスしない</h1>
+  26,248,768 bytes consed</code></pre>
+<h1 id="メモリアクセスしない">メモリアクセスしない</h1>
+
 <p>さて、最初にキャッシュした時に書き込まれている方の <code>(aref result row col)</code> は場所だからキャッシュ出来ないといいました。まあ、それは正しいのですがループの中で毎回書き込む必要はありません。</p>
+
 <p>レジスタ上で計算を済ませて最後に書き込んであげれば十分です。</p>
 <div class="highlight"><pre class="chroma"><code class="language-lisp" data-lang="lisp"><span class="p">(</span><span class="nb">defun</span> <span class="nv">on-register-gemm</span> <span class="p">(</span><span class="nv">ma</span> <span class="nv">mb</span><span class="p">)</span>
   <span class="s">&#34;Common Lispのみを使った行列積の計算&#34;</span>
@@ -266,20 +283,25 @@
              <span class="p">(</span><span class="nb">setf</span> <span class="nv">res</span>
                    <span class="p">(</span><span class="k">the</span> <span class="kt">single-float</span> <span class="p">(</span><span class="nf">+</span> <span class="nv">res</span> <span class="p">(</span><span class="nf">*</span> <span class="p">(</span><span class="nf">aref</span> <span class="nv">ma</span> <span class="nv">row</span> <span class="nv">k</span><span class="p">)</span> <span class="p">(</span><span class="nf">aref</span> <span class="nv">mb</span> <span class="nv">k</span> <span class="nv">col</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
            <span class="p">(</span><span class="nb">setf</span> <span class="p">(</span><span class="nf">aref</span> <span class="nv">result</span> <span class="nv">row</span> <span class="nv">col</span><span class="p">)</span> <span class="nv">res</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
-      <span class="nv">result</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
-</code></pre></div><p>これを試してみます。</p>
+      <span class="nv">result</span><span class="p">)</span><span class="p">)</span><span class="p">)</span></code></pre></div>
+<p>これを試してみます。</p>
 <pre><code>;; Evaluation took:
 ;;   2.302 seconds of real time
 ;;   2.304000 seconds of total run time (2.300000 user, 0.004000 system)
 ;;   [ Run times consist of 0.008 seconds GC time, and 2.296 seconds non-GC time. ]
 ;;   100.09% CPU
 ;;   6,662,273,812 processor cycles
-;;   26,216,000 bytes consed
-</code></pre><p>わお！急に速くなりました。 <code>(* 100 (- (/ 4.688 2.302) 1))</code> ≒ 103、 100%近い高速化です。</p>
-<h1 id="heading3">おわりに</h1>
+;;   26,216,000 bytes consed</code></pre>
+<p>わお！急に速くなりました。 <code>(* 100 (- (/ 4.688 2.302) 1))</code> ≒ 103、 100%近い高速化です。</p>
+
+<h1 id="おわりに">おわりに</h1>
+
 <p>特に深い意味はなかったのですがパタヘネに載っていたやつを試してみたくて遊んでみました。</p>
+
 <p>普通に行列計算したいなら線形代数ライブラリ使った方が良いと思います。</p>
-<h1 id="heading4">ノート</h1>
+
+<h1 id="ノート">ノート</h1>
+
 <ul>
 <li>ループアンローリングの部分をイテレーションコストで説明しましたが他にも1ループ内の命令数が増えると組み合わせパズルのピースが増えるので最適化されやすくなります。まあ、SBCLは覗き穴最適化をほとんどしないのであまり意味ありませんが。気になる方はディスアセンブルしてみて下さい。</li>
 <li>このあと、 <code>(aref mb k col)</code> がCPUキャッシュを無駄にしているという話からキャッシュサイズ毎に行、列を分けて計算するやり方を紹介しようとしたのですが逆に遅くなってしまいました。付録Aにコードを置いておきます。うーむ。</li>
@@ -287,7 +309,8 @@
 <li>パタヘネ的にはSIMDも使うのですが深夜に近付いてきて面倒になったのでこの辺でやめました。Common Lisp(SBCL)からSIMD命令を使うには<a href="http://keens.github.io/blog/2014/12/02/vopdeyou-bu/">私の過去のエントリ</a>を参照して下さい。</li>
 <li>本気で行列計算をしたいなら今回の $O(n^3)$ のアルゴリズムだけでなくStrassenのアルゴリズムやCoppersmith-Winogradのアルゴリズムも検討すべきです。</li>
 </ul>
-<h1 id="a">付録A</h1>
+
+<h1 id="付録a">付録A</h1>
 <div class="highlight"><pre class="chroma"><code class="language-lisp" data-lang="lisp"><span class="p">(</span><span class="nb">defun</span> <span class="nv">segmented-gemm</span> <span class="p">(</span><span class="nv">ma</span> <span class="nv">mb</span><span class="p">)</span>
   <span class="s">&#34;Common Lispのみを使った行列積の計算&#34;</span>
   <span class="p">(</span><span class="k">declare</span> <span class="p">(</span><span class="k">optimize</span> <span class="p">(</span><span class="nv">speed</span> <span class="mi">3</span><span class="p">)</span> <span class="p">(</span><span class="nv">debug</span> <span class="mi">0</span><span class="p">)</span> <span class="p">(</span><span class="nv">safety</span> <span class="mi">0</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
@@ -316,8 +339,7 @@
                  <span class="p">(</span><span class="nb">setf</span> <span class="nv">res</span>
                        <span class="p">(</span><span class="k">the</span> <span class="kt">single-float</span> <span class="p">(</span><span class="nf">+</span> <span class="nv">res</span> <span class="p">(</span><span class="nf">*</span> <span class="p">(</span><span class="nf">aref</span> <span class="nv">ma</span> <span class="nv">row</span> <span class="nv">k</span><span class="p">)</span> <span class="p">(</span><span class="nf">aref</span> <span class="nv">mb</span> <span class="nv">k</span> <span class="nv">col</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
                <span class="p">(</span><span class="nb">setf</span> <span class="p">(</span><span class="nf">aref</span> <span class="nv">result</span> <span class="nv">row</span> <span class="nv">col</span><span class="p">)</span> <span class="nv">res</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
-      <span class="nv">result</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
-</code></pre></div>
+      <span class="nv">result</span><span class="p">)</span><span class="p">)</span><span class="p">)</span></code></pre></div>
                     </section>
                 </article>
             </div>

@@ -113,61 +113,92 @@
                     <section>
                         <p>日夜CPSに励む紳士淑女のみなさなまこんにちは、κeenです。CPS変換について掘り返してたら発散していったので適当に書き留めておきます。
 主に自分向けのメモで、あとで思い出すために書いてるので私自身以外には分かりづらいと思います。</p>
+
 <h1 id="cps">CPS</h1>
+
 <p>最初はcall-by-nameをcall-by-valueでエミュレーションするために導入されたっぽい。</p>
+
 <p>Plotkin, G. D. &ldquo;Call-by-name, call-by-value, and the λ-calculus,&rdquo; Theoretical Computer Science, Vol. 1, No. 2,pp. 125–159 (December 1975).</p>
+
 <p>変換規則は以下。</p>
+
 <p>\[
 \begin{align}
-[x] &amp;= \lambda\kappa.\kappa x \\\<br>
-\[\lambda x.M] &amp;= \lambda\kappa.\kappa (\lambda{}x.[M]) \\\<br>
-\[M N] &amp;= \lambda\kappa[M] (\lambda{}m.[N] (\lambda{}n.(m n) \kappa))
+[x] &amp;= \lambda\kappa.\kappa x \\<br />
+[\lambda x.M] &amp;= \lambda\kappa.\kappa (\lambda{}x.[M]) \\<br />
+[M N] &amp;= \lambda\kappa[M] (\lambda{}m.[N] (\lambda{}n.(m n) \kappa))
 \end{align}
 \]</p>
+
 <p>存外シンプル。CPSと呼ばれだしたのはSchemeのRabbitコンパイラ（Steele Jr., G. L. 1978）からっぽい？</p>
+
 <p>ただしこれは動くだけで便利じゃない。例えば以下のような式を考える。</p>
+
 <p>\[
 \lambda{}f.\lambda{}x.\lambda{}y.(f y) x
 \]</p>
+
 <p>これをCPSすると以下のようになる。</p>
+
 <p>\[
 \lambda\kappa.\kappa (\lambda{}f.\lambda\kappa.k (\lambda{}x.\lambda\kappa.k(\lambda{}y.\lambda\kappa.(\lambda\kappa.(\lambda\kappa.\kappa f)(\lambda{}m.(\lambda\kappa.k y)(\lambda{}n.(m n)\kappa)))
-(\lambda{}m.(\lambda\kappa.\kappa x)(lambda{}n.(m n) \kappa)))))
+                                                                                                 (\lambda{}m.(\lambda\kappa.\kappa x)(lambda{}n.(m n) \kappa)))))
 \]</p>
+
 <p>これには簡約基(redex)があるので簡約するとこうなる（post-reduction）。</p>
+
 <p>\[
 \lambda\kappa.\kappa (\lambda{}f.\lambda\kappa.k (\lambda{}x.\lambda\kappa.k(\lambda{}y.\lambda\kappa.(f y)(\lambda{}m.(m x) k))))
 \]</p>
+
 <p>これで変換したものが得られたが、途中で簡約を挟んでいる。今回は元の式に簡約基がなかったがもし簡約基を持つ式をCPSするとpost-reductionで元の式の簡約基まで潰れてしまう。</p>
+
 <p>これでは困るのでCPSに工夫を加える。
 CPSの結果として残る項と変換処理の都合上導入された項を区別する。
 それが</p>
+
 <p>Danvy, O and Filinski, A. &ldquo;Representing contril: a study of the CPS transformation,&rdquo; Math. Struct. in Comp. Science (1992), vol. 2, pp. 361-391.</p>
+
 <p>関数適用にもアノテーションが必要なため、記法の都合で適用に $@$ 印を付けることにすると、こういうような規則になる。</p>
+
 <p>\[
 \begin{align}
-[x] &amp;= \overline{\lambda}\kappa.\overline{@}\kappa x \\\<br>
-\[\lambda{}x.M] &amp;= \overline{\lambda}\kappa.\overline{@}\kappa (\underline{\lambda}x.\underline{\lambda}\kappa.\overline{@}[M] (\overline{\lambda}m.\underline{@}\kappa m)) \\\<br>
-\[@M N] &amp;= \overline{\lambda}\kappa.\overline{@}[M] (\overline{\lambda}m.\overline{@}[N] (\overline{\lambda}n.\underline{@}(\underline{@}m n) (\underline{\lambda}a.\overline{@}\kappa a)))
+[x] &amp;= \overline{\lambda}\kappa.\overline{@}\kappa x \\<br />
+[\lambda{}x.M] &amp;= \overline{\lambda}\kappa.\overline{@}\kappa (\underline{\lambda}x.\underline{\lambda}\kappa.\overline{@}[M] (\overline{\lambda}m.\underline{@}\kappa m)) \\<br />
+[@M N] &amp;= \overline{\lambda}\kappa.\overline{@}[M] (\overline{\lambda}m.\overline{@}[N] (\overline{\lambda}n.\underline{@}(\underline{@}m n) (\underline{\lambda}a.\overline{@}\kappa a)))
 \end{align}
 \]</p>
+
 <p>上線がstaticな項で、CPS変換中に簡約してよい。下線がdynamicな項で、CPS変換後も残らないといけない。</p>
+
 <p>というのが基本。</p>
+
 <p>理論的なCPS変換としては上記でいいが、実用上はやっぱり不便、というか遅い。 $\lambda$ 抽象が多すぎる。
 そもそもなんのためにCPS変換するの、というのを考えないといけないが自分の場合は <code>call/cc</code> や <code>shift</code> / <code>reset</code> を実装したいから。
 となると継続が必要になる式だけCPSしたら速いんじゃねというのがSelective CPS。</p>
+
 <p>色々な切り口から色々な手法が出てるけどこれ出しとけばいいのかな。</p>
+
 <p>Nielsen, L.R. &ldquo;A Selective CPS Transformation,&rdquo; Electronic Notes in Theoretical Computer Science 45 (2001)</p>
+
 <p>これはeffect分析を用いて変換する。
 雑にいうと <code>callcc</code> や <code>throw</code> を内包する式を内側から順にマークしていって、マークのついている式だけを変換する。
 多分みんなの思ってる通りのやつ。</p>
+
 <p>あとは型主導だと浅井研のこれが好き。</p>
+
 <p>Asai, K. and Uehara, C. &ldquo;Selective CPS transformation for shift and reset,&rdquo; PEPM &lsquo;18 Proceedings of the ACM SIGPLAN Workshop on Partial Evaluation and Program Manipulation Pages 40-52 (2018)</p>
+
 <p>型主導なのでShift/Resetに型が付く言語という縛りが出るけどやっぱ型主導翻訳って楽しいよね。</p>
-<h1 id="heading">型</h1>
+
+<h1 id="型">型</h1>
+
 <p>あんまり型には興味ない。浅井先生の <code>printf</code> が有名。</p>
+
 <p>Asai, K. &ldquo;On Typing Delimited Continuations: Three New Solutions to the Printf Problem,&rdquo; Higher-Order and Symbolic Computation, Vol. 22, No. 3, pp. 275-291, Springer (2009).</p>
+
 <p>これはCPSとか型付けとかShift/ResetとかAnswer Typeとかを丁寧に解説してるのでオススメ。</p>
+
 <p>元はDanvyがCPSで書いたコードだけどそれを限定継続で再実装してみるとFilinskiのshift/resetの実装で型チェック通らないという話。
 俎上に上がってる <code>(s)printf</code> は以下のように使う。</p>
 <div class="highlight"><pre class="chroma"><code class="language-ocaml" data-lang="ocaml"><span class="c">(*</span><span class="c"> string </span><span class="c">*)</span>
@@ -187,8 +218,9 @@ CPSの結果として残る項と変換処理の都合上導入された項を�
 
 <span class="c">(*</span><span class="c"> string </span><span class="c">*)</span>
 <span class="n">sprintf</span> <span class="o">(</span><span class="n">lit</span> <span class="s2">&#34;</span><span class="s2">The value of </span><span class="s2">&#34;</span> <span class="o">+</span><span class="o">+</span> <span class="o">%</span> <span class="n">str</span> <span class="o">+</span><span class="o">+</span> <span class="n">lit</span> <span class="s2">&#34;</span><span class="s2"> is </span><span class="s2">&#34;</span> <span class="o">+</span><span class="o">+</span> <span class="o">%</span> <span class="kt">int</span> <span class="o">+</span><span class="o">+</span> <span class="n">eol</span><span class="o">)</span> <span class="s2">&#34;</span><span class="s2">x</span><span class="s2">&#34;</span> <span class="n">3</span>
-<span class="c">(*</span><span class="c"> -&gt; &#34;The value of x is 3\n&#34; </span><span class="c">*)</span>
-</code></pre></div><p>見てのとおり引数に応じて型が変わる仕組みになってる。</p>
+<span class="c">(*</span><span class="c"> -&gt; &#34;The value of x is 3\n&#34; </span><span class="c">*)</span></code></pre></div>
+<p>見てのとおり引数に応じて型が変わる仕組みになってる。</p>
+
 <p>元々はCPSだけど少し複雑なのでshift/resetで再実装したものだけ載せるとこう。
 全体的にパターンは文字列を受け取って文字列を返す関数になってる。</p>
 <div class="highlight"><pre class="chroma"><code class="language-ocaml" data-lang="ocaml"><span class="c">(*</span><span class="c">  lit : string -&gt; string -&gt; string  </span><span class="c">*)</span>
@@ -210,105 +242,147 @@ CPSの結果として残る項と変換処理の都合上導入された項を�
 <span class="k">let</span> <span class="o">%</span> <span class="n">to_str</span> <span class="o">=</span> <span class="k">fun</span> <span class="n">s</span> <span class="o">-&gt;</span> <span class="n">shift</span> <span class="o">(</span><span class="k">fun</span> <span class="n">k</span> <span class="o">-&gt;</span> <span class="k">fun</span> <span class="n">x</span> <span class="o">-&gt;</span> <span class="n">k</span> <span class="o">(</span><span class="n">s</span> <span class="o">^</span> <span class="n">to_str</span> <span class="n">x</span><span class="o">)</span><span class="o">)</span>
 
 <span class="c">(*</span><span class="c"> ??? </span><span class="c">*)</span>
-<span class="k">let</span> <span class="n">sprintf</span> <span class="n">p</span> <span class="o">=</span> <span class="n">reset</span> <span class="o">(</span><span class="k">fun</span> <span class="bp">()</span> <span class="o">-&gt;</span> <span class="n">p</span> <span class="s2">&#34;</span><span class="s2">&#34;</span><span class="o">)</span>
-</code></pre></div><p><code>%</code> が一旦継続を破棄して <code>reset</code> まで返り、必要な引数を受け取ってから継続を再起動する設計。
+<span class="k">let</span> <span class="n">sprintf</span> <span class="n">p</span> <span class="o">=</span> <span class="n">reset</span> <span class="o">(</span><span class="k">fun</span> <span class="bp">()</span> <span class="o">-&gt;</span> <span class="n">p</span> <span class="s2">&#34;</span><span class="s2">&#34;</span><span class="o">)</span></code></pre></div>
+<p><code>%</code> が一旦継続を破棄して <code>reset</code> まで返り、必要な引数を受け取ってから継続を再起動する設計。
 素直に <code>k</code> をtail callしていないのがポイントで、このせいで型付けが難しくなっている。</p>
+
 <p><code>%</code> と <code>reset</code> の型は一旦棚上げしておいて、もし動的型付言語などで実行すると以下のように簡約が進む。</p>
 <div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">   sprintf (lit &#34;Hello &#34; ++ % str ++ lit &#34;!&#34; ++ eol)
 → reset (fun () -&gt; (lit &#34;Hello &#34; ++ % str ++ lit &#34;!&#34; ++ eol) &#34;&#34;)
 → reset (fun () -&gt; eol (lit &#34;!&#34; (% str (lit &#34;Hello &#34; &#34;&#34;))))
 → reset (fun () -&gt; eol (lit &#34;!&#34; (% str &#34;Hello &#34;)))
-→ fun x -&gt; reset (fun () -&gt; eol (lit &#34;!&#34; (&#34;Hello &#34; ^ str x)))
-</code></pre></div><p>パッと見 <code>lit</code> とか使ってるので <code>string</code> が出てきそうなbodyから <code>fun x -&gt; ...</code> が出てきちゃいました、というのが型の問題。</p>
+→ fun x -&gt; reset (fun () -&gt; eol (lit &#34;!&#34; (&#34;Hello &#34; ^ str x)))</code></pre></div>
+<p>パッと見 <code>lit</code> とか使ってるので <code>string</code> が出てきそうなbodyから <code>fun x -&gt; ...</code> が出てきちゃいました、というのが型の問題。</p>
+
 <p>ここで一旦Answer Typeが出てくる。Answer Typeは初期継続の返り値型で、要するに <code>reset</code> の返り値の型になる。
 Answer Typeの概念を用いてCPSを説明すると、直接形式のプログラム <code>S -&gt; T</code> をCPS変換すると <code>(T -&gt; Ans) -&gt; S -&gt; Ans</code> になる。対偶っぽい見た目。</p>
+
 <p>直接形式のプログラムだけならそれでいいのだが、 <code>shift</code> が出てくると話がややこしくなる。
 先の例のように、元々 <code>string</code> 型が出てくる予定だった <code>reset</code> から <code>fun x -&gt; ...</code> が出てきた訳で、 <code>shift</code> を呼ぶとAnswer Typeが変化することが分かる。
 Filinskiのshift/resetの実装はこのAnswer Type Modificationをサポートしていなかったので問題が起きた。</p>
+
 <p>元々のshift/resetの理論ははAnswer Type Modificacionをサポートしていたらしい。
 <code>S -&gt; T</code> をCPSすると <code>(T -&gt; A) -&gt; S -&gt; A</code> になっていたが、Answer Typeが変わりうることを考慮すると <code>(T -&gt; A) -&gt; S -&gt; B</code> になる。
 これを <code>shift</code> / <code>reset</code> の体系で（陽に継続を扱わない体系で） 表現しようとするとAnswer Type Modificationをする関数は <code>S/A -&gt; T/B</code> と表記することになる。
 <code>shift</code> を呼ばないpureな関数はAnswer Typeに影響がないので <code>S/'p -&gt; T/'p</code> と型が付く。</p>
+
 <p>これを導入すると <code>%</code> に型が付く。</p>
 <div class="highlight"><pre class="chroma"><code class="language-ocaml" data-lang="ocaml"><span class="c">(*</span><span class="c">  % : </span><span class="c">(</span><span class="c">’b -&gt; string</span><span class="c">)</span><span class="c"> -&gt; </span><span class="c">(</span><span class="c">string / ’a -&gt; string / </span><span class="c">(</span><span class="c">’b -&gt; ’a</span><span class="c">)</span><span class="c">)</span><span class="c">  </span><span class="c">*)</span>
-<span class="k">let</span> <span class="o">%</span> <span class="n">to_str</span> <span class="o">=</span> <span class="k">fun</span> <span class="n">s</span> <span class="o">-&gt;</span> <span class="n">shift</span> <span class="o">(</span><span class="k">fun</span> <span class="n">k</span> <span class="o">-&gt;</span> <span class="k">fun</span> <span class="n">x</span> <span class="o">-&gt;</span> <span class="n">k</span> <span class="o">(</span><span class="n">s</span> <span class="o">^</span> <span class="n">to_str</span> <span class="n">x</span><span class="o">)</span><span class="o">)</span>
-</code></pre></div><p>answer typeが <code>'a</code> から <code>'b -&gt; 'a</code> に変わっているのが分かる。</p>
+<span class="k">let</span> <span class="o">%</span> <span class="n">to_str</span> <span class="o">=</span> <span class="k">fun</span> <span class="n">s</span> <span class="o">-&gt;</span> <span class="n">shift</span> <span class="o">(</span><span class="k">fun</span> <span class="n">k</span> <span class="o">-&gt;</span> <span class="k">fun</span> <span class="n">x</span> <span class="o">-&gt;</span> <span class="n">k</span> <span class="o">(</span><span class="n">s</span> <span class="o">^</span> <span class="n">to_str</span> <span class="n">x</span><span class="o">)</span><span class="o">)</span></code></pre></div>
+<p>answer typeが <code>'a</code> から <code>'b -&gt; 'a</code> に変わっているのが分かる。</p>
+
 <p>同様に <code>sprintf</code> にも型が付く。</p>
 <div class="highlight"><pre class="chroma"><code class="language-ocaml" data-lang="ocaml"><span class="c">(*</span><span class="c">  sprintf : </span><span class="c">(</span><span class="c">string / string -&gt; string / ’a</span><span class="c">)</span><span class="c"> -&gt; ’a  </span><span class="c">*)</span>
-<span class="k">let</span> <span class="n">sprintf</span> <span class="n">p</span> <span class="o">=</span> <span class="n">reset</span> <span class="o">(</span><span class="k">fun</span> <span class="bp">()</span> <span class="o">-&gt;</span> <span class="n">p</span> <span class="s2">&#34;</span><span class="s2">&#34;</span><span class="o">)</span>
-</code></pre></div><p>ちゃんと「<code>string</code> が出てきそうな <code>body</code> から <code>fun x -&gt; ...</code> (<code>'a</code>) が出てきちゃった」が表現されている。</p>
-<h1 id="heading1">計算体系</h1>
+<span class="k">let</span> <span class="n">sprintf</span> <span class="n">p</span> <span class="o">=</span> <span class="n">reset</span> <span class="o">(</span><span class="k">fun</span> <span class="bp">()</span> <span class="o">-&gt;</span> <span class="n">p</span> <span class="s2">&#34;</span><span class="s2">&#34;</span><span class="o">)</span></code></pre></div>
+<p>ちゃんと「<code>string</code> が出てきそうな <code>body</code> から <code>fun x -&gt; ...</code> (<code>'a</code>) が出てきちゃった」が表現されている。</p>
+
+<h1 id="計算体系">計算体系</h1>
+
 <p>初期の $\lambda_v-C$ とかもあるっぽいけどよく分かんないのでSLCから。
 浅井先生のスライドが分かりやすい。</p>
+
 <p>A Reinvestigation of Filinski’s Symmetric Lambda Calculus <a href="http://www.cs.ox.ac.uk/ralf.hinze/WG2.8/27/slides/kenichi1.pdf">PDF</a></p>
+
 <p>Filinskiの論文はこれ。</p>
-<p>Filinski, A. &ldquo;Declarative Continuations and Categorical Duality,&rdquo; Master's thesis, DIKU Report89/11, University of Copenhagen (1989).</p>
+
+<p>Filinski, A. &ldquo;Declarative Continuations and Categorical Duality,&rdquo; Master&rsquo;s thesis, DIKU Report89/11, University of Copenhagen (1989).</p>
+
 <p>Symmetric Lambda Calculsは「継続って値の双対だよね」という話から始まる（あとcall-by-valueとcall-by-nameも双対）。
 なので継続も値と同じように第一級に扱える計算体系になっている。
 関数も値 <code>A</code> を 値 <code>B</code> に変換する <code>A -&gt; B</code> と <code>B</code> の継続を <code>A</code> の継続に変換する <code>¬A &lt;- ¬B</code> がある。</p>
+
 <p>SLCが何故そのまま研究されなかったかは知らないけど（見た目がキモいから？）、そのあと $\lambda$ 計算に <code>call/cc</code> を入れた $\lambda\mu$ 計算が登場した。</p>
-<p>Parigot, M. &ldquo;λμ-calculus: An Algorithmic Interpretation of Classical Natural Deduction,&rdquo;&rdquo; In A.Voronkov, editor,Logic Programming and Automated Reasoning (LNCS 624), pp. 190–201 (1992).</p>
+
+<p>Parigot, M. &ldquo;λμ-calculus: An Algorithmic Interpretation of Classical Natural Deduction,&ldquo;&rdquo; In A.Voronkov, editor,Logic Programming and Automated Reasoning (LNCS 624), pp. 190–201 (1992).</p>
+
 <p>これ、Classical Natural Deductionといってシーケント計算が使われてるんですがそういうもんですかね（注意書きでProofs of usual natural deduction are easely translated in this systemとは書かれている）。
-$\lambda\mu$ 計算は自然演繹。</p>
+ $\lambda\mu$ 計算は自然演繹。</p>
+
 <p>さらにその後計算に対称性を持たせて自然演繹ではなくLKのシーケント計算に対応させた $\overline{\lambda}\mu\tilde\mu$ (ラムダ・バー・ミュー・ミュー・チルダ) 計算が出た。</p>
-<p>Curien, P.-L., and H. Herbelin &ldquo;The Duality of Computation,&rdquo; Proceedings of the ACM SIGPLANInternational Conference on Functional Programming (ICFP'00), pp. 233–243 (2000).</p>
+
+<p>Curien, P.-L., and H. Herbelin &ldquo;The Duality of Computation,&rdquo; Proceedings of the ACM SIGPLANInternational Conference on Functional Programming (ICFP&rsquo;00), pp. 233–243 (2000).</p>
+
 <p>これは読みやすいのでおすすめ。ただしシーケント計算を知ってないと文脈が分かりづらい。
 $\overline{\lambda}$ になるとシーケント計算になって、それに $\mu$ と $\tilde\mu$ を加えたっぽい？
 $\tilde\mu$ はcall-by-nameの上でcall-by-valueをするための演算子で、 $\mu$ の双対になる。実質 <code>let</code>。</p>
+
 <p>以下が $\overline{\lambda}\mu\tilde\mu$ の構文。</p>
+
 <p>\[
 \begin{align}
-c &amp;::= \langle{}v|e\rangle \\\<br>
-v &amp;::= x ‖ \mu\beta.c ‖ \lambda{}x.v \\\<br>
-e &amp;::= \alpha ‖ \tilde\mu{}x.c ‖ v\cdot{}e \\\<br>
+c &amp;::= \langle{}v|e\rangle \\<br />
+v &amp;::= x ‖ \mu\beta.c ‖ \lambda{}x.v \\<br />
+e &amp;::= \alpha ‖ \tilde\mu{}x.c ‖ v\cdot{}e \\<br />
 \end{align}
 \]</p>
+
 <p>普通の $\lambda$ 計算に慣れてると戸惑うが、値に継続（評価文脈）を当て嵌めるとそれはコマンドになる。
 $\mu$ が継続を受け取ってコマンドを返す項で、 $\tilde\mu$ が値を受け取ってコマンドを返す項。
 $\lambda{}x.v$ は何かしらの値を受け取りある値を返す項で、 $v\cdot{}e$ はある値 $v$ を供出し、何かしらの値を $e$ で受け取る項。</p>
+
 <p>評価規則は以下のようになる。</p>
+
 <p>\[
 \begin{align}
-(\to^\prime) \quad &amp; \langle\lambda{}x.v_1|v_2\cdot{}e\rangle &amp; \to \quad &amp; \langle{}v_2|\tilde\mu{}x.\langle{}v_1|e\rangle\rangle \\\<br>
-(\mu)        \quad &amp; \langle\mu\beta.c|e\rangle               &amp; \to \quad &amp; c[\beta \leftarrow e] \\\<br>
+(\to^\prime) \quad &amp; \langle\lambda{}x.v_1|v_2\cdot{}e\rangle &amp; \to \quad &amp; \langle{}v_2|\tilde\mu{}x.\langle{}v_1|e\rangle\rangle \\<br />
+(\mu)        \quad &amp; \langle\mu\beta.c|e\rangle               &amp; \to \quad &amp; c[\beta \leftarrow e] \\<br />
 (\tilde\mu ) \quad &amp; \langle{}v|\tilde\mu{}x.c\rangle         &amp; \to \quad &amp; c[x \leftarrow v]
 \end{align}
 \]</p>
+
 <p>これの $(\mu)$ を先に適用すればCBVになり、 $(\tilde\mu)$ を先に適用すればCBNになる。</p>
+
 <p>型判断が初見だと分かりづらい。記法に以下の3種類がある。</p>
+
 <p>\[
-c: (\Gamma \vdash \Delta) \\\<br>
-\Gamma \vdash v : A | \Delta \\\<br>
+c: (\Gamma \vdash \Delta) \\<br />
+\Gamma \vdash v : A | \Delta \\<br />
 \Gamma | e : A \vdash \Delta
 \]</p>
+
 <p>コマンドは値と継続が揃ってるので判断式の型がつく。 $\Gamma$ が値の型環境で、 $\Delta$ が継続の型環境。
 値の型判断は $\Gamma \vdash v : A | \Delta$ で、 $\Delta$ は使ってないので $|$ で隔離されている。
 継続の型判断は $\Gamma | e : A \vdash \Delta$ で、 $\Gamma$ は使ってないので $|$ で隔離されている。</p>
+
 <p>継続の方、確かに値と双対な書き方なんだけどそう書くのかーという感じ。</p>
+
 <p>この記法を用いて型付け規則はこう書かれる。</p>
+
 <p>\[
-\frac{\Gamma \vdash v : A | \Delta  \qquad \Gamma | e : A \vdash \Delta}{\langle{}v|e\rangle : (\Gamma \vdash \Delta)} \\\<br>
+\frac{\Gamma \vdash v : A | \Delta  \qquad \Gamma | e : A \vdash \Delta}{\langle{}v|e\rangle : (\Gamma \vdash \Delta)} \\<br />
 \frac{}{\Gamma | \alpha : A \vdash \alpha : A, \Delta} \quad
-\frac{}{\Gamma, x : A \vdash x : A | \Delta} \\\<br>
+\frac{}{\Gamma, x : A \vdash x : A | \Delta} \\<br />
 \frac{c : (\Gamma \vdash \beta : B, \Delta)}{\Gamma \vdash \mu\beta.c : B | \Delta} \quad
-\frac{c : (\Gamma , x : A \vdash \Delta)}{\Gamma | \tilde\mu{}x.c : B \vdash \Delta} \\\<br>
+\frac{c : (\Gamma , x : A \vdash \Delta)}{\Gamma | \tilde\mu{}x.c : B \vdash \Delta} \\<br />
 \frac{\Gamma \vdash v : A | \Delta \qquad \Gamma | e : B \vdash \Delta}{\Gamma | v\cdot{}e : A \to B \vdash \Delta} \quad
 \frac{\Gamma, x : A \vdash v : B | \Delta}{\Gamma \vdash \lambda{}x.v : A \to B | \Delta}
 \]</p>
+
 <p>なんか最後の2つだけ対称性が悪い。なので値に $e\cdot{}v$ を、継続に $\beta\lambda.e$ を加えて対称にする拡張もある。</p>
+
 <p>これより先は知らない。浅井先生のスライドによるとWadlerのやつがあるらしいけど未読。</p>
+
 <p>先というか応用例だとSequent Coreがある。</p>
-<p>Downen, P. Maurer, L. Ariola, Z. M. and Peyton Jones, S. &ldquo;Sequent calculus as a compiler intermediate language,&rdquo; Proceedings of the 21st ACM SIGPLAN International Conference on Functional Programming, ICFP 2016, Nara, Japan, September 18-22, 2016, pages 74–88 (2016).<br>
+
+<p>Downen, P. Maurer, L. Ariola, Z. M. and Peyton Jones, S. &ldquo;Sequent calculus as a compiler intermediate language,&rdquo; Proceedings of the 21st ACM SIGPLAN International Conference on Functional Programming, ICFP 2016, Nara, Japan, September 18-22, 2016, pages 74–88 (2016).<br />
 Maurer, L. Downen, P. Ariola, Z. M. and Peyton Jones, S. &ldquo;Compiling without continuations,&rdquo; PLDI 2017 Proceedings of the 38th ACM SIGPLAN Conference on Programming Language Design and Implementation, Pages 482-494 (2017)</p>
-<h1 id="heading2">実行</h1>
+
+<h1 id="実行">実行</h1>
+
 <p>継続を陽に扱える仮想機械にCEKマシンがある。あんまり情報がない。
 Felleisen, M. Flatt, M. &ldquo;Programming languages and lambda caluculi&rdquo; で紹介されているのは確認した。
 元論文は以下？</p>
+
 <p>M. Felleisen and D. P. Friedman. &ldquo;Control Operators, the SECD-Machine, and the λ-Calculus,&rdquo; Indiana University, Computer Science Department (1986).</p>
+
 <p>継続を陽に扱う処理系作るならSelective CPSかCEKマシンかなーと思いつつCEKマシンの情報が少ない。</p>
-<h1 id="heading3">その他</h1>
+
+<h1 id="その他">その他</h1>
+
 <p>そういえばshift/resetってどこが発祥なんだろう。というのが気になった。これかな？</p>
+
 <p>shift/reset: Danvy, O. and Filinski, A. &ldquo;A Functional Abstraction of Typed Contexts,&rdquo; Technical Report89/12, DISK, University of Copenhagen, (1989).</p>
+
 <p>control/prompt: Felleisen, M. &ldquo;The Theory and Practice of First-Class Prompts,&rdquo; proceedings of the Fifteenth Annual ACM SIGACT-SIGPLAN Symposium on Principles of Programming Languages pp 180-190, San Diego, California (1988).</p>
                     </section>
                 </article>

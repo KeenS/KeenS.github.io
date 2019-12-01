@@ -129,35 +129,45 @@
                     <section>
                         <p>κeenです。この記事は<a href="https://qiita.com/advent-calendar/2017/webassembly">WebAssembly Advent Calendar 2017</a> 8日目の記事です。WebAssemblyでガーベジコレクションする話。
 2017-12-08: ページサイズに関する誤りを訂正しました。その他加筆。</p>
+
 <p>はじめてWebAssemblyを聞いたとき、「ブラウザでアセンブラが動くのか、よし、コンパイラを作ろう」と思ったかと思います。
 私もそのうちの一人で去年頃<a href="https://github.com/KeenS/webml">こんなコンパイラ</a>を作り始めました。
 しかしご覧のように進捗芳しくありません。
 進捗が悪い理由の1つにGCがあります。最初はGCをCかRustで書いてemscriptenを通すつもりでしたがemscriptenを通したコードはどうにも扱いづらく、すぐに断念しました。
 今でこそRustのwasm32-unknown-unknownのターゲットがありますが当時はemscriptenしか選択肢がありませんでした。</p>
+
 <p>また、wasmには<a href="https://github.com/WebAssembly/design/issues/1079">GCサポートが追加される予定</a>ですがまだ使えないので絵に書いた餅。</p>
+
 <p>残る手段は1つ。アセンブラ手書きです。アセンブラ手書きでGCを書いていきます。</p>
-<h1 id="heading">リニアメモリ</h1>
+
+<h1 id="リニアメモリ">リニアメモリ</h1>
+
 <p>GCの前にリニアメモリを押さえておきましょう。詳しくは<a href="http://webassembly.org/docs/semantics/#linear-memory">ドキュメント</a>をみて下さい。ここで覚えておいてほしいのは</p>
+
 <ul>
 <li>アドレスは <em>0から始まって</em> 飛びがない</li>
 <li>データはナチュラルアラインされた方がアクセスは速いがアラインされていなくてもアクセス可能</li>
 <li>メモリは(wasm32では)Max 4GiB。ポインタも32bit</li>
 <li>メモリは<code>grow_memory</code>で<del>16KiB</del>64KiB単位で増やせる <a href="https://twitter.com/tzik_tack/status/938811214704009220">tzikさん指摘ありがとうございます。</a></li>
 <li>メモリはモジュール間でimport/exportできる
+
 <ul>
 <li>GCモジュールとミューテータ(言語)に分けられる</li>
+</ul></li>
 </ul>
-</li>
-</ul>
+
 <p>アドレスが0から始まるので保守的GCが少しやりづらそう？</p>
-<h1 id="heading1">肩慣らし</h1>
+
+<h1 id="肩慣らし">肩慣らし</h1>
+
 <p>いきなりどんとGCが来ても困ると思うので軽くwasmのコードを書いてみましょう。
 とはいっても生の.watは少々書きづらくマクロを使いたいので生成することを考えます。
 ここは餅は餅屋、S式はLispで異論ないと思います。</p>
+
 <p>まずは準備。外部コマンドを使うので<code>uiop</code>を使い、シンボルが大文字にならないようにread-caseを<code>:invert</code>にしておきます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-lisp" data-lang="lisp"><span class="p">(</span><span class="nf">require</span> <span class="ss">&#39;uiop</span><span class="p">)</span>
-<span class="p">(</span><span class="nb">setf</span> <span class="p">(</span><span class="nf">readtable-case</span> <span class="vg">*readtable*</span><span class="p">)</span> <span class="ss">:invert</span><span class="p">)</span>
-</code></pre></div><p>さて、生成自体は簡単で、</p>
+<span class="p">(</span><span class="nb">setf</span> <span class="p">(</span><span class="nf">readtable-case</span> <span class="vg">*readtable*</span><span class="p">)</span> <span class="ss">:invert</span><span class="p">)</span></code></pre></div>
+<p>さて、生成自体は簡単で、</p>
 <div class="highlight"><pre class="chroma"><code class="language-lisp" data-lang="lisp"><span class="p">(</span><span class="nf">print</span> <span class="o">&#39;</span><span class="p">(</span><span class="nv">module</span>
   <span class="p">(</span><span class="nv">func</span> <span class="nv">$i</span> <span class="p">(</span><span class="nf">import</span> <span class="s">&#34;imports&#34;</span> <span class="s">&#34;imported_func&#34;</span><span class="p">)</span> <span class="p">(</span><span class="nv">param</span> <span class="nv">i32</span><span class="p">)</span><span class="p">)</span>
   <span class="p">(</span><span class="nv">func</span> <span class="nv">$new_page</span>
@@ -168,16 +178,17 @@
     <span class="p">(</span><span class="nv">call</span> <span class="nv">$new_page</span><span class="p">)</span>
     <span class="p">(</span><span class="nv">call</span> <span class="nv">$i</span><span class="p">)</span><span class="p">)</span>
   <span class="p">(</span><span class="nv">memory</span> <span class="mi">1</span> <span class="mi">10</span><span class="p">)</span>
-<span class="p">)</span><span class="p">)</span>
-</code></pre></div><p>のように.watのコードを<code>print</code>してあげればOKです。もう少し皮を被せてアセンブルまでやるようにすれば</p>
+<span class="p">)</span><span class="p">)</span></code></pre></div>
+<p>のように.watのコードを<code>print</code>してあげればOKです。もう少し皮を被せてアセンブルまでやるようにすれば</p>
 <div class="highlight"><pre class="chroma"><code class="language-lisp" data-lang="lisp"><span class="p">(</span><span class="nb">defun</span> <span class="nv">write-wasm</span> <span class="p">(</span><span class="nv">filename</span> <span class="nv">wasm</span><span class="p">)</span>
   <span class="p">(</span><span class="nb">with-open-file</span> <span class="p">(</span><span class="nv">f</span> <span class="nv">filename</span> <span class="ss">:direction</span> <span class="ss">:output</span> <span class="ss">:if-does-not-exist</span> <span class="ss">:create</span> <span class="ss">:if-exists</span> <span class="ss">:supersede</span><span class="p">)</span>
     <span class="p">(</span><span class="nf">print</span> <span class="nv">wasm</span> <span class="nv">f</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
 
 <span class="p">(</span><span class="k">let</span> <span class="p">(</span><span class="p">(</span><span class="nv">wasm</span> <span class="nv">~~~~</span><span class="p">)</span><span class="p">)</span>
   <span class="p">(</span><span class="nv">write-wasm</span> <span class="s">&#34;simple.wat&#34;</span> <span class="nv">wasm</span><span class="p">)</span>
-  <span class="p">(</span><span class="nv">uiop:run-program</span> <span class="s">&#34;wast2wasm simple.wat -o simple.wasm&#34;</span><span class="p">)</span><span class="p">)</span>
-</code></pre></div><p>こうなり、ファイルを実行すると<code>simple.wasm</code>の生成までやってくれます。</p>
+  <span class="p">(</span><span class="nv">uiop:run-program</span> <span class="s">&#34;wast2wasm simple.wat -o simple.wasm&#34;</span><span class="p">)</span><span class="p">)</span></code></pre></div>
+<p>こうなり、ファイルを実行すると<code>simple.wasm</code>の生成までやってくれます。</p>
+
 <p>あとはこういうファイルを用意してブラウザで開けば動きます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-html" data-lang="html"><span class="cp">&lt;!doctype html&gt;</span>
 <span class="p">&lt;</span><span class="nt">html</span> <span class="na">lang</span><span class="o">=</span><span class="s">&#34;en&#34;</span><span class="p"></span><span class="p">&gt;</span>
@@ -203,18 +214,24 @@
          <span class="p">}</span><span class="p">)</span><span class="p">;</span>
         <span class="p">&lt;</span><span class="p">/</span><span class="nt">script</span><span class="p">&gt;</span>
     <span class="p">&lt;</span><span class="p">/</span><span class="nt">body</span><span class="p">&gt;</span>
-<span class="p">&lt;</span><span class="p">/</span><span class="nt">html</span><span class="p">&gt;</span>
-</code></pre></div><h1 id="gc">GC</h1>
+<span class="p">&lt;</span><span class="p">/</span><span class="nt">html</span><span class="p">&gt;</span></code></pre></div>
+<h1 id="gc">GC</h1>
+
 <p>肩も馴れてもうwasmはいくらでも書けると思うのでGCを実装していきます。</p>
-<h2 id="heading2">戦略</h2>
+
+<h2 id="戦略">戦略</h2>
+
 <ul>
 <li>GCにも色々ありますがブラウザで動かす以上JSとのFFIもあるでしょうしnon-movingなものにしましょう</li>
 <li>grow_memoryでキリの良いアドレスが帰ってくるのでそれを使いましょう</li>
 <li>C言語と違って「このマクロをデータ型定義に埋め込めば何でもGCできます」とはいかないので(単純にマクロがないため)メタデータとデータは分離しましょう</li>
 <li>地味にスタックとレジスタの走査ができないのでポインタは手でヒープに退避しましょう。これがルートセットになります。</li>
 </ul>
+
 <p>ということでbitmap式のMark and Sweepを採用します。またかよと思った方、ええ、好きなんです。</p>
-<h2 id="heading3">イメージ</h2>
+
+<h2 id="イメージ">イメージ</h2>
+
 <p>このGCを使うときのイメージはこんな感じです。</p>
 <div class="highlight"><pre class="chroma"><code class="language-html" data-lang="html">(defwfun $main (<span class="err">&amp;</span>aux (gc i32) (state i32)) nil
   `(
@@ -240,9 +257,11 @@
     ; ポインタを保護してない状態でGCを走らせる
     (call $gc-run (get_local ,gc))
     ; 回収される
-    (call $print (call $gc--allocated-data (get_local ,gc)))))
-</code></pre></div><p>さて、イメージも湧いたところで作って行きます。</p>
-<h2 id="heading4">データレイアウト</h2>
+    (call $print (call $gc--allocated-data (get_local ,gc)))))</code></pre></div>
+<p>さて、イメージも湧いたところで作って行きます。</p>
+
+<h2 id="データレイアウト">データレイアウト</h2>
+
 <p>2種類の構造体を使います。それぞれ1ページ、<del>16KiB</del>64KiB使います。
 C言語風に書くとこうです。</p>
 <div class="highlight"><pre class="chroma"><code class="language-C" data-lang="C"><span class="k">struct</span> <span class="n">gc</span> <span class="p">{</span>
@@ -261,8 +280,8 @@ C言語風に書くとこうです。</p>
   <span class="c1">// in the number of cell
 </span><span class="c1"></span>  <span class="n">size_t</span> <span class="n">heap_size</span><span class="p">,</span>
   <span class="kt">void</span> <span class="p">(</span><span class="o">*</span><span class="n">data</span><span class="p">)</span><span class="p">[</span><span class="p">]</span>
-<span class="p">}</span><span class="p">;</span>
-</code></pre></div><p>図にするとこうです。</p>
+<span class="p">}</span><span class="p">;</span></code></pre></div>
+<p>図にするとこうです。</p>
 <pre><code>                         ポインタの一時退避場所↓
 +---+- ... -+---+-----------+------------+- ... -+
 | + | pages | + | arena_top | arena_size | arena | gc
@@ -282,25 +301,37 @@ C言語風に書くとこうです。</p>
 +---------+-|-+-----------+-----------+- .. -+
   +---------+
   |
-  x
+  x</code></pre>
+<p>図には1種類しか書かれてませんが<code>heap_page</code>は4byteから4096byteまで11種類のサイズ毎にリンクトリストが用意されています。</p>
 
-</code></pre><p>図には1種類しか書かれてませんが<code>heap_page</code>は4byteから4096byteまで11種類のサイズ毎にリンクトリストが用意されています。</p>
-<h3 id="heading5">アリーナ</h3>
+<h3 id="アリーナ">アリーナ</h3>
+
 <p>アリーナは代替スタック変数領域で、スタックとして使います。関数内でアロケートしたポインタはルートセットに含まれておらず、放っておくと回収されるのでアリーナに置いて保護します。
 GC時にはアリーナはルートセットになります。</p>
-<h3 id="heappagebitmaps">heap_pageとbitmaps</h3>
+
+<h3 id="heap-pageとbitmaps">heap_pageとbitmaps</h3>
+
 <p>宣言どおりデータとメタデータを分離してます。その他にもBitmap GCには色々利点があるので気になる方は調べてみて下さい。</p>
+
 <p>bitmapsとデータ領域は連動していて、bitmapsのn bit目が1ならデータ領域のnセル目が使用中です。アロケートするときはbitmapsを舐めて0なbitに対応するセルを使います。もちろんbitmapsのbitも立てます。
 GC時には一旦すべてのbitmapをクリアし、ルートセットから辿れるものにのみマークすればOKです。</p>
-<h3 id="heading6">ポインタとマーク</h3>
+
+<h3 id="ポインタとマーク">ポインタとマーク</h3>
+
 <p>さて、アロケートはマークからデータに飛ぶので問題ないのですが、マーク時はポインタからマークに飛ぶのでやや厄介です。
 ここはページが<del>16KiB</del>64KiBアラインされていることを使います。</p>
+
 <p>ページが<del>16KiB</del>64KiBアラインされているのでページのアドレスは下位<del>14bit</del>16bitが0です。なので単にポインタの下位<del>14bit</del>16bitをクリアしてあげると自分が所属しているページのアドレスが手に入るのです。</p>
-<h3 id="20171208--">2017-12-08 追記: 限界</h3>
+
+<h3 id="2017-12-08-追記-限界">2017-12-08 追記: 限界</h3>
+
 <p>ここでは4096 byteまでのページしか用意していません。それ以上はこのGCではアロケートに失敗というか<code>unreachable</code>に入ってエラーになります。ちゃんと実装するならフリーリストなどで管理しましょう。
 / 追記</p>
-<h2 id="heading7">実装</h2>
+
+<h2 id="実装">実装</h2>
+
 <p>淡々と実装していきます。Common Lispには解説を入れないので雰囲気で追って下さい</p>
+
 <p>まず使いそうな定数とWASMの関数を便利に書くマクロを準備します。</p>
 <div class="highlight"><pre class="chroma"><code class="language-common-lisp" data-lang="common-lisp"><span class="c1">; 訂正</span>
 <span class="c1">; (defparameter *page-size* (* 16  1024))</span>
@@ -345,19 +376,17 @@ GC時には一旦すべてのbitmapをクリアし、ルートセットから辿
                          <span class="o">,@</span><span class="ss">&#39;,local</span>
                          <span class="p">)</span>
                   <span class="o">,@</span><span class="nv">body</span><span class="p">)</span><span class="p">)</span>
-        <span class="vg">*wasm-funs*</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
-
-</code></pre></div><p>このマクロで関数はこのように書けます。</p>
+        <span class="vg">*wasm-funs*</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span></code></pre></div>
+<p>このマクロで関数はこのように書けます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-common-lisp" data-lang="common-lisp"><span class="p">(</span><span class="nv">defwfun</span> <span class="nv">$add</span> <span class="p">(</span><span class="p">(</span><span class="nv">x</span> <span class="nv">i32</span><span class="p">)</span> <span class="p">(</span><span class="nv">y</span> <span class="nv">i32</span><span class="p">)</span><span class="p">)</span> <span class="nv">i32</span>
-  <span class="o">`</span><span class="p">(</span><span class="p">(</span><span class="nv">i32.add</span> <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">x</span><span class="p">)</span> <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">y</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
+  <span class="o">`</span><span class="p">(</span><span class="p">(</span><span class="nv">i32.add</span> <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">x</span><span class="p">)</span> <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">y</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span></code></pre></div>
+<p>Common Lispの関数定義に倣って引数リストの<code>&amp;aux</code>以降はローカル変数とします。</p>
 
-</code></pre></div><p>Common Lispの関数定義に倣って引数リストの<code>&amp;aux</code>以降はローカル変数とします。</p>
 <p>ユーティリティ</p>
 <div class="highlight"><pre class="chroma"><code class="language-common-lisp" data-lang="common-lisp"><span class="c1">;;; utils</span>
 <span class="p">(</span><span class="nv">defwfun</span> <span class="nv">$new-page</span> <span class="p">(</span><span class="p">)</span> <span class="nv">i32</span>
-  <span class="o">`</span><span class="p">(</span><span class="p">(</span><span class="nv">i32.mul</span> <span class="p">(</span><span class="nv">i32.const</span> <span class="o">,</span><span class="vg">*page-size*</span><span class="p">)</span> <span class="p">(</span><span class="nv">grow_memory</span> <span class="p">(</span><span class="nv">i32.const</span> <span class="mi">1</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
-
-</code></pre></div><p>先の構造体に対応する定数を手作業で定義していきます。
+  <span class="o">`</span><span class="p">(</span><span class="p">(</span><span class="nv">i32.mul</span> <span class="p">(</span><span class="nv">i32.const</span> <span class="o">,</span><span class="vg">*page-size*</span><span class="p">)</span> <span class="p">(</span><span class="nv">grow_memory</span> <span class="p">(</span><span class="nv">i32.const</span> <span class="mi">1</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span></code></pre></div>
+<p>先の構造体に対応する定数を手作業で定義していきます。
 11のポインタの初期化などはCommon Lisp側の<code>loop</code>で自動生成します。</p>
 <div class="highlight"><pre class="chroma"><code class="language-common-lisp" data-lang="common-lisp"><span class="cm">#|</span><span class="cm">
 </span><span class="cm">struct gc {
@@ -438,11 +467,13 @@ GC時には一旦すべてのbitmapをクリアし、ルートセットから辿
     <span class="c1">;; heap-size</span>
     <span class="p">(</span><span class="nv">i32.store</span> <span class="o">,</span><span class="p">(</span><span class="nf">intern</span> <span class="p">(</span><span class="nf">format</span> <span class="no">nil</span> <span class="s">&#34;OFFSET=~a&#34;</span> <span class="vg">*offset-heap-page-heap-size*</span><span class="p">)</span><span class="p">)</span>
                <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">page</span><span class="p">)</span>
-               <span class="p">(</span><span class="nv">i32.div_u</span> <span class="p">(</span><span class="nv">i32.const</span> <span class="o">,</span><span class="p">(</span><span class="nf">-</span> <span class="vg">*page-size*</span> <span class="vg">*sizeof-heap-page*</span><span class="p">)</span><span class="p">)</span> <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">size</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
-
-</code></pre></div><p>ちょっとトリッキーなのが<code>load`/</code>store<code>のオフセットの指定。 </code>(i32.store offset=4 hoge fuga)<code>のように書くのですがCommon Lispでは</code>offset=4<code>一つでシンボル扱いになって動的生成が面倒です。</code>,(intern (format nil &ldquo;OFFSET=~a&rdquo; 4))<code>のように毎度</code>intern`で生成するゴリ押しでやってます。
+               <span class="p">(</span><span class="nv">i32.div_u</span> <span class="p">(</span><span class="nv">i32.const</span> <span class="o">,</span><span class="p">(</span><span class="nf">-</span> <span class="vg">*page-size*</span> <span class="vg">*sizeof-heap-page*</span><span class="p">)</span><span class="p">)</span> <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">size</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span></code></pre></div>
+<p>ちょっとトリッキーなのが<code>load</code>/<code>store</code>のオフセットの指定。
+<code>(i32.store offset=4 hoge fuga)</code>のように書くのですがCommon Lispでは<code>offset=4</code>一つでシンボル扱いになって動的生成が面倒です。<code>,(intern (format nil &quot;OFFSET=~a&quot; 4))</code>のように毎度<code>intern</code>で生成するゴリ押しでやってます。
 本当は関数に纏めたかったけどアセンブラ感が減るのでやめました。</p>
+
 <p><code>(assert (zerop (rem *sizeof-heap-page* 8)))</code>ですが、<code>heap_page</code>から取得したポインタが全て64bitアラインになるように配慮です。</p>
+
 <p>次にサイズから2の累乗に丸めあげる処理です。Cでいうマクロのように毎度インライン展開するようにCommon Lispの関数として定義します。単純な２分探索ですが、本当は4, 8 byteがよく使われるのでそれに合わせてアンバランスドな２分探索をした方がいいらしいです。</p>
 <div class="highlight"><pre class="chroma"><code class="language-common-lisp" data-lang="common-lisp"><span class="p">(</span><span class="nb">defun</span> <span class="nv">calc-heap-index</span> <span class="p">(</span><span class="nv">size</span><span class="p">)</span>
   <span class="c1">;; Simple binary search.</span>
@@ -490,8 +521,8 @@ GC時には一旦すべてのbitmapをクリアし、ルートセットから辿
                                         <span class="c1">; 2048 &lt; size &lt;= 4096</span>
                    <span class="p">(</span><span class="nv">i32.const</span> <span class="mi">10</span><span class="p">)</span>
                                         <span class="c1">; 4096 &lt; size</span>
-                   <span class="p">(</span><span class="nv">unreachable</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
-</code></pre></div><p>ヒーブを増やす内部処理。</p>
+                   <span class="p">(</span><span class="nv">unreachable</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span></code></pre></div>
+<p>ヒーブを増やす内部処理。</p>
 <div class="highlight"><pre class="chroma"><code class="language-common-lisp" data-lang="common-lisp"><span class="p">(</span><span class="nv">defwfun</span> <span class="nv">$gc--append-heap-page</span> <span class="p">(</span><span class="p">(</span><span class="nv">gc</span> <span class="nv">i32</span><span class="p">)</span> <span class="p">(</span><span class="nv">heap-page</span> <span class="nv">i32</span><span class="p">)</span> <span class="p">(</span><span class="nv">size</span> <span class="nv">i32</span><span class="p">)</span>
                                 <span class="k">&amp;aux</span> <span class="p">(</span><span class="nv">heap-index</span> <span class="nv">i32</span><span class="p">)</span> <span class="p">(</span><span class="nv">heap-page-ptr</span> <span class="nv">i32</span><span class="p">)</span> <span class="p">(</span><span class="nv">heap-page-next-ptr</span> <span class="nv">i32</span><span class="p">)</span><span class="p">)</span> <span class="no">nil</span>
   <span class="o">`</span><span class="p">(</span><span class="p">(</span><span class="nv">set_local</span> <span class="o">,</span><span class="nv">heap-index</span> <span class="p">(</span><span class="nv">i32.mul</span> <span class="p">(</span><span class="nv">i32.const</span> <span class="mi">4</span><span class="p">)</span> <span class="o">,</span><span class="p">(</span><span class="nv">calc-heap-index</span> <span class="o">`</span><span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">size</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
@@ -520,9 +551,9 @@ GC時には一旦すべてのbitmapをクリアし、ルートセットから辿
 <span class="p">(</span><span class="nv">defwfun</span> <span class="nv">$gc-extend-heap-page</span> <span class="p">(</span><span class="p">(</span><span class="nv">gc</span> <span class="nv">i32</span><span class="p">)</span> <span class="p">(</span><span class="nv">size</span> <span class="nv">i32</span><span class="p">)</span> <span class="k">&amp;aux</span> <span class="p">(</span><span class="nv">heap-page</span> <span class="nv">i32</span><span class="p">)</span><span class="p">)</span> <span class="no">nil</span>
   <span class="o">`</span><span class="p">(</span><span class="p">(</span><span class="nv">set_local</span> <span class="o">,</span><span class="nv">heap-page</span> <span class="p">(</span><span class="nv">call</span> <span class="nv">$new-heap-page</span><span class="p">)</span><span class="p">)</span>
     <span class="p">(</span><span class="nv">call</span> <span class="nv">$init-heap-page</span> <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">heap-page</span><span class="p">)</span> <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">size</span><span class="p">)</span><span class="p">)</span>
-    <span class="p">(</span><span class="nv">call</span> <span class="nv">$gc--append-heap-page</span> <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">gc</span><span class="p">)</span> <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">heap-page</span><span class="p">)</span> <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">size</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
+    <span class="p">(</span><span class="nv">call</span> <span class="nv">$gc--append-heap-page</span> <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">gc</span><span class="p">)</span> <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">heap-page</span><span class="p">)</span> <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">size</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span></code></pre></div>
+<p>アロケーション処理。ごちゃごちゃしてますがコメントだけ拾い読みすると何をやってるかはわかります。</p>
 
-</code></pre></div><p>アロケーション処理。ごちゃごちゃしてますがコメントだけ拾い読みすると何をやってるかはわかります。</p>
 <p>GCからヒープのリストを指定して、ヒーブのリストから空いてるヒーブを探して、ヒーブの中から空いてるセルを探すので関数が3つに分かれてます。
 また、大本の<code>alloc</code>関数はメモリが足りなければGCを起動したりメモリを増やしたりします。</p>
 <div class="highlight"><pre class="chroma"><code class="language-common-lisp" data-lang="common-lisp"><span class="p">(</span><span class="nv">defwfun</span> <span class="nv">$gc--alloc-page</span> <span class="p">(</span><span class="p">(</span><span class="nv">page</span> <span class="nv">i32</span><span class="p">)</span> <span class="p">(</span><span class="nv">size</span> <span class="nv">i32</span><span class="p">)</span> <span class="k">&amp;aux</span>  <span class="p">(</span><span class="nv">bitmap</span> <span class="nv">i64</span><span class="p">)</span> <span class="p">(</span><span class="nv">i</span> <span class="nv">i32</span><span class="p">)</span> <span class="p">(</span><span class="nv">j</span> <span class="nv">i32</span><span class="p">)</span> <span class="p">(</span><span class="nv">index</span> <span class="nv">i32</span><span class="p">)</span><span class="p">)</span> <span class="nv">i32</span>
@@ -608,8 +639,8 @@ GC時には一旦すべてのbitmapをクリアし、ルートセットから辿
                                         <span class="c1">; alloc</span>
                 <span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="nv">i32.eqz</span> <span class="p">(</span><span class="nv">tee_local</span> <span class="o">,</span><span class="nv">ptr</span> <span class="p">(</span><span class="nv">call</span> <span class="nv">$gc--alloc</span> <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">gc</span><span class="p">)</span> <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">data-size</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
                     <span class="p">(</span><span class="nv">unreachable</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
-    <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">ptr</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
-</code></pre></div><p>ヒープにポインタを退避する関数群。ただのスタックなのでシンプル。</p>
+    <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">ptr</span><span class="p">)</span><span class="p">)</span><span class="p">)</span></code></pre></div>
+<p>ヒープにポインタを退避する関数群。ただのスタックなのでシンプル。</p>
 <div class="highlight"><pre class="chroma"><code class="language-common-lisp" data-lang="common-lisp"><span class="p">(</span><span class="nv">defwfun</span> <span class="nv">$gc-save-state</span> <span class="p">(</span><span class="p">(</span><span class="nv">gc</span> <span class="nv">i32</span><span class="p">)</span><span class="p">)</span> <span class="nv">i32</span>
   <span class="o">`</span><span class="p">(</span><span class="p">(</span><span class="nv">i32.load</span> <span class="o">,</span><span class="p">(</span><span class="nf">intern</span> <span class="p">(</span><span class="nf">format</span> <span class="no">nil</span> <span class="s">&#34;OFFSET=~a&#34;</span> <span class="vg">*offset-gc-arena-top*</span><span class="p">)</span><span class="p">)</span> <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">gc</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
 <span class="p">(</span><span class="nv">defwfun</span> <span class="nv">$gc-protect</span> <span class="p">(</span><span class="p">(</span><span class="nv">gc</span> <span class="nv">i32</span><span class="p">)</span> <span class="p">(</span><span class="nv">ptr</span> <span class="nv">i32</span><span class="p">)</span> <span class="k">&amp;aux</span> <span class="p">(</span><span class="nv">arena-top</span> <span class="nv">i32</span><span class="p">)</span><span class="p">)</span> <span class="no">nil</span>
@@ -622,8 +653,8 @@ GC時には一旦すべてのbitmapをクリアし、ルートセットから辿
                <span class="p">(</span><span class="nv">i32.add</span> <span class="p">(</span><span class="nv">i32.const</span> <span class="mi">4</span><span class="p">)</span> <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">arena-top</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
 <span class="p">(</span><span class="nv">defwfun</span> <span class="nv">$gc-restore-state</span> <span class="p">(</span><span class="p">(</span><span class="nv">gc</span> <span class="nv">i32</span><span class="p">)</span> <span class="p">(</span><span class="nv">state</span> <span class="nv">i32</span><span class="p">)</span><span class="p">)</span> <span class="no">nil</span>
     <span class="o">`</span><span class="p">(</span><span class="p">(</span><span class="nv">i32.store</span> <span class="o">,</span><span class="p">(</span><span class="nf">intern</span> <span class="p">(</span><span class="nf">format</span> <span class="no">nil</span> <span class="s">&#34;OFFSET=~a&#34;</span> <span class="vg">*offset-gc-arena-top*</span><span class="p">)</span><span class="p">)</span>
-                 <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">gc</span><span class="p">)</span> <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">state</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
-</code></pre></div><p>マーク処理。
+                 <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">gc</span><span class="p">)</span> <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">state</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span></code></pre></div>
+<p>マーク処理。
 先程解説してなかったのですが、アロケートしたデータをどうマークするかはユーザに任せます。
 動的型付き言語ならデータに埋め込まれたタグで型を判別してマークするでしょう。
 静的型付き言語ならタグを入れるか保守的にポインタっぽい値を全部マークする手もあるでしょう。
@@ -705,12 +736,12 @@ GC時には一旦すべてのbitmapをクリアし、ルートセットから辿
                    <span class="p">(</span><span class="nv">i32.load</span> <span class="o">,</span><span class="p">(</span><span class="nf">intern</span> <span class="p">(</span><span class="nf">format</span> <span class="no">nil</span> <span class="s">&#34;OFFSET=~a&#34;</span> <span class="vg">*offset-gc-arena*</span><span class="p">)</span><span class="p">)</span>
                              <span class="p">(</span><span class="nv">i32.add</span> <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">i</span><span class="p">)</span> <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">gc</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
        <span class="p">(</span><span class="nv">set_local</span> <span class="o">,</span><span class="nv">i</span> <span class="p">(</span><span class="nv">i32.add</span> <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">i</span> <span class="p">(</span><span class="nv">i32.const</span> <span class="mi">4</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
-       <span class="p">(</span><span class="nv">br</span> <span class="nv">$loop</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
-</code></pre></div><p>GC実行。普通のMark and Sweepとは違ってclear and mark。</p>
+       <span class="p">(</span><span class="nv">br</span> <span class="nv">$loop</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span></code></pre></div>
+<p>GC実行。普通のMark and Sweepとは違ってclear and mark。</p>
 <div class="highlight"><pre class="chroma"><code class="language-common-lisp" data-lang="common-lisp"><span class="p">(</span><span class="nv">defwfun</span> <span class="nv">$gc-run</span> <span class="p">(</span><span class="p">(</span><span class="nv">gc</span> <span class="nv">i32</span><span class="p">)</span><span class="p">)</span> <span class="no">nil</span>
   <span class="o">`</span><span class="p">(</span><span class="p">(</span><span class="nv">call</span> <span class="nv">$gc--clear-marks</span> <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">gc</span><span class="p">)</span><span class="p">)</span>
-    <span class="p">(</span><span class="nv">call</span> <span class="nv">$gc--mark</span> <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">gc</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
-</code></pre></div><p>デバッグ用の何か。確保されているセルの数を数えます。</p>
+    <span class="p">(</span><span class="nv">call</span> <span class="nv">$gc--mark</span> <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">gc</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span></code></pre></div>
+<p>デバッグ用の何か。確保されているセルの数を数えます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-common-lisp" data-lang="common-lisp"><span class="c1">;;; other utils</span>
 <span class="p">(</span><span class="nv">defwfun</span> <span class="nv">$gc--allocated-data-page</span> <span class="p">(</span><span class="p">(</span><span class="nv">page</span> <span class="nv">i32</span><span class="p">)</span> <span class="k">&amp;aux</span> <span class="p">(</span><span class="nv">sum</span> <span class="nv">i32</span><span class="p">)</span><span class="p">)</span> <span class="nv">i32</span>
   <span class="o">`</span><span class="p">(</span><span class="o">,@</span><span class="p">(</span><span class="nb">loop</span> <span class="ss">:for</span> <span class="nv">i</span> <span class="ss">:from</span> <span class="mi">0</span> <span class="ss">:below</span> <span class="vg">*bitmap-size*</span> <span class="ss">:collect</span>
@@ -740,19 +771,25 @@ GC時には一旦すべてのbitmapをクリアし、ルートセットから辿
                                 <span class="p">(</span><span class="nv">call</span> <span class="nv">$gc--allocated-data-pages</span>
                                       <span class="p">(</span><span class="nv">i32.load</span> <span class="o">,</span><span class="p">(</span><span class="nf">intern</span> <span class="p">(</span><span class="nf">format</span> <span class="no">nil</span> <span class="s">&#34;OFFSET=~a&#34;</span> <span class="p">(</span><span class="nf">*</span> <span class="nv">i</span> <span class="vg">*sizeof-ptr*</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
                                                 <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">gc</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
-      <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">sum</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
-</code></pre></div><p>はい。まだFIXMEが残ってるなど甘いところがありますがWASMでBitMap GCを書きました。
+      <span class="p">(</span><span class="nv">get_local</span> <span class="o">,</span><span class="nv">sum</span><span class="p">)</span><span class="p">)</span><span class="p">)</span></code></pre></div>
+<p>はい。まだFIXMEが残ってるなど甘いところがありますがWASMでBitMap GCを書きました。
 多分他人の書いたよくわかんバグってそうなGCを使う人はいないと思うので自作するときの参考にして下さい。</p>
+
 <p>所感としては<code>get_local</code>と<code>const</code>が面倒、<code>loop</code>が<code>br</code>を呼ばないと先頭に戻ってくれないことに気づいた、などがあります。</p>
+
 <p>今回のソースコードは<a href="https://github.com/KeenS/wasm-gc">ここ</a>にあります。</p>
+
 <p>2017-12-08 追記:
-今回のGCは2011年の上野先生の論文<sup id="fnref:1"><a href="#fn:1" class="footnote-ref" role="doc-noteref">1</a></sup>  に多大な影響を受けています。
-また、そのBitMap GCは2016年に並行版も開発されています<sup id="fnref:2"><a href="#fn:2" class="footnote-ref" role="doc-noteref">2</a></sup>。
+今回のGCは2011年の上野先生の論文<sup class="footnote-ref" id="fnref:1"><a href="#fn:1">1</a></sup>  に多大な影響を受けています。
+また、そのBitMap GCは2016年に並行版も開発されています<sup class="footnote-ref" id="fnref:2"><a href="#fn:2">2</a></sup>。
 興味のある方はぜひご一読下さい。</p>
-<h1 id="--wat-">付録 生成された .wat 全文</h1>
+
+<p>/追記</p>
+
+<h1 id="付録-生成された-wat-全文">付録 生成された .wat 全文</h1>
+
 <p>2017-12-08 編集: ページサイズを16KiB -&gt; 64KiBの変更を取り入れました</p>
-<pre><code class="language-wat" data-lang="wat">
-(module (func $print (import &quot;imports&quot; &quot;print&quot;) (param i32))
+<pre><code class="language-wat" data-lang="wat">(module (func $print (import "imports" "print") (param i32))
  (func $new-page (result i32)
   (i32.mul (i32.const 65536) (grow_memory (i32.const 1))))
  (func $new-gc (result i32) (call $new-page))
@@ -2364,20 +2401,19 @@ GC時には一旦すべてのbitmapをクリアし、ルートセットから辿
   (call $gc-restore-state (get_local 0) (get_local 1))
   (call $gc-run (get_local 0))
   (call $print (call $gc--allocated-data (get_local 0))))
- (start $main) (memory 1 10)) 
-</code></pre><p>/編集</p>
-<section class="footnotes" role="doc-endnotes">
-<hr>
+ (start $main) (memory 1 10)) </code></pre>
+<p>/編集</p>
+<div class="footnotes">
+
+<hr />
+
 <ol>
-<li id="fn:1" role="doc-endnote">
-<p><a href="https://dl.acm.org/citation.cfm?id=2034802">An efficient non-moving garbage collector for functional languages, K. Ueno, A. Ohori, T. Otomo, In Proc. ACM ICFP Conference, pp:196-208, 2011.</a><a href="#fnref:1" class="footnote-backref" role="doc-backlink">&#8617;</a></p>
-</li>
-<li id="fn:2" role="doc-endnote">
-<p><a href="https://dl.acm.org/citation.cfm?id=2951944">A Fully Concurrent Garbage Collector for Functional Programs on Multicore Processors. Katsuhiro Ueno, Atsushi Ohori. To appear in Proc. ICFP, 2016.</a>
-/追記<a href="#fnref:2" class="footnote-backref" role="doc-backlink">&#8617;</a></p>
-</li>
+<li id="fn:1"><a href="https://dl.acm.org/citation.cfm?id=2034802">An efficient non-moving garbage collector for functional languages, K. Ueno, A. Ohori, T. Otomo, In Proc. ACM ICFP Conference, pp:196-208, 2011.</a>
+ <a class="footnote-return" href="#fnref:1"><sup>[return]</sup></a></li>
+<li id="fn:2"><a href="https://dl.acm.org/citation.cfm?id=2951944">A Fully Concurrent Garbage Collector for Functional Programs on Multicore Processors. Katsuhiro Ueno, Atsushi Ohori. To appear in Proc. ICFP, 2016.</a>
+ <a class="footnote-return" href="#fnref:2"><sup>[return]</sup></a></li>
 </ol>
-</section>
+</div>
                     </section>
                 </article>
             </div>

@@ -115,25 +115,28 @@
                     </header>
                     <section>
                         <p>κeenです。最近Cargoのreplace機能を使おうとしてハマったのでメモを残しておきます。</p>
+
 <p>最近何箇所かで喋ったのでご存知の方もいらっしゃるかと思いますが、Cargoにはワークスペース機能があります。
 fat repositoryスタイルに便利な機能で、1つのディレクトリ下に複数のサブプロジェクトを配置しつつ<code>target/</code>は共有するのでマイクロプロジェクトのモジュール性とモノリシックプロジェクトのコンパイルの速さを実現することが出来ます。</p>
+
 <p>さて、問題になるのはクレートを公開するときの依存関係の記述です。
 サブプロジェクト同士で依存し合っているので<code>Cargo.toml</code>には<code>my-project-lib = {path = &quot;../my-project-lib&quot;}</code> のような依存の記述がある筈です。
 しかしながらローカルのクレートに依存していると<code>crates.io</code>に公開は出来ません。
 そこで今回はそれをどうにかするお話。</p>
+
 <h1 id="replace">replace</h1>
+
 <p>Cargoには<a href="http://doc.crates.io/manifest.html#the-replace-section">replace</a>という機能があります。
 特定のライブラリの特定のバージョンを、crates.ioにあるものではなくてユーザが指定した場所にあるものを使うように指示します。
 <a href="http://doc.crates.io/specifying-dependencies.html#overriding-dependencies">Specifying Dependencies</a>のドキュメントによると、以下のように使えます。</p>
+
 <p>例えば<code>uuid</code>クレートを使っているときにそれが依存している<code>rand</code>クレートにバグを見付けて修正し、修正した結果を試したいとします。
 その時にreplaceは以下のように使えます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-toml" data-lang="toml"><span class="c"># ワークスペースの親プロジェクト</span>
 <span class="p">.</span><span class="p">.</span><span class="p">.</span>
 
 <span class="p">[</span><span class="nx">replace</span><span class="p">]</span>
-<span class="s2">&#34;rand:0.3.14&#34;</span> <span class="p">=</span> <span class="err">{</span> <span class="nx">path</span> <span class="p">=</span> <span class="s2">&#34;./rand&#34;</span> <span class="err">}</span>
-
-</code></pre></div><div class="highlight"><pre class="chroma"><code class="language-toml" data-lang="toml"><span class="c"># ワークスペースの子プロジェクト</span>
+<span class="s2">&#34;rand:0.3.14&#34;</span> <span class="p">=</span> <span class="err">{</span> <span class="nx">path</span> <span class="p">=</span> <span class="s2">&#34;./rand&#34;</span> <span class="err">}</span></code></pre></div><div class="highlight"><pre class="chroma"><code class="language-toml" data-lang="toml"><span class="c"># ワークスペースの子プロジェクト</span>
 
 <span class="p">[</span><span class="nx">package</span><span class="p">]</span>
 <span class="nx">name</span> <span class="p">=</span> <span class="s2">&#34;my-awesome-crate&#34;</span>
@@ -141,22 +144,26 @@ fat repositoryスタイルに便利な機能で、1つのディレクトリ下�
 <span class="nx">authors</span> <span class="p">=</span> <span class="p">[</span><span class="s2">&#34;The Rust Project Developers&#34;</span><span class="p">]</span>
 
 <span class="p">[</span><span class="nx">dependencies</span><span class="p">]</span>
-<span class="nx">uuid</span> <span class="p">=</span> <span class="s2">&#34;0.2&#34;</span>
-</code></pre></div><p>間接的に依存してる<code>rand:0.3.14</code>を、crates.ioにあるものではなく指定したパスにあるものを使うように指示しています。</p>
+<span class="nx">uuid</span> <span class="p">=</span> <span class="s2">&#34;0.2&#34;</span></code></pre></div>
+<p>間接的に依存してる<code>rand:0.3.14</code>を、crates.ioにあるものではなく指定したパスにあるものを使うように指示しています。</p>
+
 <p>この仕組みを使って先のローカルパス問題を解決出来ないでしょうか。すなわち、</p>
 <div class="highlight"><pre class="chroma"><code class="language-toml" data-lang="toml"><span class="c"># 子プロジェクト</span>
 <span class="p">[</span><span class="nx">dependencies</span><span class="p">]</span>
-<span class="nx">my</span><span class="err">-</span><span class="nx">project</span><span class="err">-</span><span class="nx">lib</span> <span class="p">=</span> <span class="s2">&#34;0.1.0&#34;</span>
-
-</code></pre></div><p>のように、見た目上はcrates.ioにあるものに依存しておきつつ実際は</p>
+<span class="nx">my</span><span class="err">-</span><span class="nx">project</span><span class="err">-</span><span class="nx">lib</span> <span class="p">=</span> <span class="s2">&#34;0.1.0&#34;</span></code></pre></div>
+<p>のように、見た目上はcrates.ioにあるものに依存しておきつつ実際は</p>
 <div class="highlight"><pre class="chroma"><code class="language-toml" data-lang="toml"><span class="c"># 親プロジェクト</span>
 <span class="p">[</span><span class="nx">replace</span><span class="p">]</span>
-<span class="s2">&#34;my-project-lib:0.1.0&#34;</span> <span class="p">=</span> <span class="err">{</span> <span class="nx">path</span> <span class="p">=</span> <span class="s2">&#34;./my-project-lib&#34;</span> <span class="err">}</span>
-</code></pre></div><p>のように実際の依存先をローカルのパスに向ければ問題を解決できないでしょうか。</p>
+<span class="s2">&#34;my-project-lib:0.1.0&#34;</span> <span class="p">=</span> <span class="err">{</span> <span class="nx">path</span> <span class="p">=</span> <span class="s2">&#34;./my-project-lib&#34;</span> <span class="err">}</span></code></pre></div>
+<p>のように実際の依存先をローカルのパスに向ければ問題を解決できないでしょうか。</p>
+
 <p>この答えは、半分no、半分yesになります。</p>
+
 <p><code>replace</code>はあくまでcrates.ioにあるものを置き換えるのでまだ公開していないプロジェクトに対しては使えません。
 一方、一度crates.ioに公開してしまえば上記のテクニックは可能になります。</p>
+
 <p>なので一番最初にcrates.ioに公開する時の手順はやや煩雑になります。</p>
+
 <ol>
 <li>(ローカルサブプロジェクトへの依存の記述は<code>path = &quot;...&quot;</code>のまま)</li>
 <li>どのプロジェクトにも依存しないローカルサブプロジェクトを公開する</li>
@@ -164,6 +171,7 @@ fat repositoryスタイルに便利な機能で、1つのディレクトリ下�
 <li>ローカルパスへの依存のなくなったローカルプロジェクトから順に公開していく</li>
 <li>全てのサブプロジェクトのローカルサブプロジェクトへの依存が<code>replace</code>に置き換わったら以後はそのまま使える。</li>
 </ol>
+
 <p>このようなテクニックは例えばdieselなどで<a href="https://github.com/diesel-rs/diesel/blob/master/Cargo.toml#L21">使われています</a>。
 この辺、改善あるといいですね。</p>
                     </section>

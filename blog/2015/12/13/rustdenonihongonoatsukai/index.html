@@ -22,6 +22,7 @@
         <meta name="twitter:description" content="このエントリはRust Advent Calendar 14日目の記事です
 前:gifnksmさんの kcovを使ってRustプログラムのカバレッジを測定する - gifnksmの雑多なメモ
 後:nacika_insさんのtimeこわい
+
 κeenです。当初の予定より小ネタになってしまいましたがRustでの日本語の扱いについて書こうかと。" />
 
         <title>Rustでの日本語の扱い | κeenのHappy Hacκing Blog</title>
@@ -125,20 +126,27 @@
 
                     </header>
                     <section>
-                        <p>このエントリは<a href="http://qiita.com/advent-calendar/2015/rust-lang">Rust Advent Calendar</a> 14日目の記事です<br>
-前:gifnksmさんの <a href="http://gifnksm.hatenablog.jp/entry/2015/12/13/204655">kcovを使ってRustプログラムのカバレッジを測定する - gifnksmの雑多なメモ</a><br>
+                        <p>このエントリは<a href="http://qiita.com/advent-calendar/2015/rust-lang">Rust Advent Calendar</a> 14日目の記事です<br />
+前:gifnksmさんの <a href="http://gifnksm.hatenablog.jp/entry/2015/12/13/204655">kcovを使ってRustプログラムのカバレッジを測定する - gifnksmの雑多なメモ</a><br />
 後:nacika_insさんのtimeこわい</p>
+
 <p>κeenです。当初の予定より小ネタになってしまいましたがRustでの日本語の扱いについて書こうかと。</p>
+
 <p>ご存じの通りRustはマルチバイト文字をサポートしていますが、その殆どがUTF-8だけです。しかし日本人にはUTF-8だけでは少し辛いものがありますのでどうにかして対応しようかと。</p>
+
 <p>ソースコード中でもマルチバイト文字を扱えますが、UTF-8である必要があります。</p>
+
 <p>例えば</p>
 <div class="highlight"><pre class="chroma"><code class="language-rs" data-lang="rs"><span class="k">fn</span> <span class="nf">main</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">  </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;あああ&#34;</span><span class="p">)</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>これをISO-2022-JPで保存してrustcに食わせても、</p>
+</span></code></pre></div>
+<p>これをISO-2022-JPで保存してrustcに食わせても、</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="n">error</span>: <span class="nc">couldn</span><span class="na">&#39;t</span><span class="w"> </span><span class="n">read</span><span class="w"> </span><span class="s">&#34;src/main.rs&#34;</span>: <span class="nc">stream</span><span class="w"> </span><span class="n">did</span><span class="w"> </span><span class="n">not</span><span class="w"> </span><span class="n">contain</span><span class="w"> </span><span class="n">valid</span><span class="w"> </span><span class="n">UTF</span><span class="o">-</span><span class="mi">8</span><span class="w">
 </span><span class="w"></span><span class="n">Could</span><span class="w"> </span><span class="n">not</span><span class="w"> </span><span class="n">compile</span><span class="w"> </span><span class="err">`</span><span class="n">japanese</span><span class="err">`</span><span class="p">.</span><span class="w">
-</span></code></pre></div><p>と無下もないエラーが出てしまいます。</p>
+</span></code></pre></div>
+<p>と無下もないエラーが出てしまいます。</p>
+
 <p>内部エンコーディングにもUTF-8が使われているのでRustの文字列をUTF-8以外で出力するにはなんとなく変換が必要そうなのは理解出来ますが、変に出入力をラップしてる関数を使うとまた意図せぬエラーが出ます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">fs</span>::<span class="n">File</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">io</span>::<span class="n">BufRead</span><span class="p">;</span><span class="w">
@@ -154,11 +162,16 @@
 </span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="w">  </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>これもまた、<code>stream did not contain valid UTF-8</code>エラーを出します。</p>
+</span></code></pre></div>
+<p>これもまた、<code>stream did not contain valid UTF-8</code>エラーを出します。</p>
+
 <p>ReadもBufReadもbyte orientedって言ってるのに何故か文字列を扱えるのが若干気になりますがまあ、そういうもんなんでしょう。</p>
+
 <h1 id="encoding">encoding</h1>
+
 <p>そこで救世主となるライブラリが<a href="https://github.com/lifthrasiir/rust-encoding">lifthrasiir/rust-encoding</a>です。文字列のエンコーディングをサポートします。
 READMEに詳しい使い方が載っているのですが、このライブラリは与えられたスライスに対して指定されたエンコーディングでエンコード/デコードします。</p>
+
 <p>なので先の例のようにISO-2022-JPで<code>&quot;あああ&quot;</code>と出力したいなら</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">extern</span><span class="w"> </span><span class="k">crate</span><span class="w"> </span><span class="n">encoding</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">encoding</span>::<span class="p">{</span><span class="n">Encoding</span><span class="p">,</span><span class="w"> </span><span class="n">EncoderTrap</span><span class="p">}</span><span class="p">;</span><span class="w">
@@ -169,48 +182,59 @@ READMEに詳しい使い方が載っているのですが、このライブラ�
 </span><span class="w"></span><span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="n">bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ISO_2022_JP</span><span class="p">.</span><span class="n">encode</span><span class="p">(</span><span class="s">&#34;あああ&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">EncoderTrap</span>::<span class="n">Ignore</span><span class="p">)</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="w">  </span><span class="n">Stdout</span><span class="p">.</span><span class="n">write_all</span><span class="p">(</span><span class="o">&amp;</span><span class="n">bytes</span><span class="p">[</span><span class="p">.</span><span class="p">.</span><span class="p">]</span><span class="p">)</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="w">
-</span></code></pre></div><p>と出来るでしょう。(即興で書いてコンパイルすらしてないので本当に出来るかは分かりませんが)</p>
+</span></code></pre></div>
+<p>と出来るでしょう。(即興で書いてコンパイルすらしてないので本当に出来るかは分かりませんが)</p>
+
 <p>読み取りに関しては…………。そう、このライブラリはバッファに対してしか動作せず、ストリームに使えないのです。提供してくれたら良さそうなのですが、作者の方が忙しいようです。</p>
-<!-- raw HTML omitted -->
+
+<p><blockquote class="twitter-tweet" lang="ja"><p lang="ja" dir="ltr"><a href="https://twitter.com/blackenedgold">@blackenedgold</a> stream encoding/decodingは計画してはいるのですが、私が忙しくてなかなか作業をすることができません&hellip; orz</p>&mdash; Kang Seonghoon (@senokay) <a href="https://twitter.com/senokay/status/666516796942319616">2015, 11月 17</a></blockquote>
+<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script></p>
+
 <p>余談ですがこの方は韓国の方のようですが、日本語もある程度分かるそうです。すごいですね。</p>
+
 <p>さて、ストリームに対して使えないと分かったなら自分で対応するまで。幸いにも我々が使っているのはRustです。新しいものを既存の仕組みに載せるのは造作もありません。
 ストリームを良い感じにデコードするには<a href="https://doc.rust-lang.org/std/io/trait.Read.html">std::io::Read</a>を実装した何かを作れば十分です。作っていきましょう。<code>Read</code>トレイトを実装するには最低<code>read</code>だけ実装してしまえば十分です。</p>
+
 <p>この<code>read</code>ですが、ドキュメントを読むと中々制限が緩いようです。</p>
+
 <blockquote>
 <p>Pull some bytes from this source into the specified buffer, returning how many bytes were read.</p>
-</blockquote>
-<blockquote>
+
 <p>This function does not provide any guarantees about whether it blocks waiting for data, but if an object needs to block for a read but cannot it will typically signal this via an Err return value.</p>
-</blockquote>
-<blockquote>
+
 <p>If the return value of this method is Ok(n), then it must be guaranteed that 0 &lt;= n &lt;= buf.len(). A nonzero n value indicates that the buffer buf has been filled in with n bytes of data from this source. If n is 0, then it can indicate one of two scenarios:</p>
-</blockquote>
-<blockquote>
+
 <p>This reader has reached its &ldquo;end of file&rdquo; and will likely no longer be able to produce bytes. Note that this does not mean that the reader will always no longer be able to produce bytes.
-The buffer specified was 0 bytes in length.</p>
-</blockquote>
-<blockquote>
+   The buffer specified was 0 bytes in length.</p>
+
 <p>No guarantees are provided about the contents of buf when this function is called, implementations cannot rely on any property of the contents of buf being true. It is recommended that implementations only write data to buf instead of reading its contents.</p>
 </blockquote>
+
 <p>です。</p>
+
 <blockquote>
 <p>No guarantees are provided about the contents of buf when this function is called, implementations cannot rely on any property of the contents of buf being true.</p>
 </blockquote>
+
 <p>「関数が呼ばれる際に<code>buf</code>に対しては何如なる保証もなく、呼出側はバッファの内容に対して何如なる不変条件も期待してはいけません」とあります。つまり、4096 byteのバッファが与えられても1呼び出しにつき1バイトしか返さないような実装でも許容されます。
 また、非同期ベースのIOのようにキャッシュにデータがなければIOブロッキングせずにエラーだとかの挙動もありえます。非常にシステムプログラミング言語らしい仕様ですね。</p>
+
 <p>今から作ろうとしているデコーディングストリームも読み出したバイト列がデコード後に何バイトになるのか予測がつかないのでこの仕様は有難いですね。</p>
+
 <p>さて、作っていきましょうか。まずは必要そうなライブラリを読み込みます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">extern</span><span class="w"> </span><span class="k">crate</span><span class="w"> </span><span class="n">encoding</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="bp">self</span>::<span class="n">encoding</span>::<span class="p">{</span><span class="n">EncodingRef</span><span class="p">,</span><span class="w"> </span><span class="n">DecoderTrap</span><span class="p">}</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">io</span>::<span class="n">Read</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">io</span><span class="p">;</span><span class="w">
-</span></code></pre></div><p>そしてメインとなる構造体です。とある<code>Read</code>を実装した型をラップする形にしましょう。</p>
+</span></code></pre></div>
+<p>そしてメインとなる構造体です。とある<code>Read</code>を実装した型をラップする形にしましょう。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">struct</span> <span class="nc">DecodingReader</span><span class="o">&lt;</span><span class="n">R</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="n">inner</span>: <span class="nc">R</span><span class="p">,</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="n">encoding</span>: <span class="nc">EncodingRef</span><span class="p">,</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p><code>Read</code>はトレイトなので<code>inner</code>のところを<code>&amp;R</code>としなくて大丈夫です。<code>Read</code>の実装側が調整します。</p>
+</span></code></pre></div>
+<p><code>Read</code>はトレイトなので<code>inner</code>のところを<code>&amp;R</code>としなくて大丈夫です。<code>Read</code>の実装側が調整します。</p>
+
 <p>そしてコンストラクタですね。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">impl</span><span class="w"> </span><span class="o">&lt;</span><span class="n">R</span>: <span class="nc">Read</span><span class="o">&gt;</span><span class="w"> </span><span class="n">DecodingReader</span><span class="o">&lt;</span><span class="n">R</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">new</span><span class="p">(</span><span class="n">coding</span>: <span class="nc">EncodingRef</span><span class="p">,</span><span class="w"> </span><span class="n">read</span>: <span class="nc">R</span><span class="p">)</span>-&gt; <span class="nc">Self</span><span class="w"> </span><span class="p">{</span><span class="w">
@@ -220,7 +244,9 @@ The buffer specified was 0 bytes in length.</p>
 </span><span class="w"></span><span class="w">        </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>そのままですね。</p>
+</span></code></pre></div>
+<p>そのままですね。</p>
+
 <p><code>Read</code>の実装です。まずは<code>inner</code>の<code>read</code>を呼んで、その結果を一旦デコードしてからまたバイト列に変換します。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">impl</span><span class="w"> </span><span class="o">&lt;</span><span class="n">R</span>: <span class="nc">Read</span><span class="o">&gt;</span><span class="w"> </span><span class="n">Read</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">DecodingReader</span><span class="o">&lt;</span><span class="n">R</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="k">fn</span> <span class="nf">read</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">buf</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="p">[</span><span class="kt">u8</span><span class="p">]</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">io</span>::<span class="nb">Result</span><span class="o">&lt;</span><span class="kt">usize</span><span class="o">&gt;</span><span class="p">{</span><span class="w">
@@ -241,11 +267,16 @@ The buffer specified was 0 bytes in length.</p>
 </span><span class="w"></span><span class="w">        </span><span class="nb">Ok</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>先程も言った通りデコード読み込んだバイト列をUTF-8にした時にどれくらいバイト数が変わるか分からないので山勘で2倍くらいに膨らむだろうとして与えられたバッファ長の半分を使います。
+</span></code></pre></div>
+<p>先程も言った通りデコード読み込んだバイト列をUTF-8にした時にどれくらいバイト数が変わるか分からないので山勘で2倍くらいに膨らむだろうとして与えられたバッファ長の半分を使います。
 ここはもう少し調整が必要ですね。エンコーディング毎に適切なバッファ長を設定したい…</p>
+
 <p>バッファを確保出来たら<code>let n = try!(self.inner.read(&amp;mut buf[..len]));</code>してそれっぽいサイズ読み込んで、読み込んだサイズをデコードにかけます。</p>
+
 <p>現在<code>DecoderTrap</code>を<code>Ignore</code>にして<code>unwrap</code>してますが、これは少し雑すぎますね。例えば入力が全てvalidな文字を含んでいたとしても<code>read</code>が多バイト文字の真ん中までしか読まなかった時にそれが無効なエンコーディングと判定されて無視されるのでユーザからしたら「合ってる筈なのに何故か1文字欠損するバグ」として現れます。今回即席で作ったので勘弁して下さい。</p>
+
 <p>変換は文字列にしか出来ないようなので一旦文字列に落してからまたバイト列として取り出し、バッファに書き出します。デコード後のバイト列が<code>read</code>したバイト列より小さかったら一部<code>read</code>したデータが残ってしまいそうですが、「何如なる不変条件も…」とあるので問題ないでしょう。返り値にデコード後のバイト列の長さを返していれば良い筈です。</p>
+
 <p>さて、エンコードのエラーハンドリングしてないだとか本当に読み込みのバッファ長が適切なのかとかの疑問はあるものの、一応ストリームのデコーダが出来ました。使ってみましょう。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">extern</span><span class="w"> </span><span class="k">crate</span><span class="w"> </span><span class="n">encoding</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="k">extern</span><span class="w"> </span><span class="k">crate</span><span class="w"> </span><span class="n">japanese</span><span class="p">;</span><span class="w">
@@ -268,18 +299,26 @@ The buffer specified was 0 bytes in length.</p>
 </span><span class="w"></span><span class="w">        </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">line</span><span class="p">.</span><span class="n">unwrap</span><span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>これでちゃんとISO-2022-JPのファイルを読めます。</p>
+</span></code></pre></div>
+<p>これでちゃんとISO-2022-JPのファイルを読めます。</p>
+
 <p>Javaに慣れてる人ならこういうIOに対するデコレータパターンは見覚えがあるでしょう。</p>
+
 <p>今更ですがiso-2022-jpはいわゆるjisエンコーディングです。rust-encodingはshift_jisの拡張にあたるwindows31jだとかeuc-jpも扱えます(<a href="https://lifthrasiir.github.io/rust-encoding/encoding/codec/japanese/index.html">参考</a>)。</p>
-<h1 id="heading">今後</h1>
+
+<h1 id="今後">今後</h1>
+
 <p>ライブラリとして公開するか、あるいは作者の方がやる気はあるようなのでプルリクを送るかが終着点かな、と思っていますが如何せん雑にしか実装してないので微妙ですね。
 例の境界とマルチバイトの問題は<code>Read</code>じゃなく<code>BufRead</code>を要求して1文字分読み切るまで来るまで1バイトずつ読むとかになると思います。ダルい。</p>
-<h1 id="heading1">まとめ</h1>
+
+<h1 id="まとめ">まとめ</h1>
+
 <ul>
 <li>Rust標準だけでUTF-8以外の文字列を使うのはつらいよ</li>
 <li>Rustのエンコーディングライブラリを紹介したよ</li>
 <li>エンコーディングライブラリを使ってストリームデコーダを実装してみたよ。</li>
 </ul>
+
 <p>今回のコードは<a href="https://github.com/KeenS/japanese">こちら</a>にあります</p>
                     </section>
                 </article>

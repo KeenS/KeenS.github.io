@@ -21,6 +21,7 @@
         <meta name="twitter:title" content="RustのHigher-Kinded type Trait | κeenのHappy Hacκing Blog"/>
         <meta name="twitter:description" content="κeenです。少し前の話になりますがRustの関連型を駆使してHigher Kinded type Trait（高階型トレイト）を実現してしまったものが出回ってたのでそれについて。
 本来RustはHKTをサポートしていませんが不思議なことに実装出来てしまっているのです。
+
 HKTについて微塵も知らない方にも分かるように解説していきます。" />
 
         <title>RustのHigher-Kinded type Trait | κeenのHappy Hacκing Blog</title>
@@ -114,83 +115,107 @@ HKTについて微塵も知らない方にも分かるように解説してい�
                     <section>
                         <p>κeenです。少し前の話になりますがRustの関連型を駆使してHigher Kinded type Trait（高階型トレイト）を実現してしまったものが出回ってたのでそれについて。
 本来RustはHKTをサポートしていませんが不思議なことに実装出来てしまっているのです。</p>
+
 <p>HKTについて微塵も知らない方にも分かるように解説していきます。</p>
-<h1 id="map-"><code>map</code> 可能なトレイト</h1>
+
+<h1 id="map-可能なトレイト"><code>map</code> 可能なトレイト</h1>
+
 <p><a href="https://doc.rust-lang.org/core/option/enum.Option.html#method.map"><code>Option</code></a>、<a href="https://doc.rust-lang.org/core/result/enum.Result.html#method.map"><code>Result</code></a>、etc 色々なトレイトが <code>map</code> メソッドを実装しています。</p>
+
 <p>それぞれ型シグネチャを抜き出してみましょう。</p>
+
 <ul>
 <li>Option: <code>map&lt;U, F: FnOnce(T) -&gt; U&gt;(self, f: F) -&gt; Option&lt;U&gt;</code></li>
 <li>Result: <code>map&lt;U, F: FnOnce(T) -&gt; U&gt;(self, op: F) -&gt; Result&lt;U, E&gt;</code></li>
 </ul>
+
 <p>驚く程似てますね。これを抽象化して「<code>map</code>メソッドを持つ」トレイトを定義したくなるかもしれません。
 しかしそれは簡単には書けません。何故なら<code>map</code>はコンテナ型、つまり「型引数を取る型」に定義される型だからです。
 現在のRustは「型引数を取る型」に対するジェネリクスはサポートしていません。もし書こうとするとこのようになるでしょう。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">trait</span><span class="w"> </span><span class="n">Mappable</span><span class="o">&lt;</span><span class="n">M</span><span class="o">&lt;</span><span class="n">_</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="n">Self</span>: <span class="nc">M</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">  </span><span class="k">fn</span> <span class="nf">map</span><span class="o">&lt;</span><span class="n">U</span><span class="p">,</span><span class="w"> </span><span class="n">F</span>: <span class="nc">FunOnce</span><span class="p">(</span><span class="n">T</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">U</span><span class="o">&gt;</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">f</span>: <span class="nc">F</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">M</span><span class="o">&lt;</span><span class="n">U</span><span class="o">&gt;</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p><code>M&lt;_&gt;</code> なんて型パラメータを書くことは出来ませんし<code>M&lt;T&gt;</code>や<code>M&lt;U&gt;</code>も無理があります。残念ですね。</p>
-<h1 id="iterator-"><code>Iterator</code> との違い</h1>
+</span></code></pre></div>
+<p><code>M&lt;_&gt;</code> なんて型パラメータを書くことは出来ませんし<code>M&lt;T&gt;</code>や<code>M&lt;U&gt;</code>も無理があります。残念ですね。</p>
+
+<h1 id="iterator-との違い"><code>Iterator</code> との違い</h1>
+
 <p>さて、<code>Iterator</code>にも<a href="https://doc.rust-lang.org/std/iter/trait.Iterator.html#method.map"><code>map</code></a>はあります。
 これこそが求めている「<code>.map</code> 可能なトレイト」ではないのでしょうか。
 これはおおよそは合っているのですがやや期待とは違う動作をします。</p>
+
 <p><code>Option</code>の<code>map</code>は不自由なく使えます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="kd">let</span><span class="w"> </span><span class="n">o</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">o</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">o</span><span class="p">.</span><span class="n">map</span><span class="p">(</span><span class="o">|</span><span class="n">i</span><span class="o">|</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{:?}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">o</span><span class="p">)</span><span class="p">;</span><span class="w">
-</span></code></pre></div><p>一方、<code>Vec</code>は全く同じような書き方は出来ません。</p>
+</span></code></pre></div>
+<p>一方、<code>Vec</code>は全く同じような書き方は出来ません。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="kd">let</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vec</span><span class="o">!</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">.</span><span class="n">map</span><span class="p">(</span><span class="o">|</span><span class="n">i</span><span class="o">|</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{:?}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="p">)</span><span class="p">;</span><span class="w">
-</span></code></pre></div><pre><code>&lt;anon&gt;:3:11: 3:25 error: no method named `map` found for type `collections::vec::Vec&lt;_&gt;` in the current scope
-&lt;anon&gt;:3 let v = v.map(|i| i + 1);
+</span></code></pre></div><pre><code><anon>:3:11: 3:25 error: no method named `map` found for type `collections::vec::Vec<_>` in the current scope
+<anon>:3 let v = v.map(|i| i + 1);
                    ^~~~~~~~~~~~~~
-&lt;anon&gt;:3:11: 3:25 note: the method `map` exists but the following trait bounds were not satisfied: `collections::vec::Vec&lt;_&gt; : core::iter::Iterator`, `[_] : core::iter::Iterator`
+<anon>:3:11: 3:25 note: the method `map` exists but the following trait bounds were not satisfied: `collections::vec::Vec<_> : core::iter::Iterator`, `[_] : core::iter::Iterator`
 error: aborting due to previous error
-playpen: application terminated with error code 101
-</code></pre><p>正しくは、こうです。</p>
+playpen: application terminated with error code 101</code></pre>
+<p>正しくは、こうです。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="kd">let</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vec</span><span class="o">!</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">v</span>: <span class="nb">Vec</span><span class="o">&lt;</span><span class="kt">i32</span><span class="o">&gt;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">.</span><span class="n">iter</span><span class="p">(</span><span class="p">)</span><span class="p">.</span><span class="n">map</span><span class="p">(</span><span class="o">|</span><span class="n">i</span><span class="o">|</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="p">.</span><span class="n">collect</span><span class="p">(</span><span class="p">)</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{:?}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="p">)</span><span class="p">;</span><span class="w">
-</span></code></pre></div><p>色々実装上のノイズが乗っているのでやや例として不適切だったかもしれませんが、注目して欲しい部分はここです。</p>
+</span></code></pre></div>
+<p>色々実装上のノイズが乗っているのでやや例として不適切だったかもしれませんが、注目して欲しい部分はここです。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="kd">let</span><span class="w"> </span><span class="n">v</span>: <span class="nb">Vec</span><span class="o">&lt;</span><span class="kt">i32</span><span class="o">&gt;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="w">
-</span></code></pre></div><p><code>Vec</code>から取り出したイテレータなのに<code>Vec</code>に戻すためにわざわざ型アノテーションを書く必要があります。</p>
+</span></code></pre></div>
+<p><code>Vec</code>から取り出したイテレータなのに<code>Vec</code>に戻すためにわざわざ型アノテーションを書く必要があります。</p>
+
 <p>どうしてこうなるかというとイテレータを取り出した時点で元のコンテナ型が<code>Vec&lt;&gt;</code>であるという情報が失われているからです。
 これはRustの型システム上どうしても仕方のないことで、なので恐らくRustは「<code>map</code>可能なトレイト」などを定義せず、コレクションの操作を<code>Iterator</code>に集約しているんだと思います。
 この方式はある程度は上手くいきますが<code>Option</code>や<code>Result</code>はIteratorになれはしてもIteratorからは作れない(2要素のイテレータからOptionは作れない)ので独自でmapメソッドを持つことになってしまいます。</p>
-<h1 id="map--again"><code>map</code> 可能なトレイト again</h1>
+
+<h1 id="map-可能なトレイト-again"><code>map</code> 可能なトレイト again</h1>
+
 <p>先程そういうのは作れないと言ったばかりですが実はどうにかする方法がなくもないです。先程の(仮想の)定義を思い出して下さい。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">trait</span><span class="w"> </span><span class="n">Mappable</span><span class="o">&lt;</span><span class="n">M</span><span class="o">&lt;</span><span class="n">_</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="n">Self</span>: <span class="nc">M</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">  </span><span class="k">fn</span> <span class="nf">map</span><span class="o">&lt;</span><span class="n">U</span><span class="p">,</span><span class="w"> </span><span class="n">F</span>: <span class="nc">FunOnce</span><span class="p">(</span><span class="n">T</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">U</span><span class="o">&gt;</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">f</span>: <span class="nc">F</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">M</span><span class="o">&lt;</span><span class="n">U</span><span class="o">&gt;</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>ジェネリクスになっている登場人物は<code>M&lt;_&gt;</code>、<code>U</code>、<code>T</code> ですね。しかし<code>M&lt;_&gt;</code>は実際にはそのまま使われいる訳ではなく<code>M&lt;T&gt;</code>または<code>M&lt;U&gt;</code>の形でのみ使われています。
+</span></code></pre></div>
+<p>ジェネリクスになっている登場人物は<code>M&lt;_&gt;</code>、<code>U</code>、<code>T</code> ですね。しかし<code>M&lt;_&gt;</code>は実際にはそのまま使われいる訳ではなく<code>M&lt;T&gt;</code>または<code>M&lt;U&gt;</code>の形でのみ使われています。
 では、<code>M&lt;T&gt;</code>、<code>M&lt;U&gt;</code>をパラメータに取るようにしてはどうでしょうか。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">trait</span><span class="w"> </span><span class="n">Mappable</span><span class="o">&lt;</span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="n">MT</span><span class="o">&gt;</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="n">Self</span>: <span class="nc">MT</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">  </span><span class="k">fn</span> <span class="nf">map</span><span class="o">&lt;</span><span class="n">U</span><span class="p">,</span><span class="w"> </span><span class="n">MU</span><span class="p">,</span><span class="w"> </span><span class="n">F</span>: <span class="nc">FunOnce</span><span class="p">(</span><span class="n">T</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">U</span><span class="o">&gt;</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">f</span>: <span class="nc">F</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">MU</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>これで出来…てません。これは欲しい、正しいもの <em>も</em> 作れてはいるのですが正しくないものも含んでいます。</p>
+</span></code></pre></div>
+<p>これで出来…てません。これは欲しい、正しいもの <em>も</em> 作れてはいるのですが正しくないものも含んでいます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">impl</span><span class="w"> </span><span class="o">&lt;</span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="n">MT</span>: <span class="nb">Option</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="n">Mappable</span><span class="o">&lt;</span><span class="n">MT</span><span class="p">,</span><span class="w"> </span><span class="n">T</span><span class="o">&gt;</span><span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="nb">Option</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">  </span><span class="k">fn</span> <span class="nf">map</span><span class="o">&lt;</span><span class="n">U</span><span class="p">,</span><span class="w"> </span><span class="n">MU</span><span class="p">,</span><span class="w"> </span><span class="n">F</span>: <span class="nc">FunOnce</span><span class="p">(</span><span class="n">T</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">U</span><span class="o">&gt;</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">f</span>: <span class="nc">F</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">MU</span><span class="w"> </span><span class="p">{</span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="w">
 </span><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">r</span>: <span class="nb">Result</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="p">)</span><span class="o">&gt;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="p">.</span><span class="n">map</span><span class="p">(</span><span class="o">|</span><span class="n">i</span><span class="o">|</span><span class="w"> </span><span class="n">i</span><span class="p">.</span><span class="n">to_string</span><span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">;</span><span class="w">
-</span></code></pre></div><p><code>Option</code> に対する<code>map</code>を<code>Result</code>で受けようとしています。
+</span></code></pre></div>
+<p><code>Option</code> に対する<code>map</code>を<code>Result</code>で受けようとしています。
 これはもちろんおかしなことですが上記の型定義に従うとこういうことが出来てしまいます。
 もうちょっというと上のトレイトの定義はこういう「おかしなこと」が起こるような実装をしろ、と言っている訳で、実際には実装出来ません。</p>
+
 <p>本来なら自由パラメータが3つなのに4つの自由パラメータを取ってしまったので不整合が起きる訳です。
 では、自由パラメータを3つにして1つを従属パラメータにしてはどうでしょうか。それは<a href="https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/associated-types.html">関連型</a>を使えばRustでも出来ます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">trait</span><span class="w"> </span><span class="n">Mappable</span><span class="o">&lt;</span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="n">U</span><span class="p">,</span><span class="w"> </span><span class="n">MT</span><span class="o">&gt;</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="n">Self</span>: <span class="nc">MT</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">  </span><span class="k">type</span> <span class="nc">MU</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="w">  </span><span class="k">fn</span> <span class="nf">map</span><span class="o">&lt;</span><span class="n">F</span>: <span class="nc">FunOnce</span><span class="p">(</span><span class="n">T</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">U</span><span class="o">&gt;</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">f</span>: <span class="nc">F</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">MU</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>実は、これである程度上手くいきます。
+</span></code></pre></div>
+<p>実は、これである程度上手くいきます。
 もちろん、実際に<code>M&lt;_&gt;</code>を取れるのに比べると不自由で下手をするとバグる(MUを無関係な型に定義できてしまう)可能性があるのですが、先程の4パラメータの時と比べて
 トレイトが定義された時点で返す型は決まっているのでちゃんと実装出来ますし、使う時に不整合が起きることもありません。</p>
+
 <h1 id="hkt">HKT</h1>
+
 <p>さて、先の<code>Mappable</code>の仮想定義、<code>map</code>関数を除いて汎用的にするとこうなりますね。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">trait</span><span class="w"> </span><span class="n">HKT</span><span class="o">&lt;</span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="n">U</span><span class="p">,</span><span class="w"> </span><span class="n">MT</span><span class="o">&gt;</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="n">Self</span>: <span class="nc">MT</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">  </span><span class="k">type</span> <span class="nc">MU</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p><code>Self: MT</code> というアノテーションをつけてますが実際には使えません。<code>impl</code>を書くときに気をつけて実装するしかないです。なのでこうなります。</p>
+</span></code></pre></div>
+<p><code>Self: MT</code> というアノテーションをつけてますが実際には使えません。<code>impl</code>を書くときに気をつけて実装するしかないです。なのでこうなります。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">trait</span><span class="w"> </span><span class="n">HKT</span><span class="o">&lt;</span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="n">U</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">  </span><span class="k">type</span> <span class="nc">MU</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
@@ -198,7 +223,8 @@ playpen: application terminated with error code 101
 </span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="o">&lt;</span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="n">U</span><span class="o">&gt;</span><span class="w"> </span><span class="n">HKT</span><span class="o">&lt;</span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="n">U</span><span class="o">&gt;</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nb">Option</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">  </span><span class="k">type</span> <span class="nc">MU</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Option</span><span class="o">&lt;</span><span class="n">U</span><span class="o">&gt;</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>さて、こう書くとするとこういうことも出来てしまいます。</p>
+</span></code></pre></div>
+<p>さて、こう書くとするとこういうことも出来てしまいます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">trait</span><span class="w"> </span><span class="n">HKT</span><span class="o">&lt;</span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="n">U</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">  </span><span class="k">type</span> <span class="nc">MU</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
@@ -206,7 +232,8 @@ playpen: application terminated with error code 101
 </span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="o">&lt;</span><span class="n">S</span><span class="p">,</span><span class="w"> </span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="n">U</span><span class="o">&gt;</span><span class="w"> </span><span class="n">HKT</span><span class="o">&lt;</span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="n">U</span><span class="o">&gt;</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nb">Option</span><span class="o">&lt;</span><span class="n">S</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">  </span><span class="k">type</span> <span class="nc">MU</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Option</span><span class="o">&lt;</span><span class="n">U</span><span class="o">&gt;</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p><code>T</code>とは独立な<code>S</code>に対するコンテナに対して実装できてしまうのです。「実装するときに気をつける」とはいいましたが制約を書けるなら書いた方がいいです。こうしましょう。</p>
+</span></code></pre></div>
+<p><code>T</code>とは独立な<code>S</code>に対するコンテナに対して実装できてしまうのです。「実装するときに気をつける」とはいいましたが制約を書けるなら書いた方がいいです。こうしましょう。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">trait</span><span class="w"> </span><span class="n">HKT</span><span class="o">&lt;</span><span class="n">U</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">  </span><span class="k">type</span> <span class="nc">T</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="w">  </span><span class="k">type</span> <span class="nc">MU</span><span class="p">;</span><span class="w">
@@ -216,17 +243,26 @@ playpen: application terminated with error code 101
 </span><span class="w"></span><span class="w">  </span><span class="k">type</span> <span class="nc">T</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">T</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="w">  </span><span class="k">type</span> <span class="nc">MU</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Option</span><span class="o">&lt;</span><span class="n">U</span><span class="o">&gt;</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>これで冒頭に紹介したHKTの実装になりました。</p>
+</span></code></pre></div>
+<p>これで冒頭に紹介したHKTの実装になりました。</p>
+
 <p>逆にこのHKTの実装からMappableを定義するには、こうです。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">trait</span><span class="w"> </span><span class="n">Mappable</span><span class="o">&lt;</span><span class="n">U</span><span class="o">&gt;</span>: <span class="nc">HKT</span><span class="o">&lt;</span><span class="n">U</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">  </span><span class="k">fn</span> <span class="nf">map</span><span class="o">&lt;</span><span class="n">F</span>: <span class="nc">FunOnce</span><span class="p">(</span><span class="n">Self</span>::<span class="n">T</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">U</span><span class="o">&gt;</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">f</span>: <span class="nc">F</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span>::<span class="n">MU</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><h1 id="hkt1">HKTについてもっと</h1>
+</span></code></pre></div>
+<h1 id="hktについてもっと">HKTについてもっと</h1>
+
 <p>ようやく話題のHKTの元実装です。こちら。</p>
+
 <p><a href="https://gist.github.com/14427/af90a21b917d2892eace">Higher-kinded type trait</a></p>
+
 <p>ずいぶんとモナモナしいですがやはり高階型を使った一番実績のある構造はこのあたりでしょう。</p>
+
 <p>こういうのを扱えるとプログラミングの幅が広がりますね。</p>
-<h1 id="heading">ノート</h1>
+
+<h1 id="ノート">ノート</h1>
+
 <ul>
 <li>モナドの話題が出ましたがRustでモナドを実現するには高階型だけでなく複数ある関数トレイトのどれを選ぶかだとかその他諸々の問題を扱う必要があるようです。
 <a href="https://m4rw3r.github.io/rust-and-monad-trait/">Rust and the Monad trait - Not just higher kinded types · m4rw3r</a></li>

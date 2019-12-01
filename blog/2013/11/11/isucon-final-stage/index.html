@@ -20,6 +20,7 @@
         <meta name="twitter:site" content="@blackenedgold" />
         <meta name="twitter:title" content="チーム「銀杏絶滅しろ」でisucon学生賞もらってきました | κeenのHappy Hacκing Blog"/>
         <meta name="twitter:description" content="しばらく間が空きました。まあ、その間のことはいつかまとめて書きます。今回は isucon#3について。
+
 先日、isucon#3の予選を突破したと書きましたが、日曜にその決勝戦があったので報告です。" />
 
         <title>チーム「銀杏絶滅しろ」でisucon学生賞もらってきました | κeenのHappy Hacκing Blog</title>
@@ -112,46 +113,83 @@
                     </header>
                     <section>
                         <p>しばらく間が空きました。まあ、その間のことはいつかまとめて書きます。今回は <a href="http://isucon.net/">isucon#3</a>について。</p>
+
 <p><a href="//KeenS.github.io/blog/2013/10/09/isucon-qualifying-event/">先日</a>、isucon#3の予選を突破したと書きましたが、日曜にその決勝戦があったので報告です。</p>
-<h2 id="heading">準備</h2>
+
+<h2 id="準備">準備</h2>
+
 <p>とりあえずyokoteさんが予定が入って参加できないので@c0umeさんと二人で毎週会って予選の問題を解き直しつつSQLの勉強とかやってました。MariaDBを試したりもしましたが大して変んないねーとか。最終的に4万点くらいになったのかな？あとisucon#2で複数台構成の練習とか地味にデプロイツールCapistranoのお勉強とかもしてました。非常に便利です。</p>
-<h1 id="heading1">当日</h1>
-<p>サークルを休む許可も貰えたので何事も心配なく10時にヒカリエに集合。名札とかもらって本格的な感じ。 <img src="//KeenS.github.io/images/isucon-name-strap.jpg" alt="名札とチームの看板(?)" title="name-strap"></p>
+
+<h1 id="当日">当日</h1>
+
+<p>サークルを休む許可も貰えたので何事も心配なく10時にヒカリエに集合。名札とかもらって本格的な感じ。 <img src="//KeenS.github.io/images/isucon-name-strap.jpg" alt="名札とチームの看板(?)" title="name-strap" /></p>
+
 <p>お題のアプリは画像版ツイッターで、処理的には投稿された画像を生/中/小にサイズ変更して返すのがほとんど。htmlはインデックスだけであとはjson APIですしDBまわりも画像のアクセスレベルとユーザーのフォロー関係程度で、必要最低限といった感じ。単純にファイスサイズで攻めてきましたね。</p>
+
 <p>因みにこれ、ストーリーとしてはエンジニア二人で作って騒いでたら社長が聞き付けて「18時に大規模プロモーションかけるからそれまでに対策しといてね。あ、サーバーは4台増やしといたよ」ってなっててそれを見た瞬間のみんなの反応が</p>
+
 <blockquote>
 <p>社長を殺そう <a href="https://twitter.com/search?q=%23isucon&amp;src=hash">#isucon</a></p>
-<p>— tagomoris (@tagomoris) <a href="https://twitter.com/tagomoris/statuses/398992801850875904">November 9, 2013</a><!-- raw HTML omitted --><!-- raw HTML omitted --></p>
+
+<p>— tagomoris (@tagomoris) <a href="https://twitter.com/tagomoris/statuses/398992801850875904">November 9, 2013</a><script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script></p>
 </blockquote>
+
 <p>とかでしたw</p>
+
 <p>そうそう、そんなストーリーなもんでサーバー5台中1台にしかアプリがデプロイされてない状態でスタートです。</p>
-<h2 id="heading2">やったこと</h2>
+
+<h2 id="やったこと">やったこと</h2>
+
 <p>@c0umeさんがサーバーセットアップしてる間に私がアプリを読んできになったところをスカイプに張っていきました。</p>
+
 <p>何も考えずにとりあえずnginxを野良ビルドしてgzip配信を有効にしようとするも、なぜかnginx.confが上手く機能せずにハマる。結局conf.d以下を読んでた部分が悪さをしてたと判明。ようやくアプリ側にとりかかる。</p>
+
 <p>とりあえずリクエストの度に画像を変換してるのでそれをどうにかしようということに。POSTされた時点で変換する方針だったのですが、私は変換した画像の「パスネーム」をDBに突っ込もうって思ってたのですが@c0umeさんは画像の「バイナリデータ」を突っ込もうとしてたらしく、意思疎通ができずに若干揉めました。</p>
+
 <p>結局、1台リバースプロキシ、3台app、 1台DBの構成で、appで画像のPOSTを受けたら3サイズにコンバートしてDBに突っ込むことに。ですがとりあえず段階を踏もうということで第一段は画像をblobとしてMySQLにツッコみます。第二段でコンバートして突っ込む、第三段でさらにgzip圧縮して突っ込むことにしました。</p>
+
 <p>私がapp側、@c0umeさんがDB側でやりました。</p>
+
 <p>外部プロセスを呼んでると遅いと聞いたのでRMagickを使って変換するようにして、さらにファイルに書き出さずに<code>Magick::ImageList#from_blob</code>と<code>#to_blob</code>を使って書き換えました。</p>
+
 <p>今回、RMagickを初めて使ったのですが、ハマることハマること。<code>Magick::ImageList#crop</code>非破壊的であったり、関連ブログに書いてあるメソッドがないとか言われたり。最終的にDBが終わった@c0umeさんにも手伝ってもらってバグ取りが完了し、ベンチマークが走るようになった時点でもう終わり近く。大きな変更はやめてキャッシュとかレスポンスだけ返して裏で処理を走らせるとかをやりましたがどれもベンチマークが巧妙に作られてて失敗に終りました。あとUnicornに謎のエラーが出続けてましたが特にベンチに影響はなかったので放置しました</p>
+
 <p>それで初期スコアが1100だったのが5400程度になりました。最後20分くらいは<code>chkconfig</code>とかでfailしないよう確認作業をしてタイムアップ。暫定学生1位、全体で7位だったかと思います。</p>
+
 <p>failしないことだけを祈って1時間後の結果発表を待ちます。本計測は3分ですし謎のエラーもありましたし不安要素はいっぱいありました。</p>
-<h2 id="heading3">結果</h2>
+
+<h2 id="結果">結果</h2>
+
 <p>failしませんでした。よかった。上のチームがfailしたらしく、最終順位は学生1位、全体6位でした。まあ、failしなかったチームは7チームしかいなかったのでなんとも言い難いですが。</p>
-<p><img src="//KeenS.github.io/images/isucon-scores.jpg" alt="最終スコア。一位のLINE選抜チームは2位に4倍差を付けて圧勝しました。" title="scores-of-each-team"></p>
+
+<p><img src="//KeenS.github.io/images/isucon-scores.jpg" alt="最終スコア。一位のLINE選抜チームは2位に4倍差を付けて圧勝しました。" title="scores-of-each-team" /></p>
+
 <p>スコア的には3位と2倍差だったので案外良い線いってたのかもしれません。</p>
+
 <p>それで、タイトルにあるように学生賞もらいました。</p>
-<p><img src="//KeenS.github.io/images/isucon-prize.jpg" alt="中身は現生5万円。" title="prize"></p>
+
+<p><img src="//KeenS.github.io/images/isucon-prize.jpg" alt="中身は現生5万円。" title="prize" /></p>
+
 <p>この5万は2万ずつ二人で分けて、あとの1万でyokoteさんと3人で肉を食べに行きます。</p>
+
 <p>因みに私はこういう風に使いました。</p>
-<p><img src="//KeenS.github.io/images/isucon-books.jpg" alt="欲しいものより普段買いそうにないけど気になるものを選びました。" title="books"></p>
+
+<p><img src="//KeenS.github.io/images/isucon-books.jpg" alt="欲しいものより普段買いそうにないけど気になるものを選びました。" title="books" /></p>
+
 <p>その後懇親会ではGoとかnodeの人達がライブラリが若くてバグがあって苦しんだりしてた話を聞きました。fujiwara組長のところには行けませんでした。</p>
-<h2 id="heading4">感想</h2>
-<p>たのしかったです（小並感<br>
+
+<h2 id="感想">感想</h2>
+
+<p>たのしかったです（小並感<br />
 ベンチマークツール自体がラウンドロビンでリクエスト飛ばしてくるのでリバースプロキシ不要でしたね。あとはあせりすぎて手汗でタッチパッドの誤反応が頻発したり挙句なぜかカーネルがCPU100%使い始めて作業できなくなったりして冷や冷やしました。@c0umeさんには多大な迷惑お掛けしました。そのPC寿命じゃね？とか言われたり。</p>
+
 <p>来年は胸を張れるようなスコアを出したいですね。LINE、カヤック、データホテルのみなさんありがとうございました</p>
-<h2 id="heading5">その他</h2>
+
+<h2 id="その他">その他</h2>
+
 <p>κeenは就活生です。RubyかLispでできる仕事探してます。</p>
-<p>あとamazonほしいものリストも上げときますね。http://www.amazon.co.jp/registry/wishlist/TA077537OIUP</p>
+
+<p>あとamazonほしいものリストも上げときますね。<a href="http://www.amazon.co.jp/registry/wishlist/TA077537OIUP">http://www.amazon.co.jp/registry/wishlist/TA077537OIUP</a></p>
                     </section>
                 </article>
             </div>

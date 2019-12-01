@@ -20,6 +20,7 @@
         <meta name="twitter:site" content="@blackenedgold" />
         <meta name="twitter:title" content="RustのちょっとやりすぎなBuilderパターン | κeenのHappy Hacκing Blog"/>
         <meta name="twitter:description" content="κeenです。Rustでちょっとやりすぎだけど使う側の自由度が高くて安全なBuilderパターンを思い付いたので紹介しますね。
+
 ※2017-02-11T13:18:58Z&#43;09:00 最下部に追記しました" />
 
         <title>RustのちょっとやりすぎなBuilderパターン | κeenのHappy Hacκing Blog</title>
@@ -116,19 +117,21 @@
                     </header>
                     <section>
                         <p>κeenです。Rustでちょっとやりすぎだけど使う側の自由度が高くて安全なBuilderパターンを思い付いたので紹介しますね。</p>
+
 <p>※2017-02-11T13:18:58Z+09:00 最下部に追記しました</p>
-<h1 id="heading">目的コード</h1>
+
+<h1 id="目的コード">目的コード</h1>
+
 <p>以下のような構造体のビルダーを作りたいとします。</p>
 <pre><code class="language-struct" data-lang="struct">#[derive(Debug)]
 struct Person {
     id: u32,
     name: String,
     age: u32,
-    address: Option&lt;String&gt;,
-    zipcode: Option&lt;String&gt;,
-}
-
-</code></pre><p>雑にやると</p>
+    address: Option<String>,
+    zipcode: Option<String>,
+}</code></pre>
+<p>雑にやると</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">struct</span> <span class="nc">PersonBuilder</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="n">id</span>: <span class="nb">Option</span><span class="o">&lt;</span><span class="kt">u32</span><span class="o">&gt;</span><span class="p">,</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="n">name</span>: <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span><span class="w">
@@ -156,10 +159,14 @@ struct Person {
 </span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="w">  </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>とbuildの返り値が<code>Option</code>型になってしまい、あまりうれしくありません。
+</span></code></pre></div>
+<p>とbuildの返り値が<code>Option</code>型になってしまい、あまりうれしくありません。
 さらには例えば<code>id</code>を2回呼んだらどうなるんだとかツッコミどころが数多くあります。</p>
+
 <p>ということで色々な回避策を先人達は考えてきました。</p>
-<h1 id="heading1">不自由なコード</h1>
+
+<h1 id="不自由なコード">不自由なコード</h1>
+
 <p>普通にやるなら</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">struct</span> <span class="nc">PersonBuilder</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="n">id</span>: <span class="kt">u32</span><span class="p">,</span><span class="w">
@@ -176,8 +183,11 @@ struct Person {
 </span><span class="w"></span><span class="w">  </span><span class="c1">// 返り値がOptionじゃない
 </span><span class="c1"></span><span class="w">  </span><span class="k">fn</span> <span class="nf">build</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Person</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="w"> </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>のように<code>Option</code>でないフィールドをコンストラクタで受け取れば安全に作れますが、コンストラクタを呼ぶ時点でいくつかフィールドが揃っている必要がある、そもそも元の構造体と何が違うんだ、など色々問題があります。</p>
-<h1 id="heading2">少しマシなコード</h1>
+</span></code></pre></div>
+<p>のように<code>Option</code>でないフィールドをコンストラクタで受け取れば安全に作れますが、コンストラクタを呼ぶ時点でいくつかフィールドが揃っている必要がある、そもそも元の構造体と何が違うんだ、など色々問題があります。</p>
+
+<h1 id="少しマシなコード">少しマシなコード</h1>
+
 <p>オートマトンのようにビルダーが状態遷移するコードを使うと、1つ1つの引数をビルドしつつ安全なコードが出来ます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">struct</span> <span class="nc">PersonBuilderId</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="k">struct</span> <span class="nc">PersonBuilderName</span><span class="p">{</span><span class="n">id</span>: <span class="kt">u32</span><span class="p">}</span><span class="w">
@@ -228,33 +238,37 @@ struct Person {
 </span><span class="w"></span><span class="w">  </span><span class="c1">// これまたOptionじゃなくなってる
 </span><span class="c1"></span><span class="w">  </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">build</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Person</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="w"> </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="w">
-</span></code></pre></div><p>これは以下のように</p>
+</span></code></pre></div>
+<p>これは以下のように</p>
 <pre><code>fn main() {
   let person = PersonBuilder::new()
          .id(1)
-         .name(&quot;κeen&quot;.to_string())
+         .name("κeen".to_string())
          .age(24)
-         .address(&quot;Tokyo&quot;.to_string())
+         .address("Tokyo".to_string())
          .build();
-  println!(&quot;{:?}&quot;, person)
-}
-</code></pre><p>と使えます(即興で書いたので試してないけど)。</p>
+  println!("{:?}", person)
+}</code></pre>
+<p>と使えます(即興で書いたので試してないけど)。</p>
+
 <p>とりあえず使えそうな気がしますが、型レベルで状態遷移をハードコードしているのでメソッドを呼び出す順番が固定されてしまいます。
 なので以下はエラーです。</p>
 <pre><code>fn main() {
   let person = PersonBuilder::new()
          // nameとidを逆順に呼び出してみる
-         .name(&quot;κeen&quot;.to_string())
+         .name("κeen".to_string())
          .id(1)
          .age(24)
-         .address(&quot;Tokyo&quot;.to_string())
+         .address("Tokyo".to_string())
          .build();
-  println!(&quot;{:?}&quot;, person)
-}
-</code></pre><p>あとは単純に<code>struct PersonBuilderId</code>、<code>struct PersonBuilderName{id: u32}</code>、<code>struct PersonBuilderAge{id: u32, name: String}</code>と作っていくのが面倒という話もあります。</p>
+  println!("{:?}", person)
+}</code></pre>
+<p>あとは単純に<code>struct PersonBuilderId</code>、<code>struct PersonBuilderName{id: u32}</code>、<code>struct PersonBuilderAge{id: u32, name: String}</code>と作っていくのが面倒という話もあります。</p>
+
 <p>今回はそれを改善したいという話</p>
-<h1 id="heading3">幽霊型を使ったフィールド状態</h1>
+
+<h1 id="幽霊型を使ったフィールド状態">幽霊型を使ったフィールド状態</h1>
+
 <p>今回提案するビルダー型はこれです。提案するといってもどうせ既に誰かが考えてるでしょうが。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">marker</span>::<span class="n">PhantomData</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="k">struct</span> <span class="nc">Empty</span><span class="p">;</span><span class="w">
@@ -270,7 +284,9 @@ struct Person {
 </span><span class="w"></span><span class="w">    </span><span class="n">address</span>: <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="n">zipcode</span>: <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p><a href="https://doc.rust-lang.org/std/marker/struct.PhantomData.html">PhantomData</a>という特殊な型を使ってビルダーに余計な型を付けています。</p>
+</span></code></pre></div>
+<p><a href="https://doc.rust-lang.org/std/marker/struct.PhantomData.html">PhantomData</a>という特殊な型を使ってビルダーに余計な型を付けています。</p>
+
 <p>この型、最初は<code>Empty</code>から出発します。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">impl</span><span class="w"> </span><span class="n">PersonBuilder</span><span class="o">&lt;</span><span class="n">Empty</span><span class="p">,</span><span class="w"> </span><span class="n">Empty</span><span class="p">,</span><span class="w"> </span><span class="n">Empty</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">new</span><span class="p">(</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span><span class="w"> </span><span class="p">{</span><span class="w">
@@ -287,7 +303,9 @@ struct Person {
 </span><span class="w"></span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>そしてフィールドが埋められると対応する型がEmptyからFilledになります。</p>
+</span></code></pre></div>
+<p>そしてフィールドが埋められると対応する型がEmptyからFilledになります。</p>
+
 <p>フィールドに<code>Some</code>が埋められるのと同時に対応する<code>_state</code>フィールドを<code>Empty</code>から<code>Filled</code>にすると整合性が崩れません。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="c1">// Id以外、つまりNameとAgeはいじらないのでジェネリクスに
 </span><span class="c1"></span><span class="k">impl</span><span class="o">&lt;</span><span class="n">Name</span><span class="p">,</span><span class="w"> </span><span class="n">Age</span><span class="o">&gt;</span><span class="w"> </span><span class="n">PersonBuilder</span><span class="o">&lt;</span><span class="n">Empty</span><span class="p">,</span><span class="w"> </span><span class="n">Name</span><span class="p">,</span><span class="w"> </span><span class="n">Age</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
@@ -334,8 +352,8 @@ struct Person {
 </span><span class="w"></span><span class="w">        </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="w">
-</span></code></pre></div><p><code>Option</code>のままで構わないフィールドについては雑で構いません。</p>
+</span></code></pre></div>
+<p><code>Option</code>のままで構わないフィールドについては雑で構いません。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">impl</span><span class="o">&lt;</span><span class="n">Id</span><span class="p">,</span><span class="w"> </span><span class="n">Name</span><span class="p">,</span><span class="w"> </span><span class="n">Age</span><span class="o">&gt;</span><span class="w"> </span><span class="n">PersonBuilder</span><span class="o">&lt;</span><span class="n">Id</span><span class="p">,</span><span class="w"> </span><span class="n">Name</span><span class="p">,</span><span class="w"> </span><span class="n">Age</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">address</span><span class="o">&lt;</span><span class="n">S</span>: <span class="nb">Into</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="o">&gt;</span><span class="p">(</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">address</span>: <span class="nc">S</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">address</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="n">address</span><span class="p">.</span><span class="n">into</span><span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">;</span><span class="w">
@@ -347,7 +365,8 @@ struct Person {
 </span><span class="w"></span><span class="w">        </span><span class="bp">self</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>そして必須フィールド全てが満たされた時にだけ<code>build</code>が呼べます。<code>unwrap</code>を呼んでますが安全であることに注意して下さい。</p>
+</span></code></pre></div>
+<p>そして必須フィールド全てが満たされた時にだけ<code>build</code>が呼べます。<code>unwrap</code>を呼んでますが安全であることに注意して下さい。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">impl</span><span class="w"> </span><span class="n">PersonBuilder</span><span class="o">&lt;</span><span class="n">Filled</span><span class="p">,</span><span class="w"> </span><span class="n">Filled</span><span class="p">,</span><span class="w"> </span><span class="n">Filled</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">build</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Person</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">        </span><span class="n">Person</span><span class="w"> </span><span class="p">{</span><span class="w">
@@ -359,7 +378,8 @@ struct Person {
 </span><span class="w"></span><span class="w">        </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>こうすることで、呼び出しが非常に自由になります。</p>
+</span></code></pre></div>
+<p>こうすることで、呼び出しが非常に自由になります。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">person</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">PersonBuilder</span>::<span class="n">new</span><span class="p">(</span><span class="p">)</span><span class="w">
 </span><span class="w"></span><span class="w">        </span><span class="p">.</span><span class="n">age</span><span class="p">(</span><span class="mi">24</span><span class="p">)</span><span class="w">
@@ -369,14 +389,20 @@ struct Person {
 </span><span class="w"></span><span class="w">        </span><span class="p">.</span><span class="n">build</span><span class="p">(</span><span class="p">)</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{:?}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">person</span><span class="p">)</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>メソッドは自由に組み換えられますが、必須フィールドがなかったら<code>build</code>が呼べません（コンパイルエラー）になります。</p>
+</span></code></pre></div>
+<p>メソッドは自由に組み換えられますが、必須フィールドがなかったら<code>build</code>が呼べません（コンパイルエラー）になります。</p>
+
 <p>これは応用も出来て、それぞれの状態が独立しているので例えば「2つのVector合計3つ以上要素が入っていたら」、とか「R、G、BあるいはH、S、Vの3つが揃っていたら」とかオートマトンではエンコードしづらいものでも比較的楽に書けます。</p>
+
 <p>ということで便利なbuilderが出来ました。めでたしめでたし。といいたいところですが、ちょっとコードが冗長ですよね。マクロで生成なんかも出来るのですがあまりやりたくありません。ということで「ちょっとやりすぎな」Builderパターンでした。</p>
+
 <h1 id="some-like-it-unsafe">Some like it unsafe</h1>
+
 <p>上のコード、実はもうちょっと短く書けます。ただし<code>unsafe</code>な機能を使いますが。</p>
+
 <p>こう書いていたものが</p>
-<pre><code>impl&lt;Name, Age&gt; PersonBuilder&lt;Empty, Name, Age&gt; {
-    pub fn id(self, id: u32) -&gt; PersonBuilder&lt;Filled, Name, Age&gt; {
+<pre><code>impl<Name, Age> PersonBuilder<Empty, Name, Age> {
+    pub fn id(self, id: u32) -> PersonBuilder<Filled, Name, Age> {
         PersonBuilder {
             id: Some(id),
             id_state: PhantomData,
@@ -388,8 +414,8 @@ struct Person {
             zipcode: self.zipcode,
         }
     }
-}
-</code></pre><p><a href="https://doc.rust-lang.org/std/mem/fn.transmute.html"><code>std::mem::transmute</code></a>を使うことで2行になります。</p>
+}</code></pre>
+<p><a href="https://doc.rust-lang.org/std/mem/fn.transmute.html"><code>std::mem::transmute</code></a>を使うことで2行になります。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">mem</span>::<span class="n">transmute</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="w">
 </span><span class="w"></span><span class="k">impl</span><span class="o">&lt;</span><span class="n">Name</span><span class="p">,</span><span class="w"> </span><span class="n">Age</span><span class="o">&gt;</span><span class="w"> </span><span class="n">PersonBuilder</span><span class="o">&lt;</span><span class="n">Empty</span><span class="p">,</span><span class="w"> </span><span class="n">Name</span><span class="p">,</span><span class="w"> </span><span class="n">Age</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
@@ -398,16 +424,24 @@ struct Person {
 </span><span class="w"></span><span class="w">        </span><span class="k">unsafe</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">transmute</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="w">
-</span></code></pre></div><p>すごいですね。
+</span></code></pre></div>
+<p>すごいですね。
 しかし、案外しょっちゅうtransmuteはミスなどで間違った変換をしてしまう（上記で言えばidフィールドを更新したのにname_stateの型を変更してしまう）上に型検査で弾けないので個人的にはあまりおすすめ出来ません。
 これも「ちょっとやりすぎ」なTipsでした。</p>
-<h1 id="20170211t131858z0900-">2017-02-11T13:18:58Z+09:00 追記</h1>
+
+<h1 id="2017-02-11t13-18-58z-09-00-追記">2017-02-11T13:18:58Z+09:00 追記</h1>
+
 <p>qnighyさんからもっと便利な方法の提案がありました。</p>
-<!-- raw HTML omitted -->
+
+<p><blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">こう <a href="https://t.co/undNgEM2IQ">https://t.co/undNgEM2IQ</a> やったらunwrapしなくてすみそう？ / “RustのちょっとやりすぎなBuilderパターン | κeenのHappy Hacκing Blog” <a href="https://t.co/ogDOpYifjh">https://t.co/ogDOpYifjh</a></p>&mdash; Masaki⊣Hara (@qnighy) <a href="https://twitter.com/qnighy/status/830053476096843776">2017年2月10日</a></blockquote>
+<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script></p>
+
 <p>実際のコードはこちら。</p>
-<!-- raw HTML omitted -->
+
+<script src="https://gist.github.com/qnighy/e7a833eebd57ef778eaff3a8ab3649d7.js"></script>
+
 <p>transmuteを使ったサボった実装は出来なくなるけどそもそも余計なフィールドを使う必要がなくなるので手軽ですね。</p>
+
 <p>qnighyさんありがとうございました。</p>
                     </section>
                 </article>
