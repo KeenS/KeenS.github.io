@@ -123,252 +123,234 @@
     </header>
     <div class="reveal">
         <div class="slides">
-            <section data-markdown
-    data-separator="\n===\n"
-    data-vertical="\n---\n"
-    data-notes="^Note:">
-<script type="text/template">
-# ClojureでSSPを作った話
-----------------------
-
-<!-- .slide: class="center" -->
-===
-# About Me
----------
-![κeenのアイコン](/images/icon.png) <!-- .element: style="position:absolute;right:0;z-index:-1" -->
-
- + κeen
- + [@blackenedgold](https://twitter.com/blackenedgold)
- + Github: [KeenS](https://github.com/KeenS)
- + サイバーエージェントのエンジニア
- + Lisp, ML, Rust, Shell Scriptあたりを書きます
-
-===
-# SSPとは
--------
-※今回作ったものの話なので実際は少し違う
-
-* Supplier Side Platform
-* メディアからの広告リクエストを受けて表示権をオークションに掛け、落札された広告を表示する
-  0. 広告リクエストを受け取って
-  1. 各DSPに競りの通知を投げて
-  2. 入札を受け取って
-  3. 落札者と落札価格を決めて
-  4. 落札通知を出す
-
-===
-# アドテクコンペ
----------------
-
-* [ビジネスモデルもエンジニアリングも学べるアドテクスタジオの育成プログラムとは | 株式会社サイバーエージェント](https://www.cyberagent.co.jp/techinfo_detail/id=11380)
-* サイバーエージェントの学生向けインターン
-* 3日間、3、4人のチームで **DSP** を作る
-* 学生は7チーム、1チームあたり2000q/sを捌くことになってる
-* 学生のDSPを繋ぐための **SSP** が必要になったので作ることに。
-
-===
-<iframe src="//www.slideshare.net/slideshow/embed_code/key/92I5tQt6q6IjII" width="425" height="355" frameborder="0" marginwidth="0" marginheight="0" scrolling="no" style="border:1px solid #CCC; border-width:1px; margin-bottom:5px; max-width: 100%;" allowfullscreen> </iframe> <div style="margin-bottom:5px"> <strong> <a href="//www.slideshare.net/prir/ss-35918532" title="日本におけるアドテク市場とサイバーエージェントのアドテク事業について" target="_blank">日本におけるアドテク市場とサイバーエージェントのアドテク事業について</a> </strong> from <strong><a href="//www.slideshare.net/prir" target="_blank">CyberAgent, Inc.</a></strong> </div>
-
-===
-# 作るもの
-----------
-
-* 各DSPに競りの通知(HTTPリクエスト)を投げる大規模HTTPクライアント
-  + 各DSPが2000q/s x 7チーム + 落札通知 = 16000q/s
-  + 丁度2000q/sになるような制御も必要
-* 入札を受けてのオークション、結果のロギングなど
-* 管理画面
-
-===
-# s7pについて
--------------
-
-* 今回作ったSSP
-* [KeenS/s7p](https://github.com/KeenS/s7p)
-* Clojure製
-* 3日くらいで作った
-* やや粗い部分も
-
-===
-# 今日話すこと
---------------
-
-* なぜClojureか
-* 16000q/s出すための工夫
-* 16000q/sに抑えるための制御
-* 運用して困った話とか
-
-===
-
-# なぜClojureか
-
-<!-- .slide: class="center" -->
-
-===
-# なぜClojureか
----------------
-
-* リクエストの数が多いので非同期IOは必須
-* 100msでタイムアウトする仕様なのでタイムアウト処理も
-* もともとはScala(akka)で作ったs6pがあった
-* Actorの設計が良くなかったので遅かった
-* あと非同期HTTPクライアントにタイムアウトがなかった
-* プロダクションコードを流用したのでインターンが終わった後公開出来なかった
-* 別言語で書き直すにあたってGo, Clojure, Common Lisp, Rust, Erlangが検討された
-===
-# なぜClojureか
----------------
-
-* Common Lisp: 一番慣れてるが、非同期HTTPクライアント(とfutureライブラリ)が使いづらそうなのでやめた
-* Rust: とりあえずパフォーマンスは出そうだし使いたかったが非同期HTTPクライアントが見付からなかった
-* Clojure: そこそこ慣れてるし速そうな非同期HTTPクライアントがあった。core.asyncで非同期プログラミングもし易い
-* Erlang: 恐らく一番向いてるが、ほとんど経験がない
-* Go: 結構向いてそうだがあまり経験がないのでClojureを選んだ
-
-===
-# 16kq/s出すための工夫
-<!-- .slide: class="center" -->
-===
-# 16kq/s出すための工夫
-------------------------
-非同期IO（一部同期しちゃったけど）
-
-``` clojure
-(defn work [test req result]
-  (->> @dsps
-       (sequence (comp
-       ;; 全DSPにPOSTしてから(timeout 100ms)
-                  (map (fn [dsp] {:dsp dsp :response (http/post (:url dsp) (json-request-option req))}))
-       ;; 結果を待ち合わせる
-                  (map destruct)
-                  ...))
-       ...))
-    ....
-```
-
-===
-# 16kq/s出すための工夫2
-------------------------
-一部同期したのでとにかくスレッド。スレッドへのディスパッチはチャネルで一発解決。
-
-``` clojure
-(defn worker [c]
-  (thread
-   ...))
-```
-
-```clojure
-(defn make-workers [ch n]
-  (doall (map (fn [_] (core/worker ch)) (range n))))
-```
-
-``` clojure
- workers (manage/make-workers ch 1024)
-```
-
-===
-# 16kq/s出すための工夫3
-------------------------
-ZeroMQを使ったmaster-slave構成
-(最終的にSlave18台)
-
-![master-slave構成図](/images/s7p/s7p.svg)
-
-
-===
-# <span style="font-size: 90%">16kq/sに抑えるための制御</span>
-<!-- .slide: class="center" -->
-===
-# <span style="font-size: 90%">16kq/sに抑えるための制御</span>
----------------------------
-
-* DSPの買い付け能力というビジネス的な問題ではなくサーバの負荷という技術的な問題による制御
-* 1秒で160kクエリ投げて9秒休むとかは出来ない。もう少し細かく制御する必要がある。
-* しかし制御をあまり細かくしすぎると今度はそこで遅くなりそう。
-* リクエストを実際に投げるSlaveは分散してるけど統一した制御が必要
-
-===
-# <span style="font-size: 90%">16kq/sに抑えるための制御</span>
----------------------------
-Master側で100ms毎にに200個だけZeroMQのキューに積む
-
-![QPS制御の図](/images/s7p/qps_control.svg)
-
-===
-# <span style="font-size: 90%">16kq/sに抑えるための制御</span>
----------------------------
-実装にはcore.asyncの `chan` と `timeout` を使用。(非同期プログラミング便利!)
-
-```Clojure
-(defn start-query [sender reqs]
-  (let [timer (timer 100)]
-    (go-loop []
-      (let [t (<! timer)
-            took (take @qp100ms @reqs)]
-        (doall
-         (doseq [req took]
-           (zmq/send-str sender (json/generate-string req))))
-        (swap! reqs #(drop @qp100ms %))
-        (if (and t (not (empty? took)))
-          (recur)
-          (println "request done"))))
-    timer))
-```
-
-===
-# 運用して困った話とか
-<!-- .slide: class="center" -->
-
-===
-# 運用して困った話とか
----------------------
-## <span style="font-size: 50%">レスポンスが遅いDSPにSSPのパフォーマンスが引き摺られる</span>
-* DSPが速ければ余裕を見ても10台あれば十分だった
-* DSPのパフォーマンスに仮定をおけないので上限ギリギリの18台
-* 同期: 「DSP作ってる時はちょっとくらい待ってくれよ、って思ってたけどSSP運用したら遅いDSPガンガン切りたくなる気持分かった」
-===
-# 運用して困った話とか
----------------------
-## パフォーマンス検証が大変
-* リクエストを捌くサーバのパフォーマンスをどうするか悩む
-* サーバをチューニングすればSSPも速くなるが、検証にならない
-* かといって投げたクエリを捌けないサーバに対して検証する訳にもいかない
-* 結局安全側に倒したパフォーマンス見積りに。
-
-===
-# 運用して困った話とか
----------------------
-## <span style="font-size: 80%">Masterがログ吐きすぎてDisk Full</span>
-* 最初の予定ではMasterはディスクをそんなに使わなかったのでディスクの小さいインスタンスだった
-* ディスクスペース空けてMaster再起動で復旧。焦った。
-===
-# 運用して困った話とか
----------------------
-## <span style="font-size: 60%">timeoutし続けるDSPがいてSlave完全沈黙</span>
-* コネクションのクローズ待ちで固まってた
-* 該当DSPを切った上でSlaveの再起動で復旧
-  * カーネルのチューニングかtimeout頻度の検知が必要そう
-* timeoutを考慮に入れた構成にしてた筈なので想定外だった
-===
-# まとめ
----------
-
-* ClojureでSSP作ったよ
-* Clojure使えば非同期プログラミングが簡単に出来るよ
-* 運用って大変だよ
-
-===
-# 参考
--------
-
-* [KeenS/s7p: sexp version of s6p; a toy SSP.](https://github.com/KeenS/s7p)
-* [ClojureでDSPを作った話 | κeenのHappy Hacκing Blog](http://keens.github.io/slide/ClojuredeDSPwotsukuttahanashi/)
-* [KeenS/b11d: A toy DSP](https://github.com/KeenS/b11d)
-* [アドテクコンペ | 株式会社サイバーエージェント](https://www.cyberagent.co.jp/recruit/fresh/program_detail/id=11303&season=2016)
-* [ビジネスモデルもエンジニアリングも学べるアドテクスタジオの育成プログラムとは | 株式会社サイバーエージェント](https://www.cyberagent.co.jp/techinfo_detail/id=11380)
-
-</script>
-</section>
+            <!-- raw HTML omitted -->
+<!-- raw HTML omitted -->
+<p>===</p>
+<h1 id="about-me">About Me</h1>
+<hr>
+<p><img src="//KeenS.github.io/images/icon.png" alt="κeenのアイコン"> <!-- raw HTML omitted --></p>
+<ul>
+<li>κeen</li>
+<li><a href="https://twitter.com/blackenedgold">@blackenedgold</a></li>
+<li>Github: <a href="https://github.com/KeenS">KeenS</a></li>
+<li>サイバーエージェントのエンジニア</li>
+<li>Lisp, ML, Rust, Shell Scriptあたりを書きます</li>
+</ul>
+<p>===</p>
+<h1 id="ssp">SSPとは</h1>
+<hr>
+<p>※今回作ったものの話なので実際は少し違う</p>
+<ul>
+<li>Supplier Side Platform</li>
+<li>メディアからの広告リクエストを受けて表示権をオークションに掛け、落札された広告を表示する
+0. 広告リクエストを受け取って
+<ol>
+<li>各DSPに競りの通知を投げて</li>
+<li>入札を受け取って</li>
+<li>落札者と落札価格を決めて</li>
+<li>落札通知を出す</li>
+</ol>
+</li>
+</ul>
+<p>===</p>
+<h1 id="heading">アドテクコンペ</h1>
+<hr>
+<ul>
+<li><a href="https://www.cyberagent.co.jp/techinfo_detail/id=11380">ビジネスモデルもエンジニアリングも学べるアドテクスタジオの育成プログラムとは | 株式会社サイバーエージェント</a></li>
+<li>サイバーエージェントの学生向けインターン</li>
+<li>3日間、3、4人のチームで <strong>DSP</strong> を作る</li>
+<li>学生は7チーム、1チームあたり2000q/sを捌くことになってる</li>
+<li>学生のDSPを繋ぐための <strong>SSP</strong> が必要になったので作ることに。</li>
+</ul>
+<p>===</p>
+<!-- raw HTML omitted -->
+<p>===</p>
+<h1 id="heading1">作るもの</h1>
+<hr>
+<ul>
+<li>各DSPに競りの通知(HTTPリクエスト)を投げる大規模HTTPクライアント
+<ul>
+<li>各DSPが2000q/s x 7チーム + 落札通知 = 16000q/s</li>
+<li>丁度2000q/sになるような制御も必要</li>
+</ul>
+</li>
+<li>入札を受けてのオークション、結果のロギングなど</li>
+<li>管理画面</li>
+</ul>
+<p>===</p>
+<h1 id="s7p">s7pについて</h1>
+<hr>
+<ul>
+<li>今回作ったSSP</li>
+<li><a href="https://github.com/KeenS/s7p">KeenS/s7p</a></li>
+<li>Clojure製</li>
+<li>3日くらいで作った</li>
+<li>やや粗い部分も</li>
+</ul>
+<p>===</p>
+<h1 id="heading2">今日話すこと</h1>
+<hr>
+<ul>
+<li>なぜClojureか</li>
+<li>16000q/s出すための工夫</li>
+<li>16000q/sに抑えるための制御</li>
+<li>運用して困った話とか</li>
+</ul>
+<p>===</p>
+<h1 id="clojure">なぜClojureか</h1>
+<!-- raw HTML omitted -->
+<p>===</p>
+<h1 id="clojure1">なぜClojureか</h1>
+<hr>
+<ul>
+<li>リクエストの数が多いので非同期IOは必須</li>
+<li>100msでタイムアウトする仕様なのでタイムアウト処理も</li>
+<li>もともとはScala(akka)で作ったs6pがあった</li>
+<li>Actorの設計が良くなかったので遅かった</li>
+<li>あと非同期HTTPクライアントにタイムアウトがなかった</li>
+<li>プロダクションコードを流用したのでインターンが終わった後公開出来なかった</li>
+<li>別言語で書き直すにあたってGo, Clojure, Common Lisp, Rust, Erlangが検討された
+===</li>
+</ul>
+<h1 id="clojure2">なぜClojureか</h1>
+<hr>
+<ul>
+<li>Common Lisp: 一番慣れてるが、非同期HTTPクライアント(とfutureライブラリ)が使いづらそうなのでやめた</li>
+<li>Rust: とりあえずパフォーマンスは出そうだし使いたかったが非同期HTTPクライアントが見付からなかった</li>
+<li>Clojure: そこそこ慣れてるし速そうな非同期HTTPクライアントがあった。core.asyncで非同期プログラミングもし易い</li>
+<li>Erlang: 恐らく一番向いてるが、ほとんど経験がない</li>
+<li>Go: 結構向いてそうだがあまり経験がないのでClojureを選んだ</li>
+</ul>
+<p>===</p>
+<h1 id="16kqs">16kq/s出すための工夫</h1>
+<!-- raw HTML omitted -->
+<p>===</p>
+<h1 id="16kqs1">16kq/s出すための工夫</h1>
+<hr>
+<p>非同期IO（一部同期しちゃったけど）</p>
+<div class="highlight"><pre class="chroma"><code class="language-clojure" data-lang="clojure"><span class="p">(</span><span class="kd">defn </span><span class="nv">work</span> <span class="p">[</span><span class="nb">test </span><span class="nv">req</span> <span class="nv">result</span><span class="p">]</span>
+  <span class="p">(</span><span class="nf">-&gt;&gt;</span> <span class="o">@</span><span class="nv">dsps</span>
+       <span class="p">(</span><span class="nf">sequence</span> <span class="p">(</span><span class="nf">comp</span>
+       <span class="c1">;; 全DSPにPOSTしてから(timeout 100ms)</span>
+                  <span class="p">(</span><span class="nb">map </span><span class="p">(</span><span class="k">fn </span><span class="p">[</span><span class="nv">dsp</span><span class="p">]</span> <span class="p">{</span><span class="ss">:dsp</span> <span class="nv">dsp</span> <span class="ss">:response</span> <span class="p">(</span><span class="nf">http/post</span> <span class="p">(</span><span class="ss">:url</span> <span class="nv">dsp</span><span class="p">)</span> <span class="p">(</span><span class="nf">json-request-option</span> <span class="nv">req</span><span class="p">)</span><span class="p">)</span><span class="p">}</span><span class="p">)</span><span class="p">)</span>
+       <span class="c1">;; 結果を待ち合わせる</span>
+                  <span class="p">(</span><span class="nb">map </span><span class="nv">destruct</span><span class="p">)</span>
+                  <span class="nv">...</span><span class="p">)</span><span class="p">)</span>
+       <span class="nv">...</span><span class="p">)</span><span class="p">)</span>
+    <span class="nv">....</span>
+</code></pre></div><p>===</p>
+<h1 id="16kqs2">16kq/s出すための工夫2</h1>
+<hr>
+<p>一部同期したのでとにかくスレッド。スレッドへのディスパッチはチャネルで一発解決。</p>
+<div class="highlight"><pre class="chroma"><code class="language-clojure" data-lang="clojure"><span class="p">(</span><span class="kd">defn </span><span class="nv">worker</span> <span class="p">[</span><span class="nv">c</span><span class="p">]</span>
+  <span class="p">(</span><span class="nf">thread</span>
+   <span class="nv">...</span><span class="p">)</span><span class="p">)</span>
+</code></pre></div><div class="highlight"><pre class="chroma"><code class="language-clojure" data-lang="clojure"><span class="p">(</span><span class="kd">defn </span><span class="nv">make-workers</span> <span class="p">[</span><span class="nv">ch</span> <span class="nv">n</span><span class="p">]</span>
+  <span class="p">(</span><span class="nb">doall </span><span class="p">(</span><span class="nb">map </span><span class="p">(</span><span class="k">fn </span><span class="p">[</span><span class="nv">_</span><span class="p">]</span> <span class="p">(</span><span class="nf">core/worker</span> <span class="nv">ch</span><span class="p">)</span><span class="p">)</span> <span class="p">(</span><span class="nb">range </span><span class="nv">n</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
+</code></pre></div><div class="highlight"><pre class="chroma"><code class="language-clojure" data-lang="clojure"> <span class="nv">workers</span> <span class="p">(</span><span class="nf">manage/make-workers</span> <span class="nv">ch</span> <span class="mi">1024</span><span class="p">)</span>
+</code></pre></div><p>===</p>
+<h1 id="16kqs3">16kq/s出すための工夫3</h1>
+<hr>
+<p>ZeroMQを使ったmaster-slave構成
+(最終的にSlave18台)</p>
+<p><img src="//KeenS.github.io/images/s7p/s7p.svg" alt="master-slave構成図"></p>
+<p>===</p>
+<h1 id="span-stylefontsize-9016kqsspan"><!-- raw HTML omitted -->16kq/sに抑えるための制御<!-- raw HTML omitted --></h1>
+<!-- raw HTML omitted -->
+<p>===</p>
+<h1 id="span-stylefontsize-9016kqsspan1"><!-- raw HTML omitted -->16kq/sに抑えるための制御<!-- raw HTML omitted --></h1>
+<hr>
+<ul>
+<li>DSPの買い付け能力というビジネス的な問題ではなくサーバの負荷という技術的な問題による制御</li>
+<li>1秒で160kクエリ投げて9秒休むとかは出来ない。もう少し細かく制御する必要がある。</li>
+<li>しかし制御をあまり細かくしすぎると今度はそこで遅くなりそう。</li>
+<li>リクエストを実際に投げるSlaveは分散してるけど統一した制御が必要</li>
+</ul>
+<p>===</p>
+<h1 id="span-stylefontsize-9016kqsspan2"><!-- raw HTML omitted -->16kq/sに抑えるための制御<!-- raw HTML omitted --></h1>
+<hr>
+<p>Master側で100ms毎にに200個だけZeroMQのキューに積む</p>
+<p><img src="//KeenS.github.io/images/s7p/qps_control.svg" alt="QPS制御の図"></p>
+<p>===</p>
+<h1 id="span-stylefontsize-9016kqsspan3"><!-- raw HTML omitted -->16kq/sに抑えるための制御<!-- raw HTML omitted --></h1>
+<hr>
+<p>実装にはcore.asyncの <code>chan</code> と <code>timeout</code> を使用。(非同期プログラミング便利!)</p>
+<div class="highlight"><pre class="chroma"><code class="language-Clojure" data-lang="Clojure"><span class="p">(</span><span class="kd">defn </span><span class="nv">start-query</span> <span class="p">[</span><span class="nv">sender</span> <span class="nv">reqs</span><span class="p">]</span>
+  <span class="p">(</span><span class="k">let </span><span class="p">[</span><span class="nv">timer</span> <span class="p">(</span><span class="nf">timer</span> <span class="mi">100</span><span class="p">)</span><span class="p">]</span>
+    <span class="p">(</span><span class="nf">go-loop</span> <span class="p">[</span><span class="p">]</span>
+      <span class="p">(</span><span class="k">let </span><span class="p">[</span><span class="nv">t</span> <span class="p">(</span><span class="nf">&lt;!</span> <span class="nv">timer</span><span class="p">)</span>
+            <span class="nv">took</span> <span class="p">(</span><span class="nb">take </span><span class="o">@</span><span class="nv">qp100ms</span> <span class="o">@</span><span class="nv">reqs</span><span class="p">)</span><span class="p">]</span>
+        <span class="p">(</span><span class="nf">doall</span>
+         <span class="p">(</span><span class="nb">doseq </span><span class="p">[</span><span class="nv">req</span> <span class="nv">took</span><span class="p">]</span>
+           <span class="p">(</span><span class="nf">zmq/send-str</span> <span class="nv">sender</span> <span class="p">(</span><span class="nf">json/generate-string</span> <span class="nv">req</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
+        <span class="p">(</span><span class="nf">swap!</span> <span class="nv">reqs</span> <span class="o">#</span><span class="p">(</span><span class="nb">drop </span><span class="o">@</span><span class="nv">qp100ms</span> <span class="nv">%</span><span class="p">)</span><span class="p">)</span>
+        <span class="p">(</span><span class="k">if </span><span class="p">(</span><span class="nb">and </span><span class="nv">t</span> <span class="p">(</span><span class="nb">not </span><span class="p">(</span><span class="nf">empty?</span> <span class="nv">took</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
+          <span class="p">(</span><span class="nf">recur</span><span class="p">)</span>
+          <span class="p">(</span><span class="nb">println </span><span class="s">&#34;request done&#34;</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
+    <span class="nv">timer</span><span class="p">)</span><span class="p">)</span>
+</code></pre></div><p>===</p>
+<h1 id="heading3">運用して困った話とか</h1>
+<!-- raw HTML omitted -->
+<p>===</p>
+<h1 id="heading4">運用して困った話とか</h1>
+<hr>
+<h2 id="span-stylefontsize-50dspsspspan"><!-- raw HTML omitted -->レスポンスが遅いDSPにSSPのパフォーマンスが引き摺られる<!-- raw HTML omitted --></h2>
+<ul>
+<li>DSPが速ければ余裕を見ても10台あれば十分だった</li>
+<li>DSPのパフォーマンスに仮定をおけないので上限ギリギリの18台</li>
+<li>同期: 「DSP作ってる時はちょっとくらい待ってくれよ、って思ってたけどSSP運用したら遅いDSPガンガン切りたくなる気持分かった」
+===</li>
+</ul>
+<h1 id="heading5">運用して困った話とか</h1>
+<hr>
+<h2 id="heading6">パフォーマンス検証が大変</h2>
+<ul>
+<li>リクエストを捌くサーバのパフォーマンスをどうするか悩む</li>
+<li>サーバをチューニングすればSSPも速くなるが、検証にならない</li>
+<li>かといって投げたクエリを捌けないサーバに対して検証する訳にもいかない</li>
+<li>結局安全側に倒したパフォーマンス見積りに。</li>
+</ul>
+<p>===</p>
+<h1 id="heading7">運用して困った話とか</h1>
+<hr>
+<h2 id="span-stylefontsize-80masterdisk-fullspan"><!-- raw HTML omitted -->Masterがログ吐きすぎてDisk Full<!-- raw HTML omitted --></h2>
+<ul>
+<li>最初の予定ではMasterはディスクをそんなに使わなかったのでディスクの小さいインスタンスだった</li>
+<li>ディスクスペース空けてMaster再起動で復旧。焦った。
+===</li>
+</ul>
+<h1 id="heading8">運用して困った話とか</h1>
+<hr>
+<h2 id="span-stylefontsize-60timeoutdspslavespan"><!-- raw HTML omitted -->timeoutし続けるDSPがいてSlave完全沈黙<!-- raw HTML omitted --></h2>
+<ul>
+<li>コネクションのクローズ待ちで固まってた</li>
+<li>該当DSPを切った上でSlaveの再起動で復旧
+<ul>
+<li>カーネルのチューニングかtimeout頻度の検知が必要そう</li>
+</ul>
+</li>
+<li>timeoutを考慮に入れた構成にしてた筈なので想定外だった
+===</li>
+</ul>
+<h1 id="heading9">まとめ</h1>
+<hr>
+<ul>
+<li>ClojureでSSP作ったよ</li>
+<li>Clojure使えば非同期プログラミングが簡単に出来るよ</li>
+<li>運用って大変だよ</li>
+</ul>
+<p>===</p>
+<h1 id="heading10">参考</h1>
+<hr>
+<ul>
+<li><a href="https://github.com/KeenS/s7p">KeenS/s7p: sexp version of s6p; a toy SSP.</a></li>
+<li><a href="http://keens.github.io/slide/ClojuredeDSPwotsukuttahanashi/">ClojureでDSPを作った話 | κeenのHappy Hacκing Blog</a></li>
+<li><a href="https://github.com/KeenS/b11d">KeenS/b11d: A toy DSP</a></li>
+<li><a href="https://www.cyberagent.co.jp/recruit/fresh/program_detail/id=11303&amp;season=2016">アドテクコンペ | 株式会社サイバーエージェント</a></li>
+<li><a href="https://www.cyberagent.co.jp/techinfo_detail/id=11380">ビジネスモデルもエンジニアリングも学べるアドテクスタジオの育成プログラムとは | 株式会社サイバーエージェント</a></li>
+</ul>
+<p><!-- raw HTML omitted --></p>
+<!-- raw HTML omitted -->
 
         </div>
     </div>

@@ -22,7 +22,6 @@
         <meta name="twitter:description" content="κeenです。Advent Calendarのためにネタやアイディアを用意したものの時間/場所的都合でAdvent Calendarとして出せなかったボツネタでも供養しようかと。
 Advent Calendarが終わってしまったので投げやり気味ですね。
 第1段はRustのロガーを作る話。
-
 Rust Advent Calendarの初日でロガーはfacadと実装に分かれてると書きましたが、実装を作る話ですね。" />
 
         <title>Rustのロガーを作る | κeenのHappy Hacκing Blog</title>
@@ -125,26 +124,19 @@ Rust Advent Calendarの初日でロガーはfacadと実装に分かれてると�
                         <p>κeenです。Advent Calendarのためにネタやアイディアを用意したものの時間/場所的都合でAdvent Calendarとして出せなかったボツネタでも供養しようかと。
 Advent Calendarが終わってしまったので投げやり気味ですね。
 第1段はRustのロガーを作る話。</p>
-
 <p><a href="http://qiita.com/advent-calendar/2015/rust-lang">Rust Advent Calendar</a>の<a href="//KeenS.github.io/blog/2015/11/14/rustdechiisanatsu_ruwotsukuttemiru/">初日</a>でロガーはfacadと実装に分かれてると書きましたが、実装を作る話ですね。</p>
-
 <p><a href="https://doc.rust-lang.org/log/log/index.html">ドキュメント</a>を見てもらえば分かる通り、logは</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">trait</span><span class="w"> </span><span class="n">Log</span>: <span class="nb">Sync</span> <span class="o">+</span><span class="w"> </span><span class="nb">Send</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">enabled</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">metadata</span>: <span class="kp">&amp;</span><span class="nc">LogMetadata</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">bool</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">log</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">record</span>: <span class="kp">&amp;</span><span class="nc">LogRecord</span><span class="p">);</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">fn</span> <span class="nf">enabled</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">metadata</span>: <span class="kp">&amp;</span><span class="nc">LogMetadata</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">bool</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">fn</span> <span class="nf">log</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">record</span>: <span class="kp">&amp;</span><span class="nc">LogRecord</span><span class="p">)</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>とだけインターフェースが定まっているのでそこを実装してあげれば終わりです。
+</span></code></pre></div><p>とだけインターフェースが定まっているのでそこを実装してあげれば終わりです。
 なぜまたloggerを作ろうとしたのかというと、Rust公式の<a href="https://crates.io/crates/env_logger/">env_logger</a>は標準出力にしか出せず、crates.ioを捜しても（作ろうと思った時点ではパっと見）ファイルに書き出せるものがなさそうだったからです。</p>
-
 <p>私が作ったのは<a href="https://github.com/KeenS/file_logger">file_logger</a>といいます。まだcrates.ioには出してません。TOMLでコンフィグを書けるようになったら出そうかと思うのですがもう既にファイルに書きだせるものが他にありますかね。</p>
-
 <p>今回作るにあたって目指したのは1つのことにだけ集中する他と組み合わせられるライブラリです。
 logはロガーをグローバル変数に代入して使い回してるので同時に1つしかロガーを登録出来ません。そこでロガーアグリケーターのようなものを作ってそれに複数のロガーを登録することが考えられます。
 調べきれてませんが恐らく既にいくつか存在するでしょう。アグリゲータの存在を仮定してしまえばアグリゲータに任せれる部分は任せてしまうのが良いでしょう。</p>
-
 <p>ということで次のことを最初に決めました</p>
-
 <ul>
 <li>ログフォーマットは柔軟性を持たせる</li>
 <li>ログメッセージの内容に応じて出力を制御出来るフィルターを入れる。(アグリゲータが無差別にログを流し込んで来た時のため)</li>
@@ -152,12 +144,9 @@ logはロガーをグローバル変数に代入して使い回してるので�
 <li>プラグインはサポートしない。アグリゲータに任せる</li>
 <li>ログローテーションはしない。<code>Write</code>の実装に任せる。</li>
 </ul>
-
 <p>一応file loggerですがWriteをすべからく受け取れるので実際はストリームにも使えたりします。今書き出してみたらフォーマッタとかフィルタとかもアグリゲータに任せた方がいいのかなって気がしてきた。
 しかし単体での利便性を考えると仕方ない。</p>
-
 <p>実装は大したことをやっていなくて、精々ログフォーマットを文字列で書けるように（TOMLで設定を書きたいため）フォーマットのパーサを書いた程度でしょうか。</p>
-
 <p>もう少し考えてからリリースします。あとFile Lotating Writerも一緒に出さなきゃ片手落ちですかね…</p>
                     </section>
                 </article>

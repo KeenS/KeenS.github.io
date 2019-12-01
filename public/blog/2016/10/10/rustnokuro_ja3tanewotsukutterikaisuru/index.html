@@ -21,7 +21,6 @@
         <meta name="twitter:title" content="Rustのクロージャ3種を作って理解する | κeenのHappy Hacκing Blog"/>
         <meta name="twitter:description" content="κeenです。Rustのクロージャ、3種類もあって複雑ですよね。
 こういう複雑なものはRustの気持になって考えれば理解出来たりします。ということで手でクロージャを作って理解してみましょう。
-
 尚、これはRustの1.12.0-stableと1.14.0-nightly (6e8f92f11 2016-10-07)で実験しています。" />
 
         <title>Rustのクロージャ3種を作って理解する | κeenのHappy Hacκing Blog</title>
@@ -119,158 +118,140 @@
                     <section>
                         <p>κeenです。Rustのクロージャ、3種類もあって複雑ですよね。
 こういう複雑なものはRustの気持になって考えれば理解出来たりします。ということで手でクロージャを作って理解してみましょう。</p>
-
 <p>尚、これはRustの1.12.0-stableと1.14.0-nightly (6e8f92f11 2016-10-07)で実験しています。</p>
-
-<h1 id="用語">用語</h1>
-
+<h1 id="heading">用語</h1>
 <ul>
 <li>関数 - 関数</li>
 <li>無名関数 - 名前のついていない関数</li>
 <li>自由変数 - そのスコープの中で束縛されていない変数</li>
 <li>クロージャ - 関数に、自由変数の値(環境)もくっつけてそれだけで閉じるようにしたもの</li>
 </ul>
-
 <p>クロージャについては関数が閉じ込める環境だけを指してクロージャとする人もいますが、ここでは関数本体と環境を合わせてクロージャとします。</p>
-
 <p>よく、無名関数とクロージャ(関数閉包)を一緒くたにすることがありますが明確に区別しましょう。まあ、大抵の無名関数はクロージャになりますが、動的スコープの言語みたいにそうならないケースもあります。</p>
-
 <p>余談ですが「ラムダ式」は言語がよく無名関数に付ける名前です。「関数」も言語によって「手続き」だったり「メソッド」だったりしますね。</p>
-
-<h1 id="fnonce-fnmut-fn"><code>FnOnce</code> <code>FnMut</code> <code>Fn</code></h1>
-
+<h1 id="fnonce-fnmut-fn"><code>FnOnce` </code>FnMut<code> </code>Fn`</h1>
 <p>さて、「作って理解する」なので例を出します。なんかよく分からないけど0から9の値に1を足して印字するプログラムです。</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="p">..</span><span class="mi">10</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="c1">// 無名関数を作る
-</span><span class="c1"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">cls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">|</span><span class="n">arg</span><span class="o">|</span><span class="p">{</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">arg</span><span class="w"> </span><span class="p">};</span><span class="w">
-</span><span class="w">        </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">cls</span><span class="p">(</span><span class="n">x</span><span class="p">));</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="p">.</span><span class="p">.</span><span class="mi">10</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="c1">// 無名関数を作る
+</span><span class="c1"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">cls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">|</span><span class="n">arg</span><span class="o">|</span><span class="p">{</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">arg</span><span class="w"> </span><span class="p">}</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">cls</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>無名関数を作って <code>cls</code> という変数に束縛しています。 <code>cls</code> は自由変数 <code>i</code> を含みますので、 <code>cls</code> のクロージャを取ると 「<code>cls</code> の定義 + <code>i</code> の定義」になります。</p>
-
+</span></code></pre></div><p>無名関数を作って <code>cls</code> という変数に束縛しています。 <code>cls</code> は自由変数 <code>i</code> を含みますので、 <code>cls</code> のクロージャを取ると 「<code>cls</code> の定義 + <code>i</code> の定義」になります。</p>
 <p>では <code>i</code> という変数を保持したオブジェクトを作りましょう。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">struct</span> <span class="nc">Closure</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="n">i</span>: <span class="kt">isize</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">i</span>: <span class="kt">isize</span><span class="p">,</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="p">..</span><span class="mi">10</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="c1">// クロージャを作る
-</span><span class="c1"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">cls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Closure</span><span class="w"> </span><span class="p">{</span><span class="n">i</span>: <span class="nc">i</span><span class="p">};</span><span class="w">
-</span><span class="w">        </span><span class="c1">// もちろん、Closureは関数でないので呼び出せない
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="p">.</span><span class="p">.</span><span class="mi">10</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="c1">// クロージャを作る
+</span><span class="c1"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">cls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Closure</span><span class="w"> </span><span class="p">{</span><span class="n">i</span>: <span class="nc">i</span><span class="p">}</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="c1">// もちろん、Closureは関数でないので呼び出せない
 </span><span class="c1"></span><span class="w">        </span><span class="c1">// println!(&#34;{}&#34;, cls(x));
 </span><span class="c1"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>さて、このままだと <code>cls</code> は呼び出せません。しかし <code>+</code> なんかのオーバーロードを許しているRustはなんと関数呼び出し構文 <code>name(arg, ...)</code> もオーバーロード出来ます。実装すべきトレイトは <code>std::ops::{FnOnce, FnMut, Fn}</code> です。これがクロージャ3種です。</p>
-
-<p>これらは継承関係にあって、上から順に <code>FnOnce</code>  <code>FnMut</code> <code>Fn</code> です。</p>
+</span></code></pre></div><p>さて、このままだと <code>cls</code> は呼び出せません。しかし <code>+</code> なんかのオーバーロードを許しているRustはなんと関数呼び出し構文 <code>name(arg, ...)</code> もオーバーロード出来ます。実装すべきトレイトは <code>std::ops::{FnOnce, FnMut, Fn}</code> です。これがクロージャ3種です。</p>
+<p>これらは継承関係にあって、上から順に <code>FnOnce</code>  <code>FnMut` </code>Fn` です。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">trait</span><span class="w"> </span><span class="nb">FnOnce</span><span class="o">&lt;</span><span class="n">Args</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">type</span> <span class="nc">Output</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="k">extern</span><span class="w"> </span><span class="s">&#34;rust-call&#34;</span><span class="w"> </span><span class="k">fn</span> <span class="nf">call_once</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">args</span>: <span class="nc">Args</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span>::<span class="n">Output</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">type</span> <span class="nc">Output</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">extern</span><span class="w"> </span><span class="s">&#34;rust-call&#34;</span><span class="w"> </span><span class="k">fn</span> <span class="nf">call_once</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">args</span>: <span class="nc">Args</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span>::<span class="n">Output</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
+</span><span class="w"></span><span class="w">
 </span><span class="w"></span><span class="k">pub</span><span class="w"> </span><span class="k">trait</span><span class="w"> </span><span class="nb">FnMut</span><span class="o">&lt;</span><span class="n">Args</span><span class="o">&gt;</span>: <span class="nb">FnOnce</span><span class="o">&lt;</span><span class="n">Args</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">extern</span><span class="w"> </span><span class="s">&#34;rust-call&#34;</span><span class="w"> </span><span class="k">fn</span> <span class="nf">call_mut</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">args</span>: <span class="nc">Args</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span>::<span class="n">Output</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">extern</span><span class="w"> </span><span class="s">&#34;rust-call&#34;</span><span class="w"> </span><span class="k">fn</span> <span class="nf">call_mut</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">args</span>: <span class="nc">Args</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span>::<span class="n">Output</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
+</span><span class="w"></span><span class="w">
 </span><span class="w"></span><span class="k">pub</span><span class="w"> </span><span class="k">trait</span><span class="w"> </span><span class="nb">Fn</span><span class="o">&lt;</span><span class="n">Args</span><span class="o">&gt;</span>: <span class="nb">FnMut</span><span class="o">&lt;</span><span class="n">Args</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">extern</span><span class="w"> </span><span class="s">&#34;rust-call&#34;</span><span class="w"> </span><span class="k">fn</span> <span class="nf">call</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">args</span>: <span class="nc">Args</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span>::<span class="n">Output</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">extern</span><span class="w"> </span><span class="s">&#34;rust-call&#34;</span><span class="w"> </span><span class="k">fn</span> <span class="nf">call</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">args</span>: <span class="nc">Args</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span>::<span class="n">Output</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>これらの違いは <code>self</code> をムーブして受け取るか <code>&amp;mut</code> で受けるか <code>&amp;</code> で受けるかです。</p>
-
+</span><span class="w"></span><span class="w">
+</span></code></pre></div><p>これらの違いは <code>self</code> をムーブして受け取るか <code>&amp;mut</code> で受けるか <code>&amp;</code> で受けるかです。</p>
 <h2 id="fnonce"><code>FnOnce</code></h2>
-
 <p>とりあえず先程の <code>Closure</code> にこれを実装してみましょう。ちょいとunstableな機能なようなので <code>feature</code> を使って、nightlyでコンパイルするようにしてみます。</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#![feature(unboxed_closures)]</span><span class="w">
-</span><span class="w"></span><span class="cp">#![feature(fn_traits)]</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">ops</span>::<span class="p">{</span><span class="nb">FnOnce</span><span class="p">,</span><span class="w"> </span><span class="nb">FnMut</span><span class="p">,</span><span class="w"> </span><span class="nb">Fn</span><span class="p">};</span><span class="w">
-</span><span class="w">
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#![</span><span class="cp">feature(unboxed_closures)</span><span class="cp">]</span><span class="w">
+</span><span class="w"></span><span class="cp">#![</span><span class="cp">feature(fn_traits)</span><span class="cp">]</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">ops</span>::<span class="p">{</span><span class="nb">FnOnce</span><span class="p">,</span><span class="w"> </span><span class="nb">FnMut</span><span class="p">,</span><span class="w"> </span><span class="nb">Fn</span><span class="p">}</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">
 </span><span class="w"></span><span class="c1">// 再掲
 </span><span class="c1"></span><span class="k">struct</span> <span class="nc">Closure</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="n">i</span>: <span class="kt">isize</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">i</span>: <span class="kt">isize</span><span class="p">,</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="nb">FnOnce</span><span class="o">&lt;</span><span class="p">(</span><span class="kt">isize</span><span class="p">,)</span><span class="o">&gt;</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">Closure</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">type</span> <span class="nc">Output</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kt">isize</span><span class="p">;</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="k">extern</span><span class="w"> </span><span class="s">&#34;rust-call&#34;</span><span class="w"> </span><span class="k">fn</span> <span class="nf">call_once</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="n">arg</span><span class="p">,</span><span class="w"> </span><span class="p">)</span>: <span class="p">(</span><span class="kt">isize</span><span class="p">,))</span><span class="w"> </span>-&gt; <span class="nc">Self</span>::<span class="n">Output</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">arg</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="nb">FnOnce</span><span class="o">&lt;</span><span class="p">(</span><span class="kt">isize</span><span class="p">,</span><span class="p">)</span><span class="o">&gt;</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">Closure</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">type</span> <span class="nc">Output</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kt">isize</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">extern</span><span class="w"> </span><span class="s">&#34;rust-call&#34;</span><span class="w"> </span><span class="k">fn</span> <span class="nf">call_once</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="n">arg</span><span class="p">,</span><span class="w"> </span><span class="p">)</span>: <span class="p">(</span><span class="kt">isize</span><span class="p">,</span><span class="p">)</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span>::<span class="n">Output</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">arg</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>これで呼び出しが出来る筈です。</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="p">..</span><span class="mi">10</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="c1">// 無名関数を作る
-</span><span class="c1"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">cls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Closure</span><span class="w"> </span><span class="p">{</span><span class="n">i</span>: <span class="nc">i</span><span class="p">};</span><span class="w">
-</span><span class="w">        </span><span class="c1">// 呼出せるようになる
-</span><span class="c1"></span><span class="w">        </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">cls</span><span class="p">(</span><span class="n">x</span><span class="p">));</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span></code></pre></div><p>これで呼び出しが出来る筈です。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="p">.</span><span class="p">.</span><span class="mi">10</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="c1">// 無名関数を作る
+</span><span class="c1"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">cls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Closure</span><span class="w"> </span><span class="p">{</span><span class="n">i</span>: <span class="nc">i</span><span class="p">}</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="c1">// 呼出せるようになる
+</span><span class="c1"></span><span class="w">        </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">cls</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>勿論、これは以下のように明示的にメソッドを呼んでも同じです。</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="p">..</span><span class="mi">10</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="c1">// クロージャを作る
-</span><span class="c1"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">cls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Closure</span><span class="w"> </span><span class="p">{</span><span class="n">i</span>: <span class="nc">i</span><span class="p">};</span><span class="w">
-</span><span class="w">        </span><span class="c1">// メソッドで呼ぶ
-</span><span class="c1"></span><span class="w">        </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">cls</span><span class="p">.</span><span class="n">call_once</span><span class="p">((</span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="p">)));</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span></code></pre></div><p>勿論、これは以下のように明示的にメソッドを呼んでも同じです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="p">.</span><span class="p">.</span><span class="mi">10</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="c1">// クロージャを作る
+</span><span class="c1"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">cls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Closure</span><span class="w"> </span><span class="p">{</span><span class="n">i</span>: <span class="nc">i</span><span class="p">}</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="c1">// メソッドで呼ぶ
+</span><span class="c1"></span><span class="w">        </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">cls</span><span class="p">.</span><span class="n">call_once</span><span class="p">(</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<h2 id="fnmut-fnmut-fn"><code>FnMut</code> <del><code>FnMut</code></del> <code>Fn</code></h2>
-
+</span><span class="w"></span><span class="w">
+</span></code></pre></div><h2 id="fnmut-fnmut-fn"><code>FnMut</code> <del><code>FnMut</code></del> <code>Fn</code></h2>
 <p><code>FnOnce</code> で出来るんならなんで <code>FnMut</code> と <del><code>FnMut</code></del> <code>Fn</code>  が存在するかというと、クロージャが閉じ込めた環境の所有権の問題ですね。</p>
-
 <p>2018-02-26: 上記2打ち消し線部分修正しました</p>
-
 <p>例えば以下のコードを手で実装してみます。</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="c1">// ループの外でクロージャを作る
-</span><span class="c1"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">cls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">|</span><span class="n">arg</span><span class="o">|</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">arg</span><span class="p">};</span><span class="w">
-</span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="p">..</span><span class="mi">10</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="c1">// 複数回クロージャを呼ぶ
-</span><span class="c1"></span><span class="w">        </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">cls</span><span class="p">(</span><span class="n">i</span><span class="p">));</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="c1">// ループの外でクロージャを作る
+</span><span class="c1"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">cls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">|</span><span class="n">arg</span><span class="o">|</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">arg</span><span class="p">}</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="p">.</span><span class="p">.</span><span class="mi">10</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="c1">// 複数回クロージャを呼ぶ
+</span><span class="c1"></span><span class="w">        </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">cls</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>先程と同じ <code>Closure</code> ではコンパイル出来ません（統一感のために <code>Closure</code> のメンバ名を変えました）。</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#![feature(unboxed_closures)]</span><span class="w">
-</span><span class="w"></span><span class="cp">#![feature(fn_traits)]</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">ops</span>::<span class="p">{</span><span class="nb">FnOnce</span><span class="p">,</span><span class="w"> </span><span class="nb">FnMut</span><span class="p">,</span><span class="w"> </span><span class="nb">Fn</span><span class="p">};</span><span class="w">
-</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span></code></pre></div><p>先程と同じ <code>Closure</code> ではコンパイル出来ません（統一感のために <code>Closure</code> のメンバ名を変えました）。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#![</span><span class="cp">feature(unboxed_closures)</span><span class="cp">]</span><span class="w">
+</span><span class="w"></span><span class="cp">#![</span><span class="cp">feature(fn_traits)</span><span class="cp">]</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">ops</span>::<span class="p">{</span><span class="nb">FnOnce</span><span class="p">,</span><span class="w"> </span><span class="nb">FnMut</span><span class="p">,</span><span class="w"> </span><span class="nb">Fn</span><span class="p">}</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">
 </span><span class="w"></span><span class="k">struct</span> <span class="nc">Closure</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="n">x</span>: <span class="kt">isize</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">x</span>: <span class="kt">isize</span><span class="p">,</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="nb">FnOnce</span><span class="o">&lt;</span><span class="p">(</span><span class="kt">isize</span><span class="p">,)</span><span class="o">&gt;</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">Closure</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">  </span><span class="c1">// ...略
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="nb">FnOnce</span><span class="o">&lt;</span><span class="p">(</span><span class="kt">isize</span><span class="p">,</span><span class="p">)</span><span class="o">&gt;</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">Closure</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">  </span><span class="c1">// ...略
 </span><span class="c1"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="c1">// ループの外でクロージャを作る
-</span><span class="c1"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">cls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Closure</span><span class="w"> </span><span class="p">{</span><span class="n">x</span>: <span class="nc">x</span><span class="p">};</span><span class="w">
-</span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="p">..</span><span class="mi">10</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="c1">// 複数回クロージャを呼ぶ
-</span><span class="c1"></span><span class="w">        </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">cls</span><span class="p">(</span><span class="n">i</span><span class="p">));</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="c1">// ループの外でクロージャを作る
+</span><span class="c1"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">cls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Closure</span><span class="w"> </span><span class="p">{</span><span class="n">x</span>: <span class="nc">x</span><span class="p">}</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="p">.</span><span class="p">.</span><span class="mi">10</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="c1">// 複数回クロージャを呼ぶ
+</span><span class="c1"></span><span class="w">        </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">cls</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<pre><code>error[E0382]: use of moved value: `cls`
+</span></code></pre></div><pre><code>error[E0382]: use of moved value: `cls`
   --&gt; closure.rs:45:28
    |
 45 |             println!(&quot;{}&quot;, cls(i));
@@ -279,28 +260,24 @@
    = note: move occurs because `cls` has type `Closure`, which does not implement the `Copy` trait
 
 error: aborting due to previous error
-</code></pre>
-
-<p>1回目のループでは問題ないのですが <code>call_once(self, (arg, ): (isize,))</code> の呼び出しでムーブしてしまうので2回目以降は呼べません。ということで1つ下のトレイト、 <code>FnMut</code> も実装してみましょう。</p>
+</code></pre><p>1回目のループでは問題ないのですが <code>call_once(self, (arg, ): (isize,))</code> の呼び出しでムーブしてしまうので2回目以降は呼べません。ということで1つ下のトレイト、 <code>FnMut</code> も実装してみましょう。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="c1">// ...略
 </span><span class="c1"></span><span class="w">
-</span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="nb">FnMut</span><span class="o">&lt;</span><span class="p">(</span><span class="kt">isize</span><span class="p">,)</span><span class="o">&gt;</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">Closure</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="k">extern</span><span class="w"> </span><span class="s">&#34;rust-call&#34;</span><span class="w"> </span><span class="k">fn</span> <span class="nf">call_mut</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="n">arg</span><span class="p">,</span><span class="w"> </span><span class="p">)</span>: <span class="p">(</span><span class="kt">isize</span><span class="p">,))</span><span class="w"> </span>-&gt; <span class="nc">Self</span>::<span class="n">Output</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">x</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">arg</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="nb">FnMut</span><span class="o">&lt;</span><span class="p">(</span><span class="kt">isize</span><span class="p">,</span><span class="p">)</span><span class="o">&gt;</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">Closure</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">extern</span><span class="w"> </span><span class="s">&#34;rust-call&#34;</span><span class="w"> </span><span class="k">fn</span> <span class="nf">call_mut</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="n">arg</span><span class="p">,</span><span class="w"> </span><span class="p">)</span>: <span class="p">(</span><span class="kt">isize</span><span class="p">,</span><span class="p">)</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span>::<span class="n">Output</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">x</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">arg</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">cls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Closure</span><span class="w"> </span><span class="p">{</span><span class="n">x</span>: <span class="nc">x</span><span class="p">};</span><span class="w">
-</span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="p">..</span><span class="mi">10</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">cls</span><span class="p">(</span><span class="n">i</span><span class="p">));</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">cls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Closure</span><span class="w"> </span><span class="p">{</span><span class="n">x</span>: <span class="nc">x</span><span class="p">}</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="p">.</span><span class="p">.</span><span class="mi">10</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">cls</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>実はこれでも怒られます。</p>
-
+</span></code></pre></div><p>実はこれでも怒られます。</p>
 <pre><code>error: cannot borrow immutable local variable `cls` as mutable
   --&gt; closure.rs:45:28
    |
@@ -311,79 +288,64 @@ error: aborting due to previous error
    |                            ^^^ cannot borrow mutably
 
 error: aborting due to previous error
-</code></pre>
-
-<p>何故なら <code>mut</code> を要求しているから。正確にはこうです。</p>
+</code></pre><p>何故なら <code>mut</code> を要求しているから。正確にはこうです。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="c1">// ...略
 </span><span class="c1"></span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="c1">// `mut` を付ける
-</span><span class="c1"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">cls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Closure</span><span class="w"> </span><span class="p">{</span><span class="n">x</span>: <span class="nc">x</span><span class="p">};</span><span class="w">
-</span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="p">..</span><span class="mi">10</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">cls</span><span class="p">(</span><span class="n">i</span><span class="p">));</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="c1">// `mut` を付ける
+</span><span class="c1"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">cls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Closure</span><span class="w"> </span><span class="p">{</span><span class="n">x</span>: <span class="nc">x</span><span class="p">}</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="p">.</span><span class="p">.</span><span class="mi">10</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">cls</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>これで通ります。しかしまあ、何か書き換えてる訳でもないのに <code>mut</code> が付いているのは嫌ですね。<code>mut</code> を要求しないように定義してあげようと思ったら <code>Fn</code> が必要になります。</p>
+</span></code></pre></div><p>これで通ります。しかしまあ、何か書き換えてる訳でもないのに <code>mut</code> が付いているのは嫌ですね。<code>mut</code> を要求しないように定義してあげようと思ったら <code>Fn</code> が必要になります。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="c1">// ...略
 </span><span class="c1"></span><span class="w">
-</span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="nb">Fn</span><span class="o">&lt;</span><span class="p">(</span><span class="kt">isize</span><span class="p">,)</span><span class="o">&gt;</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">Closure</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">extern</span><span class="w"> </span><span class="s">&#34;rust-call&#34;</span><span class="w"> </span><span class="k">fn</span> <span class="nf">call</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="n">arg</span><span class="p">,)</span>: <span class="p">(</span><span class="kt">isize</span><span class="p">,</span><span class="w"> </span><span class="p">))</span><span class="w"> </span>-&gt; <span class="nc">Self</span>::<span class="n">Output</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">x</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">arg</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="nb">Fn</span><span class="o">&lt;</span><span class="p">(</span><span class="kt">isize</span><span class="p">,</span><span class="p">)</span><span class="o">&gt;</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">Closure</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">extern</span><span class="w"> </span><span class="s">&#34;rust-call&#34;</span><span class="w"> </span><span class="k">fn</span> <span class="nf">call</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="n">arg</span><span class="p">,</span><span class="p">)</span>: <span class="p">(</span><span class="kt">isize</span><span class="p">,</span><span class="w"> </span><span class="p">)</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span>::<span class="n">Output</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">x</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">arg</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">cls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Closure</span><span class="w"> </span><span class="p">{</span><span class="n">x</span>: <span class="nc">x</span><span class="p">};</span><span class="w">
-</span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="p">..</span><span class="mi">10</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">cls</span><span class="p">(</span><span class="n">i</span><span class="p">));</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">cls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Closure</span><span class="w"> </span><span class="p">{</span><span class="n">x</span>: <span class="nc">x</span><span class="p">}</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="p">.</span><span class="p">.</span><span class="mi">10</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">cls</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>これで通ります。</p>
-
-<h2 id="整理">整理</h2>
-
+</span></code></pre></div><p>これで通ります。</p>
+<h2 id="heading1">整理</h2>
 <ul>
 <li>クロージャとは関数とその環境のセットだよ</li>
 <li>環境にも所有権はあるよ</li>
 <li>Rustは所有権でクロージャの呼び出しを使い分けるよ</li>
 </ul>
-
-<h1 id="構文">構文</h1>
-
-<p>じゃあ、 <code>FnOnce</code> <code>FnMut</code> <code>Fn</code> に対応するRustの構文を探っていきます。</p>
-
+<h1 id="heading2">構文</h1>
+<p>じゃあ、 <code>FnOnce` </code>FnMut<code> </code>Fn` に対応するRustの構文を探っていきます。</p>
 <h2 id="fn"><code>Fn</code></h2>
-
 <p>先程 <code>Fn</code> まで実装しないとコンパイルが通らなかった</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">cls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">|</span><span class="n">arg</span><span class="o">|</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">arg</span><span class="p">};</span><span class="w">
-</span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="p">..</span><span class="mi">10</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">cls</span><span class="p">(</span><span class="n">i</span><span class="p">));</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">cls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">|</span><span class="n">arg</span><span class="o">|</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">arg</span><span class="p">}</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="p">.</span><span class="p">.</span><span class="mi">10</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">cls</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>は <code>||{}</code> でコンパイルが通っているので <code>||{}</code> は <code>Fn</code> を作るようです。</p>
-
+</span></code></pre></div><p>は <code>||{}</code> でコンパイルが通っているので <code>||{}</code> は <code>Fn</code> を作るようです。</p>
 <h2 id="fnmut"><code>FnMut</code></h2>
-
 <p>じゃあ、 <code>call_mut</code> を要求しそうにちょっと変えてみます。</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">cls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">|</span><span class="n">arg</span><span class="o">|</span><span class="p">{</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">arg</span><span class="w"> </span><span class="p">};</span><span class="w">
-</span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="p">..</span><span class="mi">10</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="n">cls</span><span class="p">(</span><span class="n">i</span><span class="p">);</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">x</span><span class="p">);</span><span class="w">
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">cls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">|</span><span class="n">arg</span><span class="o">|</span><span class="p">{</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">+</span><span class="o">=</span><span class="w"> </span><span class="n">arg</span><span class="w"> </span><span class="p">}</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="p">.</span><span class="p">.</span><span class="mi">10</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">cls</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">x</span><span class="p">)</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>はい、予想通りエラーが出ます。</p>
-
+</span></code></pre></div><p>はい、予想通りエラーが出ます。</p>
 <pre><code>error: cannot borrow immutable local variable `cls` as mutable
   --&gt; closure.rs:37:13
    |
@@ -408,104 +370,86 @@ error[E0502]: cannot borrow `x` as immutable because it is also borrowed as muta
 
 error: aborting due to 2 previous errors
 
-</code></pre>
-
-<p>先程の <code>FnMut</code> の例のように <code>cls</code> に <code>mut</code> を付けてみます。</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">cls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">|</span><span class="n">arg</span><span class="o">|</span><span class="p">{</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">arg</span><span class="w"> </span><span class="p">};</span><span class="w">
-</span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="p">..</span><span class="mi">10</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="n">cls</span><span class="p">(</span><span class="n">i</span><span class="p">);</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">x</span><span class="p">);</span><span class="w">
+</code></pre><p>先程の <code>FnMut</code> の例のように <code>cls</code> に <code>mut</code> を付けてみます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">cls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">|</span><span class="n">arg</span><span class="o">|</span><span class="p">{</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">+</span><span class="o">=</span><span class="w"> </span><span class="n">arg</span><span class="w"> </span><span class="p">}</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="p">.</span><span class="p">.</span><span class="mi">10</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">cls</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">x</span><span class="p">)</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>実は、これでもエラーです。</p>
+</span></code></pre></div><p>実は、これでもエラーです。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="n">error</span><span class="p">[</span><span class="n">E0502</span><span class="p">]</span>: <span class="nc">cannot</span><span class="w"> </span><span class="n">borrow</span><span class="w"> </span><span class="err">`</span><span class="n">x</span><span class="err">`</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">immutable</span><span class="w"> </span><span class="n">because</span><span class="w"> </span><span class="n">it</span><span class="w"> </span><span class="n">is</span><span class="w"> </span><span class="n">also</span><span class="w"> </span><span class="n">borrowed</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">mutable</span><span class="w">
-</span><span class="w">  </span><span class="o">-</span>-&gt; <span class="nc">closure</span><span class="p">.</span><span class="n">rs</span>:<span class="mi">39</span>:<span class="mi">24</span><span class="w">
-</span><span class="w">   </span><span class="o">|</span><span class="w">
-</span><span class="w"></span><span class="mi">35</span><span class="w"> </span><span class="o">|</span><span class="w">         </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">cls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">|</span><span class="n">arg</span><span class="o">|</span><span class="p">{</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">arg</span><span class="w"> </span><span class="p">};</span><span class="w">
-</span><span class="w">   </span><span class="o">|</span><span class="w">                       </span><span class="o">-----</span><span class="w">  </span><span class="o">-</span><span class="w"> </span><span class="n">previous</span><span class="w"> </span><span class="n">borrow</span><span class="w"> </span><span class="n">occurs</span><span class="w"> </span><span class="n">due</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="k">use</span><span class="w"> </span><span class="n">of</span><span class="w"> </span><span class="err">`</span><span class="n">x</span><span class="err">`</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="n">closure</span><span class="w">
-</span><span class="w">   </span><span class="o">|</span><span class="w">                       </span><span class="o">|</span><span class="w">
-</span><span class="w">   </span><span class="o">|</span><span class="w">                       </span><span class="n">mutable</span><span class="w"> </span><span class="n">borrow</span><span class="w"> </span><span class="n">occurs</span><span class="w"> </span><span class="n">here</span><span class="w">
-</span><span class="w"></span><span class="p">...</span><span class="w">
-</span><span class="w"></span><span class="mi">39</span><span class="w"> </span><span class="o">|</span><span class="w">         </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">x</span><span class="p">);</span><span class="w">
-</span><span class="w">   </span><span class="o">|</span><span class="w">                        </span><span class="o">^</span><span class="w"> </span><span class="n">immutable</span><span class="w"> </span><span class="n">borrow</span><span class="w"> </span><span class="n">occurs</span><span class="w"> </span><span class="n">here</span><span class="w">
+</span><span class="w"></span><span class="w">  </span><span class="o">-</span>-&gt; <span class="nc">closure</span><span class="p">.</span><span class="n">rs</span>:<span class="mi">39</span>:<span class="mi">24</span><span class="w">
+</span><span class="w"></span><span class="w">   </span><span class="o">|</span><span class="w">
+</span><span class="w"></span><span class="mi">35</span><span class="w"> </span><span class="o">|</span><span class="w">         </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">cls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">|</span><span class="n">arg</span><span class="o">|</span><span class="p">{</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">+</span><span class="o">=</span><span class="w"> </span><span class="n">arg</span><span class="w"> </span><span class="p">}</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">   </span><span class="o">|</span><span class="w">                       </span><span class="o">-</span><span class="o">-</span><span class="o">-</span><span class="o">-</span><span class="o">-</span><span class="w">  </span><span class="o">-</span><span class="w"> </span><span class="n">previous</span><span class="w"> </span><span class="n">borrow</span><span class="w"> </span><span class="n">occurs</span><span class="w"> </span><span class="n">due</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="k">use</span><span class="w"> </span><span class="n">of</span><span class="w"> </span><span class="err">`</span><span class="n">x</span><span class="err">`</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="n">closure</span><span class="w">
+</span><span class="w"></span><span class="w">   </span><span class="o">|</span><span class="w">                       </span><span class="o">|</span><span class="w">
+</span><span class="w"></span><span class="w">   </span><span class="o">|</span><span class="w">                       </span><span class="n">mutable</span><span class="w"> </span><span class="n">borrow</span><span class="w"> </span><span class="n">occurs</span><span class="w"> </span><span class="n">here</span><span class="w">
+</span><span class="w"></span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="w">
+</span><span class="w"></span><span class="mi">39</span><span class="w"> </span><span class="o">|</span><span class="w">         </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">x</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">   </span><span class="o">|</span><span class="w">                        </span><span class="o">^</span><span class="w"> </span><span class="n">immutable</span><span class="w"> </span><span class="n">borrow</span><span class="w"> </span><span class="n">occurs</span><span class="w"> </span><span class="n">here</span><span class="w">
 </span><span class="w"></span><span class="mi">40</span><span class="w"> </span><span class="o">|</span><span class="w">     </span><span class="p">}</span><span class="w">
-</span><span class="w">   </span><span class="o">|</span><span class="w">     </span><span class="o">-</span><span class="w"> </span><span class="n">mutable</span><span class="w"> </span><span class="n">borrow</span><span class="w"> </span><span class="n">ends</span><span class="w"> </span><span class="n">here</span><span class="w">
-</span><span class="w">
+</span><span class="w"></span><span class="w">   </span><span class="o">|</span><span class="w">     </span><span class="o">-</span><span class="w"> </span><span class="n">mutable</span><span class="w"> </span><span class="n">borrow</span><span class="w"> </span><span class="n">ends</span><span class="w"> </span><span class="n">here</span><span class="w">
+</span><span class="w"></span><span class="w">
 </span><span class="w"></span><span class="n">error</span>: <span class="nc">aborting</span><span class="w"> </span><span class="n">due</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">previous</span><span class="w"> </span><span class="n">error</span><span class="w">
-</span></code></pre></div>
-<p>何故なら <code>cls</code> が <code>x</code> を捕捉し続けているから。これは <code>cls</code> のライフタイムを <code>println!</code> の前で終わらせてあげると解決します。</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="c1">// `{}` でスコープを作ることでライフタイムをコントロールする
-</span><span class="c1"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">cls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">|</span><span class="n">arg</span><span class="o">|</span><span class="p">{</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">arg</span><span class="w"> </span><span class="p">};</span><span class="w">
-</span><span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="p">..</span><span class="mi">10</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">            </span><span class="n">cls</span><span class="p">(</span><span class="n">i</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">x</span><span class="p">);</span><span class="w">
+</span></code></pre></div><p>何故なら <code>cls</code> が <code>x</code> を捕捉し続けているから。これは <code>cls</code> のライフタイムを <code>println!</code> の前で終わらせてあげると解決します。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="c1">// `{}` でスコープを作ることでライフタイムをコントロールする
+</span><span class="c1"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">cls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">|</span><span class="n">arg</span><span class="o">|</span><span class="p">{</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">+</span><span class="o">=</span><span class="w"> </span><span class="n">arg</span><span class="w"> </span><span class="p">}</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="p">.</span><span class="p">.</span><span class="mi">10</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="n">cls</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">x</span><span class="p">)</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p><code>FnMut</code> は変数を <code>mut</code> にする無名関数と同じなようです。</p>
-
-<h2 id="fnonce-1"><code>FnOnce</code></h2>
-
+</span></code></pre></div><p><code>FnMut</code> は変数を <code>mut</code> にする無名関数と同じなようです。</p>
+<h2 id="fnonce1"><code>FnOnce</code></h2>
 <p>じゃあ、 <code>FnOnce</code> は？ <code>std::mem::drop</code> を使って所有権を無理矢理奪うクロージャを作ってみましょう。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">mem</span>::<span class="n">drop</span><span class="p">;</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">String</span>::<span class="n">new</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">cls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="p">{</span><span class="n">drop</span><span class="p">(</span><span class="n">x</span><span class="p">)};</span><span class="w">
-</span><span class="w">    </span><span class="n">cls</span><span class="p">();</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">String</span>::<span class="n">new</span><span class="p">(</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">cls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">|</span><span class="o">|</span><span class="w"> </span><span class="p">{</span><span class="n">drop</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="p">}</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">cls</span><span class="p">(</span><span class="p">)</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>はい、実はこれでOKです。冷静に考えたら <code>FnOnce</code> を継承している <code>Fn</code> を <code>||{}</code> で作れた時点で問題ありませんでしたね。</p>
-
-<h1 id="落穂拾い">落穂拾い</h1>
-
-<h2 id="move-クロージャ"><code>move</code> クロージャ</h2>
-
+</span></code></pre></div><p>はい、実はこれでOKです。冷静に考えたら <code>FnOnce</code> を継承している <code>Fn</code> を <code>||{}</code> で作れた時点で問題ありませんでしたね。</p>
+<h1 id="heading3">落穂拾い</h1>
+<h2 id="move-"><code>move</code> クロージャ</h2>
 <p>じゃあ、Rustが良い感じに使い分けてくれるなら <code>move</code> クロージャって何のためにあるの？と思いますが、これは環境を捕捉する際に <code>Copy</code> なんかが起こらないようにするためのものです。</p>
-
 <ul>
-<li><p><code>move</code> しない例</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">num</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">5</span><span class="p">;</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="p">{</span><span class="w">
-</span><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">add_num</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">|</span><span class="n">x</span>: <span class="kt">i32</span><span class="o">|</span><span class="w"> </span><span class="n">num</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">x</span><span class="p">;</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="n">add_num</span><span class="p">(</span><span class="mi">5</span><span class="p">);</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="n">assert_eq</span><span class="o">!</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="w"> </span><span class="n">num</span><span class="p">);</span><span class="w">
-</span></code></pre></div></li>
-
-<li><p><code>move</code> する例</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">num</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">5</span><span class="p">;</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="p">{</span><span class="w">
-</span><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">add_num</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">move</span><span class="w"> </span><span class="o">|</span><span class="n">x</span>: <span class="kt">i32</span><span class="o">|</span><span class="w"> </span><span class="n">num</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">x</span><span class="p">;</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="n">add_num</span><span class="p">(</span><span class="mi">5</span><span class="p">);</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="n">assert_eq</span><span class="o">!</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span><span class="w"> </span><span class="n">num</span><span class="p">);</span><span class="w">
-</span></code></pre></div></li>
+<li><code>move</code> しない例</li>
 </ul>
-
-<p><code>move</code> は環境 <strong>へ</strong> 所有権を移すかどうか、 <code>FnOnce</code> などは環境 <strong>から</strong> 所有権を移すかどうかです。</p>
-
-<h2 id="関数ポインタ">関数ポインタ</h2>
-
-<p>クロージャを持たない関数は、 <code>fn(i32) -&gt; i32</code> のような型を持ちます。これは空の環境を持つクロージャと同じですね。空の環境に所有権も何もないのでプリミティブの <code>fn</code> は <code>FnOnce</code> <code>FnMut</code> <code>Fn</code> のいずれとしても振舞います。</p>
-
-<h1 id="参考">参考</h1>
-
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="w">
+</span><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">num</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">5</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">add_num</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">|</span><span class="n">x</span>: <span class="kt">i32</span><span class="o">|</span><span class="w"> </span><span class="n">num</span><span class="w"> </span><span class="o">+</span><span class="o">=</span><span class="w"> </span><span class="n">x</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">add_num</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="n">assert_eq</span><span class="o">!</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="w"> </span><span class="n">num</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span></code></pre></div><ul>
+<li><code>move</code> する例</li>
+</ul>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">num</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">5</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">add_num</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">move</span><span class="w"> </span><span class="o">|</span><span class="n">x</span>: <span class="kt">i32</span><span class="o">|</span><span class="w"> </span><span class="n">num</span><span class="w"> </span><span class="o">+</span><span class="o">=</span><span class="w"> </span><span class="n">x</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">add_num</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="n">assert_eq</span><span class="o">!</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span><span class="w"> </span><span class="n">num</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span></code></pre></div><p><code>move</code> は環境 <strong>へ</strong> 所有権を移すかどうか、 <code>FnOnce</code> などは環境 <strong>から</strong> 所有権を移すかどうかです。</p>
+<h2 id="heading4">関数ポインタ</h2>
+<p>クロージャを持たない関数は、 <code>fn(i32) -&gt; i32</code> のような型を持ちます。これは空の環境を持つクロージャと同じですね。空の環境に所有権も何もないのでプリミティブの <code>fn</code> は <code>FnOnce` </code>FnMut<code> </code>Fn` のいずれとしても振舞います。</p>
+<h1 id="heading5">参考</h1>
 <p>ここまで書いて普通にドキュメントに詳しく載っているのに気付きました（汗</p>
-
 <ul>
 <li><a href="https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/functions.html">関数</a></li>
 <li><a href="https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/closures.html">クロージャ</a></li>

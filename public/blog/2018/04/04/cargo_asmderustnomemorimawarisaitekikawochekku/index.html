@@ -22,7 +22,6 @@
         <meta name="twitter:description" content="κeenです。
 RustはたとえばBoxを使っていても必ずしもヒープにアロケートされる訳ではないなど、メモリの扱いを多少最適化してるらしいです。
 しかし何がどう最適化されるのかは実際にコードを書いてみて実験しないとわからないことが多いので実験してみます。
-
 rust 1.25.0です。" />
 
         <title>cargo asmでRustのメモリ周り最適化をチェック | κeenのHappy Hacκing Blog</title>
@@ -117,42 +116,32 @@ rust 1.25.0です。" />
                         <p>κeenです。
 Rustはたとえば<code>Box</code>を使っていても必ずしもヒープにアロケートされる訳ではないなど、メモリの扱いを多少最適化してるらしいです。
 しかし何がどう最適化されるのかは実際にコードを書いてみて実験しないとわからないことが多いので実験してみます。</p>
-
 <p>rust 1.25.0です。</p>
-
 <h1 id="cargo-asm">cargo asm</h1>
-
 <p>実験の前にツールを紹介します。<a href="https://github.com/gnzlbg/cargo-asm">cargo asm</a>です。
 クレートの関数名を指定するとディスアセンブルしてくれます。</p>
-
 <p>たとえば</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">add</span><span class="p">(</span><span class="n">x</span>: <span class="kt">i32</span><span class="p">,</span><span class="w"> </span><span class="n">y</span>: <span class="kt">i32</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">i32</span> <span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="n">x</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">y</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">x</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">y</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>という関数を<code>some_crate</code>に用意すれば以下のようにディスアセンブルできます。</p>
-<div class="highlight"><pre class="chroma"><code class="language-console" data-lang="console">$ cargo asm some_crate::add
+</span><span class="w"></span><span class="w">
+</span></code></pre></div><p>という関数を<code>some_crate</code>に用意すれば以下のようにディスアセンブルできます。</p>
+<pre><code class="language-console" data-lang="console">$ cargo asm some_crate::add
 some_crate::add:
  lea     eax, [rdi, +, rsi]
- ret</code></pre></div>
-<p>ここでは味気ないですがコンソール上では色がついています。
+ ret
+</code></pre><p>ここでは味気ないですがコンソール上では色がついています。
 因みにデフォルトで<code>release</code>ビルドのものが使われます。</p>
-
 <p>cargoプロジェクトを作らないといけないのでやや手間ですがgdbやobjdumpよりは格段に使いやすいでしょう。</p>
-
 <p>他にはllvm-irを出力したりJSON形式で出力したりもできるようですがここでは使いません。</p>
-
-<h1 id="box-の実験"><code>Box</code>の実験</h1>
-
-<h2 id="普通の-box">普通の<code>Box</code></h2>
-
+<h1 id="box"><code>Box</code>の実験</h1>
+<h2 id="box1">普通の<code>Box</code></h2>
 <p><code>Box</code>をアロケートして関数から返して見ましょう。これは最適化の余地が無いので普通にヒープにアロケートすると予想されます。</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">heap_box</span><span class="p">()</span><span class="w"> </span>-&gt; <span class="nb">Box</span><span class="o">&lt;</span><span class="kt">i32</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="w">
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">heap_box</span><span class="p">(</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">Box</span><span class="o">&lt;</span><span class="kt">i32</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>これをディスアセンブルすると</p>
-<div class="highlight"><pre class="chroma"><code class="language-assembly" data-lang="assembly"> sub     rsp, 56
+</span></code></pre></div><p>これをディスアセンブルすると</p>
+<pre><code class="language-assembly" data-lang="assembly"> sub     rsp, 56
  lea     rdx, [rsp, +, 8]
  mov     edi, 4
  mov     esi, 4
@@ -173,27 +162,23 @@ some_crate::add:
  movups  xmmword, ptr, [rsp, +, 16], xmm0
  lea     rdi, [rsp, +, 8]
  call    alloc::heap::exchange_malloc::{{closure}}
- ud2</code></pre></div>
-<p>とアロケートしています。まずは当たり前のことが確認できました。</p>
-
-<h2 id="別の関数に渡す-box">別の関数に渡す<code>Box</code></h2>
-
+ ud2
+</code></pre><p>とアロケートしています。まずは当たり前のことが確認できました。</p>
+<h2 id="box2">別の関数に渡す<code>Box</code></h2>
 <p>値をエスケープさせる先として別の関数に渡すのも試してみましょう。恐らく仕方なくアロケートするでしょう。</p>
-
 <p>渡す先の関数はこれを用意します。</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#[inline(never)]</span><span class="w">
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#[</span><span class="cp">inline(never)</span><span class="cp">]</span><span class="w">
 </span><span class="w"></span><span class="k">fn</span> <span class="nf">take</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="p">(</span><span class="n">t</span>: <span class="nc">T</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">t</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">t</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>で、これ。</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">take_box</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span><span class="w">
-</span><span class="w">    </span><span class="n">take</span><span class="p">(</span><span class="n">b</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span></code></pre></div><p>で、これ。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">take_box</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">take</span><span class="p">(</span><span class="n">b</span><span class="p">)</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>ディスアセンブルします。</p>
-<div class="highlight"><pre class="chroma"><code class="language-assembly" data-lang="assembly"> sub     rsp, 56
+</span></code></pre></div><p>ディスアセンブルします。</p>
+<pre><code class="language-assembly" data-lang="assembly"> sub     rsp, 56
  lea     rdx, [rsp, +, 8]
  mov     edi, 4
  mov     esi, 4
@@ -215,63 +200,51 @@ some_crate::add:
  movups  xmmword, ptr, [rsp, +, 16], xmm0
  lea     rdi, [rsp, +, 8]
  call    alloc::heap::exchange_malloc::{{closure}}
- ud2</code></pre></div>
-<p>やはりアロケートしてますね。</p>
+ ud2
 
-<h2 id="関数内で閉じた-box">関数内で閉じた<code>Box</code></h2>
-
+</code></pre><p>やはりアロケートしてますね。</p>
+<h2 id="box3">関数内で閉じた<code>Box</code></h2>
 <p>先程は関数の外に返していましたが今度は内部で消費してみます。これは最適化できそうです。</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">stack_box</span><span class="p">()</span><span class="w"> </span>-&gt; <span class="kt">i32</span> <span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">*</span><span class="n">b</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="n">b</span><span class="w">
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">stack_box</span><span class="p">(</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">i32</span> <span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">*</span><span class="n">b</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">b</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>これをディスアセンブルすると</p>
-<div class="highlight"><pre class="chroma"><code class="language-assembly" data-lang="assembly"> mov     eax, 2
- ret</code></pre></div>
-<p>アロケートどころか全部消し飛んでますね。</p>
-
+</span></code></pre></div><p>これをディスアセンブルすると</p>
+<pre><code class="language-assembly" data-lang="assembly"> mov     eax, 2
+ ret
+</code></pre><p>アロケートどころか全部消し飛んでますね。</p>
 <p>アグレッシブー。</p>
-
-<h2 id="別の関数に渡す-box-inline化あり">別の関数に渡す<code>Box</code> - inline化あり</h2>
-
+<h2 id="box--inline">別の関数に渡す<code>Box</code> - inline化あり</h2>
 <p>2つ前のやつ、<code>take</code>の<code>#[inline(never)]</code>をはずすとどうなるかというと</p>
-<div class="highlight"><pre class="chroma"><code class="language-assembly" data-lang="assembly"> ret</code></pre></div>
-<p>アグレッシブー。</p>
-
-<h2 id="別の関数に-mut-で渡す-box">別の関数に<code>&amp;mut</code>で渡す<code>Box</code></h2>
-
+<pre><code class="language-assembly" data-lang="assembly"> ret
+</code></pre><p>アグレッシブー。</p>
+<h2 id="mutbox">別の関数に<code>&amp;mut</code>で渡す<code>Box</code></h2>
 <p>では、中途半端に<code>&amp;mut</code>で渡してみて関数内で消費してみましょう。これは最適化でアロケートが消えてスタック上の値の参照を渡すようになるんですかねー。</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">mut_stack_box</span><span class="p">()</span><span class="w"> </span>-&gt; <span class="kt">i32</span> <span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span><span class="w">
-</span><span class="w">    </span><span class="n">take</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">b</span><span class="p">);</span><span class="w">
-</span><span class="w">    </span><span class="o">*</span><span class="n">b</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w">
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">mut_stack_box</span><span class="p">(</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">i32</span> <span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">take</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">b</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="o">*</span><span class="n">b</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>ディスアセンブルすると</p>
-<div class="highlight"><pre class="chroma"><code class="language-assembly" data-lang="assembly"> mov     eax, 2
- ret</code></pre></div>
-<p>？！？！？！<code>take</code> が何もしないことを見抜いている！？</p>
-
+</span></code></pre></div><p>ディスアセンブルすると</p>
+<pre><code class="language-assembly" data-lang="assembly"> mov     eax, 2
+ ret
+</code></pre><p>？！？！？！<code>take</code> が何もしないことを見抜いている！？</p>
 <p>恐らくこれはpurity解析をしていて、<code>take</code>が純粋なので<code>optimize out</code>してもよいと判断できるのでしょう。</p>
-
 <p>適当に副作用を起こす<code>take_print</code>を用意して</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#[inline(never)]</span><span class="w">
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#[</span><span class="cp">inline(never)</span><span class="cp">]</span><span class="w">
 </span><span class="w"></span><span class="k">fn</span> <span class="nf">take_print</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="p">(</span><span class="n">t</span>: <span class="nc">T</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">t</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;hello&#34;</span><span class="p">);</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">t</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;hello&#34;</span><span class="p">)</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>それを使うコードにすると</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">mut_stack_box_print</span><span class="p">()</span><span class="w"> </span>-&gt; <span class="kt">i32</span> <span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span><span class="w">
-</span><span class="w">    </span><span class="n">take_print</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">b</span><span class="p">);</span><span class="w">
-</span><span class="w">    </span><span class="o">*</span><span class="n">b</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w">
+</span></code></pre></div><p>それを使うコードにすると</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">mut_stack_box_print</span><span class="p">(</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">i32</span> <span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">take_print</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">b</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="o">*</span><span class="n">b</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>こうなります。</p>
-<div class="highlight"><pre class="chroma"><code class="language-assembly" data-lang="assembly"> push    rbp
+</span></code></pre></div><p>こうなります。</p>
+<pre><code class="language-assembly" data-lang="assembly"> push    rbp
  push    rbx
  sub     rsp, 56
  lea     rdx, [rsp, +, 8]
@@ -311,20 +284,17 @@ some_crate::add:
  call    core::ptr::drop_in_place
  mov     rdi, rbp
  call    _Unwind_Resume
- ud2</code></pre></div>
-<p>ふむふむ。スタックは使わずにヒープにアロケートしてすぐにデアロケートするんですね。</p>
-
+ ud2
+</code></pre><p>ふむふむ。スタックは使わずにヒープにアロケートしてすぐにデアロケートするんですね。</p>
 <p>しかしちょっと気になる点が。これ、<code>&amp;mut Box&lt;i32&gt;</code>をとってませんかね。</p>
-
 <p>型を明示してみます。</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">i32_mut_stack_box_print</span><span class="p">()</span><span class="w"> </span>-&gt; <span class="kt">i32</span> <span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span><span class="w">
-</span><span class="w">    </span><span class="n">take_print</span>::<span class="o">&lt;&amp;</span><span class="k">mut</span><span class="w"> </span><span class="kt">i32</span><span class="o">&gt;</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">b</span><span class="p">);</span><span class="w">
-</span><span class="w">    </span><span class="o">*</span><span class="n">b</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w">
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">i32_mut_stack_box_print</span><span class="p">(</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">i32</span> <span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">take_print</span>::<span class="o">&lt;</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="kt">i32</span><span class="o">&gt;</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">b</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="o">*</span><span class="n">b</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>これでどうですか</p>
-<div class="highlight"><pre class="chroma"><code class="language-assembly" data-lang="assembly">memory_check::i32_mut_stack_box_print:
+</span></code></pre></div><p>これでどうですか</p>
+<pre><code class="language-assembly" data-lang="assembly">memory_check::i32_mut_stack_box_print:
  push    rbp
  push    rbx
  sub     rsp, 56
@@ -365,31 +335,26 @@ some_crate::add:
  call    core::ptr::drop_in_place
  mov     rdi, rbp
  call    _Unwind_Resume
- ud2</code></pre></div>
-<p>だめですか。</p>
-
-<h1 id="構造体の実験">構造体の実験</h1>
-
+ ud2
+</code></pre><p>だめですか。</p>
+<h1 id="heading">構造体の実験</h1>
 <p>今度は<code>Box</code>ではなくて構造体で実験します。</p>
-
 <p>用意するのはこれ。40byteの構造体。</p>
-<div class="highlight"><pre class="chroma"><code class="language-assembly" data-lang="assembly">#[derive(Default)]
+<pre><code class="language-assembly" data-lang="assembly">#[derive(Default)]
 pub struct Struct {
     a: i64,
     b: i64,
     c: i64,
     d: i64,
     e: i64,
-}</code></pre></div>
-<h2 id="構造体の値返し">構造体の値返し</h2>
-
+}
+</code></pre><h2 id="heading1">構造体の値返し</h2>
 <p>まずは<code>Box</code>と同じくそのまま関数から返してみます。</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">stack_struct</span><span class="p">()</span><span class="w"> </span>-&gt; <span class="nc">Struct</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="n">Struct</span>::<span class="n">default</span><span class="p">()</span><span class="w">
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">stack_struct</span><span class="p">(</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Struct</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">Struct</span>::<span class="n">default</span><span class="p">(</span><span class="p">)</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>これをディスアセンブルするとこうなります。</p>
-<div class="highlight"><pre class="chroma"><code class="language-assembly" data-lang="assembly"> ; 128bit(=16byte)レジスタを0初期化
+</span></code></pre></div><p>これをディスアセンブルするとこうなります。</p>
+<pre><code class="language-assembly" data-lang="assembly"> ; 128bit(=16byte)レジスタを0初期化
  xorps   xmm0, xmm0
  ; メモリに16byte書き込む。書き込み先は引数で与えられたポインタ
  movups  xmmword, ptr, [rdi, +, 16], xmm0
@@ -399,71 +364,65 @@ pub struct Struct {
  ; SIMD命令は16byteアラインされていないといけないので端数は`mov`を使う
  mov     qword, ptr, [rdi, +, 32], 0
  mov     rax, rdi
- ret</code></pre></div>
-<p>へー。SIMD使って初期化するんですね。
+ ret
+</code></pre><p>へー。SIMD使って初期化するんですね。
 それはともかく外部からポインタが渡されてますね。</p>
-
 <p>この<code>stack_struct</code>を<code>#[inline(never)]</code>して別の関数で受け取ってみましょう。</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">receive_struct</span><span class="p">()</span><span class="w">  </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">stack_struct</span><span class="p">();</span><span class="w">
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">receive_struct</span><span class="p">(</span><span class="p">)</span><span class="w">  </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">stack_struct</span><span class="p">(</span><span class="p">)</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>これをディスアセンブルすると</p>
-<div class="highlight"><pre class="chroma"><code class="language-assembly" data-lang="assembly"> ; スタックを40byte広げて
+</span></code></pre></div><p>これをディスアセンブルすると</p>
+<pre><code class="language-assembly" data-lang="assembly"> ; スタックを40byte広げて
  sub     rsp, 40
  ; その領域へのポインタを`stack_struct`に渡す
  mov     rdi, rsp
  call    memory_check::stack_struct
  add     rsp, 40
- ret</code></pre></div>
-<p>となっています。ふむふむ、スタック返しになっているんですね。</p>
+ ret
 
-<h2 id="構造体の値返し大小">構造体の値返し大小</h2>
-
+</code></pre><p>となっています。ふむふむ、スタック返しになっているんですね。</p>
+<h2 id="heading2">構造体の値返し大小</h2>
 <p>40byteではスタック返しでした。では、もっと小さかったり大きかったりするとどうなんでしょう。</p>
-
 <p>8byteの場合: レジスタ返しのようです</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#[derive(Default)]</span><span class="w">
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#[</span><span class="cp">derive(Default)</span><span class="cp">]</span><span class="w">
 </span><span class="w"></span><span class="k">pub</span><span class="w"> </span><span class="k">struct</span> <span class="nc">SmallStruct</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="n">a</span>: <span class="kt">i64</span><span class="p">,</span><span class="w">
-</span><span class="w">    </span><span class="n">b</span>: <span class="kt">i64</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">a</span>: <span class="kt">i64</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">b</span>: <span class="kt">i64</span><span class="p">,</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><div class="highlight"><pre class="chroma"><code class="language-assembly" data-lang="assembly"> xor     eax, eax
+</span></code></pre></div><pre><code class="language-assembly" data-lang="assembly"> xor     eax, eax
  xor     edx, edx
- ret</code></pre></div>
-<p>8192byteの場合: スタック返しのようです。これは<code>memset</code>を使うんですね。</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#[derive(Default)]</span><span class="w">
-</span><span class="w"></span><span class="k">pub</span><span class="w"> </span><span class="k">struct</span> <span class="nc">BigStruct</span><span class="p">([[</span><span class="kt">i64</span><span class="p">;</span><span class="w"> </span><span class="mi">32</span><span class="p">];</span><span class="w"> </span><span class="mi">32</span><span class="p">]);</span><span class="w">
-</span></code></pre></div><div class="highlight"><pre class="chroma"><code class="language-assembly" data-lang="assembly"> push    rbx
+ ret
+</code></pre><p>8192byteの場合: スタック返しのようです。これは<code>memset</code>を使うんですね。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#[</span><span class="cp">derive(Default)</span><span class="cp">]</span><span class="w">
+</span><span class="w"></span><span class="k">pub</span><span class="w"> </span><span class="k">struct</span> <span class="nc">BigStruct</span><span class="p">(</span><span class="p">[</span><span class="p">[</span><span class="kt">i64</span><span class="p">;</span><span class="w"> </span><span class="mi">32</span><span class="p">]</span><span class="p">;</span><span class="w"> </span><span class="mi">32</span><span class="p">]</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span></code></pre></div><pre><code class="language-assembly" data-lang="assembly"> push    rbx
  mov     rbx, rdi
  xor     esi, esi
  mov     edx, 8192
  call    memset
  mov     rax, rbx
  pop     rbx
- ret</code></pre></div>
-<p>因みに8192byteの場合は受取側はスタックが溢れないかチェックするようです。</p>
-<div class="highlight"><pre class="chroma"><code class="language-assembly" data-lang="assembly"> mov     eax, 262152
+ ret
+</code></pre><p>因みに8192byteの場合は受取側はスタックが溢れないかチェックするようです。</p>
+<pre><code class="language-assembly" data-lang="assembly"> mov     eax, 262152
  ; なんか呼ばれてる
  call    __rust_probestack
  sub     rsp, rax
  lea     rdi, [rsp, +, 8]
  call    memory_check::stack_big_struct
- add     rsp, 262152</code></pre></div>
-<p>この<code>__rust_probestack</code>、<a href="https://manishearth.github.io/rust-internals-docs/compiler_builtins/probestack/index.html">ドキュメント</a>によると、普段stack overflow検出にはガードページか使われていますがあまりにstackを伸ばす幅が大きいとガードページを飛び越えて伸ばしてしまう可能性があるため手動で検査する必要があるんだそうです。へー。因みに予想どおり確保サイズが4096byte以上になったらprobestackされるようです。</p>
+ add     rsp, 262152
 
-<h2 id="構造体を-box-で受け取る">構造体を<code>Box</code>で受け取る</h2>
-
+</code></pre><p>この<code>__rust_probestack</code>、<a href="https://manishearth.github.io/rust-internals-docs/compiler_builtins/probestack/index.html">ドキュメント</a>によると、普段stack overflow検出にはガードページか使われていますがあまりにstackを伸ばす幅が大きいとガードページを飛び越えて伸ばしてしまう可能性があるため手動で検査する必要があるんだそうです。へー。因みに予想どおり確保サイズが4096byte以上になったらprobestackされるようです。</p>
+<h2 id="box4">構造体を<code>Box</code>で受け取る</h2>
 <p>運が良ければ<code>Box</code>で確保した領域に直接書き込めるでしょう。運が悪ければ一旦スタックで受け、そこから <code>Box</code> に書き込むでしょう。</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">recieve_struct_in_box</span><span class="p">()</span><span class="w"> </span>-&gt; <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Struct</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="n">stack_struct</span><span class="p">());</span><span class="w">
-</span><span class="w">    </span><span class="n">b</span><span class="w">
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="w">
+</span><span class="w"></span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">recieve_struct_in_box</span><span class="p">(</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Struct</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="n">stack_struct</span><span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">b</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>因みに<code>stack_struct</code>には<code>#[inline(never)]</code>がついてます。</p>
-
+</span></code></pre></div><p>因みに<code>stack_struct</code>には<code>#[inline(never)]</code>がついてます。</p>
 <p>ディスアセンブルしてみましょう</p>
-<div class="highlight"><pre class="chroma"><code class="language-assembly" data-lang="assembly"> ; スタックを伸ばして
+<pre><code class="language-assembly" data-lang="assembly"> ; スタックを伸ばして
  sub     rsp, 88
  lea     rdi, [rsp, +, 48]
  ; stack_structを呼ぶ
@@ -492,18 +451,17 @@ pub struct Struct {
  movups  xmmword, ptr, [rsp, +, 16], xmm0
  lea     rdi, [rsp, +, 8]
  call    alloc::heap::exchange_malloc::{{closure}}
- ud2</code></pre></div>
-<p>残念な方でしたね。普通に最適化できないのかメモリ確保の失敗を勘案すると関数呼び出しと順番を入れ替えられないのか気になりますね。</p>
-
+ ud2
+</code></pre><p>残念な方でしたね。普通に最適化できないのかメモリ確保の失敗を勘案すると関数呼び出しと順番を入れ替えられないのか気になりますね。</p>
 <p>因みにnightlyのrustには<a href="https://doc.rust-lang.org/std/ops/trait.Place.html">place構文が用意されていて</a>、メモリ確保した領域に直接書き込むことができます。</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#![feature(box_syntax)]</span><span class="w">
-</span><span class="w"></span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">receive_struct_in_place_box</span><span class="p">()</span><span class="w"> </span>-&gt; <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Struct</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">box</span><span class="w"> </span><span class="n">stack_struct</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="n">b</span><span class="w">
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#![</span><span class="cp">feature(box_syntax)</span><span class="cp">]</span><span class="w">
+</span><span class="w"></span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">receive_struct_in_place_box</span><span class="p">(</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Struct</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">box</span><span class="w"> </span><span class="n">stack_struct</span><span class="p">(</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">b</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>ディスアセンブルしてみると、ちゃんと先にメモリを確保しています。</p>
-<div class="highlight"><pre class="chroma"><code class="language-assembly" data-lang="assembly"> push    rbx
+</span><span class="w"></span><span class="w">
+</span></code></pre></div><p>ディスアセンブルしてみると、ちゃんと先にメモリを確保しています。</p>
+<pre><code class="language-assembly" data-lang="assembly"> push    rbx
  sub     rsp, 48
  lea     rdx, [rsp, +, 8]
  mov     edi, 40
@@ -528,20 +486,16 @@ pub struct Struct {
  movups  xmmword, ptr, [rsp, +, 16], xmm0
  lea     rdi, [rsp, +, 8]
  call    alloc::heap::exchange_malloc::{{closure}}
- ud2</code></pre></div>
-<p>良いですね。</p>
-
-<h1 id="まとめ">まとめ</h1>
-
+ ud2
+</code></pre><p>良いですね。</p>
+<h1 id="heading3">まとめ</h1>
 <ul>
 <li><code>Box</code>は最適化で消えることはあるけどスタックに変わることはなかったよ</li>
 <li>Rustのスタックアロケートは本当にスタック返しをしてたよ</li>
 <li><code>Box::new(Struct)</code>は一旦スタック経由で書き込んでたよ</li>
 <li>Placeの機能が入ると直接書き込めるようになりそうだね</li>
 </ul>
-
-<h1 id="こぼれ話">こぼれ話</h1>
-
+<h1 id="heading4">こぼれ話</h1>
 <p>ずっとRustのメモリ周りの最適化が実際どうなっているのか調べたいと思っていました。
 しかし毎度ディスアセンブルしてマングリングされた名前をさがすのも手間なのでしばらく放置していました。
 ところがcargo-asmが登場したことにより手間が大分削減できるようになったのでこの記事が作成されました。ツールって偉大ですね。</p>

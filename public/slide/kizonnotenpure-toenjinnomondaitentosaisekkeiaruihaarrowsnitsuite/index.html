@@ -123,349 +123,379 @@
     </header>
     <div class="reveal">
         <div class="slides">
-            <section data-markdown
-    data-separator="\n===\n"
-    data-vertical="\n---\n"
-    data-notes="^Note:">
-<script type="text/template">
-<style type="text/css">
-.red {
-color: red;
-}
-</style>
-# 既存のテンプレートエンジンの問題点と再設計、あるいはArrowsについて
------------------------------------------------------------------
-Clack Meet Up #1  
-2015-03-05 @サムライト
-
-<!-- .slide: class="center" -->
-===
-# About Me
----------
-![κeenのアイコン](/images/icon.png) <!-- .element: style="position:absolute;right:0;z-index:-1" -->
-
- + κeen
- + [@blackenedgold](https://twitter.com/blackenedgold)
- + Github: [KeenS](https://github.com/KeenS)
- + 野生のLisper
- + Lisp, Ruby, OCaml, Shell Scriptあたりを書きます
-===
-# Template Engines
-
-<!-- .slide: class="center" -->
-===
-# Existing Architeture
-----------------------
-0. (リクエスト)
-1. アプリ
-  0. 引数を計算
-  1. テンプレートに引数を渡す
-  2. レスポンスをレンダリング <!--.element: class="fragment grow"  -->
-4. レスポンスをサーバに渡す
-5. (レスポンス)
-===
-# Rendering?
-----------------------
-* 結合した文字列はクライアントに返ったらその後はゴミ
- + GCへ負荷がかかる (後述)
-* クライアントにとって1つの文字列である必要はない
-* むしろ返せる部分だけ先に返した方が得（後述）
-===
-# GC Pressure (SBCL)
------------------
-* 世代別Copy GC
-* 結合した文字列は比較的大きい
-* `alloc_space`に入らない大きさならアロケートが遅い
-* GCを頻繁に起動してしまう
-* 16KBを越えると特別扱いされて遅い/メモリを喰う
-* LispのWebアプリはレスポンスタイムの分散が大きい（要出展）
-
-参考: [SBCL GENCGC @ x86 Linux](http://cl-www.msi.co.jp/reports/sbcl-gc-memo.html)
-===
-# Split Response
----------------
-例えば、こんなの
-
-<pre><code class="html">&lt;!DOCTYPE html&gt;
-&lt;html xmlns=&quot;http://www.w3.org/1999/xhtml&quot; xml:lang=&quot;en&quot; lang=&quot;en-us&quot;&gt;
-    &lt;head&gt;
-        &lt;link rel=&quot;stylesheet&quot; href=&quot;http://localhost:1313//reveal.js/lib/css/xcode.css&quot;&gt;
-        &lt;script src=&quot;//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js&quot;&gt;&lt;/script&gt;
-        ....
-        &lt;/script&gt;
-    &lt;/head&gt;
-    &lt;body class=&quot;li-body&quot;&gt;
-    &lt;header&gt;{{ header }}&lt;/header&gt;
-    {{ body }}
-    ...
-</code></pre>
-===
-# Split Response
----------------
-1. `{{ header }}`の前に先頭から`<header>`までを返す
-2. `{{ header }}`を返す
-3. `</header>`を返す
-4. `{{ body }}`を返す
-
-...
-
-===
-# Pros of Split Response
-------------------------
-* `header`を計算してる間にクライアントにhead部分が渡る
-  + 先に`<link>`や`<script>`を要求出来る
-  + サーバ側のスループットやレスポンスタイムは変わらないが
-    クライアントのレンダリング完了までの時間は大幅に短縮出来る
-* 文字列を結合する必要がない
-* 定数部分については長さが判ってるので最適化し易い
-===
-# How TEs Work 
----------------------------
-## Compilation
-1. テンプレート文字列
- + パーサ <!-- .element: style="list-style-image: url(/images/arrow_down.svg);" -->
-2. 抽象構文木
- + コードエミット <!-- .element: style="list-style-image: url(/images/arrow_down.svg);" -->
-3. レンダリング関数
-===
-# How TEs Work 
----------------------------
-## Rendering
-1. レンダリング関数
- + 引数 <!-- .element: style="list-style-image: url(/images/arrow_down.svg);" -->
-2. 文字列
-===
-# Misc Problems
----------------
-* サーバに渡すのは文字列なのにソケットに書き込む時はオクテット？
-  + 文字列で返す？オクテットで返す？（デバッグがー）
-  + オクテットの変換はいつ？
-* ストリームが遅い？
-  + POSIX APIが使える"なら"fdの方が速い？
-* ユーザが用意したバッファに書き出したい？
-* テンプレートに渡す引数が定数文字列なら畳み込める筈？
-* リクエストの度にテンプレートパースするのは筋悪だけど開発中は毎回コンパイルするのは面倒？
-===
-<!-- .slide: data-background="/images/arrows.jpg" -->
-
-# Arrows
-
-Template flies like an arrow
-
-<!-- .slide: class="center" -->
-===
-<!-- .slide: data-background="/images/arrows.jpg" -->
-# Arrows
---------
-* [KeenS/arrows](https://github.com/KeenS/arrows)
-* 現在開発中のテンプレートエンジン
-* 複数のテンプレートが選べる（予定）
-* 複数のバックエンドが選べる
-* バックエンドに依ってはnon-consing
-===
-<!-- .slide: data-background="/images/arrows.jpg" -->
-# How Arrows Works
-------------------
-## Compilation
-1. テンプレート文字列<span class="red"> + 定数引数</span>
-  + パーサ<span class="red">(default, cl-emd互換...)</span> <!-- .element: style="list-style-image: url(/images/arrow_down.svg);" -->
-2. 抽象構文木
-  + <span class="red">最適化(const folding, concat, convert...)</span> <!-- .element: style="list-style-image: url(/images/arrow_down.svg);" -->
-  + コードエミット <!-- .element: style="list-style-image: url(/images/arrow_down.svg);" -->
-3. レンダリング関数<span class="red">(string, octets, stream, fast-io ...)</span>
-===
-<!-- .slide: data-background="/images/arrows.jpg" -->
-# How Arrows Works
-------------------
-## Rendering
-1. レンダリング関数
-  + 引数 <!-- .element: style="list-style-image: url(/images/arrow_down.svg);" -->
-2. 文字列<span class="red">、オクテット列、ストリーム書き出し、fast-io…</span>
-===
-<!-- .slide: data-background="/images/arrows.jpg" -->
-# How compiled
---------------
-```html
-<h1>Hi {{var name}}!</h1>
-```
-を
-```lisp
-(compile-template-string :xxx
-  "<h1>Hi {{var name}}!</h1>" ())
-```
-とコンパイル
-===
-# Stream backend
-----------------
-<!-- .slide: data-background="/images/arrows.jpg" -->
-```lisp
-(lambda (stream &key name)
-  (write-string "<h1>Hi " stream)
-  (write-string
-    (encode-for-tt (princ-to-string name))
-    stream)
-  (write-string "!</h1>" stream))
-```
-* ほとんどアロケートしない
-===
-<!-- .slide: data-background="/images/arrows.jpg" -->
-# Octet backend
-----------------
-```lisp
-(lambda (&key name)
-  (with-fast-output (buffer)
-    (fast-write-sequence
-      #.(string-to-octets "<h1>Hi ")
-       buffer)
-    (fast-write-sequence
-      (string-to-octets
-        (encode-for-tt (princ-to-string name)))
-                       buffer)
-    (fast-write-sequence
-      #.(string-to-octets "!</h1>")
-      buffer)))
-```
-===
-<!-- .slide: data-background="/images/arrows.jpg" -->
-# How optimized
----------------
-```html
-<h1>Hi {{var name}}!</h1>
-```
-を
-
-```lisp
-(compile-template-string :stream
-   "<h1>Hi {{var name}}!</h1>"
-   '(:known-args (:name "<κeen>")))
-```
-とコンパイル
-===
-<!-- .slide: data-background="/images/arrows.jpg" -->
-# How optimized
----------------
-## variable folding
-```lisp
-(lambda (stream)
-  (write-string "<h1>Hi " stream)
-  (write-string (encode-for-tt "<κeen>") stream)
-  (write-string "!</h1>" stream))
-```
-* 既知の引数は畳み込む
-* 文字列なら`princ-to-string`しない
-===
-<!-- .slide: data-background="/images/arrows.jpg" -->
-# How optimized
----------------
-## const folding
-```lisp
-(lambda (stream)
-  (write-string "<h1>Hi " stream)
-  (write-string "&lt;κeen&gt;" stream)
-  (write-string "!</h1>" stream))
-```
-* 定数のエスケープはコンパイル時に済ませる
-===
-<!-- .slide: data-background="/images/arrows.jpg" -->
-# How optimized
----------------
-## append sequence
-```lisp
-(lambda (stream)
-  (write-string "<h1>Hi &lt;κeen&gt;!</h1>"
-                stream))
-```
-* 複数シーケンスの書き出しは1つにまとめる
-===
-<!-- .slide: data-background="/images/arrows.jpg" -->
-# Further Ideas
----------------
-* 引数計算の遅延
-* 引数計算の並列化
-* 非同期化
-* HTML compction
-===
-<!-- .slide: data-background="/images/arrows.jpg" -->
-# Further Ideas
----------------
-## 引数計算の遅延
-* `name`の計算が重いときに先に`"<h1>Hi "`を返す。
-* `name`は必要になったら値を計算する(Promise パターン)
-```lisp
-(lambda (stream &key name)
-  (write-string "<h1>Hi " stream)
-  (write-string
-    (encode-for-tt (princ-to-string name))
-    stream)
-  (write-string "!</h1>" stream))
-```
-===
-<!-- .slide: data-background="/images/arrows.jpg" -->
-# Further Ideas
----------------
-## 引数計算の並列化
-* `name`の計算が重いときに先に`"<h1>Hi "`を返す。
-* `name`は並列に計算して必要になったら値を要求する(Futureパターン)
-```lisp
-(lambda (stream &key name)
-  (write-string "<h1>Hi " stream)
-  (write-string
-    (encode-for-tt (princ-to-string name))
-    stream)
-  (write-string "!</h1>" stream))
-```
-===
-<!-- .slide: data-background="/images/arrows.jpg" -->
-# Further Ideas
----------------
-## 非同期化
-* 単純にwriteを非同期にする
-* 他にFutureもブロックするので非同期Futureを使う
-===
-<!-- .slide: data-background="/images/arrows.jpg" -->
-# Further Ideas
----------------
-## HTML compction
-```html
-<ol>
-  <li> item 1 </li>
-  <li> item 2 </li>
-  <li> item 3 </li>
+            <!-- raw HTML omitted -->
+<!-- raw HTML omitted -->
+<p>===</p>
+<h1 id="about-me">About Me</h1>
+<hr>
+<p><img src="//KeenS.github.io/images/icon.png" alt="κeenのアイコン"> <!-- raw HTML omitted --></p>
+<ul>
+<li>κeen</li>
+<li><a href="https://twitter.com/blackenedgold">@blackenedgold</a></li>
+<li>Github: <a href="https://github.com/KeenS">KeenS</a></li>
+<li>野生のLisper</li>
+<li>Lisp, Ruby, OCaml, Shell Scriptあたりを書きます
+===</li>
+</ul>
+<h1 id="template-engines">Template Engines</h1>
+<!-- raw HTML omitted -->
+<p>===</p>
+<h1 id="existing-architeture">Existing Architeture</h1>
+<hr>
+<ol start="0">
+<li>(リクエスト)</li>
+<li>アプリ</li>
+<li>引数を計算</li>
+<li>テンプレートに引数を渡す</li>
+<li>レスポンスをレンダリング <!-- raw HTML omitted --></li>
+<li>レスポンスをサーバに渡す</li>
+<li>(レスポンス)
+===</li>
 </ol>
+<h1 id="rendering">Rendering?</h1>
+<hr>
+<ul>
+<li>結合した文字列はクライアントに返ったらその後はゴミ</li>
+</ul>
+<ul>
+<li>GCへ負荷がかかる (後述)</li>
+</ul>
+<ul>
+<li>クライアントにとって1つの文字列である必要はない</li>
+<li>むしろ返せる部分だけ先に返した方が得（後述）
+===</li>
+</ul>
+<h1 id="gc-pressure-sbcl">GC Pressure (SBCL)</h1>
+<hr>
+<ul>
+<li>世代別Copy GC</li>
+<li>結合した文字列は比較的大きい</li>
+<li><code>alloc_space</code>に入らない大きさならアロケートが遅い</li>
+<li>GCを頻繁に起動してしまう</li>
+<li>16KBを越えると特別扱いされて遅い/メモリを喰う</li>
+<li>LispのWebアプリはレスポンスタイムの分散が大きい（要出展）</li>
+</ul>
+<h1 id="-sbcl-gencgc--x86-linuxhttpclwwwmsicojpreportssbclgcmemohtml">参考: <a href="http://cl-www.msi.co.jp/reports/sbcl-gc-memo.html">SBCL GENCGC @ x86 Linux</a></h1>
+<h1 id="split-response">Split Response</h1>
+<hr>
+<p>例えば、こんなの</p>
+<!-- raw HTML omitted -->
+<!-- raw HTML omitted -->
+<p>===</p>
+<h1 id="split-response1">Split Response</h1>
+<hr>
+<ol>
+<li><code>{{ header }}</code>の前に先頭から<code>&lt;header&gt;</code>までを返す</li>
+<li><code>{{ header }}</code>を返す</li>
+<li><code>&lt;/header&gt;</code>を返す</li>
+<li><code>{{ body }}</code>を返す</li>
+</ol>
+<p>&hellip;</p>
+<p>===</p>
+<h1 id="pros-of-split-response">Pros of Split Response</h1>
+<hr>
+<ul>
+<li><code>header</code>を計算してる間にクライアントにhead部分が渡る
+<ul>
+<li>先に<code>&lt;link&gt;</code>や<code>&lt;script&gt;</code>を要求出来る</li>
+<li>サーバ側のスループットやレスポンスタイムは変わらないが
+クライアントのレンダリング完了までの時間は大幅に短縮出来る</li>
+</ul>
+</li>
+<li>文字列を結合する必要がない</li>
+<li>定数部分については長さが判ってるので最適化し易い
+===</li>
+</ul>
+<h1 id="how-tes-work">How TEs Work</h1>
+<hr>
+<h2 id="compilation">Compilation</h2>
+<ol>
+<li>テンプレート文字列</li>
+</ol>
+<ul>
+<li>パーサ <!-- raw HTML omitted --></li>
+</ul>
+<ol start="2">
+<li>抽象構文木</li>
+</ol>
+<ul>
+<li>コードエミット <!-- raw HTML omitted --></li>
+</ul>
+<ol start="3">
+<li>レンダリング関数
+===</li>
+</ol>
+<h1 id="how-tes-work1">How TEs Work</h1>
+<hr>
+<h2 id="rendering1">Rendering</h2>
+<ol>
+<li>レンダリング関数</li>
+</ol>
+<ul>
+<li>引数 <!-- raw HTML omitted --></li>
+</ul>
+<ol start="2">
+<li>文字列
+===</li>
+</ol>
+<h1 id="misc-problems">Misc Problems</h1>
+<hr>
+<ul>
+<li>サーバに渡すのは文字列なのにソケットに書き込む時はオクテット？
+<ul>
+<li>文字列で返す？オクテットで返す？（デバッグがー）</li>
+<li>オクテットの変換はいつ？</li>
+</ul>
+</li>
+<li>ストリームが遅い？
+<ul>
+<li>POSIX APIが使える&quot;なら&quot;fdの方が速い？</li>
+</ul>
+</li>
+<li>ユーザが用意したバッファに書き出したい？</li>
+<li>テンプレートに渡す引数が定数文字列なら畳み込める筈？</li>
+<li>リクエストの度にテンプレートパースするのは筋悪だけど開発中は毎回コンパイルするのは面倒？
+===</li>
+</ul>
+<!-- raw HTML omitted -->
+<h1 id="arrows">Arrows</h1>
+<p>Template flies like an arrow</p>
+<!-- raw HTML omitted -->
+<p>===</p>
+<!-- raw HTML omitted -->
+<h1 id="arrows1">Arrows</h1>
+<hr>
+<ul>
+<li><a href="https://github.com/KeenS/arrows">KeenS/arrows</a></li>
+<li>現在開発中のテンプレートエンジン</li>
+<li>複数のテンプレートが選べる（予定）</li>
+<li>複数のバックエンドが選べる</li>
+<li>バックエンドに依ってはnon-consing
+===</li>
+</ul>
+<!-- raw HTML omitted -->
+<h1 id="how-arrows-works">How Arrows Works</h1>
+<hr>
+<h2 id="compilation1">Compilation</h2>
+<ol>
+<li>テンプレート文字列<!-- raw HTML omitted --> + 定数引数<!-- raw HTML omitted --></li>
+</ol>
+<ul>
+<li>パーサ<!-- raw HTML omitted -->(default, cl-emd互換&hellip;)<!-- raw HTML omitted --> <!-- raw HTML omitted --></li>
+</ul>
+<ol start="2">
+<li>抽象構文木</li>
+</ol>
+<ul>
+<li><!-- raw HTML omitted -->最適化(const folding, concat, convert&hellip;)<!-- raw HTML omitted --> <!-- raw HTML omitted --></li>
+<li>コードエミット <!-- raw HTML omitted --></li>
+</ul>
+<ol start="3">
+<li>レンダリング関数<!-- raw HTML omitted -->(string, octets, stream, fast-io &hellip;)<!-- raw HTML omitted -->
+===</li>
+</ol>
+<!-- raw HTML omitted -->
+<h1 id="how-arrows-works1">How Arrows Works</h1>
+<hr>
+<h2 id="rendering2">Rendering</h2>
+<ol>
+<li>レンダリング関数</li>
+</ol>
+<ul>
+<li>引数 <!-- raw HTML omitted --></li>
+</ul>
+<ol start="2">
+<li>文字列<!-- raw HTML omitted -->、オクテット列、ストリーム書き出し、fast-io…<!-- raw HTML omitted -->
+===</li>
+</ol>
+<!-- raw HTML omitted -->
+<h1 id="how-compiled">How compiled</h1>
+<hr>
+<div class="highlight"><pre class="chroma"><code class="language-html" data-lang="html"><span class="p">&lt;</span><span class="nt">h1</span><span class="p"></span><span class="p">&gt;</span>Hi {{var name}}!<span class="p">&lt;</span><span class="p">/</span><span class="nt">h1</span><span class="p">&gt;</span>
+</code></pre></div><p>を</p>
+<div class="highlight"><pre class="chroma"><code class="language-lisp" data-lang="lisp"><span class="p">(</span><span class="nv">compile-template-string</span> <span class="ss">:xxx</span>
+  <span class="s">&#34;&lt;h1&gt;Hi {{var name}}!&lt;/h1&gt;&#34;</span> <span class="p">(</span><span class="p">)</span><span class="p">)</span>
+</code></pre></div><h1 id="heading">とコンパイル</h1>
+<h1 id="stream-backend">Stream backend</h1>
+<hr>
+<!-- raw HTML omitted -->
+<div class="highlight"><pre class="chroma"><code class="language-lisp" data-lang="lisp"><span class="p">(</span><span class="nb">lambda</span> <span class="p">(</span><span class="nc">stream</span> <span class="k">&amp;key</span> <span class="nv">name</span><span class="p">)</span>
+  <span class="p">(</span><span class="nf">write-string</span> <span class="s">&#34;&lt;h1&gt;Hi &#34;</span> <span class="nc">stream</span><span class="p">)</span>
+  <span class="p">(</span><span class="nf">write-string</span>
+    <span class="p">(</span><span class="nv">encode-for-tt</span> <span class="p">(</span><span class="nf">princ-to-string</span> <span class="nv">name</span><span class="p">)</span><span class="p">)</span>
+    <span class="nc">stream</span><span class="p">)</span>
+  <span class="p">(</span><span class="nf">write-string</span> <span class="s">&#34;!&lt;/h1&gt;&#34;</span> <span class="nc">stream</span><span class="p">)</span><span class="p">)</span>
+</code></pre></div><ul>
+<li>ほとんどアロケートしない
+===</li>
+</ul>
+<!-- raw HTML omitted -->
+<h1 id="octet-backend">Octet backend</h1>
+<hr>
+<div class="highlight"><pre class="chroma"><code class="language-lisp" data-lang="lisp"><span class="p">(</span><span class="nb">lambda</span> <span class="p">(</span><span class="k">&amp;key</span> <span class="nv">name</span><span class="p">)</span>
+  <span class="p">(</span><span class="nv">with-fast-output</span> <span class="p">(</span><span class="nv">buffer</span><span class="p">)</span>
+    <span class="p">(</span><span class="nv">fast-write-sequence</span>
+      <span class="o">#.</span><span class="p">(</span><span class="nv">string-to-octets</span> <span class="s">&#34;&lt;h1&gt;Hi &#34;</span><span class="p">)</span>
+       <span class="nv">buffer</span><span class="p">)</span>
+    <span class="p">(</span><span class="nv">fast-write-sequence</span>
+      <span class="p">(</span><span class="nv">string-to-octets</span>
+        <span class="p">(</span><span class="nv">encode-for-tt</span> <span class="p">(</span><span class="nf">princ-to-string</span> <span class="nv">name</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
+                       <span class="nv">buffer</span><span class="p">)</span>
+    <span class="p">(</span><span class="nv">fast-write-sequence</span>
+      <span class="o">#.</span><span class="p">(</span><span class="nv">string-to-octets</span> <span class="s">&#34;!&lt;/h1&gt;&#34;</span><span class="p">)</span>
+      <span class="nv">buffer</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
+</code></pre></div><p>===</p>
+<!-- raw HTML omitted -->
+<h1 id="how-optimized">How optimized</h1>
+<hr>
+<div class="highlight"><pre class="chroma"><code class="language-html" data-lang="html"><span class="p">&lt;</span><span class="nt">h1</span><span class="p"></span><span class="p">&gt;</span>Hi {{var name}}!<span class="p">&lt;</span><span class="p">/</span><span class="nt">h1</span><span class="p">&gt;</span>
+</code></pre></div><p>を</p>
+<div class="highlight"><pre class="chroma"><code class="language-lisp" data-lang="lisp"><span class="p">(</span><span class="nv">compile-template-string</span> <span class="ss">:stream</span>
+   <span class="s">&#34;&lt;h1&gt;Hi {{var name}}!&lt;/h1&gt;&#34;</span>
+   <span class="o">&#39;</span><span class="p">(</span><span class="ss">:known-args</span> <span class="p">(</span><span class="ss">:name</span> <span class="s">&#34;&lt;κeen&gt;&#34;</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
+</code></pre></div><h1 id="heading1">とコンパイル</h1>
+<!-- raw HTML omitted -->
+<h1 id="how-optimized1">How optimized</h1>
+<hr>
+<h2 id="variable-folding">variable folding</h2>
+<div class="highlight"><pre class="chroma"><code class="language-lisp" data-lang="lisp"><span class="p">(</span><span class="nb">lambda</span> <span class="p">(</span><span class="nc">stream</span><span class="p">)</span>
+  <span class="p">(</span><span class="nf">write-string</span> <span class="s">&#34;&lt;h1&gt;Hi &#34;</span> <span class="nc">stream</span><span class="p">)</span>
+  <span class="p">(</span><span class="nf">write-string</span> <span class="p">(</span><span class="nv">encode-for-tt</span> <span class="s">&#34;&lt;κeen&gt;&#34;</span><span class="p">)</span> <span class="nc">stream</span><span class="p">)</span>
+  <span class="p">(</span><span class="nf">write-string</span> <span class="s">&#34;!&lt;/h1&gt;&#34;</span> <span class="nc">stream</span><span class="p">)</span><span class="p">)</span>
+</code></pre></div><ul>
+<li>既知の引数は畳み込む</li>
+<li>文字列なら<code>princ-to-string</code>しない
+===</li>
+</ul>
+<!-- raw HTML omitted -->
+<h1 id="how-optimized2">How optimized</h1>
+<hr>
+<h2 id="const-folding">const folding</h2>
+<div class="highlight"><pre class="chroma"><code class="language-lisp" data-lang="lisp"><span class="p">(</span><span class="nb">lambda</span> <span class="p">(</span><span class="nc">stream</span><span class="p">)</span>
+  <span class="p">(</span><span class="nf">write-string</span> <span class="s">&#34;&lt;h1&gt;Hi &#34;</span> <span class="nc">stream</span><span class="p">)</span>
+  <span class="p">(</span><span class="nf">write-string</span> <span class="s">&#34;&amp;lt;κeen&amp;gt;&#34;</span> <span class="nc">stream</span><span class="p">)</span>
+  <span class="p">(</span><span class="nf">write-string</span> <span class="s">&#34;!&lt;/h1&gt;&#34;</span> <span class="nc">stream</span><span class="p">)</span><span class="p">)</span>
+</code></pre></div><ul>
+<li>定数のエスケープはコンパイル時に済ませる
+===</li>
+</ul>
+<!-- raw HTML omitted -->
+<h1 id="how-optimized3">How optimized</h1>
+<hr>
+<h2 id="append-sequence">append sequence</h2>
+<div class="highlight"><pre class="chroma"><code class="language-lisp" data-lang="lisp"><span class="p">(</span><span class="nb">lambda</span> <span class="p">(</span><span class="nc">stream</span><span class="p">)</span>
+  <span class="p">(</span><span class="nf">write-string</span> <span class="s">&#34;&lt;h1&gt;Hi &amp;lt;κeen&amp;gt;!&lt;/h1&gt;&#34;</span>
+                <span class="nc">stream</span><span class="p">)</span><span class="p">)</span>
+</code></pre></div><ul>
+<li>複数シーケンスの書き出しは1つにまとめる
+===</li>
+</ul>
+<!-- raw HTML omitted -->
+<h1 id="further-ideas">Further Ideas</h1>
+<hr>
+<ul>
+<li>引数計算の遅延</li>
+<li>引数計算の並列化</li>
+<li>非同期化</li>
+<li>HTML compction
+===</li>
+</ul>
+<!-- raw HTML omitted -->
+<h1 id="further-ideas1">Further Ideas</h1>
+<hr>
+<h2 id="heading2">引数計算の遅延</h2>
+<ul>
+<li><code>name</code>の計算が重いときに先に<code>&quot;&lt;h1&gt;Hi &quot;</code>を返す。</li>
+<li><code>name</code>は必要になったら値を計算する(Promise パターン)</li>
+</ul>
+<div class="highlight"><pre class="chroma"><code class="language-lisp" data-lang="lisp"><span class="p">(</span><span class="nb">lambda</span> <span class="p">(</span><span class="nc">stream</span> <span class="k">&amp;key</span> <span class="nv">name</span><span class="p">)</span>
+  <span class="p">(</span><span class="nf">write-string</span> <span class="s">&#34;&lt;h1&gt;Hi &#34;</span> <span class="nc">stream</span><span class="p">)</span>
+  <span class="p">(</span><span class="nf">write-string</span>
+    <span class="p">(</span><span class="nv">encode-for-tt</span> <span class="p">(</span><span class="nf">princ-to-string</span> <span class="nv">name</span><span class="p">)</span><span class="p">)</span>
+    <span class="nc">stream</span><span class="p">)</span>
+  <span class="p">(</span><span class="nf">write-string</span> <span class="s">&#34;!&lt;/h1&gt;&#34;</span> <span class="nc">stream</span><span class="p">)</span><span class="p">)</span>
+</code></pre></div><p>===</p>
+<!-- raw HTML omitted -->
+<h1 id="further-ideas2">Further Ideas</h1>
+<hr>
+<h2 id="heading3">引数計算の並列化</h2>
+<ul>
+<li><code>name</code>の計算が重いときに先に<code>&quot;&lt;h1&gt;Hi &quot;</code>を返す。</li>
+<li><code>name</code>は並列に計算して必要になったら値を要求する(Futureパターン)</li>
+</ul>
+<div class="highlight"><pre class="chroma"><code class="language-lisp" data-lang="lisp"><span class="p">(</span><span class="nb">lambda</span> <span class="p">(</span><span class="nc">stream</span> <span class="k">&amp;key</span> <span class="nv">name</span><span class="p">)</span>
+  <span class="p">(</span><span class="nf">write-string</span> <span class="s">&#34;&lt;h1&gt;Hi &#34;</span> <span class="nc">stream</span><span class="p">)</span>
+  <span class="p">(</span><span class="nf">write-string</span>
+    <span class="p">(</span><span class="nv">encode-for-tt</span> <span class="p">(</span><span class="nf">princ-to-string</span> <span class="nv">name</span><span class="p">)</span><span class="p">)</span>
+    <span class="nc">stream</span><span class="p">)</span>
+  <span class="p">(</span><span class="nf">write-string</span> <span class="s">&#34;!&lt;/h1&gt;&#34;</span> <span class="nc">stream</span><span class="p">)</span><span class="p">)</span>
+</code></pre></div><p>===</p>
+<!-- raw HTML omitted -->
+<h1 id="further-ideas3">Further Ideas</h1>
+<hr>
+<h2 id="heading4">非同期化</h2>
+<ul>
+<li>単純にwriteを非同期にする</li>
+<li>他にFutureもブロックするので非同期Futureを使う
+===</li>
+</ul>
+<!-- raw HTML omitted -->
+<h1 id="further-ideas4">Further Ideas</h1>
+<hr>
+<h2 id="html-compction">HTML compction</h2>
+<div class="highlight"><pre class="chroma"><code class="language-html" data-lang="html"><span class="p">&lt;</span><span class="nt">ol</span><span class="p"></span><span class="p">&gt;</span>
+  <span class="p">&lt;</span><span class="nt">li</span><span class="p"></span><span class="p">&gt;</span> item 1 <span class="p">&lt;</span><span class="p">/</span><span class="nt">li</span><span class="p">&gt;</span>
+  <span class="p">&lt;</span><span class="nt">li</span><span class="p"></span><span class="p">&gt;</span> item 2 <span class="p">&lt;</span><span class="p">/</span><span class="nt">li</span><span class="p">&gt;</span>
+  <span class="p">&lt;</span><span class="nt">li</span><span class="p"></span><span class="p">&gt;</span> item 3 <span class="p">&lt;</span><span class="p">/</span><span class="nt">li</span><span class="p">&gt;</span>
+<span class="p">&lt;</span><span class="p">/</span><span class="nt">ol</span><span class="p">&gt;</span>
 
-```
-を
-```html
-<ol><li>item 1</li><li>item 2</li><li>item 3</li></ol>
+</code></pre></div><p>を</p>
+<div class="highlight"><pre class="chroma"><code class="language-html" data-lang="html"><span class="p">&lt;</span><span class="nt">ol</span><span class="p"></span><span class="p">&gt;</span><span class="p">&lt;</span><span class="nt">li</span><span class="p"></span><span class="p">&gt;</span>item 1<span class="p">&lt;</span><span class="p">/</span><span class="nt">li</span><span class="p">&gt;</span><span class="p">&lt;</span><span class="nt">li</span><span class="p"></span><span class="p">&gt;</span>item 2<span class="p">&lt;</span><span class="p">/</span><span class="nt">li</span><span class="p">&gt;</span><span class="p">&lt;</span><span class="nt">li</span><span class="p"></span><span class="p">&gt;</span>item 3<span class="p">&lt;</span><span class="p">/</span><span class="nt">li</span><span class="p">&gt;</span><span class="p">&lt;</span><span class="p">/</span><span class="nt">ol</span><span class="p">&gt;</span>
 
-```
-* DOM構造が変わってしまう
-
-===
-<!-- .slide: data-background="/images/arrows.jpg" -->
-# TODOs
--------
-* 設計上複数シンタックスをサポート可能だがまだしてない
-* 既存のテンプレートエンジンとの比較ベンチマーク
-* 高速化
-* 多機能化
-  + テンプレート
-  + 最適化
-  + バックエンド
-* clackとの連携
-  + clackのAPIはメモリアロケーションが多めに必要になる
-===
-# Summary
----------
-* 既存のテンプレートエンジンは非効率
-  + メモリを無駄遣いしていた
-  + ユーザーのことを考えてなかった
-* 新しいテンプレートエンジンを設計した
-  + メモリアロケーションをあまりしない
-  + ユーザー側の速度まで考慮した
-  + 柔軟
-</script>
-</section>
+</code></pre></div><ul>
+<li>DOM構造が変わってしまう</li>
+</ul>
+<p>===</p>
+<!-- raw HTML omitted -->
+<h1 id="todos">TODOs</h1>
+<hr>
+<ul>
+<li>設計上複数シンタックスをサポート可能だがまだしてない</li>
+<li>既存のテンプレートエンジンとの比較ベンチマーク</li>
+<li>高速化</li>
+<li>多機能化
+<ul>
+<li>テンプレート</li>
+<li>最適化</li>
+<li>バックエンド</li>
+</ul>
+</li>
+<li>clackとの連携
+<ul>
+<li>clackのAPIはメモリアロケーションが多めに必要になる
+===</li>
+</ul>
+</li>
+</ul>
+<h1 id="summary">Summary</h1>
+<hr>
+<ul>
+<li>既存のテンプレートエンジンは非効率
+<ul>
+<li>メモリを無駄遣いしていた</li>
+<li>ユーザーのことを考えてなかった</li>
+</ul>
+</li>
+<li>新しいテンプレートエンジンを設計した
+<ul>
+<li>メモリアロケーションをあまりしない</li>
+<li>ユーザー側の速度まで考慮した</li>
+<li>柔軟
+<!-- raw HTML omitted --></li>
+</ul>
+</li>
+</ul>
+<!-- raw HTML omitted -->
 
         </div>
     </div>

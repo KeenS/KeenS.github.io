@@ -20,11 +20,8 @@
         <meta name="twitter:site" content="@blackenedgold" />
         <meta name="twitter:title" content="ClojureでReactive Messaging Pattern | κeenのHappy Hacκing Blog"/>
         <meta name="twitter:description" content="このエントリはClojure Advent Calendar 2015の16日目の記事です（大遅刻）
-
 κeenです。ここのところ体調優れず、また、特に面白いネタもなくClojure Advent Calendarに遅刻したことをお詫び申し上げます。
-
 さて、今日はReactive Messaging PatternをClojureのcore.asyncでやってみたいと思います。Reactive Messaging Pattersは、Java/Scala向けActorシステムのAkkaの作者が著した本、Amazon.co.jp: Reactive Messaging Patterns with the Actor Model: Applications and Integration in Scala and Akkaで書かれているデザインパターンです。
-
 非常に興味深い本なのですがScala及びAkka初心者の私には中々辛いので一旦Clojureで試してみようかと。" />
 
         <title>ClojureでReactive Messaging Pattern | κeenのHappy Hacκing Blog</title>
@@ -129,88 +126,71 @@
                     </header>
                     <section>
                         <p>このエントリは<a href="http://qiita.com/advent-calendar/2015/clojure">Clojure Advent Calendar 2015</a>の16日目の記事です（大遅刻）</p>
-
 <p>κeenです。ここのところ体調優れず、また、特に面白いネタもなくClojure Advent Calendarに遅刻したことをお詫び申し上げます。</p>
-
 <p>さて、今日はReactive Messaging PatternをClojureのcore.asyncでやってみたいと思います。Reactive Messaging Pattersは、Java/Scala向けActorシステムの<a href="http://akka.io/">Akka</a>の作者が著した本、<a href="http://www.amazon.co.jp/Reactive-Messaging-Patterns-Actor-Model-ebook/dp/B011S8YC5G">Amazon.co.jp: Reactive Messaging Patterns with the Actor Model: Applications and Integration in Scala and Akka</a>で書かれているデザインパターンです。</p>
-
 <p>非常に興味深い本なのですがScala及びAkka初心者の私には中々辛いので一旦Clojureで試してみようかと。</p>
-
 <p>ところで、AkkaとClojureのcore.asynkには若干のモデルの違いがあります。詳しくは<a href="http://blog.paralleluniverse.co/2015/05/21/quasar-vs-akka/">ここ</a>とかにあるのですが、一番大きくは非同期/同期モデルの違いがあります。
 Akkaの場合はActorにメッセージを送っても届いたという保障はなく(「その瞬間に」届いてないだけでなく、届く前にActorが再起動したらメッセージがロストしてしまう!)、また、メッセージの受信も<code>receive</code>というコールバック用のメソッドを用意してそこでハンドルすることになります。</p>
-
 <p>そういう違いがある中でどれだけClojureに翻訳出来るか多少不安ですがチャレンジしてみます。尚、原書には様々なパターンがあるのですが流石に本一冊分全部は紹介し切れないので面白そうでかつClojureでも役立ちそうなものだけ紹介することにします。このコードは原書のものをClojureに翻訳したものではなく、私が勝手に書いたものです。コードを参考にするのは雰囲気程度に留めて、実際を知りたかったら原書を読みましょう。</p>
-
 <p>今回、</p>
 <div class="highlight"><pre class="chroma"><code class="language-clojure" data-lang="clojure"><span class="p">(</span><span class="kd">defproject </span><span class="nv">reactive-message-patterns</span> <span class="s">&#34;0.1.0-SNAPSHOT&#34;</span>
   <span class="ss">:description</span> <span class="s">&#34;FIXME: write description&#34;</span>
   <span class="ss">:url</span> <span class="s">&#34;http://example.com/FIXME&#34;</span>
   <span class="ss">:license</span> <span class="p">{</span><span class="ss">:name</span> <span class="s">&#34;Eclipse Public License&#34;</span>
             <span class="ss">:url</span> <span class="s">&#34;http://www.eclipse.org/legal/epl-v10.html&#34;</span><span class="p">}</span>
-  <span class="ss">:dependencies</span> <span class="p">[[</span><span class="nv">org.clojure/clojure</span> <span class="s">&#34;1.7.0&#34;</span><span class="p">]</span>
-                 <span class="p">[</span><span class="nv">org.clojure/core.async</span> <span class="s">&#34;0.2.374&#34;</span><span class="p">]])</span></code></pre></div>
-<p>というプロジェクト設定で試しました。また、ソースコードは<a href="https://github.com/KeenS/reactive-message-patterns">こちら</a>で公開しています。</p>
-
+  <span class="ss">:dependencies</span> <span class="p">[</span><span class="p">[</span><span class="nv">org.clojure/clojure</span> <span class="s">&#34;1.7.0&#34;</span><span class="p">]</span>
+                 <span class="p">[</span><span class="nv">org.clojure/core.async</span> <span class="s">&#34;0.2.374&#34;</span><span class="p">]</span><span class="p">]</span><span class="p">)</span>
+</code></pre></div><p>というプロジェクト設定で試しました。また、ソースコードは<a href="https://github.com/KeenS/reactive-message-patterns">こちら</a>で公開しています。</p>
 <h1 id="messaging-with-actors">Messaging With Actors</h1>
-
 <h2 id="pipes-and-filters">Pipes And Filters</h2>
-
 <p>メッセージが来る際に、そのまま受け取るのではなく一旦Filter用のActorで変換やvalidationをかけて本処理に入ります。</p>
-
-<p><del>Clojureなら<code>filter&lt;</code>/<code>filter&gt;</code>/ transducerで瞬殺</del> Filter処理をActorに分離することで並列性やモジュール性が上がります。原書の例ではまずDecrypt Filterを噛ませてAuthenticate Filterで認証出来たら De-dup Filterで重複を取り除いてメッセージをクリーンにしてから処理を始める、とういうように非常に実用的な例が出ています。</p>
-
+<p><del>Clojureなら<code>filter&lt;`/</code>filter&gt;`/ transducerで瞬殺</del> Filter処理をActorに分離することで並列性やモジュール性が上がります。原書の例ではまずDecrypt Filterを噛ませてAuthenticate Filterで認証出来たら De-dup Filterで重複を取り除いてメッセージをクリーンにしてから処理を始める、とういうように非常に実用的な例が出ています。</p>
 <p>また、(transformでなく、篩い分けの)Filterを分離することでFilterした後の処理、例えばinvalidなメッセージが来たらログに出すなどの柔軟性を得ることが出来ます。</p>
-
 <p>これを実装してみましょう。すごい適当ですがメッセージが来たらそれを2倍するfilterを作ってみます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-clojure" data-lang="clojure"><span class="p">(</span><span class="nf">use</span> <span class="ss">&#39;clojure.core.async</span><span class="p">)</span>
 
 <span class="p">(</span><span class="kd">defn </span><span class="nv">filter-actor</span>
-  <span class="p">([</span><span class="nv">f</span><span class="p">]</span>
+  <span class="p">(</span><span class="p">[</span><span class="nv">f</span><span class="p">]</span>
    <span class="p">(</span><span class="k">let </span><span class="p">[</span><span class="nv">in</span> <span class="p">(</span><span class="nf">chan</span><span class="p">)</span>
-         <span class="nv">out</span> <span class="p">(</span><span class="nf">chan</span><span class="p">)]</span>
+         <span class="nv">out</span> <span class="p">(</span><span class="nf">chan</span><span class="p">)</span><span class="p">]</span>
      <span class="p">(</span><span class="nf">do</span>
        <span class="p">(</span><span class="nf">filter-actor</span> <span class="nv">f</span> <span class="nv">in</span> <span class="nv">out</span><span class="p">)</span>
-       <span class="p">[</span><span class="nv">in</span> <span class="nv">out</span><span class="p">])))</span>
-  <span class="p">([</span><span class="nv">f</span> <span class="nv">in</span> <span class="nv">out</span><span class="p">]</span>
-   <span class="p">(</span><span class="nf">go-loop</span> <span class="p">[]</span>
-     <span class="p">(</span><span class="nb">if-let </span><span class="p">[</span><span class="nv">v</span> <span class="p">(</span><span class="nf">&lt;!</span> <span class="nv">in</span><span class="p">)]</span>
-       <span class="p">(</span><span class="nb">if-let </span><span class="p">[</span><span class="nv">ret</span> <span class="p">(</span><span class="nf">f</span> <span class="nv">v</span><span class="p">)]</span>
+       <span class="p">[</span><span class="nv">in</span> <span class="nv">out</span><span class="p">]</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
+  <span class="p">(</span><span class="p">[</span><span class="nv">f</span> <span class="nv">in</span> <span class="nv">out</span><span class="p">]</span>
+   <span class="p">(</span><span class="nf">go-loop</span> <span class="p">[</span><span class="p">]</span>
+     <span class="p">(</span><span class="nb">if-let </span><span class="p">[</span><span class="nv">v</span> <span class="p">(</span><span class="nf">&lt;!</span> <span class="nv">in</span><span class="p">)</span><span class="p">]</span>
+       <span class="p">(</span><span class="nb">if-let </span><span class="p">[</span><span class="nv">ret</span> <span class="p">(</span><span class="nf">f</span> <span class="nv">v</span><span class="p">)</span><span class="p">]</span>
          <span class="p">(</span><span class="k">if </span><span class="p">(</span><span class="nf">&gt;!</span> <span class="nv">out</span> <span class="nv">ret</span><span class="p">)</span>
-           <span class="p">(</span><span class="nf">recur</span><span class="p">)))</span>
-       <span class="p">(</span><span class="nf">close!</span> <span class="nv">out</span><span class="p">)))))</span>
+           <span class="p">(</span><span class="nf">recur</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
+       <span class="p">(</span><span class="nf">close!</span> <span class="nv">out</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
 
-<span class="p">(</span><span class="k">let </span><span class="p">[[</span><span class="nv">in</span> <span class="nv">out</span><span class="p">]</span> <span class="p">(</span><span class="nf">filter-actor</span> <span class="p">(</span><span class="k">fn </span><span class="p">[</span><span class="nv">x</span><span class="p">]</span> <span class="p">(</span><span class="nb">* </span><span class="nv">x</span> <span class="mi">2</span><span class="p">)))]</span>
+<span class="p">(</span><span class="k">let </span><span class="p">[</span><span class="p">[</span><span class="nv">in</span> <span class="nv">out</span><span class="p">]</span> <span class="p">(</span><span class="nf">filter-actor</span> <span class="p">(</span><span class="k">fn </span><span class="p">[</span><span class="nv">x</span><span class="p">]</span> <span class="p">(</span><span class="nb">* </span><span class="nv">x</span> <span class="mi">2</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">]</span>
   <span class="p">(</span><span class="nf">go</span>
     <span class="c1">;; producer</span>
-    <span class="p">(</span><span class="nb">doseq </span><span class="p">[</span><span class="nv">v</span> <span class="p">(</span><span class="nb">range </span><span class="mi">1</span> <span class="mi">10</span><span class="p">)]</span>
-      <span class="p">(</span><span class="nf">&gt;!</span> <span class="nv">in</span> <span class="nv">v</span><span class="p">))</span>
-    <span class="p">(</span><span class="nf">close!</span> <span class="nv">in</span><span class="p">))</span>
-  <span class="p">(</span><span class="nf">go-loop</span> <span class="p">[]</span>
+    <span class="p">(</span><span class="nb">doseq </span><span class="p">[</span><span class="nv">v</span> <span class="p">(</span><span class="nb">range </span><span class="mi">1</span> <span class="mi">10</span><span class="p">)</span><span class="p">]</span>
+      <span class="p">(</span><span class="nf">&gt;!</span> <span class="nv">in</span> <span class="nv">v</span><span class="p">)</span><span class="p">)</span>
+    <span class="p">(</span><span class="nf">close!</span> <span class="nv">in</span><span class="p">)</span><span class="p">)</span>
+  <span class="p">(</span><span class="nf">go-loop</span> <span class="p">[</span><span class="p">]</span>
     <span class="c1">;; consumer</span>
-    <span class="p">(</span><span class="nb">if-let </span><span class="p">[</span><span class="nv">v</span> <span class="p">(</span><span class="nf">&lt;!</span> <span class="nv">out</span><span class="p">)]</span>
+    <span class="p">(</span><span class="nb">if-let </span><span class="p">[</span><span class="nv">v</span> <span class="p">(</span><span class="nf">&lt;!</span> <span class="nv">out</span><span class="p">)</span><span class="p">]</span>
       <span class="p">(</span><span class="nf">do</span>
         <span class="p">(</span><span class="nb">println </span><span class="nv">v</span><span class="p">)</span>
-        <span class="p">(</span><span class="nf">recur</span><span class="p">))</span>
-      <span class="p">(</span><span class="nf">close!</span> <span class="nv">out</span><span class="p">))))</span></code></pre></div>
-<p>簡単ですね。チャネルが終わったかどうか調べるのに一々<code>if-let</code>を使うのが面倒ですがリストに対する再帰関数もそんな感じなのでまあ、こういうもんなんでしょう。</p>
+        <span class="p">(</span><span class="nf">recur</span><span class="p">)</span><span class="p">)</span>
+      <span class="p">(</span><span class="nf">close!</span> <span class="nv">out</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
 
-<h2 id="その他">その他</h2>
-
+</code></pre></div><p>簡単ですね。チャネルが終わったかどうか調べるのに一々<code>if-let</code>を使うのが面倒ですがリストに対する再帰関数もそんな感じなのでまあ、こういうもんなんでしょう。</p>
+<h2 id="heading">その他</h2>
 <p>他にもMessaging With ActorsにはMessage Router, Message Translator, Message Endpointsなどのパターンが載っているのですが割愛します。特にMessage Translatorは外部システム(HTTPリクエスト、MQ, SQLなど)とのやりとりの話なので簡単に試すには少し重すぎるようです。</p>
-
 <h1 id="messaging-channels">Messaging Channels</h1>
-
 <p>この章にはActor同士のメッセージのやりとりの方法が色々書かれています。
 Point-to-Point Channel, Publish-Subscribe Channel, Datatype Channel, Invalid Message Channel, Dead Letter Channel, Guaranteed Delivery, Channel Adapter, Message Bridge, Message Bus。
 中々多くのパターンが載っているのですが一部はAkka固有であったりClojureには必要なかったりしますので、私が興味を持ったものを紹介します。</p>
-
-<h2 id="publish-subscribe">Publish-Subscribe</h2>
-
+<h2 id="publishsubscribe">Publish-Subscribe</h2>
 <p>定番ですね。概念自体の説明は不要と思います。core.asyncだとどうなるのかを見てみます。<code>pub</code>と<code>sub</code>を使います。</p>
 <div class="highlight"><pre class="chroma"><code class="language-clojure" data-lang="clojure"><span class="p">(</span><span class="k">let </span><span class="p">[</span><span class="nv">publisher</span> <span class="p">(</span><span class="nf">chan</span><span class="p">)</span>
       <span class="nv">publication</span> <span class="p">(</span><span class="nf">pub</span> <span class="nv">publisher</span> <span class="ss">:topic</span><span class="p">)</span>
       <span class="nv">subscriber1</span> <span class="p">(</span><span class="nf">chan</span><span class="p">)</span>
-      <span class="nv">subscriber2</span> <span class="p">(</span><span class="nf">chan</span><span class="p">)]</span>
+      <span class="nv">subscriber2</span> <span class="p">(</span><span class="nf">chan</span><span class="p">)</span><span class="p">]</span>
   <span class="p">(</span><span class="nf">sub</span> <span class="nv">publication</span> <span class="ss">:delete</span> <span class="nv">subscriber1</span><span class="p">)</span>
   <span class="p">(</span><span class="nf">sub</span> <span class="nv">publication</span> <span class="ss">:create</span> <span class="nv">subscriber1</span><span class="p">)</span>
 
@@ -218,104 +198,85 @@ Point-to-Point Channel, Publish-Subscribe Channel, Datatype Channel, Invalid Mes
   <span class="p">(</span><span class="nf">sub</span> <span class="nv">publication</span> <span class="ss">:read</span> <span class="nv">subscriber2</span><span class="p">)</span>
 
   <span class="c1">;; start subscribers before publish start</span>
-  <span class="p">(</span><span class="nf">go-loop</span> <span class="p">[]</span> <span class="p">(</span><span class="nb">when-let </span><span class="p">[</span><span class="nv">v</span> <span class="p">(</span><span class="nf">&lt;!</span> <span class="nv">subscriber1</span><span class="p">)]</span> <span class="p">(</span><span class="nf">printf</span> <span class="s">&#34;I&#39;m One, got %s\n&#34;</span> <span class="p">(</span><span class="ss">:type</span> <span class="nv">v</span><span class="p">))</span> <span class="p">(</span><span class="nf">recur</span><span class="p">)))</span>
-  <span class="p">(</span><span class="nf">go-loop</span> <span class="p">[]</span> <span class="p">(</span><span class="nb">when-let </span><span class="p">[</span><span class="nv">v</span> <span class="p">(</span><span class="nf">&lt;!</span> <span class="nv">subscriber2</span><span class="p">)]</span> <span class="p">(</span><span class="nf">printf</span> <span class="s">&#34;I&#39;m Two, got %s\n&#34;</span> <span class="p">(</span><span class="ss">:type</span> <span class="nv">v</span><span class="p">))</span> <span class="p">(</span><span class="nf">recur</span><span class="p">)))</span>
+  <span class="p">(</span><span class="nf">go-loop</span> <span class="p">[</span><span class="p">]</span> <span class="p">(</span><span class="nb">when-let </span><span class="p">[</span><span class="nv">v</span> <span class="p">(</span><span class="nf">&lt;!</span> <span class="nv">subscriber1</span><span class="p">)</span><span class="p">]</span> <span class="p">(</span><span class="nf">printf</span> <span class="s">&#34;I&#39;m One, got %s\n&#34;</span> <span class="p">(</span><span class="ss">:type</span> <span class="nv">v</span><span class="p">)</span><span class="p">)</span> <span class="p">(</span><span class="nf">recur</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
+  <span class="p">(</span><span class="nf">go-loop</span> <span class="p">[</span><span class="p">]</span> <span class="p">(</span><span class="nb">when-let </span><span class="p">[</span><span class="nv">v</span> <span class="p">(</span><span class="nf">&lt;!</span> <span class="nv">subscriber2</span><span class="p">)</span><span class="p">]</span> <span class="p">(</span><span class="nf">printf</span> <span class="s">&#34;I&#39;m Two, got %s\n&#34;</span> <span class="p">(</span><span class="ss">:type</span> <span class="nv">v</span><span class="p">)</span><span class="p">)</span> <span class="p">(</span><span class="nf">recur</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
 
-  <span class="p">(</span><span class="nf">go</span> <span class="p">(</span><span class="nf">onto-chan</span> <span class="nv">publisher</span> <span class="p">[{</span><span class="ss">:topic</span> <span class="ss">:update</span>, <span class="ss">:type</span> <span class="s">&#34;dog&#34;</span><span class="p">}</span>
+  <span class="p">(</span><span class="nf">go</span> <span class="p">(</span><span class="nf">onto-chan</span> <span class="nv">publisher</span> <span class="p">[</span><span class="p">{</span><span class="ss">:topic</span> <span class="ss">:update</span>, <span class="ss">:type</span> <span class="s">&#34;dog&#34;</span><span class="p">}</span>
                             <span class="p">{</span><span class="ss">:topic</span> <span class="ss">:create</span>, <span class="ss">:type</span> <span class="s">&#34;cat&#34;</span><span class="p">}</span>
-                            <span class="p">{</span><span class="ss">:topic</span> <span class="ss">:read</span>  , <span class="ss">:type</span> <span class="s">&#34;fox&#34;</span><span class="p">}]))</span>
-  <span class="p">)</span></code></pre></div>
-<p>おもちゃのような例ですがこれで動くようです。因みに原書ではここに結構なページ数が割かれていて、分散システムを念頭に、異なるシステムにメッセージを送る話なども扱っています。core.asyncだとそこまでは出来そうにないですね。</p>
-
+                            <span class="p">{</span><span class="ss">:topic</span> <span class="ss">:read</span>  , <span class="ss">:type</span> <span class="s">&#34;fox&#34;</span><span class="p">}</span><span class="p">]</span><span class="p">)</span><span class="p">)</span>
+  <span class="p">)</span>
+</code></pre></div><p>おもちゃのような例ですがこれで動くようです。因みに原書ではここに結構なページ数が割かれていて、分散システムを念頭に、異なるシステムにメッセージを送る話なども扱っています。core.asyncだとそこまでは出来そうにないですね。</p>
 <h2 id="invalid-message-channel">Invalid Message Channel</h2>
-
 <p>とあるActorに予期しないメッセージが届いたらどうしましょうか。そのまま捨てますか？もしかしたらバグを潰せる好機かもしれないのにそのまま捨てるには勿体なすぎます。
 かといって全てのActorにデバッグ用のコードを入れていては埒が明かないどころかコードが複雑化してしまいます。そこでInvalid Massage Channelを使いましょう。</p>
-
 <p>あるActorに予期しないメッセージが届いた時に、全てを放り投げるチャネルを用意しておいて、その先のActorでログを出すなりするのです。</p>
-
 <p>今回は<code>:price</code>タグのついていないメッセージが届いた時にinvalid actorに放り投げ、ログを出すものを作りました。</p>
 <div class="highlight"><pre class="chroma"><code class="language-clojure" data-lang="clojure"><span class="p">(</span><span class="kd">defn </span><span class="nv">invalid</span> <span class="p">[</span><span class="nv">data</span><span class="p">]</span>
   <span class="p">{</span><span class="ss">:data</span> <span class="nv">data</span>
-   <span class="ss">:from</span> <span class="p">(</span><span class="nf">Thread/currentThread</span><span class="p">)})</span>
+   <span class="ss">:from</span> <span class="p">(</span><span class="nf">Thread/currentThread</span><span class="p">)</span><span class="p">}</span><span class="p">)</span>
 
 <span class="p">(</span><span class="k">let </span><span class="p">[</span><span class="nv">invalid-chan</span> <span class="p">(</span><span class="nf">chan</span><span class="p">)</span>
       <span class="nv">in</span> <span class="p">(</span><span class="nf">chan</span><span class="p">)</span>
       <span class="nv">tax</span> <span class="mf">0.08</span><span class="p">]</span>
   <span class="c1">;; invalid message processor</span>
-  <span class="p">(</span><span class="nf">go-loop</span> <span class="p">[]</span>
-    <span class="p">(</span><span class="nb">when-let </span><span class="p">[{</span><span class="nv">data</span> <span class="ss">:data</span> <span class="nv">from</span> <span class="ss">:from</span><span class="p">}</span> <span class="p">(</span><span class="nf">&lt;!</span> <span class="nv">invalid-chan</span><span class="p">)]</span>
+  <span class="p">(</span><span class="nf">go-loop</span> <span class="p">[</span><span class="p">]</span>
+    <span class="p">(</span><span class="nb">when-let </span><span class="p">[</span><span class="p">{</span><span class="nv">data</span> <span class="ss">:data</span> <span class="nv">from</span> <span class="ss">:from</span><span class="p">}</span> <span class="p">(</span><span class="nf">&lt;!</span> <span class="nv">invalid-chan</span><span class="p">)</span><span class="p">]</span>
       <span class="p">(</span><span class="nf">printf</span> <span class="s">&#34;invalid data %s from %s from\n&#34;</span> <span class="nv">data</span> <span class="nv">from</span><span class="p">)</span>
-      <span class="p">(</span><span class="nf">recur</span><span class="p">)))</span>
+      <span class="p">(</span><span class="nf">recur</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
 
   <span class="c1">;; main processing actor</span>
-  <span class="p">(</span><span class="nf">go-loop</span> <span class="p">[]</span>
-    <span class="p">(</span><span class="nb">when-let </span><span class="p">[</span><span class="nv">v</span> <span class="p">(</span><span class="nf">&lt;!</span> <span class="nv">in</span><span class="p">)]</span>
-      <span class="p">(</span><span class="nb">if-let </span><span class="p">[</span><span class="nv">price</span> <span class="p">(</span><span class="ss">:price</span> <span class="nv">v</span><span class="p">)]</span>
-        <span class="p">(</span><span class="nf">printf</span> <span class="s">&#34;price: %f\n&#34;</span> <span class="p">(</span><span class="nb">* </span><span class="nv">price</span> <span class="p">(</span><span class="nb">+ </span><span class="mi">1</span> <span class="nv">tax</span><span class="p">)))</span>
-        <span class="p">(</span><span class="nf">&gt;!</span> <span class="nv">invalid-chan</span> <span class="p">(</span><span class="nf">invalid</span> <span class="nv">v</span><span class="p">)))</span>
-      <span class="p">(</span><span class="nf">recur</span><span class="p">)))</span>
+  <span class="p">(</span><span class="nf">go-loop</span> <span class="p">[</span><span class="p">]</span>
+    <span class="p">(</span><span class="nb">when-let </span><span class="p">[</span><span class="nv">v</span> <span class="p">(</span><span class="nf">&lt;!</span> <span class="nv">in</span><span class="p">)</span><span class="p">]</span>
+      <span class="p">(</span><span class="nb">if-let </span><span class="p">[</span><span class="nv">price</span> <span class="p">(</span><span class="ss">:price</span> <span class="nv">v</span><span class="p">)</span><span class="p">]</span>
+        <span class="p">(</span><span class="nf">printf</span> <span class="s">&#34;price: %f\n&#34;</span> <span class="p">(</span><span class="nb">* </span><span class="nv">price</span> <span class="p">(</span><span class="nb">+ </span><span class="mi">1</span> <span class="nv">tax</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
+        <span class="p">(</span><span class="nf">&gt;!</span> <span class="nv">invalid-chan</span> <span class="p">(</span><span class="nf">invalid</span> <span class="nv">v</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
+      <span class="p">(</span><span class="nf">recur</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
 
-  <span class="p">(</span><span class="nf">go</span> <span class="p">(</span><span class="nf">onto-chan</span> <span class="nv">in</span> <span class="p">[{</span><span class="ss">:goods</span> <span class="s">&#34;はじめてのClojure&#34;</span>
+  <span class="p">(</span><span class="nf">go</span> <span class="p">(</span><span class="nf">onto-chan</span> <span class="nv">in</span> <span class="p">[</span><span class="p">{</span><span class="ss">:goods</span> <span class="s">&#34;はじめてのClojure&#34;</span>
                       <span class="ss">:price</span> <span class="mi">1900</span><span class="p">}</span>
                      <span class="p">{</span><span class="ss">:goods</span> <span class="s">&#34;プログラミングClojure&#34;</span>
                       <span class="ss">:price</span> <span class="mi">3400</span><span class="p">}</span>
                      <span class="p">{</span><span class="ss">:goods</span> <span class="s">&#34;へび&#34;</span>
-                      <span class="ss">:description</span> <span class="s">&#34;にょろにょろ&#34;</span><span class="p">}])))</span></code></pre></div>
-<p><code>from</code>についてはActorならアクターオブジェクトに対してリフレクションかけて何かしらの情報をとれるのですが<code>go</code>に対するリフレクションが分からなかったので代わりにスレッド情報を使いました。
+                      <span class="ss">:description</span> <span class="s">&#34;にょろにょろ&#34;</span><span class="p">}</span><span class="p">]</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
+
+</code></pre></div><p><code>from</code>についてはActorならアクターオブジェクトに対してリフレクションかけて何かしらの情報をとれるのですが<code>go</code>に対するリフレクションが分からなかったので代わりにスレッド情報を使いました。
 私はこの章を読んだ時にいたく完動しました。ログの扱いを集約出来るし地味にIOして非同期モデルのアクターの邪魔になるログをそれぞれのアクターに持たなくて済む。
 しかしこれのActorが落ちたら、とかこのActor自身にinvalidなメッセージが来たら、とか色々考えたくなります。詳しくは原書を読みましょう。</p>
-
-<h2 id="その他-1">その他</h2>
-
+<h2 id="heading1">その他</h2>
 <p>この章には他にも外部システムと連携するMessage Adapter、外部のメッセージングシステムと連携するMessage Bridge、複数のシステム間でメッセージをやりとりするMessage Busなどが載っていますが割愛します。</p>
-
 <h1 id="message-construction">Message Construction</h1>
-
 <p>この章にはCommand Message, Document Message, Event Message, Request-Reply, Return Address, Correlation Identifire, Message Sequence, Message Expiration, Format Indicatorなどのメッセージ自体にまつわる話題が載っています。</p>
-
 <p><del>疲れてきたため</del> AkkaやScala特有の話題が多いので1つだけに絞ります。。まあ、だいたいErlangとかやってたら自然と覚えるやつらです。</p>
-
 <h2 id="document-message">Document Message</h2>
-
 <p>Command MessageやEvent Messageは良く見ますが、Document Messageとはどのようなものでしょうか。原書にはこう書いてあります</p>
-
 <blockquote>
 <p>Use a Document Message to convey information to a receiver, but without indicating how the data should be used.</p>
 </blockquote>
-
 <p>「受取側に情報を伝えはするが、その情報がどのように扱われるべきかを指示しない時にDocument Messageを使います」Command Messageに付随する情報でもなくEvent Messageに付随する情報でもなくただ単なる情報です。</p>
-
 <p>これは例えばデータベースアダプタのような所で使うことになります。</p>
-<div class="highlight"><pre class="chroma"><code class="language-clojure" data-lang="clojure"><span class="p">(</span><span class="k">let </span><span class="p">[</span><span class="nv">db</span> <span class="p">[{</span><span class="ss">:id</span> <span class="mi">1</span> <span class="ss">:name</span> <span class="s">&#34;Aho&#34;</span><span class="p">}</span> <span class="p">{</span><span class="ss">:id</span> <span class="mi">2</span> <span class="ss">:name</span> <span class="s">&#34;Ulman&#34;</span><span class="p">}</span> <span class="p">{</span><span class="ss">:id</span> <span class="mi">3</span> <span class="ss">:name</span> <span class="s">&#34;Sethi&#34;</span><span class="p">}]</span>
-      <span class="nv">in</span> <span class="p">(</span><span class="nf">chan</span><span class="p">)]</span>
-  <span class="p">(</span><span class="nf">go-loop</span> <span class="p">[]</span>
-    <span class="p">(</span><span class="nb">when-let </span><span class="p">[[</span><span class="nv">id</span> <span class="nv">return</span><span class="p">]</span> <span class="p">(</span><span class="nf">&lt;!</span> <span class="nv">in</span><span class="p">)]</span>
-      <span class="p">(</span><span class="nf">&gt;!</span> <span class="nv">return</span> <span class="p">(</span><span class="nb">some </span><span class="o">#</span><span class="p">(</span><span class="nb">when </span><span class="p">(</span><span class="nb">= </span><span class="nv">id</span> <span class="p">(</span><span class="ss">:id</span> <span class="nv">%</span><span class="p">)</span> <span class="p">)</span> <span class="nv">%</span><span class="p">)</span> <span class="nv">db</span><span class="p">))</span>
-      <span class="p">(</span><span class="nf">recur</span><span class="p">)))</span>
+<div class="highlight"><pre class="chroma"><code class="language-clojure" data-lang="clojure"><span class="p">(</span><span class="k">let </span><span class="p">[</span><span class="nv">db</span> <span class="p">[</span><span class="p">{</span><span class="ss">:id</span> <span class="mi">1</span> <span class="ss">:name</span> <span class="s">&#34;Aho&#34;</span><span class="p">}</span> <span class="p">{</span><span class="ss">:id</span> <span class="mi">2</span> <span class="ss">:name</span> <span class="s">&#34;Ulman&#34;</span><span class="p">}</span> <span class="p">{</span><span class="ss">:id</span> <span class="mi">3</span> <span class="ss">:name</span> <span class="s">&#34;Sethi&#34;</span><span class="p">}</span><span class="p">]</span>
+      <span class="nv">in</span> <span class="p">(</span><span class="nf">chan</span><span class="p">)</span><span class="p">]</span>
+  <span class="p">(</span><span class="nf">go-loop</span> <span class="p">[</span><span class="p">]</span>
+    <span class="p">(</span><span class="nb">when-let </span><span class="p">[</span><span class="p">[</span><span class="nv">id</span> <span class="nv">return</span><span class="p">]</span> <span class="p">(</span><span class="nf">&lt;!</span> <span class="nv">in</span><span class="p">)</span><span class="p">]</span>
+      <span class="p">(</span><span class="nf">&gt;!</span> <span class="nv">return</span> <span class="p">(</span><span class="nb">some </span><span class="o">#</span><span class="p">(</span><span class="nb">when </span><span class="p">(</span><span class="nb">= </span><span class="nv">id</span> <span class="p">(</span><span class="ss">:id</span> <span class="nv">%</span><span class="p">)</span> <span class="p">)</span> <span class="nv">%</span><span class="p">)</span> <span class="nv">db</span><span class="p">)</span><span class="p">)</span>
+      <span class="p">(</span><span class="nf">recur</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
 
-  <span class="p">(</span><span class="k">let </span><span class="p">[</span><span class="nv">chan-cache</span> <span class="p">(</span><span class="nf">chan</span><span class="p">)]</span>
+  <span class="p">(</span><span class="k">let </span><span class="p">[</span><span class="nv">chan-cache</span> <span class="p">(</span><span class="nf">chan</span><span class="p">)</span><span class="p">]</span>
     <span class="p">(</span><span class="nf">go-loop</span> <span class="p">[</span><span class="nv">id</span> <span class="mi">1</span><span class="p">]</span>
-      <span class="p">(</span><span class="nf">&gt;!</span> <span class="nv">in</span> <span class="p">[</span><span class="nv">id</span> <span class="nv">chan-cache</span><span class="p">])</span>
-      <span class="p">(</span><span class="nb">when-let </span><span class="p">[</span><span class="nv">res</span> <span class="p">(</span><span class="nf">&lt;!</span> <span class="nv">chan-cache</span><span class="p">)]</span>
+      <span class="p">(</span><span class="nf">&gt;!</span> <span class="nv">in</span> <span class="p">[</span><span class="nv">id</span> <span class="nv">chan-cache</span><span class="p">]</span><span class="p">)</span>
+      <span class="p">(</span><span class="nb">when-let </span><span class="p">[</span><span class="nv">res</span> <span class="p">(</span><span class="nf">&lt;!</span> <span class="nv">chan-cache</span><span class="p">)</span><span class="p">]</span>
         <span class="p">(</span><span class="nb">println </span><span class="nv">res</span><span class="p">)</span>
-        <span class="p">(</span><span class="nf">recur</span> <span class="p">(</span><span class="nb">+ </span><span class="nv">id</span> <span class="mi">1</span><span class="p">))))))</span></code></pre></div>
-<p>複数のアクセスがあることを考えると双方向チャネルがあるからといってそれ1つを使うのは良くないでしょう。混線してしまいます。今回は返信用のチャネル自身も一緒に送ってしまってそこにDocumentを貰うことにしました。
+        <span class="p">(</span><span class="nf">recur</span> <span class="p">(</span><span class="nb">+ </span><span class="nv">id</span> <span class="mi">1</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
+</code></pre></div><p>複数のアクセスがあることを考えると双方向チャネルがあるからといってそれ1つを使うのは良くないでしょう。混線してしまいます。今回は返信用のチャネル自身も一緒に送ってしまってそこにDocumentを貰うことにしました。
 ActorならActor ID(Ref)を送ることになるでしょう。</p>
-
 <h1 id="message-routing">Message Routing</h1>
-
 <p>この章は主にAkkaのクラスタ、分散実行に関る内容です。それ自体非常に興味深いのですがClojureだと試せないので飛ばします。
 まあ、実際にはクラスタを組まなくてもいくつかのactorを使ってactor群同士でやりとりをすればいいのですが準備が中々面倒ですね。</p>
-
 <p>一応扱われているトピックを拾うとContent Based Router, Message Filter, Dynamic Router, Recipient List, Splitter,
 Aggregator, Resequencer, Composed Message Processor, Scatter-Gather, Routing-Slip, Process Manager, Message Brokerです。
 見ての通り非常に数が多く、ページ数もかなり割かれています。そして、よく使いそうなパターンが多く載っています。Scatter-Gatherとか重い処理する時に使いそうなんですけどね。</p>
-
-<h1 id="などなど">などなど</h1>
-
+<h1 id="heading2">などなど</h1>
 <p>ここまでで、4~7章を紹介しました。原書は10章まで続きます(1-3章は何故Actorが必要なのかなどを延々語ってます)が私はこの辺で筆を置くことにします。続きが気になる方は原書をお読み下さい。</p>
-
 <p>Advent Calendar遅刻して大変申し分けありませんでした。</p>
                     </section>
                 </article>

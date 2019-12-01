@@ -20,9 +20,7 @@
         <meta name="twitter:site" content="@blackenedgold" />
         <meta name="twitter:title" content="新しいコンパイラバックエンドcretonne | κeenのHappy Hacκing Blog"/>
         <meta name="twitter:description" content="このエントリは言語実装 Advent Calendar 2016 - Qiita3日目の記事です。
-
 κeenです。先日、Rustの開発者フォーラムに新しいバックエンドしてcretonneが提案されていました。
-
 ちょっと気になったのでそれを紹介します。" />
 
         <title>新しいコンパイラバックエンドcretonne | κeenのHappy Hacκing Blog</title>
@@ -127,57 +125,45 @@
                     </header>
                     <section>
                         <p>このエントリは<a href="http://qiita.com/advent-calendar/2016/lang_dev">言語実装 Advent Calendar 2016 - Qiita</a>3日目の記事です。</p>
-
 <p>κeenです。先日、Rustの開発者フォーラムに新しいバックエンドして<a href="https://github.com/stoklund/cretonne">cretonne</a>が<a href="https://internals.rust-lang.org/t/possible-alternative-compiler-backend-cretonne/4275">提案されていました</a>。</p>
-
 <p>ちょっと気になったのでそれを紹介します。</p>
-
-<h1 id="概略">概略</h1>
-
+<h1 id="heading">概略</h1>
 <ul>
 <li><a href="https://github.com/stoklund/cretonne">GitHub</a></li>
 <li><a href="http://cretonne.readthedocs.io/en/latest/index.html">ドキュメント</a></li>
 </ul>
-
 <p>フォーラムによると、WebAssemblyをエンコードするために作られたコンパイラバックエンドで、FirefoxのJSエンジンであるSpiderMonkeyに載せる予定だそうです。JITが主な目的？</p>
-
 <p>LLVMのように最適化を頑張る方ではなくてコードを吐くまでのレイテンシを気にして作られているとのこと。なのでcretonne自身は最適化を行いません。</p>
-
 <p>特徴はドキュメントの<a href="http://cretonne.readthedocs.io/en/latest/compare-llvm.html">LLVMとの比較</a>によくまとまってますが、</p>
-
 <ul>
 <li>LLVMは複数種類の中間言語を持つのに対してcretonneは1種類</li>
 <li>アセンブラもディスアセンブラもない
-
 <ul>
 <li>コードジェネレータが吐く命令だけサポート</li>
-</ul></li>
+</ul>
+</li>
 <li>中間言語はISA非依存で、legalization / instruction selectionをするとISA固有のアノテーションが付く</li>
 <li>最大抽象単位が関数(LLVMはモジュール)。cretonneは関数のインライン化とかもしない。</li>
 <li>Extended Basic Blockを使う(LLVMはBasic Block)。
-
 <ul>
 <li>ebbは分岐命令のfalse branchを指定せず、fall throughする。よくあるマシン語に近い。</li>
 <li>分岐の合流はebbに引数を持たせることで行う(LLVMはphi nodeを使う)。</li>
-</ul></li>
+</ul>
+</li>
 <li><strong>undefined behaviorが存在しない</strong></li>
 </ul>
-
 <p>なんとなくWebAssemblyを意識した仕様ですね。</p>
-
-<h1 id="雰囲気">雰囲気</h1>
-
+<h1 id="heading1">雰囲気</h1>
 <p>以下のCのコードは</p>
 <div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="kt">float</span>
 <span class="nf">average</span><span class="p">(</span><span class="k">const</span> <span class="kt">float</span> <span class="o">*</span><span class="n">array</span><span class="p">,</span> <span class="n">size_t</span> <span class="n">count</span><span class="p">)</span>
 <span class="p">{</span>
     <span class="kt">double</span> <span class="n">sum</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
-    <span class="k">for</span> <span class="p">(</span><span class="n">size_t</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">count</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span>
-        <span class="n">sum</span> <span class="o">+=</span> <span class="n">array</span><span class="p">[</span><span class="n">i</span><span class="p">];</span>
+    <span class="k">for</span> <span class="p">(</span><span class="n">size_t</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">count</span><span class="p">;</span> <span class="n">i</span><span class="o">+</span><span class="o">+</span><span class="p">)</span>
+        <span class="n">sum</span> <span class="o">+</span><span class="o">=</span> <span class="n">array</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="p">;</span>
     <span class="k">return</span> <span class="n">sum</span> <span class="o">/</span> <span class="n">count</span><span class="p">;</span>
-<span class="p">}</span></code></pre></div>
-<p>以下のcretonneのIRに落ちるそうです。</p>
-
+<span class="p">}</span>
+</code></pre></div><p>以下のcretonneのIRに落ちるそうです。</p>
 <pre><code>function average(i32, i32) -&gt; f32 {
     ss1 = stack_slot 8, align 4   ; Stack slot for ``sum``.
 
@@ -208,169 +194,136 @@ ebb2(v5: i32):
 ebb3:
     v100 = f32const qNaN
     return v100
-</code></pre>
-
-<p>まあ、実際はファイルヘッダとかも付きますがこんな感じです。</p>
-
+</code></pre><p>まあ、実際はファイルヘッダとかも付きますがこんな感じです。</p>
 <p>ebbに引数があったりebbの途中で平気でブランチしてたり中々やんちゃですね。</p>
-
-<h1 id="使ってみる">使ってみる</h1>
-
+<h1 id="heading2">使ってみる</h1>
 <p>コードを吐くところまでやりたかったのですがまだ絶賛開発中ということもあってそのような操作が見当りませんでした。</p>
-
 <p>ということでファイルの方を扱ってると面白みがないのでRust APIの方で関数を構築して正当性を検証してから中間言語を吐き出してみます。</p>
-
-<h2 id="一歩">一歩</h2>
-
+<h2 id="heading3">一歩</h2>
 <p>まずはcretonneをcloneしてきます。</p>
-
 <pre><code>$ cargo new cretonne-sample --bin
 $ cd cretonne-sample
-</code></pre>
-
-<p>んでCargo.tomlのdependenciesに</p>
-
+</code></pre><p>んでCargo.tomlのdependenciesに</p>
 <pre><code>cretonne = {path = &quot;path/cretonne/lib/cretonne/&quot;}
-</code></pre>
-
-<p>を追加します。どうやらトップレベルのプロジェクトはただのユーティリティのようでした。本体は<code>lib/cretonne/</code>以下にいます。</p>
-
+</code></pre><p>を追加します。どうやらトップレベルのプロジェクトはただのユーティリティのようでした。本体は<code>lib/cretonne/</code>以下にいます。</p>
 <p>そしてmainファイルの中身はこうです。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">extern</span><span class="w"> </span><span class="k">crate</span><span class="w"> </span><span class="n">cretonne</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">cretonne</span>::<span class="n">ir</span>::<span class="o">*</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">cretonne</span>::<span class="n">ir</span>::<span class="p">{</span><span class="n">types</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">ty</span><span class="p">};</span><span class="w">
-</span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">cretonne</span>::<span class="n">ir</span>::<span class="p">{</span><span class="n">immediates</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">imm</span><span class="p">};</span><span class="w">
+</span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">cretonne</span>::<span class="n">ir</span>::<span class="p">{</span><span class="n">types</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">ty</span><span class="p">}</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">cretonne</span>::<span class="n">ir</span>::<span class="p">{</span><span class="n">immediates</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">imm</span><span class="p">}</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">cretonne</span>::<span class="n">isa</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">cretonne</span>::<span class="n">settings</span>::<span class="p">{</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">Configurable</span><span class="p">};</span><span class="w">
-</span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">cretonne</span>::<span class="p">{</span><span class="n">write_function</span><span class="p">,</span><span class="w"> </span><span class="n">legalize_function</span><span class="p">,</span><span class="w"> </span><span class="n">verify_function</span><span class="p">};</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">func</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">FunctionName</span>::<span class="n">new</span><span class="p">(</span><span class="s">&#34;average&#34;</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">sig</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Signature</span>::<span class="n">new</span><span class="p">();</span><span class="w">
-</span><span class="w">        </span><span class="n">sig</span><span class="p">.</span><span class="n">argument_types</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">ArgumentType</span>::<span class="n">new</span><span class="p">(</span><span class="n">ty</span>::<span class="n">I32</span><span class="p">));</span><span class="w">
-</span><span class="w">        </span><span class="n">sig</span><span class="p">.</span><span class="n">argument_types</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">ArgumentType</span>::<span class="n">new</span><span class="p">(</span><span class="n">ty</span>::<span class="n">I32</span><span class="p">));</span><span class="w">
-</span><span class="w">        </span><span class="n">sig</span><span class="p">.</span><span class="n">return_types</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">ArgumentType</span>::<span class="n">new</span><span class="p">(</span><span class="n">ty</span>::<span class="n">F32</span><span class="p">));</span><span class="w">
-</span><span class="w">        </span><span class="n">Function</span>::<span class="n">with_name_signature</span><span class="p">(</span><span class="n">name</span><span class="p">,</span><span class="w"> </span><span class="n">sig</span><span class="p">)</span><span class="w">
-</span><span class="w">    </span><span class="p">};</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">isa</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">settings</span>::<span class="n">builder</span><span class="p">();</span><span class="w">
-</span><span class="w">        </span><span class="n">b</span><span class="p">.</span><span class="n">set</span><span class="p">(</span><span class="s">&#34;opt_level&#34;</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;fastest&#34;</span><span class="p">).</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">settings</span>::<span class="n">Flags</span>::<span class="n">new</span><span class="p">(</span><span class="o">&amp;</span><span class="n">b</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">builder</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">isa</span>::<span class="n">lookup</span><span class="p">(</span><span class="s">&#34;intel&#34;</span><span class="p">).</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
-</span><span class="w">        </span><span class="n">builder</span><span class="p">.</span><span class="n">finish</span><span class="p">(</span><span class="n">f</span><span class="p">)</span><span class="w">
-</span><span class="w">    </span><span class="p">};</span><span class="w">
-</span><span class="w">    </span><span class="n">verify_function</span><span class="p">(</span><span class="o">&amp;</span><span class="n">func</span><span class="p">).</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="n">legalize_function</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">func</span><span class="p">,</span><span class="w"> </span><span class="n">isa</span><span class="p">.</span><span class="n">as_ref</span><span class="p">());</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">o</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">String</span>::<span class="n">new</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="n">write_function</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">o</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">func</span><span class="p">,</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="n">isa</span><span class="p">.</span><span class="n">as_ref</span><span class="p">())).</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">o</span><span class="p">);</span><span class="w">
+</span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">cretonne</span>::<span class="n">settings</span>::<span class="p">{</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">Configurable</span><span class="p">}</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">cretonne</span>::<span class="p">{</span><span class="n">write_function</span><span class="p">,</span><span class="w"> </span><span class="n">legalize_function</span><span class="p">,</span><span class="w"> </span><span class="n">verify_function</span><span class="p">}</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">func</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">FunctionName</span>::<span class="n">new</span><span class="p">(</span><span class="s">&#34;average&#34;</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">sig</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Signature</span>::<span class="n">new</span><span class="p">(</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">sig</span><span class="p">.</span><span class="n">argument_types</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">ArgumentType</span>::<span class="n">new</span><span class="p">(</span><span class="n">ty</span>::<span class="n">I32</span><span class="p">)</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">sig</span><span class="p">.</span><span class="n">argument_types</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">ArgumentType</span>::<span class="n">new</span><span class="p">(</span><span class="n">ty</span>::<span class="n">I32</span><span class="p">)</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">sig</span><span class="p">.</span><span class="n">return_types</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">ArgumentType</span>::<span class="n">new</span><span class="p">(</span><span class="n">ty</span>::<span class="n">F32</span><span class="p">)</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">Function</span>::<span class="n">with_name_signature</span><span class="p">(</span><span class="n">name</span><span class="p">,</span><span class="w"> </span><span class="n">sig</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">isa</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">settings</span>::<span class="n">builder</span><span class="p">(</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">b</span><span class="p">.</span><span class="n">set</span><span class="p">(</span><span class="s">&#34;opt_level&#34;</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;fastest&#34;</span><span class="p">)</span><span class="p">.</span><span class="n">unwrap</span><span class="p">(</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">settings</span>::<span class="n">Flags</span>::<span class="n">new</span><span class="p">(</span><span class="o">&amp;</span><span class="n">b</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">builder</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">isa</span>::<span class="n">lookup</span><span class="p">(</span><span class="s">&#34;intel&#34;</span><span class="p">)</span><span class="p">.</span><span class="n">unwrap</span><span class="p">(</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">builder</span><span class="p">.</span><span class="n">finish</span><span class="p">(</span><span class="n">f</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">verify_function</span><span class="p">(</span><span class="o">&amp;</span><span class="n">func</span><span class="p">)</span><span class="p">.</span><span class="n">unwrap</span><span class="p">(</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">legalize_function</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">func</span><span class="p">,</span><span class="w"> </span><span class="n">isa</span><span class="p">.</span><span class="n">as_ref</span><span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">o</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">String</span>::<span class="n">new</span><span class="p">(</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">write_function</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">o</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">func</span><span class="p">,</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="n">isa</span><span class="p">.</span><span class="n">as_ref</span><span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">.</span><span class="n">unwrap</span><span class="p">(</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">o</span><span class="p">)</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">
 </span></code></pre></div><div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="n">function</span><span class="w"> </span><span class="n">average</span><span class="p">(</span><span class="kt">i32</span><span class="p">,</span><span class="w"> </span><span class="kt">i32</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">f32</span> <span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>おおまかには<code>func</code>を構築して<code>isa</code>を決めて<code>verify_function</code>で検証、さらに<code>legalize_function</code>で今回のアーキテクチャ向けに微調整、<code>write_function</code>で書き出しです。</p>
-
-<h2 id="スタックスロットの追加">スタックスロットの追加</h2>
-
+</span></code></pre></div><p>おおまかには<code>func</code>を構築して<code>isa</code>を決めて<code>verify_function</code>で検証、さらに<code>legalize_function</code>で今回のアーキテクチャ向けに微調整、<code>write_function</code>で書き出しです。</p>
+<h2 id="heading4">スタックスロットの追加</h2>
 <p>まあ、スタック領域ですね。8byteの領域を確保します。</p>
-
 <p><code>func</code>にstack_slotsフィールドがあるのでそこにpushします。</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">func</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="p">....</span><span class="w">
-</span><span class="w">    </span><span class="p">};</span><span class="w">
-</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">func</span><span class="p">.</span><span class="n">stack_slots</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">StackSlotData</span>::<span class="n">new</span><span class="p">(</span><span class="mi">8</span><span class="p">));</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">isa</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="p">....</span><span class="w">
-</span><span class="w">    </span><span class="p">};</span><span class="w">
-</span><span class="w">    </span><span class="p">....</span><span class="w">
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">func</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">func</span><span class="p">.</span><span class="n">stack_slots</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">StackSlotData</span>::<span class="n">new</span><span class="p">(</span><span class="mi">8</span><span class="p">)</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">isa</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<pre><code>function average(i32, i32) -&gt; f32 {
+</span><span class="w"></span><span class="w">
+</span></code></pre></div><pre><code>function average(i32, i32) -&gt; f32 {
     ss0 = stack_slot 8
 }
-</code></pre>
-
-<p><code>push</code>の返り値はスタック領域を指すキーです。</p>
-
-<h2 id="ebbの追加">EBBの追加</h2>
-
+</code></pre><p><code>push</code>の返り値はスタック領域を指すキーです。</p>
+<h2 id="ebb">EBBの追加</h2>
 <p><code>func</code>構造体のフィールドに<code>dfg</code>がいて、そいつを色々いじります。</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">func</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="p">....</span><span class="w">
-</span><span class="w">    </span><span class="p">};</span><span class="w">
-</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">func</span><span class="p">.</span><span class="n">stack_slots</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">StackSlotData</span>::<span class="n">new</span><span class="p">(</span><span class="mi">8</span><span class="p">));</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">cur</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">Cursor</span>::<span class="n">new</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">func</span><span class="p">.</span><span class="n">layout</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ebb0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">func</span><span class="p">.</span><span class="n">dfg</span><span class="p">.</span><span class="n">make_ebb</span><span class="p">();</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">func</span><span class="p">.</span><span class="n">dfg</span><span class="p">.</span><span class="n">append_ebb_arg</span><span class="p">(</span><span class="n">ebb0</span><span class="p">,</span><span class="w"> </span><span class="n">types</span>::<span class="n">I32</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">func</span><span class="p">.</span><span class="n">dfg</span><span class="p">.</span><span class="n">append_ebb_arg</span><span class="p">(</span><span class="n">ebb0</span><span class="p">,</span><span class="w"> </span><span class="n">types</span>::<span class="n">I32</span><span class="p">);</span><span class="w">
-</span><span class="w">
-</span><span class="w">        </span><span class="n">cur</span><span class="p">.</span><span class="n">insert_ebb</span><span class="p">(</span><span class="n">ebb0</span><span class="p">);</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">isa</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="p">....</span><span class="w">
-</span><span class="w">    </span><span class="p">};</span><span class="w">
-</span><span class="w">    </span><span class="p">....</span><span class="w">
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">func</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">func</span><span class="p">.</span><span class="n">stack_slots</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">StackSlotData</span>::<span class="n">new</span><span class="p">(</span><span class="mi">8</span><span class="p">)</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">cur</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">Cursor</span>::<span class="n">new</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">func</span><span class="p">.</span><span class="n">layout</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ebb0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">func</span><span class="p">.</span><span class="n">dfg</span><span class="p">.</span><span class="n">make_ebb</span><span class="p">(</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">func</span><span class="p">.</span><span class="n">dfg</span><span class="p">.</span><span class="n">append_ebb_arg</span><span class="p">(</span><span class="n">ebb0</span><span class="p">,</span><span class="w"> </span><span class="n">types</span>::<span class="n">I32</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">func</span><span class="p">.</span><span class="n">dfg</span><span class="p">.</span><span class="n">append_ebb_arg</span><span class="p">(</span><span class="n">ebb0</span><span class="p">,</span><span class="w"> </span><span class="n">types</span>::<span class="n">I32</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">cur</span><span class="p">.</span><span class="n">insert_ebb</span><span class="p">(</span><span class="n">ebb0</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">isa</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<pre><code>function average(i32, i32) -&gt; f32 {
+</span><span class="w"></span><span class="w">
+</span></code></pre></div><pre><code>function average(i32, i32) -&gt; f32 {
     ss0 = stack_slot 8
 
 ebb0(vx0: i32, vx1: i32):
 }
-</code></pre>
-
-<p>EBBの追加にはカーソルを決めてあげて、dfgにebbを作ってあげて、カーソルの位置にebbの追加という形になります。</p>
-
+</code></pre><p>EBBの追加にはカーソルを決めてあげて、dfgにebbを作ってあげて、カーソルの位置にebbの追加という形になります。</p>
 <p>EBBには任意に引数を追加出来ます。<code>append_ebb_arg</code>の返り値はSSAの変数です。</p>
-
-<h2 id="命令を追加する">命令を追加する</h2>
-
+<h2 id="heading5">命令を追加する</h2>
 <p>命令はpythonのスクリプトによって生成されるので補完が効かず、中々扱いづらいですが頑張ります。</p>
-
 <p>さて、今回コードの検証を入れているので以下のようなコードは検証に落ちてしまいます。</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="w">    </span><span class="p">....</span><span class="w">
-</span><span class="w">    </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">func</span><span class="p">.</span><span class="n">stack_slots</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">StackSlotData</span>::<span class="n">new</span><span class="p">(</span><span class="mi">8</span><span class="p">));</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">cur</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">Cursor</span>::<span class="n">new</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">func</span><span class="p">.</span><span class="n">layout</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">dfg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">func</span><span class="p">.</span><span class="n">dfg</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ebb0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">make_ebb</span><span class="p">();</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">append_ebb_arg</span><span class="p">(</span><span class="n">ebb0</span><span class="p">,</span><span class="w"> </span><span class="n">types</span>::<span class="n">I32</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">append_ebb_arg</span><span class="p">(</span><span class="n">ebb0</span><span class="p">,</span><span class="w"> </span><span class="n">types</span>::<span class="n">I32</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="n">cur</span><span class="p">.</span><span class="n">insert_ebb</span><span class="p">(</span><span class="n">ebb0</span><span class="p">);</span><span class="w">
-</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">ins</span><span class="p">(</span><span class="n">cur</span><span class="p">).</span><span class="n">f64const</span><span class="p">(</span><span class="n">imm</span>::<span class="n">Ieee64</span>::<span class="n">new</span><span class="p">(</span><span class="mf">0.0</span><span class="p">));</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="p">....</span><span class="w">
-</span></code></pre></div>
-<pre><code>thread 'main' panicked at 'called `Result::unwrap()` on an `Err` value: Error { location: Ebb(Ebb(0)), message: &quot;block does not end in a terminator instruction!&quot; }', ../src/libcore/result.rs:799
-</code></pre>
-
-<p>最後の命令が定数であるため、正常なブロックと見做されないのです。</p>
-
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="w">    </span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">func</span><span class="p">.</span><span class="n">stack_slots</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">StackSlotData</span>::<span class="n">new</span><span class="p">(</span><span class="mi">8</span><span class="p">)</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">cur</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">Cursor</span>::<span class="n">new</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">func</span><span class="p">.</span><span class="n">layout</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">dfg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">func</span><span class="p">.</span><span class="n">dfg</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ebb0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">make_ebb</span><span class="p">(</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">append_ebb_arg</span><span class="p">(</span><span class="n">ebb0</span><span class="p">,</span><span class="w"> </span><span class="n">types</span>::<span class="n">I32</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">append_ebb_arg</span><span class="p">(</span><span class="n">ebb0</span><span class="p">,</span><span class="w"> </span><span class="n">types</span>::<span class="n">I32</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">cur</span><span class="p">.</span><span class="n">insert_ebb</span><span class="p">(</span><span class="n">ebb0</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">ins</span><span class="p">(</span><span class="n">cur</span><span class="p">)</span><span class="p">.</span><span class="n">f64const</span><span class="p">(</span><span class="n">imm</span>::<span class="n">Ieee64</span>::<span class="n">new</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="w">
+</span></code></pre></div><pre><code>thread 'main' panicked at 'called `Result::unwrap()` on an `Err` value: Error { location: Ebb(Ebb(0)), message: &quot;block does not end in a terminator instruction!&quot; }', ../src/libcore/result.rs:799
+</code></pre><p>最後の命令が定数であるため、正常なブロックと見做されないのです。</p>
 <p>ひとまずv3を返すことで凌ぎます。</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="w">    </span><span class="p">....</span><span class="w">
-</span><span class="w">    </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="p">....</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">varg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">VariableArgs</span>::<span class="n">new</span><span class="p">();</span><span class="w">
-</span><span class="w">        </span><span class="n">varg</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">v3</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">ins</span><span class="p">(</span><span class="n">cur</span><span class="p">).</span><span class="n">return_</span><span class="p">(</span><span class="n">varg</span><span class="p">);</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="p">....</span><span class="w">
-</span></code></pre></div>
-<pre><code>function average(i32, i32) -&gt; f32 {
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="w">    </span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">varg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">VariableArgs</span>::<span class="n">new</span><span class="p">(</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">varg</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">v3</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">ins</span><span class="p">(</span><span class="n">cur</span><span class="p">)</span><span class="p">.</span><span class="n">return_</span><span class="p">(</span><span class="n">varg</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="w">
+</span></code></pre></div><pre><code>function average(i32, i32) -&gt; f32 {
     ss0 = stack_slot 8
 
                     ebb0(vx0: i32, vx1: i32):
@@ -378,33 +331,28 @@ ebb0(vx0: i32, vx1: i32):
 [-]                     return v0
 }
 
-</code></pre>
-
-<p>命令の頭に付いてる <code>[-]</code>はlegalizeすると付くようです。</p>
-
-<h2 id="ブランチ">ブランチ</h2>
-
+</code></pre><p>命令の頭に付いてる <code>[-]</code>はlegalizeすると付くようです。</p>
+<h2 id="heading6">ブランチ</h2>
 <p>もう1つebbを追加してあげる必要があります。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="w">    </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">func</span><span class="p">.</span><span class="n">stack_slots</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">StackSlotData</span>::<span class="n">new</span><span class="p">(</span><span class="mi">8</span><span class="p">));</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">cur</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">Cursor</span>::<span class="n">new</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">func</span><span class="p">.</span><span class="n">layout</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">dfg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">func</span><span class="p">.</span><span class="n">dfg</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ebb0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">make_ebb</span><span class="p">();</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ebb3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">make_ebb</span><span class="p">();</span><span class="w">  </span><span class="c1">// &lt;- ebb3を作成
-</span><span class="c1"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">append_ebb_arg</span><span class="p">(</span><span class="n">ebb0</span><span class="p">,</span><span class="w"> </span><span class="n">types</span>::<span class="n">I32</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">append_ebb_arg</span><span class="p">(</span><span class="n">ebb0</span><span class="p">,</span><span class="w"> </span><span class="n">types</span>::<span class="n">I32</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="n">cur</span><span class="p">.</span><span class="n">insert_ebb</span><span class="p">(</span><span class="n">ebb0</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">ins</span><span class="p">(</span><span class="n">cur</span><span class="p">).</span><span class="n">f64const</span><span class="p">(</span><span class="n">imm</span>::<span class="n">Ieee64</span>::<span class="n">new</span><span class="p">(</span><span class="mf">0.0</span><span class="p">));</span><span class="w">
-</span><span class="w">        </span><span class="n">dfg</span><span class="p">.</span><span class="n">ins</span><span class="p">(</span><span class="n">cur</span><span class="p">).</span><span class="n">brz</span><span class="p">(</span><span class="n">v2</span><span class="p">,</span><span class="w"> </span><span class="n">ebb3</span><span class="p">,</span><span class="w"> </span><span class="n">VariableArgs</span>::<span class="n">new</span><span class="p">());</span><span class="w"> </span><span class="c1">// &lt;-ebb3にジャンプ
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">func</span><span class="p">.</span><span class="n">stack_slots</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">StackSlotData</span>::<span class="n">new</span><span class="p">(</span><span class="mi">8</span><span class="p">)</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">cur</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">Cursor</span>::<span class="n">new</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">func</span><span class="p">.</span><span class="n">layout</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">dfg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">func</span><span class="p">.</span><span class="n">dfg</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ebb0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">make_ebb</span><span class="p">(</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ebb3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">make_ebb</span><span class="p">(</span><span class="p">)</span><span class="p">;</span><span class="w">  </span><span class="c1">// &lt;- ebb3を作成
+</span><span class="c1"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">append_ebb_arg</span><span class="p">(</span><span class="n">ebb0</span><span class="p">,</span><span class="w"> </span><span class="n">types</span>::<span class="n">I32</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">append_ebb_arg</span><span class="p">(</span><span class="n">ebb0</span><span class="p">,</span><span class="w"> </span><span class="n">types</span>::<span class="n">I32</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">cur</span><span class="p">.</span><span class="n">insert_ebb</span><span class="p">(</span><span class="n">ebb0</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">ins</span><span class="p">(</span><span class="n">cur</span><span class="p">)</span><span class="p">.</span><span class="n">f64const</span><span class="p">(</span><span class="n">imm</span>::<span class="n">Ieee64</span>::<span class="n">new</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">dfg</span><span class="p">.</span><span class="n">ins</span><span class="p">(</span><span class="n">cur</span><span class="p">)</span><span class="p">.</span><span class="n">brz</span><span class="p">(</span><span class="n">v2</span><span class="p">,</span><span class="w"> </span><span class="n">ebb3</span><span class="p">,</span><span class="w"> </span><span class="n">VariableArgs</span>::<span class="n">new</span><span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">;</span><span class="w"> </span><span class="c1">// &lt;-ebb3にジャンプ
 </span><span class="c1"></span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">varg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">VariableArgs</span>::<span class="n">new</span><span class="p">();</span><span class="w">
-</span><span class="w">        </span><span class="n">varg</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">v3</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">ins</span><span class="p">(</span><span class="n">cur</span><span class="p">).</span><span class="n">return_</span><span class="p">(</span><span class="n">varg</span><span class="p">);</span><span class="w">
-</span><span class="w">
-</span><span class="w">        </span><span class="n">cur</span><span class="p">.</span><span class="n">insert_ebb</span><span class="p">(</span><span class="n">ebb3</span><span class="p">);</span><span class="w"> </span><span class="c1">// &lt;- ebb3を追加
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">varg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">VariableArgs</span>::<span class="n">new</span><span class="p">(</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">varg</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">v3</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">ins</span><span class="p">(</span><span class="n">cur</span><span class="p">)</span><span class="p">.</span><span class="n">return_</span><span class="p">(</span><span class="n">varg</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">cur</span><span class="p">.</span><span class="n">insert_ebb</span><span class="p">(</span><span class="n">ebb3</span><span class="p">)</span><span class="p">;</span><span class="w"> </span><span class="c1">// &lt;- ebb3を追加
 </span><span class="c1"></span><span class="w">    </span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<pre><code>function average(i32, i32) -&gt; f32 {
+</span></code></pre></div><pre><code>function average(i32, i32) -&gt; f32 {
     ss0 = stack_slot 8
 
                     ebb0(vx0: i32, vx1: i32):
@@ -414,43 +362,38 @@ ebb0(vx0: i32, vx1: i32):
 
                     ebb1:
 }
-</code></pre>
-
-<h2 id="残り">残り</h2>
+</code></pre><h2 id="heading7">残り</h2>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">func</span><span class="p">.</span><span class="n">stack_slots</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">StackSlotData</span>::<span class="n">new</span><span class="p">(</span><span class="mi">8</span><span class="p">));</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">cur</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">Cursor</span>::<span class="n">new</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">func</span><span class="p">.</span><span class="n">layout</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">dfg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">func</span><span class="p">.</span><span class="n">dfg</span><span class="p">;</span><span class="w">
-</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ebb0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">make_ebb</span><span class="p">();</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">append_ebb_arg</span><span class="p">(</span><span class="n">ebb0</span><span class="p">,</span><span class="w"> </span><span class="n">types</span>::<span class="n">I32</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">append_ebb_arg</span><span class="p">(</span><span class="n">ebb0</span><span class="p">,</span><span class="w"> </span><span class="n">types</span>::<span class="n">I32</span><span class="p">);</span><span class="w">
-</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ebb2</span><span class="w"> </span><span class="o">=</span><span class="w">  </span><span class="n">dfg</span><span class="p">.</span><span class="n">make_ebb</span><span class="p">();</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v5</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">append_ebb_arg</span><span class="p">(</span><span class="n">ebb0</span><span class="p">,</span><span class="w"> </span><span class="n">types</span>::<span class="n">I32</span><span class="p">);</span><span class="w">
-</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ebb3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">make_ebb</span><span class="p">();</span><span class="w">
-</span><span class="w">
-</span><span class="w">        </span><span class="n">cur</span><span class="p">.</span><span class="n">insert_ebb</span><span class="p">(</span><span class="n">ebb0</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">ins</span><span class="p">(</span><span class="n">cur</span><span class="p">).</span><span class="n">f64const</span><span class="p">(</span><span class="n">imm</span>::<span class="n">Ieee64</span>::<span class="n">new</span><span class="p">(</span><span class="mf">0.0</span><span class="p">));</span><span class="w">
-</span><span class="w">        </span><span class="n">dfg</span><span class="p">.</span><span class="n">ins</span><span class="p">(</span><span class="n">cur</span><span class="p">).</span><span class="n">brz</span><span class="p">(</span><span class="n">v2</span><span class="p">,</span><span class="w"> </span><span class="n">ebb3</span><span class="p">,</span><span class="w"> </span><span class="n">VariableArgs</span>::<span class="n">new</span><span class="p">());</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v4</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">ins</span><span class="p">(</span><span class="n">cur</span><span class="p">).</span><span class="n">iconst</span><span class="p">(</span><span class="n">types</span>::<span class="n">I32</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">ebb2_arg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">VariableArgs</span>::<span class="n">new</span><span class="p">();</span><span class="w">
-</span><span class="w">        </span><span class="n">ebb2_arg</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">v4</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="n">dfg</span><span class="p">.</span><span class="n">ins</span><span class="p">(</span><span class="n">cur</span><span class="p">).</span><span class="n">jump</span><span class="p">(</span><span class="n">ebb2</span><span class="p">,</span><span class="w"> </span><span class="n">ebb2_arg</span><span class="p">);</span><span class="w">
-</span><span class="w">
-</span><span class="w">        </span><span class="n">cur</span><span class="p">.</span><span class="n">insert_ebb</span><span class="p">(</span><span class="n">ebb2</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v6</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">ins</span><span class="p">(</span><span class="n">cur</span><span class="p">).</span><span class="n">imul_imm</span><span class="p">(</span><span class="n">v5</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v7</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">ins</span><span class="p">(</span><span class="n">cur</span><span class="p">).</span><span class="n">iadd</span><span class="p">(</span><span class="n">v1</span><span class="p">,</span><span class="w"> </span><span class="n">v6</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="n">dfg</span><span class="p">.</span><span class="n">ins</span><span class="p">(</span><span class="n">cur</span><span class="p">).</span><span class="n">jump</span><span class="p">(</span><span class="n">ebb3</span><span class="p">,</span><span class="w"> </span><span class="n">VariableArgs</span>::<span class="n">new</span><span class="p">());</span><span class="w">
-</span><span class="w">
-</span><span class="w">        </span><span class="n">cur</span><span class="p">.</span><span class="n">insert_ebb</span><span class="p">(</span><span class="n">ebb3</span><span class="p">);</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>こんな感じで進めていこうと思いましたがどうやらまだstack/heapを触る命令がない？？ようなので詰みました。</p>
-
-<h1 id="まとめ">まとめ</h1>
-
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">func</span><span class="p">.</span><span class="n">stack_slots</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">StackSlotData</span>::<span class="n">new</span><span class="p">(</span><span class="mi">8</span><span class="p">)</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">cur</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">Cursor</span>::<span class="n">new</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">func</span><span class="p">.</span><span class="n">layout</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">dfg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">func</span><span class="p">.</span><span class="n">dfg</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ebb0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">make_ebb</span><span class="p">(</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">append_ebb_arg</span><span class="p">(</span><span class="n">ebb0</span><span class="p">,</span><span class="w"> </span><span class="n">types</span>::<span class="n">I32</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">append_ebb_arg</span><span class="p">(</span><span class="n">ebb0</span><span class="p">,</span><span class="w"> </span><span class="n">types</span>::<span class="n">I32</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ebb2</span><span class="w"> </span><span class="o">=</span><span class="w">  </span><span class="n">dfg</span><span class="p">.</span><span class="n">make_ebb</span><span class="p">(</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v5</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">append_ebb_arg</span><span class="p">(</span><span class="n">ebb0</span><span class="p">,</span><span class="w"> </span><span class="n">types</span>::<span class="n">I32</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ebb3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">make_ebb</span><span class="p">(</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">cur</span><span class="p">.</span><span class="n">insert_ebb</span><span class="p">(</span><span class="n">ebb0</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">ins</span><span class="p">(</span><span class="n">cur</span><span class="p">)</span><span class="p">.</span><span class="n">f64const</span><span class="p">(</span><span class="n">imm</span>::<span class="n">Ieee64</span>::<span class="n">new</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">dfg</span><span class="p">.</span><span class="n">ins</span><span class="p">(</span><span class="n">cur</span><span class="p">)</span><span class="p">.</span><span class="n">brz</span><span class="p">(</span><span class="n">v2</span><span class="p">,</span><span class="w"> </span><span class="n">ebb3</span><span class="p">,</span><span class="w"> </span><span class="n">VariableArgs</span>::<span class="n">new</span><span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v4</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">ins</span><span class="p">(</span><span class="n">cur</span><span class="p">)</span><span class="p">.</span><span class="n">iconst</span><span class="p">(</span><span class="n">types</span>::<span class="n">I32</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">ebb2_arg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">VariableArgs</span>::<span class="n">new</span><span class="p">(</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">ebb2_arg</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">v4</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">dfg</span><span class="p">.</span><span class="n">ins</span><span class="p">(</span><span class="n">cur</span><span class="p">)</span><span class="p">.</span><span class="n">jump</span><span class="p">(</span><span class="n">ebb2</span><span class="p">,</span><span class="w"> </span><span class="n">ebb2_arg</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">cur</span><span class="p">.</span><span class="n">insert_ebb</span><span class="p">(</span><span class="n">ebb2</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v6</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">ins</span><span class="p">(</span><span class="n">cur</span><span class="p">)</span><span class="p">.</span><span class="n">imul_imm</span><span class="p">(</span><span class="n">v5</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v7</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfg</span><span class="p">.</span><span class="n">ins</span><span class="p">(</span><span class="n">cur</span><span class="p">)</span><span class="p">.</span><span class="n">iadd</span><span class="p">(</span><span class="n">v1</span><span class="p">,</span><span class="w"> </span><span class="n">v6</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">dfg</span><span class="p">.</span><span class="n">ins</span><span class="p">(</span><span class="n">cur</span><span class="p">)</span><span class="p">.</span><span class="n">jump</span><span class="p">(</span><span class="n">ebb3</span><span class="p">,</span><span class="w"> </span><span class="n">VariableArgs</span>::<span class="n">new</span><span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">cur</span><span class="p">.</span><span class="n">insert_ebb</span><span class="p">(</span><span class="n">ebb3</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
+</span></code></pre></div><p>こんな感じで進めていこうと思いましたがどうやらまだstack/heapを触る命令がない？？ようなので詰みました。</p>
+<h1 id="heading8">まとめ</h1>
 <ul>
 <li>コンパイラバックエンドcretonneについて紹介しました</li>
 <li>cretonneのRust APIを触ってみましたがダメでした。</li>

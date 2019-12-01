@@ -115,74 +115,49 @@
                     </header>
                     <section>
                         <p>κeenです。寝れないので小ネタを。数年悩んでた問題がようやく解決しましたのでそれについて。</p>
-
-<h1 id="経緯">経緯</h1>
-
-<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">30GBくらいのファイルのバックアップをdejadupを使って500GBのHDDに取ろうと思ったらディスクの空き領域がないって言われるんだけど何が原因なんだろう。因みにホストのSSDも500GBある。Ubuntu 16.04と16.10で起きた。</p>&mdash; κeen (@blackenedgold) <a href="https://twitter.com/blackenedgold/status/805017551776251904?ref_src=twsrc%5Etfw">2016年12月3日</a></blockquote>
-
-<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">Ubuntuのバックアップがとれない病に掛かってるんだけどこの度17.04に上げてもダメだった。因みにバックアップデータ数十GBに対してバックアップ先は500GBと十分にある。 <a href="https://t.co/vgSE8uoLtB">pic.twitter.com/vgSE8uoLtB</a></p>&mdash; κeen (@blackenedgold) <a href="https://twitter.com/blackenedgold/status/854333150519975940?ref_src=twsrc%5Etfw">2017年4月18日</a></blockquote>
-
+<h1 id="heading">経緯</h1>
+<!-- raw HTML omitted -->
+<!-- raw HTML omitted -->
 <p>エラーメッセージの情報量が少ないので打てる手が少ないですね…。</p>
-
 <p>このあとバックアップ用のHDDを買い替えて2TBのものを用意しましたがダメでした。
 ハードの問題ではないと判明したのでUbuntuのバックアップ(ソフトウェア名はdeja-dup)のバグを疑い、しばらく放置することにしました。
 流石に再現条件を割り出せてないので自らバグレポートをすることはせず、熱心な他人に委ねようという判断です。</p>
-
-<h1 id="原因究明">原因究明</h1>
-
+<h1 id="heading1">原因究明</h1>
 <p>最初に問題が発生してから2年くらいになりますがふと思い立って少しずつバックアップを取ったらどうかと試し始めます。</p>
-
-<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">ubuntuのdejadupがバックアップに失敗する問題、ちょっとずつやれば成功するな。どこのサイズが足りてないんだろう。</p>&mdash; κeen (@blackenedgold) <a href="https://twitter.com/blackenedgold/status/989518503441924102?ref_src=twsrc%5Etfw">2018年4月26日</a></blockquote>
-
+<!-- raw HTML omitted -->
 <p>少し進展しましたね。</p>
-
 <p>さらにここでデバッグする気力が湧いたので色々試し始めます。
 <code>top</code> でCPU Usageをみてるとdeja-dupはただのフロントエンドでバックアップをしているのはduplicityということに気づきます。
 そこで <code>ps aux</code> でコマンド引数を抜き出して自分の手でduplicityを操作し始めます。</p>
-
-<blockquote class="twitter-tweet" data-conversation="none" data-lang="ja"><p lang="ja" dir="ltr">とりあえずduplicity叩いたらエラーメッセージは見えた。150Gくらいのバックアップに4TB必要と言っている。ほんまか？</p>&mdash; κeen (@blackenedgold) <a href="https://twitter.com/blackenedgold/status/989690301420716034?ref_src=twsrc%5Etfw">2018年4月27日</a></blockquote>
-
+<!-- raw HTML omitted -->
 <p>150Gというのは <code>du ~/</code> で測ったものです。そもそもUbuntuをインストールしているディスク全体でも500GBなので何か設定を間違っていたとしても流石に500GBには収まる筈。バックアップのメタデータでちょっと嵩むとしてもこれはおかしいですね。</p>
-
 <p>さらにこのあと <code>--dry-run</code> ではなく実際にコピーを走らせてみると、とあるファイルでずっと止まってることに気づきます。</p>
-
-<blockquote class="twitter-tweet" data-conversation="none" data-lang="ja"><p lang="ja" dir="ltr">理解した。pijulのdbファイルが中身はほぼ空だけどサイズ上4TBあることになってた。</p>&mdash; κeen (@blackenedgold) <a href="https://twitter.com/blackenedgold/status/989725492755353600?ref_src=twsrc%5Etfw">2018年4月27日</a></blockquote>
-
+<!-- raw HTML omitted -->
 <p>ということで犯人がわかりました。余談ですが<a href="https://pijul.org/">pijul</a>というのは新興バージョン管理システムの1つです。このファイルはpijulがバージョン0.1くらいのときに作ったもののようでした。その時のpijulはメタデータDBにひとまずでかいファイルを作るようになってたんですね。</p>
-
 <p>ということでこのファイルを消して無事バックアップを取れました。</p>
-
 <p>しかし4TBのファイルを作っているのに <code>du</code> は 150GBと報告しました。これはどういうことなのでしょうか。これが今日のお話。</p>
-
-<h1 id="ディスク上のサイズとファイルサイズ">ディスク上のサイズとファイルサイズ</h1>
-
+<h1 id="heading2">ディスク上のサイズとファイルサイズ</h1>
 <p><code>du</code> のマニュアルを見ると、 <code>du</code> は <strong>ディスク上のサイズ</strong> 、いわば物理サイズを見積もるツールだと言っています。一方 <code>ls</code> などでみるのは <strong>ファイルサイズ</strong> 、論理的なサイズです。
 両者に違いがあるかというと、<a href="https://wiki.archlinux.jp/index.php/%E3%82%B9%E3%83%91%E3%83%BC%E3%82%B9%E3%83%95%E3%82%A1%E3%82%A4%E3%83%AB">スパースファイル</a>の場合実際のディスクサイズはずっと小さくなります。</p>
-
-<p><blockquote class="twitter-tweet" data-conversation="none" data-lang="ja"><p lang="ja" dir="ltr">Linuxだと0ページ最適化してくれるから4TBあってもディスクスペースは食わないんだけどそれをtarにすると4TBのtarが出来上がるんだろうか。</p>&mdash; κeen (@blackenedgold) <a href="https://twitter.com/blackenedgold/status/989727168639848449?ref_src=twsrc%5Etfw">2018年4月27日</a></blockquote>
-<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script></p>
-
+<!-- raw HTML omitted -->
 <p>ということで実験しましょう(終わった後で上のArch Wikiに全部書いてることに気づきましたが気にしない)。tarが出てきたのはduplicityがフォーマットとしてtarを用いているからです。</p>
-
 <p><code>truncate</code> コマンドでファイルを無意味に伸ばすことができます(普段はファイルをサイズ0に切り詰めるコマンドですね:) )</p>
-<div class="highlight"><pre class="chroma"><code class="language-console" data-lang="console">$ truncate -s10M file</code></pre></div>
-<p>さて、これを <code>du</code> と <code>ls -l</code> で確認してみましょう。</p>
-<div class="highlight"><pre class="chroma"><code class="language-console" data-lang="console">$ ls -lh file
+<pre><code class="language-console" data-lang="console">$ truncate -s10M file
+</code></pre><p>さて、これを <code>du</code> と <code>ls -l</code> で確認してみましょう。</p>
+<pre><code class="language-console" data-lang="console">$ ls -lh file
 -rw-r--r-- 1 kim kim 10M  4月 28 02:59 file
 $ du -h
-4.0K    .</code></pre></div>
-<p>見かけ上のサイズと実際のサイズが異なっていますね。これをtarballにしてみましょう。</p>
-<div class="highlight"><pre class="chroma"><code class="language-console" data-lang="console">$ tar cf file.tar file
+4.0K    .
+</code></pre><p>見かけ上のサイズと実際のサイズが異なっていますね。これをtarballにしてみましょう。</p>
+<pre><code class="language-console" data-lang="console">$ tar cf file.tar file
 $ ls -lh
 合計 11M
 -rw-r--r-- 1 kim kim 10M  4月 28 02:59 file
 -rw-r--r-- 1 kim kim 11M  4月 28 03:00 file.tar
 $ du -h
-11M     .</code></pre></div>
-<p>tarballにすると本来のサイズに膨らむことがわかりました。</p>
-
+11M     .
+</code></pre><p>tarballにすると本来のサイズに膨らむことがわかりました。</p>
 <p>そしてArch Wikiによると <code>tar</code> はオプションでsparse fileを扱えるようなのでそれも実験してみましょう。</p>
-
 <pre><code>$ rm file.tar
 $ tar Scf file.tar file
 $ ls -lh
@@ -192,12 +167,8 @@ $ ls -lh
 -rw-r--r-- 1 kim kim 10K  4月 28 03:01 file.tar
 $ du -h
 16K     .
-</code></pre>
-
-<p>本当に小さくなってますね。</p>
-
-<h1 id="まとめ">まとめ</h1>
-
+</code></pre><p>本当に小さくなってますね。</p>
+<h1 id="heading3">まとめ</h1>
 <ul>
 <li>ext4などのファイルシステムはsparse fileを効率的に保存してるよ</li>
 <li>duがデフォルト表示するのはディスク上のサイズであってファイルサイズではないよ</li>
