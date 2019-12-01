@@ -123,535 +123,575 @@
     </header>
     <div class="reveal">
         <div class="slides">
-            <section data-markdown
-    data-separator="\n===\n"
-    data-vertical="\n---\n"
-    data-notes="^Note:">
-<script type="text/template">
-
-# Rustで非同期Thrift
-----------------------
-[歌舞伎座.tech#12「メッセージフォーマット/RPC勉強会」 - connpass](https://kbkz.connpass.com/event/40629/)
-
-<!-- .slide: class="center" -->
-
-===
-
-# About Me
----------
-![κeenのアイコン](/images/icon.png) <!-- .element: style="position:absolute;right:0;z-index:-1" -->
-
- * κeen
- * [@blackenedgold](https://twitter.com/blackenedgold)
- * Github: [KeenS](https://github.com/KeenS)
- * サイバーエージェントのエンジニア
- * Lisp, ML, Rust, Shell Scriptあたりを書きます
-
-===
-
-* <span style="font-size:150%">X</span> RPCライブラリを使う話
-* <span style="font-size:150%">O</span> RPCライブラリを作る話
-
-<!-- .slide: class="center" -->
-
-===
-
-# RPC
------
-
-* Remote Procedure Call
-* リモートで呼べる
-* 言語跨げる
-* シリアライズフォーマットが決まれば大体出来る
-* Thrift, protobuf/gRPC, avro...
-* 大抵バイナリ
-  + JSONに比べて2倍くらい効率がいい
-
-===
-
-# Thrift
---------
-
-* Facebook発(現apache)RPCフレームワーク
-* IDLから複数の言語向けのコードを吐ける
-* 対応言語多い
-* 新しい言語はthriftレポジトリフォークして追加
-
-===
-
-# Thrift vs gRPC
-----------------
-
-\                       | Thrift | gRPC
-------------------------|:------:|:----:
-ベース                  | 自前   | HTTP/2
-コード生成              | o      | o
-プロトコルのアップデート | o      | o
-通信の多重化            | トランスポート次第  | o (HTTP/2)
-認証                    | x  | o
-例外                    | ユーザ定義可能 | 事前定義のみ?
-対応言語                | 多い   | ほどほど
-その他                  | union  | timestamp, anyなど
-<!-- .element: style=" margin-right:auto; margin-left:auto"-->
-
-===
-
-# 何故Thrift?
--------------
-
-* 仕事で使ってたから
-* 仕事は「gRPCかthrift、まあthriftでいっしょ」で決まった
-
-===
-
-# RustとThrift
---------------
-いくつか実装がある
-
-===
-
-## [sgnr/rust-thrift](https://github.com/sgnr/rust-thrift)
-
-<!-- .slide: class="center" -->
-
-===
-
-![sgnr/rust-thrift is deprecated](/images/thrift/sgnr-rust-thrift.png)
-
-===
-
-## [maximg/thrift](https://github.com/maximg/thrift)
-
-<!-- .slide: class="center" -->
-
-===
-
-![maximg/thrift is deprecated](/images/thrift/maximg-thrift.png)
-
-===
-
-## [terminalcloud/thrift](https://github.com/terminalcloud/thrift)
-
-<!-- .slide: class="center" -->
-
-===
-
-![terminalcloud/thrift is deprecated](/images/thrift/terminalcloud.png)
-
-===
-
-# [thehydroimpulse/thrust](https://github.com/thehydroimpulse/thrust)
----------------------------
-
-* Thrift RPC in Rust (Async I/O)
-* 非同期!!
-* apache/thriftベースじゃない（フルスクラッチ）
-* コンパイラプラグインサポートとかも
-* 作りかけ
-  + `Latest commit 0a37b77 on 11 Apr`
-
-→ フォークすることに
-
-===
-
-# [Finagle](https://github.com/twitter/finagle)
----------
-
-* **Scalaの** RPCフレームワーク
-* [You Server as a Function](https://monkey.org/~marius/funsrv.pdf)
-* Nettyベース
-* サーバとクライアント両方サポート
-* Twitter製
-* 良くも悪くもTwitterべったり
-
-===
-
-# Finagle Client
---------
-
-* クライアントが賢い
-* RPCではTCPベースのLBが使えない
-  + クライアントはコネクション張りっぱなし
-* クライアントサイドロードバランシングが必要
-* Finagleはそこまでカバー
-* 他にもエラーが起きたサーバ外したり色々
-
-===
-
-# Tokio
---------
-
-* **Rustの** RPCフレームワーク
-* mioベース
-* Finagleを参考に開発
-  + **開発中**
-* tokio-core
-  + コア部分
-* tokio-proto
-  + プロトコル実装のサポート
-  + 絶賛API変更中
-* tokio-service
-  + サービス実装のサポート
-
-
-===
-
-# TokioとFinagle
------------------
-
-  \           | Tokio       | Finagle
---------------|:-----------:|:-------:
-コア          | [tokio-core](https://github.com/tokio-rs/tokio-core) | [finagle-core](https://github.com/twitter/finagle/tree/develop/finagle-core)
-Future        | [future](https://github.com/alexcrichton/futures-rs) | [twitter util](https://github.com/twitter/util)
-非同期エンジン | [mio](https://github.com/carllerche/mio) | [netty](http://netty.io/)
-<!-- .element: style=" margin-right:auto; margin-left:auto"-->
-
-
-===
-
-# [mio](https://github.com/carllerche/mio)
-------
-
-* 非同期イベントループライブラリ
-* イベントドリブン
-* ループ内ゼロアロケーション
-* `epoll` などの薄いラッパ
-* libuv, libevent, libev2などのRust版
-* ソケットだけでなく *ファイルIO* 、インメモリチャネルとかも監視出来る
-
-===
-
-# [future](https://github.com/alexcrichton/futures-rs)
---------------
-
-* [Zero-cost futures in Rust · Aaron Turon](https://aturon.github.io/blog/2016/08/11/futures/)
-* ゼロコスト
-* 普通にFutureを使うとランタイムにステートマシンになる
-* 「将来実行される」という「状態」を第一級の値として表現する大事な手段
-* お型付けは大変
-    + `map` したら `Map<A, fn (A)->B>` の型が返ったり
-* ストリーミング指向のAPIもある
-
-===
-
-# [tokio-core](https://github.com/tokio-rs/tokio-core)
---------------
-
-* 非同期IOのフレームワーク
-* Futureベース
-* フレームドIOとストリーミングIO
-* フレームワークというよりユーティリティ？
-  + mioとfutureを合わせて使う
-
-===
-
-# [tokio-proto](https://github.com/tokio-rs/tokio-proto)
--------------
-
-* 主にバイナリ列<->構造体の部分の面倒を見てくれる
-* API変更中…
-* バッファリングしてパースしやすくしてくれる
-* プロトコルの多重化やってくれる(後述)
-
-===
-
-# [tokio-service](https://github.com/tokio-rs/tokio-service)
------------------
-
-* タスクサーバの面倒見てくれる
-* 主にロードバランシング
-
-
-===
-
-# [Service](https://tokio-rs.github.io/tokio-service/tokio_service/trait.Service.html)
--------------
-
-``` rust
-pub trait Service {
-    type Request;
-    type Response;
-    type Error;
-    type Future: Future<Item=Self::Response, Error=Self::Error>;
-    fn call(&self, req: Self::Request) -> Self::Future;
-}
-```
-
-===
-
-# Service
-----------
-
-* いわゆるハンドラ
-* インターフェースさえ満たせばいい
-  + ミドルウェアもハンドラも同じ扱い
-
-===
-
-# [NewService](https://tokio-rs.github.io/tokio-service/tokio_service/trait.NewService.html)
---------------
-
-```rust
-pub trait NewService {
-    type Request;
-    type Response;
-    type Error;
-    type Instance: Service<Request=Self::Request, Response=Self::Response, Error=Self::Error>;
-    fn new_service(&self) -> Result<Self::Instance>;
-}
-
-impl<F, R> NewService for F where F: Fn() -> Result<R>, R: Service
-```
-
-===
-
-# NewService
-------------
-
-* いわゆるAbstractServiceFactory的な存在
-* コア数に応じてサービスを作ってくれる
-* ただし`Service`を返す普通の関数も`NewService`になる
-* [example](https://github.com/tokio-rs/tokio-line/blob/master/examples/echo_client_server.rs#L21)
-
-
-===
-
-# tokio-thrift
-<!-- .slide: class="center" -->
-
-===
-
-# [tokio-thrift](https://github.com/KeenS/tokio-thrift)
---------------
-
-* [KeenS/tokio-thrift](https://github.com/KeenS/tokio-thrift)
-* この発表のために作った（作ってる）
-* tokioベースのrustのthriftサポート
-* thrustのフォーク
-* 基本ツール全て
-  + コードジェネレータ
-  + コンパイラプラグイン
-  + ランタイムライブラリ
-
-===
-
-# プロトコルスタック
--------------------
-
-ユーザは実装に集中出来る仕組み
-
-```
-+------------------------------------------------+
+            <!-- raw HTML omitted -->
+<h1 id="rustthrift">Rustで非同期Thrift</h1>
+<hr>
+<p><a href="https://kbkz.connpass.com/event/40629/">歌舞伎座.tech#12「メッセージフォーマット/RPC勉強会」 - connpass</a></p>
+<!-- raw HTML omitted -->
+<p>===</p>
+<h1 id="about-me">About Me</h1>
+<hr>
+<p><img src="//KeenS.github.io/images/icon.png" alt="κeenのアイコン"> <!-- raw HTML omitted --></p>
+<ul>
+<li>κeen</li>
+<li><a href="https://twitter.com/blackenedgold">@blackenedgold</a></li>
+<li>Github: <a href="https://github.com/KeenS">KeenS</a></li>
+<li>サイバーエージェントのエンジニア</li>
+<li>Lisp, ML, Rust, Shell Scriptあたりを書きます</li>
+</ul>
+<p>===</p>
+<ul>
+<li><!-- raw HTML omitted -->X<!-- raw HTML omitted --> RPCライブラリを使う話</li>
+<li><!-- raw HTML omitted -->O<!-- raw HTML omitted --> RPCライブラリを作る話</li>
+</ul>
+<!-- raw HTML omitted -->
+<p>===</p>
+<h1 id="rpc">RPC</h1>
+<hr>
+<ul>
+<li>Remote Procedure Call</li>
+<li>リモートで呼べる</li>
+<li>言語跨げる</li>
+<li>シリアライズフォーマットが決まれば大体出来る</li>
+<li>Thrift, protobuf/gRPC, avro&hellip;</li>
+<li>大抵バイナリ
+<ul>
+<li>JSONに比べて2倍くらい効率がいい</li>
+</ul>
+</li>
+</ul>
+<p>===</p>
+<h1 id="thrift">Thrift</h1>
+<hr>
+<ul>
+<li>Facebook発(現apache)RPCフレームワーク</li>
+<li>IDLから複数の言語向けのコードを吐ける</li>
+<li>対応言語多い</li>
+<li>新しい言語はthriftレポジトリフォークして追加</li>
+</ul>
+<p>===</p>
+<h1 id="thrift-vs-grpc">Thrift vs gRPC</h1>
+<hr>
+<table>
+<thead>
+<tr>
+<th>\</th>
+<th align="center">Thrift</th>
+<th align="center">gRPC</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ベース</td>
+<td align="center">自前</td>
+<td align="center">HTTP/2</td>
+</tr>
+<tr>
+<td>コード生成</td>
+<td align="center">o</td>
+<td align="center">o</td>
+</tr>
+<tr>
+<td>プロトコルのアップデート</td>
+<td align="center">o</td>
+<td align="center">o</td>
+</tr>
+<tr>
+<td>通信の多重化</td>
+<td align="center">トランスポート次第</td>
+<td align="center">o (HTTP/2)</td>
+</tr>
+<tr>
+<td>認証</td>
+<td align="center">x</td>
+<td align="center">o</td>
+</tr>
+<tr>
+<td>例外</td>
+<td align="center">ユーザ定義可能</td>
+<td align="center">事前定義のみ?</td>
+</tr>
+<tr>
+<td>対応言語</td>
+<td align="center">多い</td>
+<td align="center">ほどほど</td>
+</tr>
+<tr>
+<td>その他</td>
+<td align="center">union</td>
+<td align="center">timestamp, anyなど</td>
+</tr>
+</tbody>
+</table>
+<!-- raw HTML omitted -->
+<p>===</p>
+<h1 id="thrift1">何故Thrift?</h1>
+<hr>
+<ul>
+<li>仕事で使ってたから</li>
+<li>仕事は「gRPCかthrift、まあthriftでいっしょ」で決まった</li>
+</ul>
+<p>===</p>
+<h1 id="rustthrift1">RustとThrift</h1>
+<hr>
+<p>いくつか実装がある</p>
+<p>===</p>
+<h2 id="sgnrrustthrifthttpsgithubcomsgnrrustthrift"><a href="https://github.com/sgnr/rust-thrift">sgnr/rust-thrift</a></h2>
+<!-- raw HTML omitted -->
+<p>===</p>
+<p><img src="//KeenS.github.io/images/thrift/sgnr-rust-thrift.png" alt="sgnr/rust-thrift is deprecated"></p>
+<p>===</p>
+<h2 id="maximgthrifthttpsgithubcommaximgthrift"><a href="https://github.com/maximg/thrift">maximg/thrift</a></h2>
+<!-- raw HTML omitted -->
+<p>===</p>
+<p><img src="//KeenS.github.io/images/thrift/maximg-thrift.png" alt="maximg/thrift is deprecated"></p>
+<p>===</p>
+<h2 id="terminalcloudthrifthttpsgithubcomterminalcloudthrift"><a href="https://github.com/terminalcloud/thrift">terminalcloud/thrift</a></h2>
+<!-- raw HTML omitted -->
+<p>===</p>
+<p><img src="//KeenS.github.io/images/thrift/terminalcloud.png" alt="terminalcloud/thrift is deprecated"></p>
+<p>===</p>
+<h1 id="thehydroimpulsethrusthttpsgithubcomthehydroimpulsethrust"><a href="https://github.com/thehydroimpulse/thrust">thehydroimpulse/thrust</a></h1>
+<hr>
+<ul>
+<li>Thrift RPC in Rust (Async I/O)</li>
+<li>非同期!!</li>
+<li>apache/thriftベースじゃない（フルスクラッチ）</li>
+<li>コンパイラプラグインサポートとかも</li>
+<li>作りかけ
+<ul>
+<li><code>Latest commit 0a37b77 on 11 Apr</code></li>
+</ul>
+</li>
+</ul>
+<p>→ フォークすることに</p>
+<p>===</p>
+<h1 id="finaglehttpsgithubcomtwitterfinagle"><a href="https://github.com/twitter/finagle">Finagle</a></h1>
+<hr>
+<ul>
+<li><strong>Scalaの</strong> RPCフレームワーク</li>
+<li><a href="https://monkey.org/~marius/funsrv.pdf">You Server as a Function</a></li>
+<li>Nettyベース</li>
+<li>サーバとクライアント両方サポート</li>
+<li>Twitter製</li>
+<li>良くも悪くもTwitterべったり</li>
+</ul>
+<p>===</p>
+<h1 id="finagle-client">Finagle Client</h1>
+<hr>
+<ul>
+<li>クライアントが賢い</li>
+<li>RPCではTCPベースのLBが使えない
+<ul>
+<li>クライアントはコネクション張りっぱなし</li>
+</ul>
+</li>
+<li>クライアントサイドロードバランシングが必要</li>
+<li>Finagleはそこまでカバー</li>
+<li>他にもエラーが起きたサーバ外したり色々</li>
+</ul>
+<p>===</p>
+<h1 id="tokio">Tokio</h1>
+<hr>
+<ul>
+<li><strong>Rustの</strong> RPCフレームワーク</li>
+<li>mioベース</li>
+<li>Finagleを参考に開発
+<ul>
+<li><strong>開発中</strong></li>
+</ul>
+</li>
+<li>tokio-core
+<ul>
+<li>コア部分</li>
+</ul>
+</li>
+<li>tokio-proto
+<ul>
+<li>プロトコル実装のサポート</li>
+<li>絶賛API変更中</li>
+</ul>
+</li>
+<li>tokio-service
+<ul>
+<li>サービス実装のサポート</li>
+</ul>
+</li>
+</ul>
+<p>===</p>
+<h1 id="tokiofinagle">TokioとFinagle</h1>
+<hr>
+<table>
+<thead>
+<tr>
+<th>\</th>
+<th align="center">Tokio</th>
+<th align="center">Finagle</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>コア</td>
+<td align="center"><a href="https://github.com/tokio-rs/tokio-core">tokio-core</a></td>
+<td align="center"><a href="https://github.com/twitter/finagle/tree/develop/finagle-core">finagle-core</a></td>
+</tr>
+<tr>
+<td>Future</td>
+<td align="center"><a href="https://github.com/alexcrichton/futures-rs">future</a></td>
+<td align="center"><a href="https://github.com/twitter/util">twitter util</a></td>
+</tr>
+<tr>
+<td>非同期エンジン</td>
+<td align="center"><a href="https://github.com/carllerche/mio">mio</a></td>
+<td align="center"><a href="http://netty.io/">netty</a></td>
+</tr>
+</tbody>
+</table>
+<!-- raw HTML omitted -->
+<p>===</p>
+<h1 id="miohttpsgithubcomcarllerchemio"><a href="https://github.com/carllerche/mio">mio</a></h1>
+<hr>
+<ul>
+<li>非同期イベントループライブラリ</li>
+<li>イベントドリブン</li>
+<li>ループ内ゼロアロケーション</li>
+<li><code>epoll</code> などの薄いラッパ</li>
+<li>libuv, libevent, libev2などのRust版</li>
+<li>ソケットだけでなく <em>ファイルIO</em> 、インメモリチャネルとかも監視出来る</li>
+</ul>
+<p>===</p>
+<h1 id="futurehttpsgithubcomalexcrichtonfuturesrs"><a href="https://github.com/alexcrichton/futures-rs">future</a></h1>
+<hr>
+<ul>
+<li><a href="https://aturon.github.io/blog/2016/08/11/futures/">Zero-cost futures in Rust · Aaron Turon</a></li>
+<li>ゼロコスト</li>
+<li>普通にFutureを使うとランタイムにステートマシンになる</li>
+<li>「将来実行される」という「状態」を第一級の値として表現する大事な手段</li>
+<li>お型付けは大変
+<ul>
+<li><code>map</code> したら <code>Map&lt;A, fn (A)-&gt;B&gt;</code> の型が返ったり</li>
+</ul>
+</li>
+<li>ストリーミング指向のAPIもある</li>
+</ul>
+<p>===</p>
+<h1 id="tokiocorehttpsgithubcomtokiorstokiocore"><a href="https://github.com/tokio-rs/tokio-core">tokio-core</a></h1>
+<hr>
+<ul>
+<li>非同期IOのフレームワーク</li>
+<li>Futureベース</li>
+<li>フレームドIOとストリーミングIO</li>
+<li>フレームワークというよりユーティリティ？
+<ul>
+<li>mioとfutureを合わせて使う</li>
+</ul>
+</li>
+</ul>
+<p>===</p>
+<h1 id="tokioprotohttpsgithubcomtokiorstokioproto"><a href="https://github.com/tokio-rs/tokio-proto">tokio-proto</a></h1>
+<hr>
+<ul>
+<li>主にバイナリ列&lt;-&gt;構造体の部分の面倒を見てくれる</li>
+<li>API変更中…</li>
+<li>バッファリングしてパースしやすくしてくれる</li>
+<li>プロトコルの多重化やってくれる(後述)</li>
+</ul>
+<p>===</p>
+<h1 id="tokioservicehttpsgithubcomtokiorstokioservice"><a href="https://github.com/tokio-rs/tokio-service">tokio-service</a></h1>
+<hr>
+<ul>
+<li>タスクサーバの面倒見てくれる</li>
+<li>主にロードバランシング</li>
+</ul>
+<p>===</p>
+<h1 id="servicehttpstokiorsgithubiotokioservicetokioservicetraitservicehtml"><a href="https://tokio-rs.github.io/tokio-service/tokio_service/trait.Service.html">Service</a></h1>
+<hr>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">trait</span><span class="w"> </span><span class="n">Service</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">type</span> <span class="nc">Request</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">type</span> <span class="nc">Response</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">type</span> <span class="nc">Error</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">type</span> <span class="nc">Future</span>: <span class="nc">Future</span><span class="o">&lt;</span><span class="n">Item</span><span class="o">=</span><span class="n">Self</span>::<span class="n">Response</span><span class="p">,</span><span class="w"> </span><span class="n">Error</span><span class="o">=</span><span class="n">Self</span>::<span class="n">Error</span><span class="o">&gt;</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">fn</span> <span class="nf">call</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">req</span>: <span class="nc">Self</span>::<span class="n">Request</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span>::<span class="n">Future</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div><p>===</p>
+<h1 id="service">Service</h1>
+<hr>
+<ul>
+<li>いわゆるハンドラ</li>
+<li>インターフェースさえ満たせばいい
+<ul>
+<li>ミドルウェアもハンドラも同じ扱い</li>
+</ul>
+</li>
+</ul>
+<p>===</p>
+<h1 id="newservicehttpstokiorsgithubiotokioservicetokioservicetraitnewservicehtml"><a href="https://tokio-rs.github.io/tokio-service/tokio_service/trait.NewService.html">NewService</a></h1>
+<hr>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">trait</span><span class="w"> </span><span class="n">NewService</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">type</span> <span class="nc">Request</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">type</span> <span class="nc">Response</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">type</span> <span class="nc">Error</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">type</span> <span class="nc">Instance</span>: <span class="nc">Service</span><span class="o">&lt;</span><span class="n">Request</span><span class="o">=</span><span class="n">Self</span>::<span class="n">Request</span><span class="p">,</span><span class="w"> </span><span class="n">Response</span><span class="o">=</span><span class="n">Self</span>::<span class="n">Response</span><span class="p">,</span><span class="w"> </span><span class="n">Error</span><span class="o">=</span><span class="n">Self</span>::<span class="n">Error</span><span class="o">&gt;</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">fn</span> <span class="nf">new_service</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">Result</span><span class="o">&lt;</span><span class="n">Self</span>::<span class="n">Instance</span><span class="o">&gt;</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="k">impl</span><span class="o">&lt;</span><span class="n">F</span><span class="p">,</span><span class="w"> </span><span class="n">R</span><span class="o">&gt;</span><span class="w"> </span><span class="n">NewService</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">F</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="n">F</span>: <span class="nb">Fn</span><span class="p">(</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">Result</span><span class="o">&lt;</span><span class="n">R</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="n">R</span>: <span class="nc">Service</span><span class="w">
+</span></code></pre></div><p>===</p>
+<h1 id="newservice">NewService</h1>
+<hr>
+<ul>
+<li>いわゆるAbstractServiceFactory的な存在</li>
+<li>コア数に応じてサービスを作ってくれる</li>
+<li>ただし<code>Service</code>を返す普通の関数も<code>NewService</code>になる</li>
+<li><a href="https://github.com/tokio-rs/tokio-line/blob/master/examples/echo_client_server.rs#L21">example</a></li>
+</ul>
+<p>===</p>
+<h1 id="tokiothrift">tokio-thrift</h1>
+<!-- raw HTML omitted -->
+<p>===</p>
+<h1 id="tokiothrifthttpsgithubcomkeenstokiothrift"><a href="https://github.com/KeenS/tokio-thrift">tokio-thrift</a></h1>
+<hr>
+<ul>
+<li><a href="https://github.com/KeenS/tokio-thrift">KeenS/tokio-thrift</a></li>
+<li>この発表のために作った（作ってる）</li>
+<li>tokioベースのrustのthriftサポート</li>
+<li>thrustのフォーク</li>
+<li>基本ツール全て
+<ul>
+<li>コードジェネレータ</li>
+<li>コンパイラプラグイン</li>
+<li>ランタイムライブラリ</li>
+</ul>
+</li>
+</ul>
+<p>===</p>
+<h1 id="heading">プロトコルスタック</h1>
+<hr>
+<p>ユーザは実装に集中出来る仕組み</p>
+<pre><code>+------------------------------------------------+
 | service   | tokio-service + 生成コード + ユーザ |
 |------------------------------------------------|
 | protocol  | tokio-proto   + tokio-thrift       |
 |------------------------------------------------|
 | transport | tokio-core                         |
 +------------------------------------------------+
-```
-
-===
-
-# サンプルコード
-----------------
-
-* [これ](https://github.com/KeenS/tokio-thrift/blob/master/example/simple_server_client/src/main.rs)
-
-===
-
-# ユーザビリティ
----------------
-
-* サーバ: ユーザはインターフェースに沿ったコードを書くだけ
-* クライアント: インターフェース通りに呼べる
-* 返り値はFuture
-* サーバ: 非同期実装と相性がいい
-* クライアント: 非同期通信をそのままエンコード
-
-===
-
-# 実装の話
-
-<!-- .slide: class="center" -->
-
-===
-
-# Thriftのプロトコル
--------------------
-
-* 現状binary protocolのみ
-  + fork元が実装してあった
-* compactとか需要ある？
-* 因みにJSONはやめとけ
-
-===
-
-# 所有権とゼロコピー
--------------------
-
-* プロトコルのパースの部分の話
-* Rustっぽい部分
-* バッファの所有権をパース結果に渡すことでデータのコピーを避ける
-
-===
-
-# 所有権とゼロコピー
--------------------
-バッファをresultにパースして
-
-```
-buffer
+</code></pre><p>===</p>
+<h1 id="heading1">サンプルコード</h1>
+<hr>
+<ul>
+<li><a href="https://github.com/KeenS/tokio-thrift/blob/master/example/simple_server_client/src/main.rs">これ</a></li>
+</ul>
+<p>===</p>
+<h1 id="heading2">ユーザビリティ</h1>
+<hr>
+<ul>
+<li>サーバ: ユーザはインターフェースに沿ったコードを書くだけ</li>
+<li>クライアント: インターフェース通りに呼べる</li>
+<li>返り値はFuture</li>
+<li>サーバ: 非同期実装と相性がいい</li>
+<li>クライアント: 非同期通信をそのままエンコード</li>
+</ul>
+<p>===</p>
+<h1 id="heading3">実装の話</h1>
+<!-- raw HTML omitted -->
+<p>===</p>
+<h1 id="thrift2">Thriftのプロトコル</h1>
+<hr>
+<ul>
+<li>現状binary protocolのみ
+<ul>
+<li>fork元が実装してあった</li>
+</ul>
+</li>
+<li>compactとか需要ある？</li>
+<li>因みにJSONはやめとけ</li>
+</ul>
+<p>===</p>
+<h1 id="heading4">所有権とゼロコピー</h1>
+<hr>
+<ul>
+<li>プロトコルのパースの部分の話</li>
+<li>Rustっぽい部分</li>
+<li>バッファの所有権をパース結果に渡すことでデータのコピーを避ける</li>
+</ul>
+<p>===</p>
+<h1 id="heading5">所有権とゼロコピー</h1>
+<hr>
+<p>バッファをresultにパースして</p>
+<pre><code>buffer
   |
 +-+---------------+
 |                 |
 -------------------
-| | | | | ... | | | <- バイト列
+| | | | | ... | | | &lt;- バイト列
 -------------------
-```
-
-===
-
-# 所有権とゼロコピー
--------------------
-resultにデータの所有権を渡してしまう
-
-```
- result   buffer
+</code></pre><p>===</p>
+<h1 id="heading6">所有権とゼロコピー</h1>
+<hr>
+<p>resultにデータの所有権を渡してしまう</p>
+<pre><code> result   buffer
    |        |
 +--+----++--+-----+
 |       ||        |
 -------------------
-| | | | | ... | | | <- バイト列
+| | | | | ... | | | &lt;- バイト列
 -------------------
-```
-
-===
-
-# 複数メソッド
--------------
-
-* 複数メソッドだと複数の引数/返値の型を扱う
-* コネクションのハンドラは1つ
-* 複数型をどうやって扱う？
-  + [enumを定義](https://github.com/KeenS/tokio-thrift/blob/master/example/simple_server_client/src/thrift.rs#L67)
-  + ゼロオーバーヘッド…
-
-===
-
-# 複数メソッド
--------------
-
-```
- (methodA) (methodB)
+</code></pre><p>===</p>
+<h1 id="heading7">複数メソッド</h1>
+<hr>
+<ul>
+<li>複数メソッドだと複数の引数/返値の型を扱う</li>
+<li>コネクションのハンドラは1つ</li>
+<li>複数型をどうやって扱う？
+<ul>
+<li><a href="https://github.com/KeenS/tokio-thrift/blob/master/example/simple_server_client/src/thrift.rs#L67">enumを定義</a></li>
+<li>ゼロオーバーヘッド…</li>
+</ul>
+</li>
+</ul>
+<p>===</p>
+<h1 id="heading8">複数メソッド</h1>
+<hr>
+<pre><code> (methodA) (methodB)
      |         |
      +----+----+
-          | <----- enum化
+          | &lt;----- enum化
       [client]
           |
       [server]
-          | <----- enumでディスパッチ
+          | &lt;----- enumでディスパッチ
      +----+-----+
      |          |
 (handlerA) (handlerB)
-```
-
-===
-
-# つらい話
------------------
-
-* Thrift IDLのセマンティクスが書いてない
-  + throws節のフィールドは直積？直和？
-  + Javaで生成してみて推測するしかない
-* フォークライブラリの実装が不完全
-  + パーサはフルスクラッチで書き直した
-  + [パーサコンビネータ便利](https://github.com/KeenS/tokio-thrift/blob/master/tokio-thrift-codegen/src/parser.rs#L517)
-  + フォークした意味…
-* Rustにエンコード出来ないthriftの機能もある
-  + mapの定数は普通には無理
-  + エラーどうしよう(`Error`トレイトの実装とEnum)
-* 所有権の問題
-
-===
-
-# 言語との統合
--------------
-
-* Rustには公式のシリアライズフレームワークがある
-* [rustc-serialize](https://github.com/rust-lang-nursery/rustc-serialize)
-* あるいはユーザ側のも
-* [serde](https://github.com/serde-rs/serde)
-* のっかりたいけどThriftに必要なデータがない
-  + フィールドのシーケンス番号とか
-* 今のところ自動生成に頼る
-  + フレームワークにフィードバックした方がいい？
-
-===
-
-# コード生成の話
----------------
-
-* [コンパイラプラグイン](https://github.com/KeenS/tokio-thrift/blob/master/tokio-thrift-macros/tests/service.rs#L10)微妙
-  + 定義元ジャンプ、フィールド名補完などに難
-* CLI生成は悪手
-  + IDL変更する度CLI実行？
-  + 生成コードはコミット？
-    - CLIのバージョンがあるので基本はコミット。でも…
-* ビルドツール統合が最良
-  + FinagleにはScoogeがある
-  + tokio-thriftでもやりたい
-    - build.rsのサポート
-
-===
-
-# 多重化の話
-------------
-
-* 生のthrift on TCPだと通信を多重化出来ない
-* tokio-proto側でpipelineやmultiplexなどをサポート
-* pipeline: レスポンスを待たずに次のリクエスト
-* multiplex: リクエストとレスポンスが入り乱れてもよい。プロトコルオーバーヘッドがある
-* tokio-thriftは未対応
-
-===
-
-# Tokioの利点
--------------
-
-* service: サーバとクライアント両方面倒見てくれる
-  + サーバもCPUの数だけハンドラをクローンしてくれたりする
-* protocol: 面倒毎が少ない(バッファ使ってくれる)
-* Futureベースの非同期
-* pipeline, multiplexによる多重化
-
-===
-
-# Tokioの欠点
--------------
-
-* APIが不安定
-  + tokio-thriftは今動かないorz
-* thriftはストリーミング指向なのにバッファ使う
-* Rustの痒い所に当たる
-  + 返り値多相がない(`Future`を直接返せない)
-  + アロケーションが必要になる
-  + ダイナミックディスパッチが必要になる
-  + 他言語と同水準のコスト
-
-===
-
-# まとめ
---------
-
-* Thriftは広さで勝負
-* コードジェネレータはビルドツールへの統合を
-* IDLは既存のコードに乗っかった方が楽（上と競合）
-* フレームワークを使うとみんな幸せ
-* RPCはインターフェースベースであるべき
-* 多重化はRPCより下のレイヤーで出来る
-
-</script>
-</section>
+</code></pre><p>===</p>
+<h1 id="heading9">つらい話</h1>
+<hr>
+<ul>
+<li>Thrift IDLのセマンティクスが書いてない
+<ul>
+<li>throws節のフィールドは直積？直和？</li>
+<li>Javaで生成してみて推測するしかない</li>
+</ul>
+</li>
+<li>フォークライブラリの実装が不完全
+<ul>
+<li>パーサはフルスクラッチで書き直した</li>
+<li><a href="https://github.com/KeenS/tokio-thrift/blob/master/tokio-thrift-codegen/src/parser.rs#L517">パーサコンビネータ便利</a></li>
+<li>フォークした意味…</li>
+</ul>
+</li>
+<li>Rustにエンコード出来ないthriftの機能もある
+<ul>
+<li>mapの定数は普通には無理</li>
+<li>エラーどうしよう(<code>Error</code>トレイトの実装とEnum)</li>
+</ul>
+</li>
+<li>所有権の問題</li>
+</ul>
+<p>===</p>
+<h1 id="heading10">言語との統合</h1>
+<hr>
+<ul>
+<li>Rustには公式のシリアライズフレームワークがある</li>
+<li><a href="https://github.com/rust-lang-nursery/rustc-serialize">rustc-serialize</a></li>
+<li>あるいはユーザ側のも</li>
+<li><a href="https://github.com/serde-rs/serde">serde</a></li>
+<li>のっかりたいけどThriftに必要なデータがない
+<ul>
+<li>フィールドのシーケンス番号とか</li>
+</ul>
+</li>
+<li>今のところ自動生成に頼る
+<ul>
+<li>フレームワークにフィードバックした方がいい？</li>
+</ul>
+</li>
+</ul>
+<p>===</p>
+<h1 id="heading11">コード生成の話</h1>
+<hr>
+<ul>
+<li><a href="https://github.com/KeenS/tokio-thrift/blob/master/tokio-thrift-macros/tests/service.rs#L10">コンパイラプラグイン</a>微妙
+<ul>
+<li>定義元ジャンプ、フィールド名補完などに難</li>
+</ul>
+</li>
+<li>CLI生成は悪手
+<ul>
+<li>IDL変更する度CLI実行？</li>
+<li>生成コードはコミット？
+<ul>
+<li>CLIのバージョンがあるので基本はコミット。でも…</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>ビルドツール統合が最良
+<ul>
+<li>FinagleにはScoogeがある</li>
+<li>tokio-thriftでもやりたい
+<ul>
+<li>build.rsのサポート</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p>===</p>
+<h1 id="heading12">多重化の話</h1>
+<hr>
+<ul>
+<li>生のthrift on TCPだと通信を多重化出来ない</li>
+<li>tokio-proto側でpipelineやmultiplexなどをサポート</li>
+<li>pipeline: レスポンスを待たずに次のリクエスト</li>
+<li>multiplex: リクエストとレスポンスが入り乱れてもよい。プロトコルオーバーヘッドがある</li>
+<li>tokio-thriftは未対応</li>
+</ul>
+<p>===</p>
+<h1 id="tokio1">Tokioの利点</h1>
+<hr>
+<ul>
+<li>service: サーバとクライアント両方面倒見てくれる
+<ul>
+<li>サーバもCPUの数だけハンドラをクローンしてくれたりする</li>
+</ul>
+</li>
+<li>protocol: 面倒毎が少ない(バッファ使ってくれる)</li>
+<li>Futureベースの非同期</li>
+<li>pipeline, multiplexによる多重化</li>
+</ul>
+<p>===</p>
+<h1 id="tokio2">Tokioの欠点</h1>
+<hr>
+<ul>
+<li>APIが不安定
+<ul>
+<li>tokio-thriftは今動かないorz</li>
+</ul>
+</li>
+<li>thriftはストリーミング指向なのにバッファ使う</li>
+<li>Rustの痒い所に当たる
+<ul>
+<li>返り値多相がない(<code>Future</code>を直接返せない)</li>
+<li>アロケーションが必要になる</li>
+<li>ダイナミックディスパッチが必要になる</li>
+<li>他言語と同水準のコスト</li>
+</ul>
+</li>
+</ul>
+<p>===</p>
+<h1 id="heading13">まとめ</h1>
+<hr>
+<ul>
+<li>Thriftは広さで勝負</li>
+<li>コードジェネレータはビルドツールへの統合を</li>
+<li>IDLは既存のコードに乗っかった方が楽（上と競合）</li>
+<li>フレームワークを使うとみんな幸せ</li>
+<li>RPCはインターフェースベースであるべき</li>
+<li>多重化はRPCより下のレイヤーで出来る</li>
+</ul>
+<p><!-- raw HTML omitted --></p>
+<!-- raw HTML omitted -->
 
         </div>
     </div>

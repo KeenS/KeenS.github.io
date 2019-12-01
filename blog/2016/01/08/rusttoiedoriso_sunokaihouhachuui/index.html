@@ -111,66 +111,57 @@
                     </header>
                     <section>
                         <p>κeenです。深夜にですが小ネタを。</p>
-
 <p>Rustを使っているとついついリソースの解放のことは忘れてしまうのですが、注意しないといけない類のリソースがあります。</p>
-
 <p>その1つが<code>BufWriter</code>です。
 バッファリングライター全般に言えることですが、奴らはメモリ上にまだ書き込まれてない値を保持しているので解放する前にそれらを掃き出す必要があります。
 その時に書き込み例外が起き得るので、解放も安全な処理ではないのです。Javaのtry-with-resource文を使わないファイルの扱いについては悪名高いですが、あれは仕方ない話なのです。</p>
-
 <p>ところでRustのリソースの解放は<code>Drop</code>トレイトの<code>drop</code>が担っていますが、返り値は<code>void</code>です。基本的には裏で動くので当然ですね。
 そして、<code>drop</code>はpanicを起こさないことが望ましいです。Rustは今のところ(1.5時点)panicから回復出来ないのでそれはそうでしょう。では、エラーを返り値でも返せない、panicも起こせない中<code>BufWrite</code>はどうエラーを扱っているのでしょう。それは実装を見ると分かります。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">impl</span><span class="o">&lt;</span><span class="n">W</span>: <span class="nc">Write</span><span class="o">&gt;</span><span class="w"> </span><span class="nb">Drop</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">BufWriter</span><span class="o">&lt;</span><span class="n">W</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">drop</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">inner</span><span class="p">.</span><span class="n">is_some</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">            </span><span class="c1">// dtors should not panic, so we ignore a failed flush
+</span><span class="w"></span><span class="w">    </span><span class="k">fn</span> <span class="nf">drop</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">inner</span><span class="p">.</span><span class="n">is_some</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="c1">// dtors should not panic, so we ignore a failed flush
 </span><span class="c1"></span><span class="w">            </span><span class="c1">// 訳: dropはパニックすべきではない、だからflushの失敗は無視する
-</span><span class="c1"></span><span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">_r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">flush_buf</span><span class="p">();</span><span class="w">
-</span><span class="w">        </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="c1"></span><span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">_r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">flush_buf</span><span class="p">(</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>…はい。中々アレなことをやってくれますね。</p>
-
+</span><span class="w"></span><span class="w">
+</span></code></pre></div><p>…はい。中々アレなことをやってくれますね。</p>
 <p>ということで<code>BufWrite</code>を使う時は</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="p">{</span><span class="w">
-</span><span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="n">file</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">File</span>::<span class="n">create</span><span class="p">(</span><span class="s">&#34;some_file.txt&#34;</span><span class="p">).</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
-</span><span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="n">br</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">BufWrite</span>::<span class="n">new</span><span class="p">(</span><span class="o">&amp;</span><span class="n">file</span><span class="p">);</span><span class="w">
-</span><span class="w">
-</span><span class="w">  </span><span class="c1">// do something
+</span><span class="w"></span><span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="n">file</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">File</span>::<span class="n">create</span><span class="p">(</span><span class="s">&#34;some_file.txt&#34;</span><span class="p">)</span><span class="p">.</span><span class="n">unwrap</span><span class="p">(</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="n">br</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">BufWrite</span>::<span class="n">new</span><span class="p">(</span><span class="o">&amp;</span><span class="n">file</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="w">  </span><span class="c1">// do something
 </span><span class="c1"></span><span class="w">
-</span><span class="w">  </span><span class="k">match</span><span class="w"> </span><span class="n">br</span><span class="p">.</span><span class="n">flush_buf</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="nb">Ok</span><span class="p">(())</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">(),</span><span class="w">
-</span><span class="w">    </span><span class="nb">Err</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="c1">// handle errors
+</span><span class="w"></span><span class="w">  </span><span class="k">match</span><span class="w"> </span><span class="n">br</span><span class="p">.</span><span class="n">flush_buf</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="nb">Ok</span><span class="p">(</span><span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="o">&gt;</span><span class="w"> </span><span class="p">(</span><span class="p">)</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="nb">Err</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="o">&gt;</span><span class="w"> </span><span class="c1">// handle errors
 </span><span class="c1"></span><span class="w">  </span><span class="p">}</span><span class="w">
-</span><span class="w">
+</span><span class="w"></span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>のようにライフタイムの終わりで<code>flush_buf</code>を呼ぶのが作法的な方法です。
+</span></code></pre></div><p>のようにライフタイムの終わりで<code>flush_buf</code>を呼ぶのが作法的な方法です。
 <code>unwrap</code>と同じく掃き出せない時に無視されてもいいならそこまでする必要はありませんが、それでもスコープの終わりに意図的に<code>flush_buf</code>を呼んでない旨を書くと丁寧でしょう。</p>
-
 <p>因みにスコープが大きすぎる時は</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="p">{</span><span class="w">
-</span><span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="n">file</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">File</span>::<span class="n">create</span><span class="p">(</span><span class="s">&#34;some_file.txt&#34;</span><span class="p">).</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
-</span><span class="w">  </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">br</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">BufWrite</span>::<span class="n">new</span><span class="p">(</span><span class="o">&amp;</span><span class="n">file</span><span class="p">);</span><span class="w">
-</span><span class="w">  
+</span><span class="w"></span><span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="n">file</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">File</span>::<span class="n">create</span><span class="p">(</span><span class="s">&#34;some_file.txt&#34;</span><span class="p">)</span><span class="p">.</span><span class="n">unwrap</span><span class="p">(</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">  </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">br</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">BufWrite</span>::<span class="n">new</span><span class="p">(</span><span class="o">&amp;</span><span class="n">file</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">  
 </span><span class="w">    </span><span class="c1">// do something with br
 </span><span class="c1"></span><span class="w">  
-</span><span class="w">    </span><span class="k">match</span><span class="w"> </span><span class="n">br</span><span class="p">.</span><span class="n">flush_buf</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">      </span><span class="nb">Ok</span><span class="p">(())</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">(),</span><span class="w">
-</span><span class="w">      </span><span class="nb">Err</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="c1">// handle errors
+</span><span class="w">    </span><span class="k">match</span><span class="w"> </span><span class="n">br</span><span class="p">.</span><span class="n">flush_buf</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">      </span><span class="nb">Ok</span><span class="p">(</span><span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="o">&gt;</span><span class="w"> </span><span class="p">(</span><span class="p">)</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">      </span><span class="nb">Err</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="o">&gt;</span><span class="w"> </span><span class="c1">// handle errors
 </span><span class="c1"></span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">  </span><span class="p">}</span><span class="w">
-</span><span class="w">  
+</span><span class="w"></span><span class="w">  </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">  
 </span><span class="w">  </span><span class="c1">// do other things
 </span><span class="c1"></span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>のようにスコープを作って不要なライフタイムを切り詰めるイディオムもあるので併せてどうぞ。</p>
-
+</span></code></pre></div><p>のようにスコープを作って不要なライフタイムを切り詰めるイディオムもあるので併せてどうぞ。</p>
 <p>余談ですが<code>std::fs::File</code>の実体はCの<code>FILE</code>構造体ではなくファイルディスクリプタなのでバッファリングはしてません。のでこちらは気にする必要はありません。</p>
-
 <p>という訳で小ネタでした。</p>
                     </section>
                 </article>

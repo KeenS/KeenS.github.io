@@ -119,573 +119,604 @@
     </header>
     <div class="reveal">
         <div class="slides">
-            <section data-markdown
-    data-separator="\n===\n"
-    data-vertical="\n---\n"
-    data-notes="^Note:">
-<script type="text/template">
-# Futureとその周辺
-----------------------
-[情報科学若手の会 #51](https://wakate.org/2018/07/28/51th-general/)
-
-<!-- .slide: class="center" -->
-===
-# About Me
----------
-![κeenのアイコン](/images/kappa.png) <!-- .element: style="position:absolute;right:0;z-index:-1" width="20%" -->
-
- * κeen
- * [@blackenedgold](https://twitter.com/blackenedgold)
- * Github: [KeenS](https://github.com/KeenS)
- * [Idein Inc.](https://idein.jp/)のエンジニア
- * Lisp, ML, Rust, Shell Scriptあたりを書きます
- * 言語処理系と継続が好き
- * 科学っぽい話はできないです ><
-
-===
-# 背景
--------
-
-* 非同期計算を上手く扱いたい
-* 色々あるけど難しい
-* 似て非なるものを同じ名前で呼んでて紛らわしい
-* 全体を俯瞰したい
-
-===
-# 同期計算
--------------
-
-* 同期IO処理はその処理が終わるまで待つ
-* 待ってる間が無駄
-
-![同期計算](/images/sync.png) <!-- .element: width="100%" -->
-
-===
-
-# 非同期計算
--------------
-
-* 待ってる間別のことをやりたい
-* 処理の切り替えどうするの
-
-![非同期計算](/images/async.png) <!-- .element: width="100%" -->
-
-
-===
-
-# 非同期計算
--------------
-
-* (限定)継続が取り出せればいい
-* 解決！
-
-![限定継続](/images/cont.png) <!-- .element: width="100%"  -->
-
-===
-# 限定継続
-----------
-
-* 多くの言語では限定継続は扱えない
-  + Schemeなら簡単なんだけどねー
-* CPS変換すれば限定継続じみたことができる
-  + 要はコールバック形式
-
-===
-# 問題意識
-----------
-
-* コールバック地獄
-* デッドロック
-
-
-===
-# コールバック地獄
---------------
-
-* コールバックがどんとんネストしていく問題
-* 非同期呼び出しする度に深くなる
-* 視認性が悪くなる
-
-===
-# コールバック地獄
---------------
-
-```javascript
-fs.readdir(source, function (err, files) {
-  if (err) {
-    console.log('Error finding files: ' + err)
-  } else {
-    files.forEach(function (filename, fileIndex) {
-      console.log(filename)
-      gm(source + filename).size(function (err, values) {
-        if (err) {
-          console.log('Error identifying file size: ' + err)
-        } else {
-          console.log(filename + ' : ' + values)
-          aspect = (values.width / values.height)
-          widths.forEach(function (width, widthIndex) {
-            height = Math.round(width / aspect)
-            console.log('resizing ' + filename + 'to ' + height + 'x' + height)
-            this.resize(width, height).write(dest + 'w' + width + '_' + filename, function(err) {
-              if (err) console.log('Error writing file: ' + err)
-            })
-          }.bind(this))
-        }
-      })
-    })
-  }
-})
-```
-
-http://callbackhell.com/
-
-
-===
-# デッドロック
-------------
-
-* 個人的経験
-* [Aerospike](https://www.aerospike.jp/)のJavaクライアント
- + 非同期IO
- + コールバックが設定できる
-* readしてコールバックでwriteした
-* → デッドロックした
-* 非同期処理はIOスレッドが実行していた
-* コールバックもIOスレッドて呼ばれていた
-
-===
-# デッドロック
-------------
-
-
-1. 非同期ReadでIOスレッドを専有
-2. IOスレッドでコールバック発火
-3. 非同期Write発行
-4. WriteはIOスレッド待ち & IOスレッドはWrite待ち
-5. デッドロック
-
-
-===
-
-# 色々な視点
-------------
-
-* 実行モデル
-  + デッドロックの件は実行モデルの知識が足りなかったから起きた
-* ユーザインタフェース ← メイン
-  + コールバック地獄は主にユーザインタフェースの問題
-* 実装方式
-  + 処理系の中身みんな知りたいよね！
-
-===
-# 実行モデル
------------
-
-* 多分無数にある
-* ただの遅延計算
-* IOスレッド1つ
-* スレッドプール
-  + ブロックするスレッドとさせたくないスレッドを分離
-  + スケジューラに無数のバリエーション
-* イベントループ
-  + スレッドをブロックせずに一杯タスクをこなす
-* その他応用
-
-===
-# ユーザインタフェース
----------------------
-
-* コールバック
-* Future
-  + futureにも色々
-  + 少し実装も絡む
-* `async`/`await`
-* `do` 式 / `for` 式
-* coroutine
-  + coroutineにも色々
-* goroutine
-
-===
-# 実装方式
-----------
-
-* 完全ユーザレベル
-* 完全処理系レベル
-* 処理系レベルだけど一部ユーザレベル
-* ユーザレベルだけど特殊な処理系の機能を使う
-
-===
-# コールバック
--------------
-
-* ユーザインタフェース: コールバック
-  + 扱いづらい
-* 実行モデル: ものによる
-* 実装方式: 完全ユーザレベル
-
-===
-
-# Future
---------
-
-* ユーザインタフェース: Future
-  + 少しマシになった
-* 実行モデル: ものによる
-* 実装方式: 完全ユーザレベル
-
-===
-# Future
---------
-
-* 並行デザインパターン
-* 計算を非同期実行
-* 値の引換券(先物 = future)を返す
-* 実行した値を受け取れる
-* みなさん知ってますよね
-
-===
-
-# diff to コールバック
------------------------------
-
-* 値になる
- + 「あとで呼ばれる」という暗黙の文脈が「値」という一級市民になった
-* 続けて処理を書ける
-  + map, andThen, ...
-  + 要はモナド
-* そのままだとコールバック地獄は変わらない
-
-===
-Scala標準ライブラリ
-
-``` scala
-val purchase = usdQuote flatMap {
-  usd =>
-  chfQuote
-    .withFilter(chf => isProfitable(usd, chf))
-    .map(chf => connection.buy(amount, chf))
-}
-```
-
-https://docs.scala-lang.org/ja/overviews/core/futures.html
-
-
-===
-# Future x 実行モデル
---------------------
-
-* Futureは基本的にはコールバックの抽象化
-* 特定の実行モデルとは結びつかない
-* …とでも思ったか！
-* 実装によって千差万別
-
-===
-# Future x 実行モデル
---------------------
-
-* Scala: 標準ライブラリの`Future`
-  + Futureそのものは実行モデルと結びつかない
-  + `Future` の作成にスレッドプールが必要
-  + 実装レベルでは分離
-  + APIレベルでは結合してる
-* Clojure: clojure.coreの`future`
-  + 雑にスレッドプールに処理を投げる
-  + 完全に密結合
-
-===
-# Future x 実行モデル
---------------------
-
-* Scala: TwitterUtilの`Future`
-  + Futureそのものは実行モデルと結びつかない
-  + APIレベルでも分離
-  + 別途スレッドプールも用意される
-* Rust: futures-rs
-  + Futureそのものは実行モデルと結びつかない
-  + APIレベルでも分離
-  + 別途スレッドプールも用意される
-
-===
-# Future x 実行モデル
---------------------
-
-* Futureとスレッドプールが密結合
-  + 手軽に並列化できる
-* Futureと実行モデルは粗結合
-  + 計算を合成してからスレッドプールに投げられる
-   - 計算と実行を別々のライブラリにできる
-
-===
-# Futureはいつ実行される
---------------------
-
-* 前のタスクが終了した直後に実行
-* ジョブキューに積まれていつか実行
-* 値をgetするとき
-* イベントループがpollする
-* …
-
-
-===
-# Futureの構文糖衣
-------------------
-
-* Futureを使ってもコールバック地獄は変わらない
-  + 構文糖衣でどうにかする
-* Futureはモナド
-  + 普通のプログラムっぽい書き方ができるはず
-* 普通は構文糖衣は処理系のサポートが必要
-
-===
-# Futureの構文糖衣
-------------------
-
-* `async`/`await`
-  + 大半処理系、一部ユーザ
-  + ジェネレーターが必要
-* `do` 式/`for`式
-  + 処理系の機能に乗っかる
-  + 高階多相が必要
-* Lispだとマクロでユーザレベルで可能
-
-===
-# `async`/`await`
------------------
-
-``` c#
-// Signature specifies Task<TResult>
-async Task<int> TaskOfTResult_MethodAsync()
-{
-    int hours;
-    // . . .
-    // Return statement specifies an integer result.
-    return hours;
-}
-
-// Calls to TaskOfTResult_MethodAsync
-Task<int> returnedTaskTResult = TaskOfTResult_MethodAsync();
-int intResult = await returnedTaskTResult;
-// or, in a single statement
-int intResult = await TaskOfTResult_MethodAsync();
-```
-
-===
-# `do` 式
-------
-
-``` haskell
-   do a1 <- async (getURL url1)
-      a2 <- async (getURL url2)
-      page1 <- wait a1
-      page2 <- wait a2
-      ...
-```
-http://hackage.haskell.org/package/async-2.2.1/docs/Control-Concurrent-Async.html
-
-===
-# `for` 式
------------
-
-``` scala
-val usdQuote = Future { connection.getCurrentValue(USD) }
-val chfQuote = Future { connection.getCurrentValue(CHF) }
-
-val purchase = for {
-  usd <- usdQuote
-  chf <- chfQuote
-  if isProfitable(usd, chf)
-} yield connection.buy(amount, chf)
-```
-
-https://docs.scala-lang.org/ja/overviews/core/futures.html
-
-
-===
-# Lisp
---------
-
-```common-lisp
-(alet ((x (grab-x-from-server1))
-       (y (grab-y-from-server2)))
-  (format t "x + y = ~a~%" (+ x y)))
-```
-
-http://orthecreedence.github.io/blackbird/
-
-
-===
-
-# 発展的話題
-------------
-
-* コールバック形式でなくて直接形式で書きたい
-* もっと直接限定継続を取得したい
-* 1回しか実行しなくていいので限定継続より軽いモデルでいい
-* → コルーチン
-
-===
-# コルーチン
------------
-
-* 対称/非対称コルーチンがある
-  + 対称: 各コルーチンが対等。 `transfer` で切り替える
-  + 非対称: コルーチンに親子関係がある。 `yield` で親に、 `resume` で子に切り替える
-* stack full/stack lessがある
-  + stack full: 呼び出された関数内から外のコルーチンを `transfer` / `yield` できる
-  + stack less: コルーチン直下でしか `transfer` / `yield` できない
-* fiber = 準コルーチン = 非対称コルーチン
-
-===
-
-``` ruby
-f = Fiber.new do
-  n = 0
-  loop do
-    Fiber.yield(n)
-    n += 1
-  end
-end
-```
-https://docs.ruby-lang.org/ja/latest/class/Fiber.html
-
-===
-
-``` ruby
-require 'fiber'
-
-fr1 = Fiber.new do |v|
-  :fugafuga
-end
-
-fr2 = Fiber.new do |v|
-  fr1.transfer
-  :fuga
-end
-
-fr3 = Fiber.new do |v|
-  fr2.resume
-  :hoge
-end
-
-p fr3.resume # => :fugafuga
-```
-
-https://docs.ruby-lang.org/ja/latest/method/Fiber/i/transfer.html
-
-===
-
-![対称コルーチン](/images/coroutine.png) <!-- .element: width="100%" -->
-
-===
-
-![非対称コルーチン](/images/semicoroutine.png) <!-- .element: width="100%" -->
-
-===
-# Futureとの関係
-----------------
-* `async`/`await`はstack less非対称コルーチン(=generator)の上に実装されることが多い
-  + jsの`async`/`await`とか
-  + Rustの`async`/`await`もそうなる予定
-* `do`式/`for`式はstack less非対称コルーチンを実装できる
-  http://hackage.haskell.org/package/monad-coroutine-0.9.0.4/docs/Control-Monad-Coroutine.html
-
-===
-
-![async/awaitと機能の依存](/images/async-await.png) <!-- .element: width="100%" -->
-
-===
-
-![do式と機能の依存](/images/do-async.png) <!-- .element: width="100%" -->
-
-
-===
-
-# goroutine
-------------
-
-* Goのあれ
-  + 他の言語にもある
-* 完全処理系レベルの実現
-* stackfullな対称coroutine(多分) + IOをトリガとした自動スケジュール
-  + 直接形式で書ける
-* 自分でtransferを書かないのでスレッドに近い見た目
-
-===
-
-``` go
-func say(s string) {
-	for i := 0; i < 5; i++ {
-		time.Sleep(100 * time.Millisecond)
-		fmt.Println(s)
-	}
-}
-
-func main() {
-	go say("world")
-	say("hello")
-}
-```
-https://tour.golang.org/concurrency/1
-
-===
-# スレッドとの違い
-----------------
-* スレッドはプリエンプティブ
-  + スケジューラが勝手に止めたり起動したりする
-* goroutineはノンプリエンプティブ
-  + 自身でIOする直前に別のgoroutineにtransferする
-  + スケジューラは次にどのgoroutineを起動するか選ぶだけ
-
-===
-# goroutine
------------
-
-* Goのgoroutine
-  + mainもgoroutine
-  + ランタイムにスケジューラが組込
-* JavaのProject Loom
-  + 処理系に手を入れることで既存ライブラリもサポート
-  + 用語が変
-* Clojureのcore.async
-  + なんとユーザレベルで実現
-  + マクロでSSA変換
-
-===
-# goroutine
------------
-
-* プログラマ的には直接形式で書けるので扱いやすい
-* 処理系的には処理系全体でサポートする必要がある
-  + IOのタイミングを全部掌握
-  + FFIとかも
-* 実行モデルは決め打ちになる
-
-
-===
-# 結論
---------
-
-* 非同期に対して色々なアプローチがある
-* 同じ名前で中身が違うことが多々有る
-* 結局抽象化を解いて中身を見るしかない
-
-===
-# まとめ
---------
-
-* コールバックを値にしたのがFuture
-* Futureに構文糖衣を被せたのが`async`/`await`とか
-* Futureと実行モデルはほぼ直行する
-* 別のアプローチとしてgoroutineがある
-* goroutineは実行モデルと密結合
-* Lispはなんでもできる
-
-
-</script>
-</section>
-
-<script src="https://unpkg.com/mermaid@7.0.4/dist/mermaid.min.js"></script>
-<script>mermaid.initialize({startOnLoad:true});</script>
+            <!-- raw HTML omitted -->
+<!-- raw HTML omitted -->
+<p>===</p>
+<h1 id="about-me">About Me</h1>
+<hr>
+<p><img src="//KeenS.github.io/images/kappa.png" alt="κeenのアイコン"> <!-- raw HTML omitted --></p>
+<ul>
+<li>κeen</li>
+<li><a href="https://twitter.com/blackenedgold">@blackenedgold</a></li>
+<li>Github: <a href="https://github.com/KeenS">KeenS</a></li>
+<li><a href="https://idein.jp/">Idein Inc.</a>のエンジニア</li>
+<li>Lisp, ML, Rust, Shell Scriptあたりを書きます</li>
+<li>言語処理系と継続が好き</li>
+<li>科学っぽい話はできないです &gt;&lt;</li>
+</ul>
+<p>===</p>
+<h1 id="heading">背景</h1>
+<hr>
+<ul>
+<li>非同期計算を上手く扱いたい</li>
+<li>色々あるけど難しい</li>
+<li>似て非なるものを同じ名前で呼んでて紛らわしい</li>
+<li>全体を俯瞰したい</li>
+</ul>
+<p>===</p>
+<h1 id="heading1">同期計算</h1>
+<hr>
+<ul>
+<li>同期IO処理はその処理が終わるまで待つ</li>
+<li>待ってる間が無駄</li>
+</ul>
+<p><img src="//KeenS.github.io/images/sync.png" alt="同期計算"> <!-- raw HTML omitted --></p>
+<p>===</p>
+<h1 id="heading2">非同期計算</h1>
+<hr>
+<ul>
+<li>待ってる間別のことをやりたい</li>
+<li>処理の切り替えどうするの</li>
+</ul>
+<p><img src="//KeenS.github.io/images/async.png" alt="非同期計算"> <!-- raw HTML omitted --></p>
+<p>===</p>
+<h1 id="heading3">非同期計算</h1>
+<hr>
+<ul>
+<li>(限定)継続が取り出せればいい</li>
+<li>解決！</li>
+</ul>
+<p><img src="//KeenS.github.io/images/cont.png" alt="限定継続"> <!-- raw HTML omitted --></p>
+<p>===</p>
+<h1 id="heading4">限定継続</h1>
+<hr>
+<ul>
+<li>多くの言語では限定継続は扱えない
+<ul>
+<li>Schemeなら簡単なんだけどねー</li>
+</ul>
+</li>
+<li>CPS変換すれば限定継続じみたことができる
+<ul>
+<li>要はコールバック形式</li>
+</ul>
+</li>
+</ul>
+<p>===</p>
+<h1 id="heading5">問題意識</h1>
+<hr>
+<ul>
+<li>コールバック地獄</li>
+<li>デッドロック</li>
+</ul>
+<p>===</p>
+<h1 id="heading6">コールバック地獄</h1>
+<hr>
+<ul>
+<li>コールバックがどんとんネストしていく問題</li>
+<li>非同期呼び出しする度に深くなる</li>
+<li>視認性が悪くなる</li>
+</ul>
+<p>===</p>
+<h1 id="heading7">コールバック地獄</h1>
+<hr>
+<div class="highlight"><pre class="chroma"><code class="language-javascript" data-lang="javascript"><span class="nx">fs</span><span class="p">.</span><span class="nx">readdir</span><span class="p">(</span><span class="nx">source</span><span class="p">,</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">files</span><span class="p">)</span> <span class="p">{</span>
+  <span class="k">if</span> <span class="p">(</span><span class="nx">err</span><span class="p">)</span> <span class="p">{</span>
+    <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;Error finding files: &#39;</span> <span class="o">+</span> <span class="nx">err</span><span class="p">)</span>
+  <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+    <span class="nx">files</span><span class="p">.</span><span class="nx">forEach</span><span class="p">(</span><span class="kd">function</span> <span class="p">(</span><span class="nx">filename</span><span class="p">,</span> <span class="nx">fileIndex</span><span class="p">)</span> <span class="p">{</span>
+      <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">filename</span><span class="p">)</span>
+      <span class="nx">gm</span><span class="p">(</span><span class="nx">source</span> <span class="o">+</span> <span class="nx">filename</span><span class="p">)</span><span class="p">.</span><span class="nx">size</span><span class="p">(</span><span class="kd">function</span> <span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">values</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">if</span> <span class="p">(</span><span class="nx">err</span><span class="p">)</span> <span class="p">{</span>
+          <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;Error identifying file size: &#39;</span> <span class="o">+</span> <span class="nx">err</span><span class="p">)</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+          <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">filename</span> <span class="o">+</span> <span class="s1">&#39; : &#39;</span> <span class="o">+</span> <span class="nx">values</span><span class="p">)</span>
+          <span class="nx">aspect</span> <span class="o">=</span> <span class="p">(</span><span class="nx">values</span><span class="p">.</span><span class="nx">width</span> <span class="o">/</span> <span class="nx">values</span><span class="p">.</span><span class="nx">height</span><span class="p">)</span>
+          <span class="nx">widths</span><span class="p">.</span><span class="nx">forEach</span><span class="p">(</span><span class="kd">function</span> <span class="p">(</span><span class="nx">width</span><span class="p">,</span> <span class="nx">widthIndex</span><span class="p">)</span> <span class="p">{</span>
+            <span class="nx">height</span> <span class="o">=</span> <span class="nb">Math</span><span class="p">.</span><span class="nx">round</span><span class="p">(</span><span class="nx">width</span> <span class="o">/</span> <span class="nx">aspect</span><span class="p">)</span>
+            <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;resizing &#39;</span> <span class="o">+</span> <span class="nx">filename</span> <span class="o">+</span> <span class="s1">&#39;to &#39;</span> <span class="o">+</span> <span class="nx">height</span> <span class="o">+</span> <span class="s1">&#39;x&#39;</span> <span class="o">+</span> <span class="nx">height</span><span class="p">)</span>
+            <span class="k">this</span><span class="p">.</span><span class="nx">resize</span><span class="p">(</span><span class="nx">width</span><span class="p">,</span> <span class="nx">height</span><span class="p">)</span><span class="p">.</span><span class="nx">write</span><span class="p">(</span><span class="nx">dest</span> <span class="o">+</span> <span class="s1">&#39;w&#39;</span> <span class="o">+</span> <span class="nx">width</span> <span class="o">+</span> <span class="s1">&#39;_&#39;</span> <span class="o">+</span> <span class="nx">filename</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span> <span class="p">{</span>
+              <span class="k">if</span> <span class="p">(</span><span class="nx">err</span><span class="p">)</span> <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;Error writing file: &#39;</span> <span class="o">+</span> <span class="nx">err</span><span class="p">)</span>
+            <span class="p">}</span><span class="p">)</span>
+          <span class="p">}</span><span class="p">.</span><span class="nx">bind</span><span class="p">(</span><span class="k">this</span><span class="p">)</span><span class="p">)</span>
+        <span class="p">}</span>
+      <span class="p">}</span><span class="p">)</span>
+    <span class="p">}</span><span class="p">)</span>
+  <span class="p">}</span>
+<span class="p">}</span><span class="p">)</span>
+</code></pre></div><p><a href="http://callbackhell.com/">http://callbackhell.com/</a></p>
+<p>===</p>
+<h1 id="heading8">デッドロック</h1>
+<hr>
+<ul>
+<li>個人的経験</li>
+<li><a href="https://www.aerospike.jp/">Aerospike</a>のJavaクライアント</li>
+</ul>
+<ul>
+<li>非同期IO</li>
+<li>コールバックが設定できる</li>
+</ul>
+<ul>
+<li>readしてコールバックでwriteした</li>
+<li>→ デッドロックした</li>
+<li>非同期処理はIOスレッドが実行していた</li>
+<li>コールバックもIOスレッドて呼ばれていた</li>
+</ul>
+<p>===</p>
+<h1 id="heading9">デッドロック</h1>
+<hr>
+<ol>
+<li>非同期ReadでIOスレッドを専有</li>
+<li>IOスレッドでコールバック発火</li>
+<li>非同期Write発行</li>
+<li>WriteはIOスレッド待ち &amp; IOスレッドはWrite待ち</li>
+<li>デッドロック</li>
+</ol>
+<p>===</p>
+<h1 id="heading10">色々な視点</h1>
+<hr>
+<ul>
+<li>実行モデル
+<ul>
+<li>デッドロックの件は実行モデルの知識が足りなかったから起きた</li>
+</ul>
+</li>
+<li>ユーザインタフェース ← メイン
+<ul>
+<li>コールバック地獄は主にユーザインタフェースの問題</li>
+</ul>
+</li>
+<li>実装方式
+<ul>
+<li>処理系の中身みんな知りたいよね！</li>
+</ul>
+</li>
+</ul>
+<p>===</p>
+<h1 id="heading11">実行モデル</h1>
+<hr>
+<ul>
+<li>多分無数にある</li>
+<li>ただの遅延計算</li>
+<li>IOスレッド1つ</li>
+<li>スレッドプール
+<ul>
+<li>ブロックするスレッドとさせたくないスレッドを分離</li>
+<li>スケジューラに無数のバリエーション</li>
+</ul>
+</li>
+<li>イベントループ
+<ul>
+<li>スレッドをブロックせずに一杯タスクをこなす</li>
+</ul>
+</li>
+<li>その他応用</li>
+</ul>
+<p>===</p>
+<h1 id="heading12">ユーザインタフェース</h1>
+<hr>
+<ul>
+<li>コールバック</li>
+<li>Future
+<ul>
+<li>futureにも色々</li>
+<li>少し実装も絡む</li>
+</ul>
+</li>
+<li><code>async`/</code>await`</li>
+<li><code>do</code> 式 / <code>for</code> 式</li>
+<li>coroutine
+<ul>
+<li>coroutineにも色々</li>
+</ul>
+</li>
+<li>goroutine</li>
+</ul>
+<p>===</p>
+<h1 id="heading13">実装方式</h1>
+<hr>
+<ul>
+<li>完全ユーザレベル</li>
+<li>完全処理系レベル</li>
+<li>処理系レベルだけど一部ユーザレベル</li>
+<li>ユーザレベルだけど特殊な処理系の機能を使う</li>
+</ul>
+<p>===</p>
+<h1 id="heading14">コールバック</h1>
+<hr>
+<ul>
+<li>ユーザインタフェース: コールバック
+<ul>
+<li>扱いづらい</li>
+</ul>
+</li>
+<li>実行モデル: ものによる</li>
+<li>実装方式: 完全ユーザレベル</li>
+</ul>
+<p>===</p>
+<h1 id="future">Future</h1>
+<hr>
+<ul>
+<li>ユーザインタフェース: Future
+<ul>
+<li>少しマシになった</li>
+</ul>
+</li>
+<li>実行モデル: ものによる</li>
+<li>実装方式: 完全ユーザレベル</li>
+</ul>
+<p>===</p>
+<h1 id="future1">Future</h1>
+<hr>
+<ul>
+<li>並行デザインパターン</li>
+<li>計算を非同期実行</li>
+<li>値の引換券(先物 = future)を返す</li>
+<li>実行した値を受け取れる</li>
+<li>みなさん知ってますよね</li>
+</ul>
+<p>===</p>
+<h1 id="diff-to-">diff to コールバック</h1>
+<hr>
+<ul>
+<li>値になる</li>
+</ul>
+<ul>
+<li>「あとで呼ばれる」という暗黙の文脈が「値」という一級市民になった</li>
+</ul>
+<ul>
+<li>続けて処理を書ける
+<ul>
+<li>map, andThen, &hellip;</li>
+<li>要はモナド</li>
+</ul>
+</li>
+<li>そのままだとコールバック地獄は変わらない</li>
+</ul>
+<p>===
+Scala標準ライブラリ</p>
+<div class="highlight"><pre class="chroma"><code class="language-scala" data-lang="scala"><span class="k">val</span> <span class="n">purchase</span> <span class="k">=</span> <span class="n">usdQuote</span> <span class="n">flatMap</span> <span class="o">{</span>
+  <span class="n">usd</span> <span class="k">=&gt;</span>
+  <span class="n">chfQuote</span>
+    <span class="o">.</span><span class="n">withFilter</span><span class="o">(</span><span class="n">chf</span> <span class="k">=&gt;</span> <span class="n">isProfitable</span><span class="o">(</span><span class="n">usd</span><span class="o">,</span> <span class="n">chf</span><span class="o">)</span><span class="o">)</span>
+    <span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="n">chf</span> <span class="k">=&gt;</span> <span class="n">connection</span><span class="o">.</span><span class="n">buy</span><span class="o">(</span><span class="n">amount</span><span class="o">,</span> <span class="n">chf</span><span class="o">)</span><span class="o">)</span>
+<span class="o">}</span>
+</code></pre></div><p><a href="https://docs.scala-lang.org/ja/overviews/core/futures.html">https://docs.scala-lang.org/ja/overviews/core/futures.html</a></p>
+<p>===</p>
+<h1 id="future-x-">Future x 実行モデル</h1>
+<hr>
+<ul>
+<li>Futureは基本的にはコールバックの抽象化</li>
+<li>特定の実行モデルとは結びつかない</li>
+<li>…とでも思ったか！</li>
+<li>実装によって千差万別</li>
+</ul>
+<p>===</p>
+<h1 id="future-x-1">Future x 実行モデル</h1>
+<hr>
+<ul>
+<li>Scala: 標準ライブラリの<code>Future</code>
+<ul>
+<li>Futureそのものは実行モデルと結びつかない</li>
+<li><code>Future</code> の作成にスレッドプールが必要</li>
+<li>実装レベルでは分離</li>
+<li>APIレベルでは結合してる</li>
+</ul>
+</li>
+<li>Clojure: clojure.coreの<code>future</code>
+<ul>
+<li>雑にスレッドプールに処理を投げる</li>
+<li>完全に密結合</li>
+</ul>
+</li>
+</ul>
+<p>===</p>
+<h1 id="future-x-2">Future x 実行モデル</h1>
+<hr>
+<ul>
+<li>Scala: TwitterUtilの<code>Future</code>
+<ul>
+<li>Futureそのものは実行モデルと結びつかない</li>
+<li>APIレベルでも分離</li>
+<li>別途スレッドプールも用意される</li>
+</ul>
+</li>
+<li>Rust: futures-rs
+<ul>
+<li>Futureそのものは実行モデルと結びつかない</li>
+<li>APIレベルでも分離</li>
+<li>別途スレッドプールも用意される</li>
+</ul>
+</li>
+</ul>
+<p>===</p>
+<h1 id="future-x-3">Future x 実行モデル</h1>
+<hr>
+<ul>
+<li>Futureとスレッドプールが密結合
+<ul>
+<li>手軽に並列化できる</li>
+</ul>
+</li>
+<li>Futureと実行モデルは粗結合
+<ul>
+<li>計算を合成してからスレッドプールに投げられる</li>
+</ul>
+<ul>
+<li>計算と実行を別々のライブラリにできる</li>
+</ul>
+</li>
+</ul>
+<p>===</p>
+<h1 id="future2">Futureはいつ実行される</h1>
+<hr>
+<ul>
+<li>前のタスクが終了した直後に実行</li>
+<li>ジョブキューに積まれていつか実行</li>
+<li>値をgetするとき</li>
+<li>イベントループがpollする</li>
+<li>…</li>
+</ul>
+<p>===</p>
+<h1 id="future3">Futureの構文糖衣</h1>
+<hr>
+<ul>
+<li>Futureを使ってもコールバック地獄は変わらない
+<ul>
+<li>構文糖衣でどうにかする</li>
+</ul>
+</li>
+<li>Futureはモナド
+<ul>
+<li>普通のプログラムっぽい書き方ができるはず</li>
+</ul>
+</li>
+<li>普通は構文糖衣は処理系のサポートが必要</li>
+</ul>
+<p>===</p>
+<h1 id="future4">Futureの構文糖衣</h1>
+<hr>
+<ul>
+<li><code>async`/</code>await`
+<ul>
+<li>大半処理系、一部ユーザ</li>
+<li>ジェネレーターが必要</li>
+</ul>
+</li>
+<li><code>do</code> 式/<code>for</code>式
+<ul>
+<li>処理系の機能に乗っかる</li>
+<li>高階多相が必要</li>
+</ul>
+</li>
+<li>Lispだとマクロでユーザレベルで可能</li>
+</ul>
+<p>===</p>
+<h1 id="asyncawait"><code>async`/</code>await`</h1>
+<hr>
+<div class="highlight"><pre class="chroma"><code class="language-c#" data-lang="c#"><span class="c1">// Signature specifies Task&lt;TResult&gt;
+</span><span class="c1"></span><span class="k">async</span> <span class="n">Task</span><span class="p">&lt;</span><span class="kt">int</span><span class="p">&gt;</span> <span class="n">TaskOfTResult_MethodAsync</span><span class="p">(</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="kt">int</span> <span class="n">hours</span><span class="p">;</span>
+    <span class="c1">// . . .
+</span><span class="c1"></span>    <span class="c1">// Return statement specifies an integer result.
+</span><span class="c1"></span>    <span class="k">return</span> <span class="n">hours</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="c1">// Calls to TaskOfTResult_MethodAsync
+</span><span class="c1"></span><span class="n">Task</span><span class="p">&lt;</span><span class="kt">int</span><span class="p">&gt;</span> <span class="n">returnedTaskTResult</span> <span class="p">=</span> <span class="n">TaskOfTResult_MethodAsync</span><span class="p">(</span><span class="p">)</span><span class="p">;</span>
+<span class="kt">int</span> <span class="n">intResult</span> <span class="p">=</span> <span class="k">await</span> <span class="n">returnedTaskTResult</span><span class="p">;</span>
+<span class="c1">// or, in a single statement
+</span><span class="c1"></span><span class="kt">int</span> <span class="n">intResult</span> <span class="p">=</span> <span class="k">await</span> <span class="n">TaskOfTResult_MethodAsync</span><span class="p">(</span><span class="p">)</span><span class="p">;</span>
+</code></pre></div><p>===</p>
+<h1 id="do-"><code>do</code> 式</h1>
+<hr>
+<div class="highlight"><pre class="chroma"><code class="language-haskell" data-lang="haskell">   <span class="kr">do</span> <span class="n">a1</span> <span class="ow">&lt;-</span> <span class="n">async</span> <span class="p">(</span><span class="n">getURL</span> <span class="n">url1</span><span class="p">)</span>
+      <span class="n">a2</span> <span class="ow">&lt;-</span> <span class="n">async</span> <span class="p">(</span><span class="n">getURL</span> <span class="n">url2</span><span class="p">)</span>
+      <span class="n">page1</span> <span class="ow">&lt;-</span> <span class="n">wait</span> <span class="n">a1</span>
+      <span class="n">page2</span> <span class="ow">&lt;-</span> <span class="n">wait</span> <span class="n">a2</span>
+      <span class="o">...</span>
+</code></pre></div><p><a href="http://hackage.haskell.org/package/async-2.2.1/docs/Control-Concurrent-Async.html">http://hackage.haskell.org/package/async-2.2.1/docs/Control-Concurrent-Async.html</a></p>
+<p>===</p>
+<h1 id="for-"><code>for</code> 式</h1>
+<hr>
+<div class="highlight"><pre class="chroma"><code class="language-scala" data-lang="scala"><span class="k">val</span> <span class="n">usdQuote</span> <span class="k">=</span> <span class="nc">Future</span> <span class="o">{</span> <span class="n">connection</span><span class="o">.</span><span class="n">getCurrentValue</span><span class="o">(</span><span class="nc">USD</span><span class="o">)</span> <span class="o">}</span>
+<span class="k">val</span> <span class="n">chfQuote</span> <span class="k">=</span> <span class="nc">Future</span> <span class="o">{</span> <span class="n">connection</span><span class="o">.</span><span class="n">getCurrentValue</span><span class="o">(</span><span class="nc">CHF</span><span class="o">)</span> <span class="o">}</span>
+
+<span class="k">val</span> <span class="n">purchase</span> <span class="k">=</span> <span class="k">for</span> <span class="o">{</span>
+  <span class="n">usd</span> <span class="k">&lt;-</span> <span class="n">usdQuote</span>
+  <span class="n">chf</span> <span class="k">&lt;-</span> <span class="n">chfQuote</span>
+  <span class="k">if</span> <span class="n">isProfitable</span><span class="o">(</span><span class="n">usd</span><span class="o">,</span> <span class="n">chf</span><span class="o">)</span>
+<span class="o">}</span> <span class="k">yield</span> <span class="n">connection</span><span class="o">.</span><span class="n">buy</span><span class="o">(</span><span class="n">amount</span><span class="o">,</span> <span class="n">chf</span><span class="o">)</span>
+</code></pre></div><p><a href="https://docs.scala-lang.org/ja/overviews/core/futures.html">https://docs.scala-lang.org/ja/overviews/core/futures.html</a></p>
+<p>===</p>
+<h1 id="lisp">Lisp</h1>
+<hr>
+<div class="highlight"><pre class="chroma"><code class="language-common-lisp" data-lang="common-lisp"><span class="p">(</span><span class="nv">alet</span> <span class="p">(</span><span class="p">(</span><span class="nv">x</span> <span class="p">(</span><span class="nv">grab-x-from-server1</span><span class="p">)</span><span class="p">)</span>
+       <span class="p">(</span><span class="nv">y</span> <span class="p">(</span><span class="nv">grab-y-from-server2</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
+  <span class="p">(</span><span class="nf">format</span> <span class="no">t</span> <span class="s">&#34;x + y = ~a~%&#34;</span> <span class="p">(</span><span class="nf">+</span> <span class="nv">x</span> <span class="nv">y</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
+</code></pre></div><p><a href="http://orthecreedence.github.io/blackbird/">http://orthecreedence.github.io/blackbird/</a></p>
+<p>===</p>
+<h1 id="heading15">発展的話題</h1>
+<hr>
+<ul>
+<li>コールバック形式でなくて直接形式で書きたい</li>
+<li>もっと直接限定継続を取得したい</li>
+<li>1回しか実行しなくていいので限定継続より軽いモデルでいい</li>
+<li>→ コルーチン</li>
+</ul>
+<p>===</p>
+<h1 id="heading16">コルーチン</h1>
+<hr>
+<ul>
+<li>対称/非対称コルーチンがある
+<ul>
+<li>対称: 各コルーチンが対等。 <code>transfer</code> で切り替える</li>
+<li>非対称: コルーチンに親子関係がある。 <code>yield</code> で親に、 <code>resume</code> で子に切り替える</li>
+</ul>
+</li>
+<li>stack full/stack lessがある
+<ul>
+<li>stack full: 呼び出された関数内から外のコルーチンを <code>transfer</code> / <code>yield</code> できる</li>
+<li>stack less: コルーチン直下でしか <code>transfer</code> / <code>yield</code> できない</li>
+</ul>
+</li>
+<li>fiber = 準コルーチン = 非対称コルーチン</li>
+</ul>
+<p>===</p>
+<div class="highlight"><pre class="chroma"><code class="language-ruby" data-lang="ruby"><span class="n">f</span> <span class="o">=</span> <span class="no">Fiber</span><span class="o">.</span><span class="n">new</span> <span class="k">do</span>
+  <span class="n">n</span> <span class="o">=</span> <span class="mi">0</span>
+  <span class="o"></span><span class="kp">loop</span> <span class="k">do</span>
+    <span class="no">Fiber</span><span class="o">.</span><span class="n">yield</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+    <span class="n">n</span> <span class="o">+=</span> <span class="mi">1</span>
+  <span class="o"></span><span class="k">end</span>
+<span class="k">end</span>
+</code></pre></div><p><a href="https://docs.ruby-lang.org/ja/latest/class/Fiber.html">https://docs.ruby-lang.org/ja/latest/class/Fiber.html</a></p>
+<p>===</p>
+<div class="highlight"><pre class="chroma"><code class="language-ruby" data-lang="ruby"><span class="nb">require</span> <span class="s1">&#39;fiber&#39;</span>
+
+<span class="n">fr1</span> <span class="o">=</span> <span class="no">Fiber</span><span class="o">.</span><span class="n">new</span> <span class="k">do</span> <span class="o">|</span><span class="n">v</span><span class="o">|</span>
+  <span class="ss">:fugafuga</span>
+<span class="k">end</span>
+
+<span class="n">fr2</span> <span class="o">=</span> <span class="no">Fiber</span><span class="o">.</span><span class="n">new</span> <span class="k">do</span> <span class="o">|</span><span class="n">v</span><span class="o">|</span>
+  <span class="n">fr1</span><span class="o">.</span><span class="n">transfer</span>
+  <span class="ss">:fuga</span>
+<span class="k">end</span>
+
+<span class="n">fr3</span> <span class="o">=</span> <span class="no">Fiber</span><span class="o">.</span><span class="n">new</span> <span class="k">do</span> <span class="o">|</span><span class="n">v</span><span class="o">|</span>
+  <span class="n">fr2</span><span class="o">.</span><span class="n">resume</span>
+  <span class="ss">:hoge</span>
+<span class="k">end</span>
+
+<span class="nb">p</span> <span class="n">fr3</span><span class="o">.</span><span class="n">resume</span> <span class="c1"># =&gt; :fugafuga</span>
+</code></pre></div><p><a href="https://docs.ruby-lang.org/ja/latest/method/Fiber/i/transfer.html">https://docs.ruby-lang.org/ja/latest/method/Fiber/i/transfer.html</a></p>
+<p>===</p>
+<p><img src="//KeenS.github.io/images/coroutine.png" alt="対称コルーチン"> <!-- raw HTML omitted --></p>
+<p>===</p>
+<p><img src="//KeenS.github.io/images/semicoroutine.png" alt="非対称コルーチン"> <!-- raw HTML omitted --></p>
+<p>===</p>
+<h1 id="future5">Futureとの関係</h1>
+<hr>
+<ul>
+<li><code>async`/</code>await`はstack less非対称コルーチン(=generator)の上に実装されることが多い
+<ul>
+<li>jsの<code>async`/</code>await`とか</li>
+<li>Rustの<code>async`/</code>await`もそうなる予定</li>
+</ul>
+</li>
+<li><code>do</code>式/<code>for</code>式はstack less非対称コルーチンを実装できる
+<a href="http://hackage.haskell.org/package/monad-coroutine-0.9.0.4/docs/Control-Monad-Coroutine.html">http://hackage.haskell.org/package/monad-coroutine-0.9.0.4/docs/Control-Monad-Coroutine.html</a></li>
+</ul>
+<p>===</p>
+<p><img src="//KeenS.github.io/images/async-await.png" alt="async/awaitと機能の依存"> <!-- raw HTML omitted --></p>
+<p>===</p>
+<p><img src="//KeenS.github.io/images/do-async.png" alt="do式と機能の依存"> <!-- raw HTML omitted --></p>
+<p>===</p>
+<h1 id="goroutine">goroutine</h1>
+<hr>
+<ul>
+<li>Goのあれ
+<ul>
+<li>他の言語にもある</li>
+</ul>
+</li>
+<li>完全処理系レベルの実現</li>
+<li>stackfullな対称coroutine(多分) + IOをトリガとした自動スケジュール
+<ul>
+<li>直接形式で書ける</li>
+</ul>
+</li>
+<li>自分でtransferを書かないのでスレッドに近い見た目</li>
+</ul>
+<p>===</p>
+<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="nf">say</span><span class="p">(</span><span class="nx">s</span> <span class="kt">string</span><span class="p">)</span> <span class="p">{</span>
+	<span class="k">for</span> <span class="nx">i</span> <span class="o">:=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="p">&lt;</span> <span class="mi">5</span><span class="p">;</span> <span class="nx">i</span><span class="o">++</span> <span class="p">{</span>
+		<span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">100</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+		<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">s</span><span class="p">)</span>
+	<span class="p">}</span>
+<span class="p">}</span>
+
+<span class="kd">func</span> <span class="nf">main</span><span class="p">(</span><span class="p">)</span> <span class="p">{</span>
+	<span class="k">go</span> <span class="nf">say</span><span class="p">(</span><span class="s">&#34;world&#34;</span><span class="p">)</span>
+	<span class="nf">say</span><span class="p">(</span><span class="s">&#34;hello&#34;</span><span class="p">)</span>
+<span class="p">}</span>
+</code></pre></div><p><a href="https://tour.golang.org/concurrency/1">https://tour.golang.org/concurrency/1</a></p>
+<p>===</p>
+<h1 id="heading17">スレッドとの違い</h1>
+<hr>
+<ul>
+<li>スレッドはプリエンプティブ
+<ul>
+<li>スケジューラが勝手に止めたり起動したりする</li>
+</ul>
+</li>
+<li>goroutineはノンプリエンプティブ
+<ul>
+<li>自身でIOする直前に別のgoroutineにtransferする</li>
+<li>スケジューラは次にどのgoroutineを起動するか選ぶだけ</li>
+</ul>
+</li>
+</ul>
+<p>===</p>
+<h1 id="goroutine1">goroutine</h1>
+<hr>
+<ul>
+<li>Goのgoroutine
+<ul>
+<li>mainもgoroutine</li>
+<li>ランタイムにスケジューラが組込</li>
+</ul>
+</li>
+<li>JavaのProject Loom
+<ul>
+<li>処理系に手を入れることで既存ライブラリもサポート</li>
+<li>用語が変</li>
+</ul>
+</li>
+<li>Clojureのcore.async
+<ul>
+<li>なんとユーザレベルで実現</li>
+<li>マクロでSSA変換</li>
+</ul>
+</li>
+</ul>
+<p>===</p>
+<h1 id="goroutine2">goroutine</h1>
+<hr>
+<ul>
+<li>プログラマ的には直接形式で書けるので扱いやすい</li>
+<li>処理系的には処理系全体でサポートする必要がある
+<ul>
+<li>IOのタイミングを全部掌握</li>
+<li>FFIとかも</li>
+</ul>
+</li>
+<li>実行モデルは決め打ちになる</li>
+</ul>
+<p>===</p>
+<h1 id="heading18">結論</h1>
+<hr>
+<ul>
+<li>非同期に対して色々なアプローチがある</li>
+<li>同じ名前で中身が違うことが多々有る</li>
+<li>結局抽象化を解いて中身を見るしかない</li>
+</ul>
+<p>===</p>
+<h1 id="heading19">まとめ</h1>
+<hr>
+<ul>
+<li>コールバックを値にしたのがFuture</li>
+<li>Futureに構文糖衣を被せたのが<code>async`/</code>await`とか</li>
+<li>Futureと実行モデルはほぼ直行する</li>
+<li>別のアプローチとしてgoroutineがある</li>
+<li>goroutineは実行モデルと密結合</li>
+<li>Lispはなんでもできる</li>
+</ul>
+<p><!-- raw HTML omitted --></p>
+<!-- raw HTML omitted -->
+<!-- raw HTML omitted -->
+<!-- raw HTML omitted -->
 
         </div>
     </div>

@@ -121,25 +121,19 @@ n月刊ラムダノートに書いた「代数的データ型とパターンマ�
 n月刊ラムダノートに書いた「代数的データ型とパターンマッチの基礎」のところで「パターンマッチがあるとこんなに便利になるよ」というのと紹介し忘れていたので勝手に補遺します。
 まあ、紙面の都合もあって覚えていたとしても入りませんでしたね。
 代数的データ型とパターンマッチの題材としては定番の赤黒木を紹介します。</p>
-
 <p>赤黒木についてはこちらのページを参考にして下さい。特に、比較になるので掲載されているソースコードを読んで下さい。</p>
-
 <ul>
 <li><a href="http://wwwa.pikara.ne.jp/okojisan/rb-tree/index.html">Red-Black Tree by Java &ndash; これで分かった赤黒木</a></li>
 </ul>
-
 <p>ソースコードはPython版もあるようです：<a href="http://wwwa.pikara.ne.jp/okojisan/rb-tree/python.html">Red-Black Tree by Python &ndash; Python による赤黒木</a>。</p>
-
 <p>読みましたか？</p>
-
 <p>それでは赤黒木をStandard MLで書いていきます。
 パターンマッチ関係ないところでややこしくならないように保持するデータ型は <code>int</code> とします。</p>
-
 <p>色とデータ型は文句なく以下で決まります。</p>
-<div class="highlight"><pre class="chroma"><code class="language-standard-ml" data-lang="standard-ml">datatype color = Red | Black
-datatype t = Leaf | Node of color * t * int *  t</code></pre></div>
-<p>ここからすぐさま簡単な操作は書けます。</p>
-<div class="highlight"><pre class="chroma"><code class="language-standard-ml" data-lang="standard-ml">val empty = Leaf
+<pre><code class="language-standard-ml" data-lang="standard-ml">datatype color = Red | Black
+datatype t = Leaf | Node of color * t * int *  t
+</code></pre><p>ここからすぐさま簡単な操作は書けます。</p>
+<pre><code class="language-standard-ml" data-lang="standard-ml">val empty = Leaf
 
 fun isEmpty Leaf = true
   | isEmpty _    = false
@@ -149,34 +143,32 @@ fun isMember Leaf _ = false
     (case Int.compare (label, x) of
          LESS =&gt; isMember right x
        | EQUAL =&gt; true
-       | MORE =&gt; isMember left x)</code></pre></div>
-<p>さて、それでは <code>insert</code> と <code>balance</code> を書いていきます。Java（あるいはPython）の実装から分かるとおり、結構泥臭いというか何をやっているのか分かりづらい処理が続きます。これをパターンマッチで書き直したらどうなるか見てみましょう。</p>
-
+       | MORE =&gt; isMember left x)
+</code></pre><p>さて、それでは <code>insert</code> と <code>balance</code> を書いていきます。Java（あるいはPython）の実装から分かるとおり、結構泥臭いというか何をやっているのか分かりづらい処理が続きます。これをパターンマッチで書き直したらどうなるか見てみましょう。</p>
 <p>まずは便利関数を定義しておきます。</p>
-<div class="highlight"><pre class="chroma"><code class="language-standard-ml" data-lang="standard-ml">fun red   l x r = Node(Red,   l, x, r)
-fun black l x r = Node(Black, l, x, r)</code></pre></div>
-<p><code>balance</code> は以下で定義できます。</p>
-<div class="highlight"><pre class="chroma"><code class="language-standard-ml" data-lang="standard-ml">fun balance (Node(Black, Node(Red, Node(Red, a, x, b), y, c), z, d)) = red (black a x b) y (black c z d)
+<pre><code class="language-standard-ml" data-lang="standard-ml">fun red   l x r = Node(Red,   l, x, r)
+fun black l x r = Node(Black, l, x, r)
+</code></pre><p><code>balance</code> は以下で定義できます。</p>
+<pre><code class="language-standard-ml" data-lang="standard-ml">fun balance (Node(Black, Node(Red, Node(Red, a, x, b), y, c), z, d)) = red (black a x b) y (black c z d)
   | balance (Node(Black, Node(Red, a, x, Node(Red, b, y, c)), z, d)) = red (black a x b) y (black c z d)
   | balance (Node(Black, a, x, Node(Red, Node(Red, b, y, c), z, d))) = red (black a x b) y (black c z d)
   | balance (Node(Black, a, x, Node(Red, b, y, Node(Red, c, z, d)))) = red (black a x b) y (black c z d)
-  | balance t = t</code></pre></div>
-<p>ここから <code>insert</code> を定義していきますが、その前に <code>Int.compare</code> 関数を紹介します。
+  | balance t = t
+</code></pre><p>ここから <code>insert</code> を定義していきますが、その前に <code>Int.compare</code> 関数を紹介します。
 <code>Int.compare</code> は以下の型を持つ関数です。</p>
-<div class="highlight"><pre class="chroma"><code class="language-standard-ml" data-lang="standard-ml">Int.compare: int * int -&gt; order</code></pre></div>
-<p>ここで、 <code>order</code> は以下のように定義されています。</p>
-<div class="highlight"><pre class="chroma"><code class="language-standard-ml" data-lang="standard-ml">datatype order = LESS | EQUAL | GREATER</code></pre></div>
-<p>Rubyでいう <code>&lt;=&gt;</code> メソッドのような存在ですね。</p>
-
+<pre><code class="language-standard-ml" data-lang="standard-ml">Int.compare: int * int -&gt; order
+</code></pre><p>ここで、 <code>order</code> は以下のように定義されています。</p>
+<pre><code class="language-standard-ml" data-lang="standard-ml">datatype order = LESS | EQUAL | GREATER
+</code></pre><p>Rubyでいう <code>&lt;=&gt;</code> メソッドのような存在ですね。</p>
 <p>以下のように動作します。</p>
-<div class="highlight"><pre class="chroma"><code class="language-standard-ml" data-lang="standard-ml"># Int.compare (1, 2);
+<pre><code class="language-standard-ml" data-lang="standard-ml"># Int.compare (1, 2);
 val it = LESS : order
 # Int.compare (2, 2);
 val it = EQUAL : order
 # Int.compare (3, 2);
-val it = GREATER : order</code></pre></div>
-<p>これを用いて <code>insert</code> は以下で定義できます。</p>
-<div class="highlight"><pre class="chroma"><code class="language-standard-ml" data-lang="standard-ml">fun insert tree x = let
+val it = GREATER : order
+</code></pre><p>これを用いて <code>insert</code> は以下で定義できます。</p>
+<pre><code class="language-standard-ml" data-lang="standard-ml">fun insert tree x = let
     fun ins Leaf x = red Leaf x Leaf
       | ins (t as Node(color, left, label, right)) x =
         (case Int.compare (label, x) of
@@ -189,14 +181,13 @@ in
         (* unreachable *)
         Leaf =&gt; Leaf
       | Node(_, left, label, right) =&gt; black left label right
-end</code></pre></div>
-<p><code>ins</code> のパターンマッチで使っている <code>t as Node(...)</code> という構文は、RubyのAsパターンと同様に <code>Node(...)</code> でパターンマッチしつつ全体を <code>t</code> に束縛する構文です。</p>
-
+end
+</code></pre><p><code>ins</code> のパターンマッチで使っている <code>t as Node(...)</code> という構文は、RubyのAsパターンと同様に <code>Node(...)</code> でパターンマッチしつつ全体を <code>t</code> に束縛する構文です。</p>
 <p>あとは以下のような関数を1つ用意してあげればREPLで遊べます。</p>
-<div class="highlight"><pre class="chroma"><code class="language-standard-ml" data-lang="standard-ml">fun fromList [] = empty
-  | fromList (x::xs) = insert (fromList xs) x</code></pre></div>
-<p>REPLでの様子：</p>
-<div class="highlight"><pre class="chroma"><code class="language-standard-ml" data-lang="standard-ml"># val tree = RedBlackTree.fromList [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+<pre><code class="language-standard-ml" data-lang="standard-ml">fun fromList [] = empty
+  | fromList (x::xs) = insert (fromList xs) x
+</code></pre><p>REPLでの様子：</p>
+<pre><code class="language-standard-ml" data-lang="standard-ml"># val tree = RedBlackTree.fromList [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 val tree =
   Node
    (
@@ -226,14 +217,12 @@ val it = true : bool
 # isMember tree 10;
 val it = true : bool
 # isMember tree 11;
-val it = false : bool</code></pre></div>
-<p>ここまで見てきたとおり、パターンマッチを使うことで複雑なデータ構造を簡潔に実装できます。
+val it = false : bool
+</code></pre><p>ここまで見てきたとおり、パターンマッチを使うことで複雑なデータ構造を簡潔に実装できます。
 さらに、コードのほとんどが代数的データ型とパターンマッチで構成されていたことから分かるように、関数型言語ではちょっと便利なツール程度ではなくプログラムを構成する主たるパーツになっています。</p>
-
 <p>今回のコードをちゃんとした書き方に直したものを貼っておきます。
 1つ注意しておくと関数型な書き方なのでいわゆる永続データ構造と呼ばれる形になっています。遊んでみる方は留意して下さい。</p>
-
-<script src="https://gitlab.com/snippets/1909738.js"></script>
+<!-- raw HTML omitted -->
                     </section>
                 </article>
             </div>

@@ -22,7 +22,6 @@
         <meta name="twitter:description" content="κeenです。Advent Calendarのためにネタやアイディアを用意したものの時間/場所的都合でAdvent Calendarとして出せなかったボツネタでも供養しようかと。
 Advent Calendarが終わってしまったので投げやり気味ですね。
 第3段はSML#とCプリプロセッサで連携する話。
-
 SML#のC FFIを使ってるとマクロで定義された値などを触りたくなるのですが、触れないのでどうにかしようかと。" />
 
         <title>SML#とCプリプロセッサの連携 | κeenのHappy Hacκing Blog</title>
@@ -133,16 +132,12 @@ SML#のC FFIを使ってるとマクロで定義された値などを触りた�
                         <p>κeenです。Advent Calendarのためにネタやアイディアを用意したものの時間/場所的都合でAdvent Calendarとして出せなかったボツネタでも供養しようかと。
 Advent Calendarが終わってしまったので投げやり気味ですね。
 第3段はSML#とCプリプロセッサで連携する話。</p>
-
 <p>SML#のC FFIを使ってるとマクロで定義された値などを触りたくなるのですが、触れないのでどうにかしようかと。</p>
-
 <p>発想自体は単純で、SMLファイルの中でCのヘッダをインクルードしてCプリプロセッサを呼んであげればどうにかなります。</p>
-
-<h1 id="簡単な例">簡単な例</h1>
-
+<h1 id="heading">簡単な例</h1>
 <p><a href="//KeenS.github.io/blog/2015/12/12/sml_dejitwotsukurukaruihanashi/">JITを作る話</a>の時のように、定数に触りたいとします。
 その時、以下のように.smlファイルを記述して、</p>
-<div class="highlight"><pre class="chroma"><code class="language-sml" data-lang="sml">(* 
+<pre><code class="language-sml" data-lang="sml">(* 
 #include&lt;sys/mman.h&gt;
 *)
 
@@ -152,22 +147,21 @@ datatype dummy = $ of int
 val $PROT_READ  = $ PROT_READ
 val $PROT_WRITE = $ PROT_WRITE
 val $PROT_EXEC  = $ PROT_EXEC
-val $PROT_NONE  = $ PROT_NONE</code></pre></div>
-<p>以下のコマンドを実行します。</p>
-<div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh">cpp -pipe -E cpp_pre.sml <span class="p">|</span> sed <span class="s1">&#39;1,/====END_OF_HEADER====/d;/^#/d&#39;</span> &gt; cpp.sml </code></pre></div>
-<p>ポイントを挙げると、</p>
+val $PROT_NONE  = $ PROT_NONE
 
+</code></pre><p>以下のコマンドを実行します。</p>
+<div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh">cpp -pipe -E cpp_pre.sml <span class="p">|</span> sed <span class="s1">&#39;1,/====END_OF_HEADER====/d;/^#/d&#39;</span> &gt; cpp.sml 
+</code></pre></div><p>ポイントを挙げると、</p>
 <ol>
 <li>smlファイルに<code>#include</code>を書く。lintでエラーが出ないように<code>#include</code>はコメントで囲む</li>
-<li><code>include</code>をコメントで囲ったところで安全でない( インクルードしたファイルに&rsquo;<code>*)</code>&lsquo;、例えば <code>int f(char *);</code>とかが入ってるとコメントが終端される)ので、<code>include</code>の部分は後で削除する。
+<li><code>include</code>をコメントで囲ったところで安全でない( インクルードしたファイルに'<code>*)</code>&rsquo;、例えば <code>int f(char *);</code>とかが入ってるとコメントが終端される)ので、<code>include</code>の部分は後で削除する。
 そのための識別子として、<code>====END_OF_HEADER====</code>を置いておく(これも完全には安全ではないが比較的マシ)。</li>
 <li>Cのマクロと同じ識別子を使おうとすると識別子も置換されてしまうので左辺にダミーで<code>$</code>をつけておく。スペースは空けない。
 逆に右辺は置換されてほしいので<code>$</code>の後にスペースを空ける。</li>
 <li>最後にCプリプロセッサを呼び、sedでヘッダ部分や無駄に追加されたCのコメントを除く。</li>
 </ol>
-
 <p>ちょっと<code>$</code>の部分がこの方式だとintにしか使えないのでイケてませんがないよりマシでしょう。因みに処理結果はこうなります。</p>
-<div class="highlight"><pre class="chroma"><code class="language-sml" data-lang="sml">datatype dummy = $ of int
+<pre><code class="language-sml" data-lang="sml">datatype dummy = $ of int
 
 val $PROT_READ = $ 
                    0x1
@@ -179,11 +173,10 @@ val $PROT_EXEC = $
                    0x4
 
 val $PROT_NONE = $ 
-                   0x0</code></pre></div>
-<h1 id="ifdef"><code>ifdef</code></h1>
-
+                   0x0
+</code></pre><h1 id="ifdef"><code>ifdef</code></h1>
 <p>一旦発想さえ得てしまえば話は簡単です。次は<code>ifdef</code>を使う例です。</p>
-<div class="highlight"><pre class="chroma"><code class="language-sml" data-lang="sml">(* ====END_OF_HEADER==== *)
+<pre><code class="language-sml" data-lang="sml">(* ====END_OF_HEADER==== *)
 
 
 (* 
@@ -197,11 +190,14 @@ val debug = false
 
 (* 
 #endif
-*)</code></pre></div>
-<p>これは</p>
-<div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh">cpp -pipe -E -DDebug ifdef_pre.sml <span class="p">|</span> sed <span class="s1">&#39;1,/====END_OF_HEADER====/d;/^#/d&#39;</span> &gt; ifdef.sml</code></pre></div>
-<p>と<code>Debug</code>を定義して処理すればifdef.smlの中身は</p>
-<div class="highlight"><pre class="chroma"><code class="language-sml" data-lang="sml">(*
+*)
+
+</code></pre><p>これは</p>
+<div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh">cpp -pipe -E -DDebug ifdef_pre.sml <span class="p">|</span> sed <span class="s1">&#39;1,/====END_OF_HEADER====/d;/^#/d&#39;</span> &gt; ifdef.sml
+</code></pre></div><p>と<code>Debug</code>を定義して処理すればifdef.smlの中身は</p>
+<pre><code class="language-sml" data-lang="sml">
+
+(*
 
 *)
 val debug = true
@@ -212,35 +208,30 @@ val debug = true
 
 
 
-*)</code></pre></div>
-<p>となりますし、定義せずに</p>
-<div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh"></code></pre></div>
-<p>sh
-cpp -pipe -E ifdef_pre.sml | sed &lsquo;1,/====END_OF_HEADER====/d;/^#/d&rsquo; &gt; ifdef.sml</p>
+*)
 
-<pre><code>
-と処理すれば
+</code></pre><p>となりますし、定義せずに</p>
+<div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh">
+<span class="sb">`</span><span class="sb">`</span><span class="sb">`</span> sh
+cpp -pipe -E ifdef_pre.sml <span class="p">|</span> sed <span class="s1">&#39;1,/====END_OF_HEADER====/d;/^#/d&#39;</span> &gt; ifdef.sml
+</code></pre></div><p>と処理すれば</p>
+<pre><code class="language-sml" data-lang="sml">
+
+(*
 
 
-</code></pre>
 
-<p>sml</p>
 
-<p>(*</p>
 
-<p>*)
-val debug = false</p>
+*)
+val debug = false
 
-<p>(*</p>
+(*
 
-<p>*)</p>
+*)
 
-<p>```</p>
-
-<p>となってどちらでもSMLとして有効な文法になります。<code>ifndef</code>だったり、<code>elif</code>があったとしても有効な文法のままです。</p>
-
-<h1 id="まとめ">まとめ</h1>
-
+</code></pre><p>となってどちらでもSMLとして有効な文法になります。<code>ifndef</code>だったり、<code>elif</code>があったとしても有効な文法のままです。</p>
+<h1 id="heading1">まとめ</h1>
 <ul>
 <li>CプリプロセッサでSMLファイルを処理する方法を提示したよ</li>
 <li><code>ifdef</code>も使えるよ</li>

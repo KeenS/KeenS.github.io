@@ -22,7 +22,6 @@
         <meta name="twitter:description" content="κeenです。かねてより気になっていた幽霊型(Phantom Type)について知ったのでアウトプット。
 このPDFがベースになって
 ます。
-
 余談ですが英語がファントム・タイプと中々中二な名前なので和訳も幻影型とかそういう方向に走って欲かったな。" />
 
         <title>幽霊型を知った | κeenのHappy Hacκing Blog</title>
@@ -121,16 +120,12 @@
                         <p>κeenです。かねてより気になっていた幽霊型(Phantom Type)について知ったのでアウトプット。
 <a href="http://www.cs.rit.edu/~mtf/research/phantom-subtyping/jfp06/jfp06.pdf">このPDF</a>がベースになって
 ます。</p>
-
 <p>余談ですが英語がファントム・タイプと中々中二な名前なので和訳も幻影型とかそういう方向に走って欲かったな。</p>
-
 <p>「幽霊型」で調べると真っ先に<a href="https://kagamilove0707.github.io/programming/2014/02/20/about-phantom-type/">このサイト</a>が出てくるのですが、ミスリーディングと言われていました。
 別に間違ったことを書いている訳ではないのですが、幽霊型の応用例なのでこれこそが幽霊型だと思ってしまうと少し視野が狭くなってしまうようです。</p>
-
-<h1 id="モチベーション">モチベーション</h1>
-
+<h1 id="heading">モチベーション</h1>
 <p>ブーリアンと整数と条件分岐と足し算と比較が出来るミニ言語を考えてみます。自動で型変換は行わない(つまりintとboolの比較などは出来ない)言語とします。こんな感じでしょうか。</p>
-<div class="highlight"><pre class="chroma"><code class="language-sml" data-lang="sml">datatype exp
+<pre><code class="language-sml" data-lang="sml">datatype exp
   = Int of int
   | Bool of bool
   | If of exp * exp * exp
@@ -152,13 +147,13 @@ fun evalIf cnd thn els =
 
 fun evalPlus x y =
   case (eval x, eval y) of
-      (Int x&#39;, Int y&#39;) =&gt; Int(x&#39; + y&#39;)
+      (Int x', Int y') =&gt; Int(x' + y')
     | _  =&gt; raise Type
 
 fun evalEqual x y =
   case (eval x, eval y) of
-      (Int x&#39;, Int y&#39;) =&gt; Bool(x&#39; = y&#39;)
-    | (Bool x&#39;, Bool y&#39;) =&gt; Bool(x&#39; = y&#39;)
+      (Int x', Int y') =&gt; Bool(x' = y')
+    | (Bool x', Bool y') =&gt; Bool(x' = y')
     | _  =&gt; raise Type
 
 fun eval exp =
@@ -166,123 +161,107 @@ fun eval exp =
       If(cnd, thn, els) =&gt; evalIf cnd thn els
     | Plus(x, y) =&gt; evalPlus x y
     | Equal(x, y) =&gt; evalEqual x y
-    | e =&gt; e</code></pre></div>
-<p>さて、この定義に従うと次のような自明に間違ったプログラムもコンパイルを通ってしまいます<sup class="footnote-ref" id="fnref:1"><a href="#fn:1">1</a></sup>。</p>
-<div class="highlight"><pre class="chroma"><code class="language-sml" data-lang="sml">mkEqual (mkInt 1) (mkBool false)</code></pre></div>
-<p>勿論、評価するとエラーになります。</p>
-<div class="highlight"><pre class="chroma"><code class="language-sml" data-lang="sml">eval (mkEqual (mkInt 1) (mkBool false));
+    | e =&gt; e
+</code></pre><p>さて、この定義に従うと次のような自明に間違ったプログラムもコンパイルを通ってしまいます<sup id="fnref:1"><a href="#fn:1" class="footnote-ref" role="doc-noteref">1</a></sup>。</p>
+<pre><code class="language-sml" data-lang="sml">mkEqual (mkInt 1) (mkBool false)
+</code></pre><p>勿論、評価するとエラーになります。</p>
+<pre><code class="language-sml" data-lang="sml">eval (mkEqual (mkInt 1) (mkBool false));
 
-uncaught exception Type</code></pre></div>
-<p>こういうものを極力コンパイル時に発見出来ないかとうのがモチベーションです。因みにこのモチベーションは変な型変換を行わない言語なら動的型付き言語でも同じで、SBCLで<code>(+ 1 t)</code>を評価するとちゃんとコンパイルエラーになります。</p>
-
-<h1 id="問題の分析">問題の分析</h1>
-
+uncaught exception Type
+</code></pre><p>こういうものを極力コンパイル時に発見出来ないかとうのがモチベーションです。因みにこのモチベーションは変な型変換を行わない言語なら動的型付き言語でも同じで、SBCLで<code>(+ 1 t)</code>を評価するとちゃんとコンパイルエラーになります。</p>
+<h1 id="heading1">問題の分析</h1>
 <p>今回、<code>Int</code>だとか<code>Bool</code>だとかの型情報をタグ、つまり値として持たせました。しかしコンパイル時に値にはアクセス出来ません。コンパイル時にアクセスできるのは型です。ということでメタデータとして型を付与しましょう。</p>
-
-<h1 id="幽霊型">幽霊型</h1>
-
+<h1 id="heading2">幽霊型</h1>
 <p>メタデータとして型を付けたのが幽霊型です。名前的に<code>'a texp</code>ではなく<code>'a</code>の部分が幽霊型なんですかね。</p>
-
 <p>使い方は割と分かりやすくて、<code>datatype</code>に余計な型をつけます。この<code>'a</code>は使われていませんがメタデータなのでそういうもんです。</p>
-<div class="highlight"><pre class="chroma"><code class="language-sml" data-lang="sml">datatype &#39;a texp = E of exp</code></pre></div>
-<p>次に、<code>mkXxx</code> にも型を付けます。</p>
-
+<pre><code class="language-sml" data-lang="sml">datatype 'a texp = E of exp
+</code></pre><p>次に、<code>mkXxx</code> にも型を付けます。</p>
 <p>まず、<code>mkInt</code>なら返り値はIntなので<code>'a</code>の部分にその情報を詰め込みます。今回は<code>int</code>が宜しいようです。
 毎回<code>E</code>がつくのが面倒ですが我慢して下さい。</p>
-<div class="highlight"><pre class="chroma"><code class="language-sml" data-lang="sml">fun mkInt x: int texp = E (Int x)</code></pre></div>
-<p><code>mkBool</code>も同じです。</p>
-<div class="highlight"><pre class="chroma"><code class="language-sml" data-lang="sml">fun mkBool x: bool texp = E (Bool x)</code></pre></div>
-<p>次は<code>mkIf</code>ですが、condにはBool型、thenとelseには同じ型が来て欲しいです。そして返り値というかこのIfを
+<pre><code class="language-sml" data-lang="sml">fun mkInt x: int texp = E (Int x)
+</code></pre><p><code>mkBool</code>も同じです。</p>
+<pre><code class="language-sml" data-lang="sml">fun mkBool x: bool texp = E (Bool x)
+</code></pre><p>次は<code>mkIf</code>ですが、condにはBool型、thenとelseには同じ型が来て欲しいです。そして返り値というかこのIfを
 evalした型はthenやelseと同じ型なのでこのような型になります。Ifに渡す為に一旦<code>E</code>を剥がしてます。</p>
-<div class="highlight"><pre class="chroma"><code class="language-sml" data-lang="sml">fun mkIf (E cnd: &#39;b texp) (E thn: &#39;a texp) (E els: &#39;a texp): &#39;a texp = E (If(cnd, thn, els))</code></pre></div>
-<p>同じように考えたら<code>mkPlus</code>や<code>mkEqual</code>も型付け出来ます。</p>
-
+<pre><code class="language-sml" data-lang="sml">fun mkIf (E cnd: 'b texp) (E thn: 'a texp) (E els: 'a texp): 'a texp = E (If(cnd, thn, els))
+</code></pre><p>同じように考えたら<code>mkPlus</code>や<code>mkEqual</code>も型付け出来ます。</p>
 <pre><code>fun mkPlus (E x: int texp) (E y: int texp): int texp = E (Plus(x, y))
 fun mkEqual (E x: 'a texp) (E y: 'a texp): bool texp = E (Equal(x, y))
-</code></pre>
-
-<p>これ以後は変更ありません。一応修正後のプログラムを載せると、</p>
-<div class="highlight"><pre class="chroma"><code class="language-sml" data-lang="sml">datatype exp
+</code></pre><p>これ以後は変更ありません。一応修正後のプログラムを載せると、</p>
+<pre><code class="language-sml" data-lang="sml">datatype exp
   = Int of int
   | Bool of bool
   | If of exp * exp * exp
   | Plus of exp * exp
   | Equal of exp * exp
 
-datatype &#39;a texp = E of exp
+datatype 'a texp = E of exp
 
 fun mkInt x: int texp = E (Int x)
 fun mkBool x: bool texp = E (Bool x)
-fun mkIf (E cnd: &#39;b texp) (E thn: &#39;a texp) (E els: &#39;a texp): &#39;a texp = E (If(cnd, thn, els))
+fun mkIf (E cnd: 'b texp) (E thn: 'a texp) (E els: 'a texp): 'a texp = E (If(cnd, thn, els))
 fun mkPlus (E x: int texp) (E y: int texp): int texp = E (Plus(x, y))
-fun mkEqual (E x: &#39;a texp) (E y: &#39;a texp): bool texp = E (Equal(x, y))
+fun mkEqual (E x: 'a texp) (E y: 'a texp): bool texp = E (Equal(x, y))
 
 exception Type
 
 fun evalIf cnd thn els =
-  case eval&#39; cnd of
-      Bool x =&gt; if x then eval&#39; thn else eval&#39; els
+  case eval' cnd of
+      Bool x =&gt; if x then eval' thn else eval' els
     | _ =&gt; raise Type
 
 and evalPlus x y =
-    case (eval&#39; x, eval&#39; y) of
-        (Int x&#39;, Int y&#39;) =&gt; Int(x&#39; + y&#39;)
+    case (eval' x, eval' y) of
+        (Int x', Int y') =&gt; Int(x' + y')
       | _  =&gt; raise Type
 
 and evalEqual x y =
-    case (eval&#39; x, eval&#39; y) of
-        (Int x&#39;, Int y&#39;) =&gt; Bool(x&#39; = y&#39;)
-      | (Bool x&#39;, Bool y&#39;) =&gt; Bool(x&#39; = y&#39;)
+    case (eval' x, eval' y) of
+        (Int x', Int y') =&gt; Bool(x' = y')
+      | (Bool x', Bool y') =&gt; Bool(x' = y')
       | _  =&gt; raise Type
 
-and eval&#39; exp =
+and eval' exp =
     case exp of
         If(cnd, thn, els) =&gt; evalIf cnd thn els
       | Plus(x, y) =&gt; evalPlus x y
       | Equal(x, y) =&gt; evalEqual x y
       | e =&gt; e
 
-fun eval (E x) = eval&#39; x</code></pre></div>
-<p>となります。ユーザインターフェースレベルでの変更はありません。
+fun eval (E x) = eval' x
+</code></pre><p>となります。ユーザインターフェースレベルでの変更はありません。
 さて、ということで先の式をもう一度評価してみましょう。</p>
-
 <pre><code>mkEqual (mkInt 1) (mkBool false);
 stdIn:1.2-1.34 Error: operator and operand don't agree [tycon mismatch]
   operator domain: int texp
   operand:         bool texp
   in expression:
     (mkEqual (mkInt 1)) (mkBool false)
-</code></pre>
-
-<p>ちゃんとエラーが出ました。楽しいですね。</p>
-
-<h1 id="発展1-任意の型">発展1 - 任意の型</h1>
-
+</code></pre><p>ちゃんとエラーが出ました。楽しいですね。</p>
+<h1 id="1--">発展1 - 任意の型</h1>
 <p>任意の型を作る手段としてタグ1つ、引数無しのタグ付き共用体を使う方法があります。それを使った技が先のPDFに載ってます。</p>
-<div class="highlight"><pre class="chroma"><code class="language-sml" data-lang="sml">datatype tcp = TCP
+<pre><code class="language-sml" data-lang="sml">datatype tcp = TCP
 datatype udp = UDP
-datatype &#39;a safe_socket = W of Word32.word
+datatype 'a safe_socket = W of Word32.word
 
 fun mkTCP ....
 fun mkUDP ....
 fun sendTCP ...
 fun sendUPD ...
-fun close ...</code></pre></div>
-<p>のように型安全に、そして<code>close</code>のように可能なものはジェネリックにプログラムを書くことが出来ます。</p>
-
-<h1 id="発展2-サブタイプ">発展2 - サブタイプ</h1>
-
+fun close ...
+</code></pre><p>のように型安全に、そして<code>close</code>のように可能なものはジェネリックにプログラムを書くことが出来ます。</p>
+<h1 id="2--">発展2 - サブタイプ</h1>
 <p>次のようにヒエラルキーがある場合の話です。面倒なので言語を縮小しますね。</p>
-<div class="highlight"><pre class="chroma"><code class="language-sml" data-lang="sml">datatype num
+<pre><code class="language-sml" data-lang="sml">datatype num
   = Int of int
   | Real of real
 
 datatype exp
   = Num of num
   | Bool of bool
-  | Plus of exp * exp</code></pre></div>
-<p>この場合、こうなります。</p>
-<div class="highlight"><pre class="chroma"><code class="language-sml" data-lang="sml">datatype num
+  | Plus of exp * exp
+</code></pre><p>この場合、こうなります。</p>
+<pre><code class="language-sml" data-lang="sml">datatype num
   = Int of int
   | Real of real
 
@@ -291,8 +270,8 @@ datatype exp
   | Bool of bool
   | Plus of exp * exp
 
-datatype &#39;a tnum = N
-datatype &#39;a texp = E of exp
+datatype 'a tnum = N
+datatype 'a texp = E of exp
 
 exception Type
 
@@ -301,36 +280,29 @@ fun mkReal x: (real tnum texp) = E (Num (Real x))
 fun mkBool x: (bool texp) = E (Bool x)
 
 
-fun mkPlus (E x: &#39;a tnum texp) (E y: &#39;a tnum texp): &#39;a tnum texp =
+fun mkPlus (E x: 'a tnum texp) (E y: 'a tnum texp): 'a tnum texp =
   case (x, y) of
-      (Num (Int x&#39;), Num (Int y&#39;)) =&gt; E (Num (Int (x&#39; + y&#39;)))
-    | (Num (Real x&#39;), Num (Real y&#39;)) =&gt; E (Num (Real (x&#39; + y&#39;)))
-    | _ =&gt; raise Type  </code></pre></div>
-<p>疲れてきたので説明省略しますが型パラメータを入れ子にしたら上手い具合にサブタイプの親子関係を表せるよねって話です。</p>
-
-<h1 id="まとめ">まとめ</h1>
-
+      (Num (Int x'), Num (Int y')) =&gt; E (Num (Int (x' + y')))
+    | (Num (Real x'), Num (Real y')) =&gt; E (Num (Real (x' + y')))
+    | _ =&gt; raise Type  
+</code></pre><p>疲れてきたので説明省略しますが型パラメータを入れ子にしたら上手い具合にサブタイプの親子関係を表せるよねって話です。</p>
+<h1 id="heading3">まとめ</h1>
 <p>幽霊型を使うと値レベルの話を一部型レベルに持ち上げれる（ってことで良いのかな？）</p>
-
-<h1 id="最後に">最後に</h1>
-
+<h1 id="heading4">最後に</h1>
 <p>どうしても</p>
-<div class="highlight"><pre class="chroma"><code class="language-sml" data-lang="sml">datatype &#39;a texp = E of exp</code></pre></div>
-<p>としている所の<code>E</code>が気になりますね。型システム上必要っぽい(<code>type 'a texp = exp</code>としてもダメだった)ので必要なコストだとは思うのですが
+<pre><code class="language-sml" data-lang="sml">datatype 'a texp = E of exp
+</code></pre><p>としている所の<code>E</code>が気になりますね。型システム上必要っぽい(<code>type 'a texp = exp</code>としてもダメだった)ので必要なコストだとは思うのですが
 少くとも内部的にはゼロオーバーヘッドであって欲しいです。最適化で消せそうですが実際に消してる処理系はどれほどあるのでしょう。</p>
-
 <p><code>type 'a texp = exp</code>でダメだった(型がミスマッチしてるのにコンパイルが通ってしまった)のも気になります。smlの<code>type</code>ってただのエイリアスなんでしたっけ？</p>
-
 <p>若干のモヤモヤは残るものの一応幽霊型について知りました。</p>
-<div class="footnotes">
-
-<hr />
-
+<section class="footnotes" role="doc-endnotes">
+<hr>
 <ol>
-<li id="fn:1">因みにこのコードをSML#のREPLで評価すると返ってこなくなります。<a href="https://github.com/smlsharp/smlsharp/issues/24">イシュー</a>に上がってます。
- <a class="footnote-return" href="#fnref:1"><sup>[return]</sup></a></li>
+<li id="fn:1" role="doc-endnote">
+<p>因みにこのコードをSML#のREPLで評価すると返ってこなくなります。<a href="https://github.com/smlsharp/smlsharp/issues/24">イシュー</a>に上がってます。<a href="#fnref:1" class="footnote-backref" role="doc-backlink">&#8617;</a></p>
+</li>
 </ol>
-</div>
+</section>
                     </section>
                 </article>
             </div>

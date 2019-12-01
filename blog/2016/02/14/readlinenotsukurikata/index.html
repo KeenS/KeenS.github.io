@@ -119,150 +119,121 @@
                     </header>
                     <section>
                         <p>κeenです。なんか伏線っぽいもの回収しといた方が良いかなと思ってLinuxっぽい話でも。</p>
-
 <p>readlineって便利ですよね。
 でもCで書かれているから他の言語から使おうと思うと面倒だったり使えなかったりGPLv3の所為で使えなかったりしますよね。
 そこである程度POSIXのインターフェースを扱わせてくれる言語でのreadlineの作り方でも。</p>
-
-<h1 id="カノニカルモードとエコーモード">カノニカルモードとエコーモード</h1>
-
+<h1 id="heading">カノニカルモードとエコーモード</h1>
 <p>readlineの仕組み自体は簡単で、全ての文字入力を受け取って、</p>
-
 <ul>
 <li>readlineの制御キーシーケンスなら指定の制御を行なう</li>
 <li>普通の文字ならそのまま画面に表示する</li>
 <li>コントロールシーケンスなら <code>^W</code> などとエスケープ表示する</li>
 </ul>
-
 <p>これだけです。しかしそう簡単ではありません。
 あなたのお気に入りの言語で <code>readchar</code> っぽい関数を実行してみると分かるかと思いますが、</p>
-
 <ol>
 <li>一文字入力しただけではプログラムに入力文字が渡されない。エンターキーを押して初めてプログラムの <code>readchar</code> 関数が返る。</li>
 <li>入力した文字がそのままエコーバックされる。すなわち、 <code>←</code> を押しても <code>^[[D</code> が入力されてしまい、制御上不都合。</li>
 </ol>
-
 <p>私は昔はこれらの挙動が適切な関数がないからだと思ってました。しかし、そうではありません。
 このような挙動をするのはプログラムの責任でもでもシェルの責任でもなくターミナルの責任です。</p>
-
 <p>ターミナルには多彩なモードがあり、それによって挙動が変わるのです。
 つまり、1.の挙動をするのはカノニカルモードの挙動、2.の挙動をするのはエコーモードの挙動なのです。</p>
-
-<h1 id="tcgetattr-と-tcsetattr"><code>tcgetattr</code> と <code>tcsetattr</code></h1>
-
+<h1 id="tcgetattr--tcsetattr"><code>tcgetattr</code> と <code>tcsetattr</code></h1>
 <p>さて、ターミナルのモードはプログラム側から変更出来ます。それを行なうのが <code>tcgetattr(3)</code> と <code>tcsetattr(3)</code> です。
 ざっくり言うと <code>tcgetattr</code> で現在のターミナルのコンフィグレーションを取得して、それを所望のモードに書き換え、 <code>tcsetattr</code> を使って反映出来ます。</p>
-
 <p>今回はカノニカルモードとエコーモードをoffにしたいのですごい雑なコードだとこう書けるでしょう。</p>
 <div class="highlight"><pre class="chroma"><code class="language-lisp" data-lang="lisp"><span class="p">(</span><span class="nf">require</span> <span class="ss">&#39;sb-posix</span><span class="p">)</span>
-<span class="p">(</span><span class="k">let*</span> <span class="p">((</span><span class="nv">stdin</span> <span class="mi">0</span><span class="p">)</span>
-       <span class="p">(</span><span class="nv">termios</span> <span class="p">(</span><span class="nv">sb-posix:tcgetattr</span> <span class="nv">stdin</span><span class="p">))</span>
-       <span class="p">(</span><span class="nv">lflag</span> <span class="p">(</span><span class="nv">sb-posix:termios-lflag</span> <span class="nv">termios</span><span class="p">)))</span>
-  <span class="p">(</span><span class="nb">setf</span> <span class="nv">lflag</span> <span class="p">(</span><span class="nf">logand</span> <span class="nv">lflag</span> <span class="p">(</span><span class="nf">lognot</span> <span class="nv">sb-posix:icanon</span><span class="p">)))</span>
-  <span class="p">(</span><span class="nb">setf</span> <span class="nv">lflag</span> <span class="p">(</span><span class="nf">logand</span> <span class="nv">lflag</span> <span class="p">(</span><span class="nf">lognot</span> <span class="nv">sb-posix:echo</span><span class="p">)))</span>
+<span class="p">(</span><span class="k">let*</span> <span class="p">(</span><span class="p">(</span><span class="nv">stdin</span> <span class="mi">0</span><span class="p">)</span>
+       <span class="p">(</span><span class="nv">termios</span> <span class="p">(</span><span class="nv">sb-posix:tcgetattr</span> <span class="nv">stdin</span><span class="p">)</span><span class="p">)</span>
+       <span class="p">(</span><span class="nv">lflag</span> <span class="p">(</span><span class="nv">sb-posix:termios-lflag</span> <span class="nv">termios</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
+  <span class="p">(</span><span class="nb">setf</span> <span class="nv">lflag</span> <span class="p">(</span><span class="nf">logand</span> <span class="nv">lflag</span> <span class="p">(</span><span class="nf">lognot</span> <span class="nv">sb-posix:icanon</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
+  <span class="p">(</span><span class="nb">setf</span> <span class="nv">lflag</span> <span class="p">(</span><span class="nf">logand</span> <span class="nv">lflag</span> <span class="p">(</span><span class="nf">lognot</span> <span class="nv">sb-posix:echo</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
   <span class="p">(</span><span class="nb">setf</span> <span class="p">(</span><span class="nv">sb-posix:termios-lflag</span> <span class="nv">termios</span><span class="p">)</span> <span class="nv">lflag</span><span class="p">)</span>
-  <span class="p">(</span><span class="nv">sb-posix:tcsetattr</span> <span class="nv">stdin</span> <span class="nv">sb-posix:tcsadrain</span> <span class="nv">termios</span><span class="p">))</span></code></pre></div>
-<p>しかし、これは雑すぎます。なぜならreadlineを実行し終わった後にターミナルを元の状態に復元する必要があるからです。
+  <span class="p">(</span><span class="nv">sb-posix:tcsetattr</span> <span class="nv">stdin</span> <span class="nv">sb-posix:tcsadrain</span> <span class="nv">termios</span><span class="p">)</span><span class="p">)</span>
+</code></pre></div><p>しかし、これは雑すぎます。なぜならreadlineを実行し終わった後にターミナルを元の状態に復元する必要があるからです。
 そうしないとreadlineするつもりのない入力関数が予期せぬ挙動をするでしょう。
 あるいはLispプロセスを終了した後のターミナルにまで影響が及びます。
 なので <strong>必ず</strong> 処理が終わったらターミナルの状態を復元する必要があります。</p>
-
 <p>さて、Common Lispではこの「必ず」は <code>unwind-protect</code> を使った <code>with-</code> マクロで実現するのが常套手段です。
 コードはこのようになるでしょうか。</p>
 <div class="highlight"><pre class="chroma"><code class="language-lisp" data-lang="lisp"><span class="p">(</span><span class="nb">defmacro</span> <span class="nv">with-readline-mode</span> <span class="p">(</span><span class="k">&amp;body</span> <span class="nv">body</span><span class="p">)</span>
-  <span class="p">(</span><span class="k">let</span> <span class="p">((</span><span class="nv">stdin</span>       <span class="p">(</span><span class="nf">gensym</span> <span class="s">&#34;stdin&#34;</span><span class="p">))</span>
-        <span class="p">(</span><span class="nv">old-termios</span> <span class="p">(</span><span class="nf">gensym</span> <span class="s">&#34;old-termios&#34;</span><span class="p">))</span>
-        <span class="p">(</span><span class="nv">new-termios</span> <span class="p">(</span><span class="nf">gensym</span> <span class="s">&#34;new-termios&#34;</span><span class="p">))</span>
-        <span class="p">(</span><span class="nv">lflag</span>       <span class="p">(</span><span class="nf">gensym</span> <span class="s">&#34;lflag&#34;</span><span class="p">)))</span>
-    <span class="o">`</span><span class="p">(</span><span class="k">let*</span> <span class="p">((</span><span class="o">,</span><span class="nv">stdin</span> <span class="mi">0</span><span class="p">)</span>
-            <span class="p">(</span><span class="o">,</span><span class="nv">old-termios</span> <span class="p">(</span><span class="nv">sb-posix:tcgetattr</span> <span class="o">,</span><span class="nv">stdin</span><span class="p">))</span>
-            <span class="p">(</span><span class="o">,</span><span class="nv">new-termios</span> <span class="p">(</span><span class="nv">sb-posix:tcgetattr</span> <span class="o">,</span><span class="nv">stdin</span><span class="p">))</span>
-            <span class="p">(</span><span class="o">,</span><span class="nv">lflag</span> <span class="p">(</span><span class="nv">sb-posix:termios-lflag</span> <span class="o">,</span><span class="nv">new-termios</span><span class="p">)))</span>
+  <span class="p">(</span><span class="k">let</span> <span class="p">(</span><span class="p">(</span><span class="nv">stdin</span>       <span class="p">(</span><span class="nf">gensym</span> <span class="s">&#34;stdin&#34;</span><span class="p">)</span><span class="p">)</span>
+        <span class="p">(</span><span class="nv">old-termios</span> <span class="p">(</span><span class="nf">gensym</span> <span class="s">&#34;old-termios&#34;</span><span class="p">)</span><span class="p">)</span>
+        <span class="p">(</span><span class="nv">new-termios</span> <span class="p">(</span><span class="nf">gensym</span> <span class="s">&#34;new-termios&#34;</span><span class="p">)</span><span class="p">)</span>
+        <span class="p">(</span><span class="nv">lflag</span>       <span class="p">(</span><span class="nf">gensym</span> <span class="s">&#34;lflag&#34;</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
+    <span class="o">`</span><span class="p">(</span><span class="k">let*</span> <span class="p">(</span><span class="p">(</span><span class="o">,</span><span class="nv">stdin</span> <span class="mi">0</span><span class="p">)</span>
+            <span class="p">(</span><span class="o">,</span><span class="nv">old-termios</span> <span class="p">(</span><span class="nv">sb-posix:tcgetattr</span> <span class="o">,</span><span class="nv">stdin</span><span class="p">)</span><span class="p">)</span>
+            <span class="p">(</span><span class="o">,</span><span class="nv">new-termios</span> <span class="p">(</span><span class="nv">sb-posix:tcgetattr</span> <span class="o">,</span><span class="nv">stdin</span><span class="p">)</span><span class="p">)</span>
+            <span class="p">(</span><span class="o">,</span><span class="nv">lflag</span> <span class="p">(</span><span class="nv">sb-posix:termios-lflag</span> <span class="o">,</span><span class="nv">new-termios</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
        <span class="p">(</span><span class="k">unwind-protect</span>
             <span class="p">(</span><span class="k">progn</span>
-              <span class="p">(</span><span class="nb">setf</span> <span class="o">,</span><span class="nv">lflag</span> <span class="p">(</span><span class="nf">logand</span> <span class="o">,</span><span class="nv">lflag</span> <span class="p">(</span><span class="nf">lognot</span> <span class="nv">sb-posix:icanon</span><span class="p">)))</span>
-              <span class="p">(</span><span class="nb">setf</span> <span class="o">,</span><span class="nv">lflag</span> <span class="p">(</span><span class="nf">logand</span> <span class="o">,</span><span class="nv">lflag</span> <span class="p">(</span><span class="nf">lognot</span> <span class="nv">sb-posix:echo</span><span class="p">)))</span>
+              <span class="p">(</span><span class="nb">setf</span> <span class="o">,</span><span class="nv">lflag</span> <span class="p">(</span><span class="nf">logand</span> <span class="o">,</span><span class="nv">lflag</span> <span class="p">(</span><span class="nf">lognot</span> <span class="nv">sb-posix:icanon</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
+              <span class="p">(</span><span class="nb">setf</span> <span class="o">,</span><span class="nv">lflag</span> <span class="p">(</span><span class="nf">logand</span> <span class="o">,</span><span class="nv">lflag</span> <span class="p">(</span><span class="nf">lognot</span> <span class="nv">sb-posix:echo</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
               <span class="p">(</span><span class="nb">setf</span> <span class="p">(</span><span class="nv">sb-posix:termios-lflag</span> <span class="o">,</span><span class="nv">new-termios</span><span class="p">)</span> <span class="o">,</span><span class="nv">lflag</span><span class="p">)</span>
               <span class="p">(</span><span class="nv">sb-posix:tcsetattr</span> <span class="o">,</span><span class="nv">stdin</span> <span class="nv">sb-posix:tcsadrain</span> <span class="o">,</span><span class="nv">new-termios</span><span class="p">)</span>
               <span class="o">,@</span><span class="nv">body</span><span class="p">)</span>
-        <span class="p">(</span><span class="nv">sb-posix:tcsetattr</span> <span class="o">,</span><span class="nv">stdin</span> <span class="nv">sb-posix:tcsadrain</span> <span class="o">,</span><span class="nv">old-termios</span><span class="p">)))))</span></code></pre></div>
-<p>これで</p>
+        <span class="p">(</span><span class="nv">sb-posix:tcsetattr</span> <span class="o">,</span><span class="nv">stdin</span> <span class="nv">sb-posix:tcsadrain</span> <span class="o">,</span><span class="nv">old-termios</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
+</code></pre></div><p>これで</p>
 <div class="highlight"><pre class="chroma"><code class="language-lisp" data-lang="lisp"><span class="p">(</span><span class="nv">with-readline-mode</span>
-  <span class="p">(</span><span class="nf">format</span> <span class="no">t</span> <span class="s">&#34;~a~%&#34;</span> <span class="p">(</span><span class="nf">read-char</span><span class="p">)))</span></code></pre></div>
-<p>などとするとターミナルのモードが変わったことが実感出来るでしょう。</p>
-
+  <span class="p">(</span><span class="nf">format</span> <span class="no">t</span> <span class="s">&#34;~a~%&#34;</span> <span class="p">(</span><span class="nf">read-char</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
+</code></pre></div><p>などとするとターミナルのモードが変わったことが実感出来るでしょう。</p>
 <p>尚、繰り返すとこれはターミナルの設定の話なのでEmacs内から試そうとしても正常に動作しない筈です。</p>
-
-<h1 id="コントロールシーケンス">コントロールシーケンス</h1>
-
+<h1 id="heading1">コントロールシーケンス</h1>
 <p>さて、Common Lispの標準にない拡張機能が必要なのはターミナルのモード変更だけで、あとは好き勝手出来るのですが私も少し嵌った部分があるのでそこだけ。</p>
-
 <p>readlineに欲しい機能はなんでしょうか。色々あるかと思いますが、まずは <code>←</code> 、 <code>→</code> でカーソル移動をしたいのではないでしょうか。
 実はこれが大落し穴。</p>
-
 <p><code>←</code> キーを押すとターミナルにはなんと3文字入力されます。すなわち、 Esc文字の <code>^[</code> 、普通のASCII文字の <code>[</code> 、そして大文字の <code>D</code> です。</p>
-
 <p>そしてカーソルの移動文字を受けてカーソルを移動するにはターミナルにそのままEsc文字の <code>^[</code> 、普通のASCII文字の <code>[</code> 、そして大文字の <code>D</code> を入力してあげれば出来ます。</p>
-
 <p>なのでこのようなコードになるでしょう。</p>
 <div class="highlight"><pre class="chroma"><code class="language-lisp" data-lang="lisp"><span class="p">(</span><span class="nb">defconstant</span> <span class="nv">left</span> <span class="s">&#34;[d&#34;</span><span class="p">)</span>
 <span class="p">(</span><span class="nb">defconstant</span> <span class="nv">right</span> <span class="s">&#34;[c&#34;</span><span class="p">)</span>
 
-<span class="p">(</span><span class="nb">defun</span> <span class="nv">left</span> <span class="p">()</span>
+<span class="p">(</span><span class="nb">defun</span> <span class="nv">left</span> <span class="p">(</span><span class="p">)</span>
   <span class="p">(</span><span class="nf">format</span> <span class="no">t</span> <span class="s">&#34;~a&#34;</span> <span class="nv">left</span><span class="p">)</span>
-  <span class="p">(</span><span class="nf">force-output</span><span class="p">))</span>
+  <span class="p">(</span><span class="nf">force-output</span><span class="p">)</span><span class="p">)</span>
 
-<span class="p">(</span><span class="nb">defun</span> <span class="nv">right</span> <span class="p">()</span>
+<span class="p">(</span><span class="nb">defun</span> <span class="nv">right</span> <span class="p">(</span><span class="p">)</span>
   <span class="p">(</span><span class="nf">format</span> <span class="no">t</span> <span class="s">&#34;~a&#34;</span> <span class="nv">right</span><span class="p">)</span>
-  <span class="p">(</span><span class="nf">force-output</span><span class="p">))</span>
+  <span class="p">(</span><span class="nf">force-output</span><span class="p">)</span><span class="p">)</span>
 
 
-<span class="p">(</span><span class="nb">defun</span> <span class="nv">readline</span> <span class="p">()</span>
-  <span class="p">(</span><span class="k">let</span> <span class="p">((</span><span class="nv">line</span> <span class="o">&#39;</span><span class="p">()))</span>
-    <span class="p">(</span><span class="k">flet</span> <span class="p">((</span><span class="nv">self-insert</span> <span class="p">(</span><span class="nf">char</span><span class="p">)</span>
+<span class="p">(</span><span class="nb">defun</span> <span class="nv">readline</span> <span class="p">(</span><span class="p">)</span>
+  <span class="p">(</span><span class="k">let</span> <span class="p">(</span><span class="p">(</span><span class="nv">line</span> <span class="o">&#39;</span><span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
+    <span class="p">(</span><span class="k">flet</span> <span class="p">(</span><span class="p">(</span><span class="nv">self-insert</span> <span class="p">(</span><span class="nf">char</span><span class="p">)</span>
              <span class="p">(</span><span class="nf">format</span> <span class="no">t</span> <span class="s">&#34;~c&#34;</span> <span class="nf">char</span><span class="p">)</span>
-             <span class="p">(</span><span class="nb">setf</span> <span class="nv">line</span> <span class="p">(</span><span class="nc">cons</span> <span class="nf">char</span> <span class="nv">line</span><span class="p">))</span>
-             <span class="p">(</span><span class="nf">force-output</span><span class="p">)))</span>
+             <span class="p">(</span><span class="nb">setf</span> <span class="nv">line</span> <span class="p">(</span><span class="nc">cons</span> <span class="nf">char</span> <span class="nv">line</span><span class="p">)</span><span class="p">)</span>
+             <span class="p">(</span><span class="nf">force-output</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
       <span class="p">(</span><span class="nv">with-readline-mode</span>
        <span class="p">(</span><span class="nb">loop</span>
-          <span class="p">(</span><span class="k">let*</span> <span class="p">((</span><span class="nf">char</span> <span class="p">(</span><span class="nf">read-char</span><span class="p">))</span>
-                 <span class="p">(</span><span class="nv">code</span> <span class="p">(</span><span class="nf">char-code</span> <span class="nf">char</span><span class="p">)))</span>
+          <span class="p">(</span><span class="k">let*</span> <span class="p">(</span><span class="p">(</span><span class="nf">char</span> <span class="p">(</span><span class="nf">read-char</span><span class="p">)</span><span class="p">)</span>
+                 <span class="p">(</span><span class="nv">code</span> <span class="p">(</span><span class="nf">char-code</span> <span class="nf">char</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
             <span class="p">(</span><span class="nb">case</span> <span class="nv">code</span>
               <span class="c1">; escape</span>
-              <span class="p">((</span><span class="mb">#b11011</span><span class="p">)</span>
-               <span class="p">(</span><span class="k">let*</span> <span class="p">((</span><span class="nf">char</span> <span class="p">(</span><span class="nf">read-char</span><span class="p">))</span>
-                      <span class="p">(</span><span class="nv">code</span> <span class="p">(</span><span class="nf">char-code</span> <span class="nf">char</span><span class="p">)))</span>
+              <span class="p">(</span><span class="p">(</span><span class="mb">#b11011</span><span class="p">)</span>
+               <span class="p">(</span><span class="k">let*</span> <span class="p">(</span><span class="p">(</span><span class="nf">char</span> <span class="p">(</span><span class="nf">read-char</span><span class="p">)</span><span class="p">)</span>
+                      <span class="p">(</span><span class="nv">code</span> <span class="p">(</span><span class="nf">char-code</span> <span class="nf">char</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
                  <span class="c1">;; (write-line &#34;called&#34;)</span>
                  <span class="c1">;; (format t &#34;~a~%&#34; char)</span>
                  <span class="c1">;; (format t &#34;~a~%&#34; code)</span>
                  <span class="p">(</span><span class="nb">case</span> <span class="nf">char</span>
-                   <span class="p">((</span><span class="sc">#\[</span><span class="p">)</span>
-                    <span class="p">(</span><span class="k">let*</span> <span class="p">((</span><span class="nf">char</span> <span class="p">(</span><span class="nf">read-char</span><span class="p">))</span>
-                           <span class="p">(</span><span class="nv">code</span> <span class="p">(</span><span class="nf">char-code</span> <span class="nf">char</span><span class="p">)))</span>
+                   <span class="p">(</span><span class="p">(</span><span class="sc">#\[</span><span class="p">)</span>
+                    <span class="p">(</span><span class="k">let*</span> <span class="p">(</span><span class="p">(</span><span class="nf">char</span> <span class="p">(</span><span class="nf">read-char</span><span class="p">)</span><span class="p">)</span>
+                           <span class="p">(</span><span class="nv">code</span> <span class="p">(</span><span class="nf">char-code</span> <span class="nf">char</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
                       <span class="p">(</span><span class="nb">case</span> <span class="nf">char</span>
-                        <span class="p">((</span><span class="sc">#\c</span><span class="p">)</span> <span class="p">(</span><span class="nv">right</span><span class="p">))</span>
-                        <span class="p">((</span><span class="sc">#\d</span><span class="p">)</span> <span class="p">(</span><span class="nv">left</span><span class="p">)))))</span>
-                   <span class="p">((</span><span class="no">t</span><span class="p">)</span>
+                        <span class="p">(</span><span class="p">(</span><span class="sc">#\c</span><span class="p">)</span> <span class="p">(</span><span class="nv">right</span><span class="p">)</span><span class="p">)</span>
+                        <span class="p">(</span><span class="p">(</span><span class="sc">#\d</span><span class="p">)</span> <span class="p">(</span><span class="nv">left</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
+                   <span class="p">(</span><span class="p">(</span><span class="no">t</span><span class="p">)</span>
                     <span class="p">(</span><span class="nv">self-insert</span> <span class="sc">#\escape</span><span class="p">)</span>
-                    <span class="p">(</span><span class="nv">self-insert</span> <span class="nf">char</span><span class="p">)))))</span>
-              <span class="p">((</span><span class="mb">#b1010</span><span class="p">)</span>
-               <span class="p">(</span><span class="k">return-from</span> <span class="nv">readline</span> <span class="p">(</span><span class="nf">coerce</span> <span class="p">(</span><span class="nf">reverse</span> <span class="nv">line</span><span class="p">)</span> <span class="ss">&#39;string</span><span class="p">)))</span>
-              <span class="p">(</span><span class="no">t</span> <span class="p">(</span><span class="nv">self-insert</span> <span class="nf">char</span><span class="p">)))))))))</span></code></pre></div>
-<p><code>case</code> をネストしていくのはダルいし拡張性がないので現実的にはtrie木を使うことになるかと思いますが単純にはこのようなコードでreadlineを作れます。</p>
-
-<p>Let&rsquo;s Happy Hacκking!</p>
-
-<h1 id="付録a-伏線">付録A: 伏線</h1>
-
-<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">適当に魚と野菜炒めたらオサレっぽくなった <a href="https://t.co/9IIzhIGjzd">pic.twitter.com/9IIzhIGjzd</a></p>&mdash; κeen (@blackenedgold) <a href="https://twitter.com/blackenedgold/status/698821538686984192">2016, 2月 14</a></blockquote>
-
-<p><blockquote class="twitter-tweet" data-conversation="none" data-lang="ja"><p lang="ja" dir="ltr"><a href="https://twitter.com/blackenedgold">@blackenedgold</a> 魚は何？タラ？だったら季節物だし、旬の鱈と野菜のソテー、詳解Linuxカーネルを添えて。と命名しよう</p>&mdash; Shinnosuke Takeda (@cnosuke) <a href="https://twitter.com/cnosuke/status/698824048319410176">2016, 2月 14</a></blockquote>
-<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script></p>
-
-<h1 id="付録b-pure-rubyなreadlineのソースコード">付録B: Pure Rubyなreadlineのソースコード</h1>
-
-<p>努力が必要ということが読み解ければ幸いです。</p>
-
+                    <span class="p">(</span><span class="nv">self-insert</span> <span class="nf">char</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
+              <span class="p">(</span><span class="p">(</span><span class="mb">#b1010</span><span class="p">)</span>
+               <span class="p">(</span><span class="k">return-from</span> <span class="nv">readline</span> <span class="p">(</span><span class="nf">coerce</span> <span class="p">(</span><span class="nf">reverse</span> <span class="nv">line</span><span class="p">)</span> <span class="ss">&#39;string</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
+              <span class="p">(</span><span class="no">t</span> <span class="p">(</span><span class="nv">self-insert</span> <span class="nf">char</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
+</code></pre></div><p><code>case</code> をネストしていくのはダルいし拡張性がないので現実的にはtrie木を使うことになるかと思いますが単純にはこのようなコードでreadlineを作れます。</p>
+<p>Let's Happy Hacκking!</p>
+<h1 id="a-">付録A: 伏線</h1>
+<!-- raw HTML omitted -->
+<!-- raw HTML omitted -->
 <p><a href="https://github.com/ConnorAtherton/rb-readline/blob/master/lib/rbreadline.rb">rb-readline/rbreadline.rb at master · ConnorAtherton/rb-readline</a></p>
                     </section>
                 </article>

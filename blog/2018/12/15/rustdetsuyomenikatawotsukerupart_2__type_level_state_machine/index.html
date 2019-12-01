@@ -20,7 +20,6 @@
         <meta name="twitter:site" content="@blackenedgold" />
         <meta name="twitter:title" content="Rustで強めに型をつけるPart 2: Type Level State Machine | κeenのHappy Hacκing Blog"/>
         <meta name="twitter:description" content="このエントリはRustその2 Advent Calendar 2018 7日目の記事を時空を遡って書いています。
-
 κeenです。寝れないので空いてる日の分を埋めに行きます。次はType Level State Machine。あるいはやりすぎてない方のBuilderバターン。
 過去記事で当たり前のように書いたコードをもう少し丁寧に説明します。" />
 
@@ -126,31 +125,26 @@
                     </header>
                     <section>
                         <p>このエントリは<a href="https://qiita.com/advent-calendar/2018/rust2">Rustその2 Advent Calendar 2018</a> 7日目の記事を時空を遡って書いています。</p>
-
 <p>κeenです。寝れないので空いてる日の分を埋めに行きます。次はType Level State Machine。あるいはやりすぎてない方のBuilderバターン。
 <a href="https://keens.github.io/blog/2017/02/09/rustnochottoyarisuginabuilderpata_n/">過去記事</a>で当たり前のように書いたコードをもう少し丁寧に説明します。</p>
-
 <p>以下のようなデータ型のビルダーを作りたいとします。</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#[derive(Debug)]</span><span class="w">
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#[</span><span class="cp">derive(Debug)</span><span class="cp">]</span><span class="w">
 </span><span class="w"></span><span class="k">struct</span> <span class="nc">Person</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="n">id</span>: <span class="kt">u32</span><span class="p">,</span><span class="w">
-</span><span class="w">    </span><span class="n">name</span>: <span class="nb">String</span><span class="p">,</span><span class="w">
-</span><span class="w">    </span><span class="n">age</span>: <span class="kt">u32</span><span class="p">,</span><span class="w">
-</span><span class="w">    </span><span class="n">address</span>: <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span><span class="w">
-</span><span class="w">    </span><span class="n">zipcode</span>: <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">id</span>: <span class="kt">u32</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">name</span>: <span class="nb">String</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">age</span>: <span class="kt">u32</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">address</span>: <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">zipcode</span>: <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>ビルダは以下のように使いたいとします。</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="kd">let</span><span class="w"> </span><span class="n">person</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">PersonBuilder</span>::<span class="n">new</span><span class="p">()</span><span class="w">
-</span><span class="w">       </span><span class="p">.</span><span class="n">id</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="w">
-</span><span class="w">       </span><span class="p">.</span><span class="n">name</span><span class="p">(</span><span class="s">&#34;κeen&#34;</span><span class="p">.</span><span class="n">to_string</span><span class="p">())</span><span class="w">
-</span><span class="w">       </span><span class="p">.</span><span class="n">age</span><span class="p">(</span><span class="mi">26</span><span class="p">)</span><span class="w">
-</span><span class="w">       </span><span class="p">.</span><span class="n">address</span><span class="p">(</span><span class="s">&#34;Tokyo&#34;</span><span class="p">.</span><span class="n">to_string</span><span class="p">())</span><span class="w">
-</span><span class="w">       </span><span class="p">.</span><span class="n">build</span><span class="p">();</span><span class="w">
-</span></code></pre></div>
-<p>このとき、 <code>Person</code> には <code>id</code>、<code>name</code>、<code>age</code>のフィールドは自明なデフォルト値を持たないので必須にしたいです。
+</span></code></pre></div><p>ビルダは以下のように使いたいとします。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="kd">let</span><span class="w"> </span><span class="n">person</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">PersonBuilder</span>::<span class="n">new</span><span class="p">(</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="w">       </span><span class="p">.</span><span class="n">id</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="w">       </span><span class="p">.</span><span class="n">name</span><span class="p">(</span><span class="s">&#34;κeen&#34;</span><span class="p">.</span><span class="n">to_string</span><span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="w">       </span><span class="p">.</span><span class="n">age</span><span class="p">(</span><span class="mi">26</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="w">       </span><span class="p">.</span><span class="n">address</span><span class="p">(</span><span class="s">&#34;Tokyo&#34;</span><span class="p">.</span><span class="n">to_string</span><span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="w">       </span><span class="p">.</span><span class="n">build</span><span class="p">(</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span></code></pre></div><p>このとき、 <code>Person</code> には <code>id</code>、<code>name</code>、<code>age</code>のフィールドは自明なデフォルト値を持たないので必須にしたいです。
 つまり少なくとも <code>.id()</code>、<code>.name()</code>、<code>.age()</code> の3つのメソッドを呼ばないと <code>.build()</code> を呼べないようにしたいです。さて、どうしましょう。</p>
-
 <p>3つのメソッドを呼ばないと<code>.build()</code>を実装した型がでてこないようにすればいいのです。
 型の話は置いておいて、ひとまず以下のようなステートマシンをイメージしましょう。</p>
 <div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">                                   .zipcode()
@@ -158,73 +152,70 @@
                                   +----------+
                                   |          |
     .id()     .name()     .age()  v          | .build()
-(S)-------[1]---------[2]--------[3]---------+----------(E)</code></pre></div>
-<p>メソッドを呼ぶ度そのラベルのついた状態に遷移すると思って下さい。
+(S)-------[1]---------[2]--------[3]---------+----------(E)
+</code></pre></div><p>メソッドを呼ぶ度そのラベルのついた状態に遷移すると思って下さい。
 <code>id</code>、<code>name</code>、<code>age</code> を呼ばないと <code>build</code> が呼べないですね。<code>zipcode</code> や <code>address</code> が複数回呼べてしまいますがまあ、それは目を瞑りましょう。
 これを型にエンコードします。遷移はメソッド呼び出しで表現します。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="c1">// Sに対応
 </span><span class="c1"></span><span class="k">struct</span> <span class="nc">PersonBuilderId</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="n">PersonBuilderId</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">new</span><span class="p">()</span><span class="w"> </span>-&gt; <span class="nc">Self</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="n">PersonBuilderId</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="c1">// idの次はname
+</span><span class="w"></span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">new</span><span class="p">(</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">PersonBuilderId</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="c1">// idの次はname
 </span><span class="c1"></span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">id</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">id</span>: <span class="kt">u32</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">PersonBuilderName</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="n">PersonBuilderName</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">id</span>: <span class="nc">id</span><span class="w"> </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">PersonBuilderName</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">id</span>: <span class="nc">id</span><span class="w"> </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="c1">// 1に対応
 </span><span class="c1"></span><span class="k">struct</span> <span class="nc">PersonBuilderName</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="n">id</span>: <span class="kt">u32</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">id</span>: <span class="kt">u32</span><span class="p">,</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="n">PersonBuilderName</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="c1">// nameの次はage
+</span><span class="w"></span><span class="w">    </span><span class="c1">// nameの次はage
 </span><span class="c1"></span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">name</span>: <span class="nb">String</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">PersonBuilderAge</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="n">PersonBuilderAge</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">            </span><span class="n">id</span>: <span class="nc">self</span><span class="p">.</span><span class="n">id</span><span class="p">,</span><span class="w">
-</span><span class="w">            </span><span class="n">name</span>: <span class="nc">name</span><span class="p">,</span><span class="w">
-</span><span class="w">        </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">PersonBuilderAge</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="n">id</span>: <span class="nc">self</span><span class="p">.</span><span class="n">id</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="n">name</span>: <span class="nc">name</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="c1">// 2に対応
 </span><span class="c1"></span><span class="k">struct</span> <span class="nc">PersonBuilderAge</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="n">id</span>: <span class="kt">u32</span><span class="p">,</span><span class="w">
-</span><span class="w">    </span><span class="n">name</span>: <span class="nb">String</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">id</span>: <span class="kt">u32</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">name</span>: <span class="nb">String</span><span class="p">,</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="n">PersonBuilderAge</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="c1">// ageは最後
+</span><span class="w"></span><span class="w">    </span><span class="c1">// ageは最後
 </span><span class="c1"></span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">age</span>: <span class="kt">u32</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">PersonBuilder</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="n">PersonBuilder</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">            </span><span class="n">id</span>: <span class="nc">self</span><span class="p">.</span><span class="n">id</span><span class="p">,</span><span class="w">
-</span><span class="w">            </span><span class="n">name</span>: <span class="nc">self</span><span class="p">.</span><span class="n">name</span><span class="p">,</span><span class="w">
-</span><span class="w">            </span><span class="n">age</span>: <span class="nc">age</span><span class="p">,</span><span class="w">
-</span><span class="w">            </span><span class="n">address</span>: <span class="nb">None</span><span class="p">,</span><span class="w">
-</span><span class="w">            </span><span class="n">zipcode</span>: <span class="nb">None</span><span class="p">,</span><span class="w">
-</span><span class="w">        </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">PersonBuilder</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="n">id</span>: <span class="nc">self</span><span class="p">.</span><span class="n">id</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="n">name</span>: <span class="nc">self</span><span class="p">.</span><span class="n">name</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="n">age</span>: <span class="nc">age</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="n">address</span>: <span class="nb">None</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="n">zipcode</span>: <span class="nb">None</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="c1">// 3に対応
 </span><span class="c1"></span><span class="k">struct</span> <span class="nc">PersonBuilder</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="n">id</span>: <span class="kt">u32</span><span class="p">,</span><span class="w">
-</span><span class="w">    </span><span class="n">name</span>: <span class="nb">String</span><span class="p">,</span><span class="w">
-</span><span class="w">    </span><span class="n">age</span>: <span class="kt">u32</span><span class="p">,</span><span class="w">
-</span><span class="w">    </span><span class="n">address</span>: <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span><span class="w">
-</span><span class="w">    </span><span class="n">zipcode</span>: <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">id</span>: <span class="kt">u32</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">name</span>: <span class="nb">String</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">age</span>: <span class="kt">u32</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">address</span>: <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">zipcode</span>: <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
+</span><span class="w"></span><span class="w">
 </span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="n">PersonBuilder</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">new</span><span class="p">()</span><span class="w"> </span>-&gt; <span class="nc">PersonBuilderId</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">...</span><span class="w"> </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">address</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">address</span>: <span class="nb">String</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">...</span><span class="w"> </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">zipcode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">zipcode</span>: <span class="nb">String</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">...</span><span class="w"> </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">build</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Person</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">...</span><span class="w"> </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">new</span><span class="p">(</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">PersonBuilderId</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="w"> </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">address</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">address</span>: <span class="nb">String</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="w"> </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">zipcode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">zipcode</span>: <span class="nb">String</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="w"> </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">build</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Person</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="w"> </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>これで目的の「<code>id</code>、<code>name</code>、<code>age</code>が揃うまで<code>build</code>」が呼べないが達成されました。</p>
-
+</span></code></pre></div><p>これで目的の「<code>id</code>、<code>name</code>、<code>age</code>が揃うまで<code>build</code>」が呼べないが達成されました。</p>
 <p>因みにこのコードはRustの所有権を上手く使っています。各メソッドで <code>self</code> の所有権を取るので古い状態が消えるのが都合がいいんですね。
 こういう状態遷移はビルダーに限らず色々あると思います。例えばヘッダを書いてからボディを書きたいとか特定のメソッドを呼ぶとアクティブになって特定のメソッドを呼ぶとパッシブになるとか。
 そういうのの状態管理に使えると便利です。</p>
-
 <p>なんかあんまり丁寧な解説にならなかった</p>
                     </section>
                 </article>

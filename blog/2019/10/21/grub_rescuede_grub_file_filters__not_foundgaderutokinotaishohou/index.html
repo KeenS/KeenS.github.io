@@ -111,64 +111,43 @@
                     </header>
                     <section>
                         <p>κeenです。<a href="https://keens.github.io/blog/2018/05/12/ubuntuderootfswobtrfsnoraid1insuto_ru/">昔変な構成でRAID1を組んだ</a>のですが、その状態でUbuntuのアップグレードをしたらgrubが壊れたらしくどうにもならなくなったのでそれを復旧したときのメモです。</p>
-
 <p>grub rescueに落ちたら普段ならカーネルの場所さえ分かれば復帰できるんですが今回はgrub rescueが壊れてるようなのでそれもできません。</p>
-
-<p><blockquote class="twitter-tweet"><p lang="en" dir="ltr">current status <a href="https://t.co/2yxwSMrdnL">pic.twitter.com/2yxwSMrdnL</a></p>&mdash; κeen (@blackenedgold) <a href="https://twitter.com/blackenedgold/status/1186194005970706432?ref_src=twsrc%5Etfw">October 21, 2019</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script></p>
-
+<!-- raw HTML omitted -->
 <p>色々調べた結果、これはgrubを再インストールする他ないようです。
-外部から起動して、元のシステム内にchrootで入ってから <code>grub-install</code> を叩きます。</p>
-
+外部から起動して、元のシステム内にchrootで入ってから <code> grub-install</code> を叩きます。</p>
 <p>という訳でUbuntuのインストールメディアをもってきて、そちらから起動します。</p>
-
 <p>インストールメディアには「Ubuntuを試す」のオプションがあるのでそこからUbuntuに入りましょう。
 そこからGNOME Terminalなどのターミナルを立ち上げます。</p>
-
 <p>ここから先は記憶で書いているので注意です。</p>
-
-<h1 id="デバイスを見付ける">デバイスを見付ける</h1>
-
+<h1 id="heading">デバイスを見付ける</h1>
 <p>rootが載っていたデバイスの他に、今挿したインストールメディアや、バックアップ用のディスクもあるのでgrubがrootが載っていたデバイスを探します。</p>
-
 <p>色々方法があるかと思いますが、私は gpartedでパーティションを見て探します。
 今回は <code>/sdb</code> と <code>/sdd</code> がそれだったみたいです。</p>
-
-<h1 id="mdadm-の復元">mdadm の復元</h1>
-
+<h1 id="mdadm-">mdadm の復元</h1>
 <p>/boot を格納している筈の <code>/dev/md0</code> がありませんでした。なのでmd0を復元させます。これはコマンド1つでできるみたいです。</p>
-<div class="highlight"><pre class="chroma"><code class="language-console" data-lang="console">$ mdadm --assemble --scan</code></pre></div>
-<p>これで <code>/dev/md0</code> ができました。</p>
-
-<h1 id="root-fsをマウントする">root fsをマウントする</h1>
-
+<pre><code class="language-console" data-lang="console">$ mdadm --assemble --scan
+</code></pre><p>これで <code>/dev/md0</code> ができました。</p>
+<h1 id="root-fs">root fsをマウントする</h1>
 <p><code>/</code> はbtrfsなのでそれをマウントします。
 RAIDを構成しているデバイスを全部列挙し、サブボリュームも指定してあげましょう。</p>
-<div class="highlight"><pre class="chroma"><code class="language-console" data-lang="console">$ sudo mount -t btrfs -o device=/dev/sdb5,device=/dev/sdd5,subvol=@ /dev/sdb5 /mnt</code></pre></div>
-<h1 id="boot-をマウントする">/boot をマウントする</h1>
-
+<pre><code class="language-console" data-lang="console">$ sudo mount -t btrfs -o device=/dev/sdb5,device=/dev/sdd5,subvol=@ /dev/sdb5 /mnt
+</code></pre><h1 id="boot-">/boot をマウントする</h1>
 <p>普通にマウントすればいいです。</p>
-<div class="highlight"><pre class="chroma"><code class="language-console" data-lang="console">$ sudo mount /dev/md0 /mnt/boot</code></pre></div>
-<h1 id="その他疑似ファイルシステムをマウントする">その他疑似ファイルシステムをマウントする</h1>
-
+<pre><code class="language-console" data-lang="console">$ sudo mount /dev/md0 /mnt/boot
+</code></pre><h1 id="heading1">その他疑似ファイルシステムをマウントする</h1>
 <p>マウントしましょう。 See also <a href="https://superuser.com/questions/165116/mount-dev-proc-sys-in-a-chroot-environment">linux - mount dev, proc, sys in a chroot environment? - Super User</a></p>
-<div class="highlight"><pre class="chroma"><code class="language-console" data-lang="console">$ sudo mount -t proc proc /mnt/proc
+<pre><code class="language-console" data-lang="console">$ sudo mount -t proc proc /mnt/proc
 $ sudo mount --rbind /sys sys/
-$ sudo mount --rbind /dev dev/</code></pre></div>
-<h1 id="chrootする">chrootする</h1>
-
+$ sudo mount --rbind /dev dev/
+</code></pre><h1 id="chroot">chrootする</h1>
 <p>chrootします。</p>
-
 <pre><code>$ chroot /mnt /bin/bash
-</code></pre>
-
-<h1 id="grubの再インストール">grubの再インストール</h1>
-
+</code></pre><h1 id="grub">grubの再インストール</h1>
 <p>前をブログのようにやればよいです。</p>
-<div class="highlight"><pre class="chroma"><code class="language-console" data-lang="console">$ sudo grub-install /dev/sdb
+<pre><code class="language-console" data-lang="console">$ sudo grub-install /dev/sdb
 $ sudo grub-install /dev/sdd
-$ sudo update-grub</code></pre></div>
-<p>これであとは再起動するだけ。</p>
-
+$ sudo update-grub
+</code></pre><p>これであとは再起動するだけ。</p>
 <p>ファイルシステムのマウントのところは人それぞれだと思うので各自で判断してやって下さい。</p>
                     </section>
                 </article>

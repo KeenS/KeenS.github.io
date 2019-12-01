@@ -20,9 +20,8 @@
         <meta name="twitter:site" content="@blackenedgold" />
         <meta name="twitter:title" content="ClackのHandlerの書き方 | κeenのHappy Hacκing Blog"/>
         <meta name="twitter:description" content="(この記事は Lisp Advent Calendar 7日目のためのエントリです。
- ( 6日目 meymaoさんより「Lisperがクリスマスに贈るべきプレゼント三選」)
- ( 8日目 athos0220さんよりマクロとクロージャで作る並行プログラミング言語))
-
+( 6日目 meymaoさんより「Lisperがクリスマスに贈るべきプレゼント三選」)
+( 8日目 athos0220さんよりマクロとクロージャで作る並行プログラミング言語))
 ClackのHandlerの書き方についてちゃちゃっと解説します。" />
 
         <title>ClackのHandlerの書き方 | κeenのHappy Hacκing Blog</title>
@@ -126,71 +125,46 @@ ClackのHandlerの書き方についてちゃちゃっと解説します。" />
 
                     </header>
                     <section>
-                        <p>(この記事は <a href="http://qiita.com/advent-calendar/2013/lisp">Lisp Advent Calendar</a> 7日目のためのエントリです。<br />
- ( <a href="http://meymao.hatenablog.com/entry/2013/12/06/140029">6日目</a> meymaoさんより「Lisperがクリスマスに贈るべきプレゼント三選」)<br />
- ( <a href="http://www.principia-m.com/ts/0081/index-jp.html">8日目</a> athos0220さんよりマクロとクロージャで作る並行プログラミング言語))</p>
-
+                        <p>(この記事は <a href="http://qiita.com/advent-calendar/2013/lisp">Lisp Advent Calendar</a> 7日目のためのエントリです。<br>
+( <a href="http://meymao.hatenablog.com/entry/2013/12/06/140029">6日目</a> meymaoさんより「Lisperがクリスマスに贈るべきプレゼント三選」)<br>
+( <a href="http://www.principia-m.com/ts/0081/index-jp.html">8日目</a> athos0220さんよりマクロとクロージャで作る並行プログラミング言語))</p>
 <p>ClackのHandlerの書き方についてちゃちゃっと解説します。</p>
-
 <p>さっくりゆるふわな感じで行くので <a href="http://clacklisp.org/">clack公式</a>だとか <a href="http://clacklisp.org/tutorial/ja/">チュートリアル</a>だとかも参考にして下さい。とは言ってもCommon Lispな方なら知ってるでしょう。</p>
-
-<h2 id="clackって">Clackって？</h2>
-
+<h2 id="clack">Clackって？</h2>
 <p>PerlのPlackやRubyのRackと同じくCommon Lispの統一HTTPサーバーインターフェースです。開発時はHunchentootで、本番はFastCGIでみたいなことが簡単にできます。</p>
-
-<h2 id="handlerって">Handlerって？</h2>
-
+<h2 id="handler">Handlerって？</h2>
 <p>HunchentootやFastCGIといったバックエンドとClackとの間でリクエストやレスポンスの受け渡しを担当します。さっくり言うとHandlerを書けばClackで使えるサーバーが増える訳です。今(2013-12現在)のところ、Hunchentoot、FastCGI、Apache + mod_lisp2があるようです。</p>
-
 <p>じゃあ、実際に軽量サーバーの <a href="https://github.com/gigamonkey/toot">toot</a>のハンドラを書きながら解説しますね</p>
-
-<h2 id="準備">準備</h2>
-
+<h2 id="heading">準備</h2>
 <p><code>git clone git@github.com:fukamachi/clack.git</code>してclackのソースコードを持ってきます。他のHanderがそうしてるようなので</p>
-
 <ul>
 <li><code>clack/clack-handler-toot.asd</code></li>
 <li><code>clack/src/core/handler/toot.lisp</code></li>
 </ul>
-
 <p>を作ります。<code>core</code>じゃなくて<code>contrib</code>だろとかそもそも自分のリポジトリに作れよとかは自由にやって下さい。<code>clack/clack-handler-toot.asd</code>は適当に似た名前のやつをコピーすれば良いんじゃないですかね？（適当</p>
-
-<h2 id="書き方">書き方</h2>
-
+<h2 id="heading1">書き方</h2>
 <p>いたって簡単で、<code>run (app &amp;key debug (port 5000)) -&gt; acceptor</code>と<code>stop (acceptor) -&gt; 多分決まってない</code>を実装すれば良いです。</p>
-
 <p>とはいっても<code>stop</code>は1行で終わりますが<code>run</code>は大きく分けて</p>
-
 <ol>
 <li>. サーバーを立ち上げる</li>
 <li>. サーバーから渡されたリクエスト(多くの場合<code>request</code>オブジェクト)をplistにして<code>app</code>に渡す</li>
 <li>. <code>app</code>のlist形式の返値を適切な形(多くの場合<code>response</code>オブジェクト)にしてサーバーに返す</li>
 <li>. エラーハンドリング</li>
 </ol>
-
 <p>の4つの作業があります。一つ一つ説明していきますね。</p>
-
-<h3 id="1-サーバーを立ち上げる">1 サーバーを立ち上げる</h3>
-
+<h3 id="1-">1 サーバーを立ち上げる</h3>
 <p>tootの場合は<code>toot:start-server (&amp;key handler port)</code>を使いました。スレッド立てるのはclackがやってくれます。はい。</p>
-
-<h3 id="2-サーバー渡されたリクエスト-多くの場合-request-オブジェクト-をplistにして-app-に渡す">2 サーバー渡されたリクエスト(多くの場合<code>request</code>オブジェクト)をplistにして<code>app</code>に渡す</h3>
-
+<h3 id="2-requestplistapp">2 サーバー渡されたリクエスト(多くの場合<code>request</code>オブジェクト)をplistにして<code>app</code>に渡す</h3>
 <p>tootの場合、<code>key</code>の<code>handler</code>が<code>requesut</code>オブジェクトを受け取って<code>response</code>オブジェクトを返せば良いので</p>
-
 <pre><code>(lambda (req)
     .....
     (call app (handle-request req))
     .....
 )
 </code></pre>
-
 <p>って感じで<code>handle-request</code>に実装を書きます。</p>
-
 <p><code>handle-request</code>の内部は<code>req</code>を <a href="http://clacklisp.org/tutorial/ja/04-the-environment.html">clack公式のチュートリアル</a>に載っているプロパティに一つ一つ変換していきます。このプロパティとバックエンドのオブジェクトのスロット名と実際のHTTPヘッダの名前が必ずしも一致しないのが泣き所です。さらに、大抵のサーバーの場合リクエストオブジェクトのスロットの詳細まではドキュメントに載ってないのでソースを参照しながら書くことになります。また、そもそも対応する値が無くて、他の情報を切り貼りして作らないといけなかったり、どうしようもなくて空にしないといけないこともあります。</p>
-
 <p>tootハンドラは</p>
-
 <pre><code>(defun handle-request (req)
   &quot;Convert Request from server into a plist
 before pass to Clack application.&quot;
@@ -225,43 +199,31 @@ before pass to Clack application.&quot;
              append (list (intern (format nil &quot;HTTP-~:@(~A~)&quot; k) :keyword)
                           v)))))
 </code></pre>
-
 <p>こんな感じに実装されてます。tootからインポートしたものの他、一部ヘルパー関数も使ってますが挙動はまあ、名前から察して下さい。</p>
-
-<h3 id="3-app-の返値のplistを適切な形-多くの場合-response-オブジェクト-にしてサーバーに返す">3 <code>app</code>の返値のplistを適切な形(多くの場合<code>response</code>オブジェクト)にしてサーバーに返す</h3>
-
+<h3 id="3-appplistresponse">3 <code>app</code>の返値のplistを適切な形(多くの場合<code>response</code>オブジェクト)にしてサーバーに返す</h3>
 <p><code>app</code>を<code>call</code>してやると<code>(status headers body)</code>という形式のlistが返ってきます。<code>status</code>は数値、<code>headers</code>はplist、<code>body</code>はパスネーム又は文字列のリストです。</p>
-
 <p>さっきはこんな感じで呼んだのでした。</p>
-
 <pre><code>(lambda (req)
     .....
     (call app (handle-request req))
     .....
 )
 </code></pre>
-
 <p>もうお分かりかと思いますが</p>
-
 <pre><code>(lambda (req)
     (handle-response
         (call app (handle-request req)))
 )
 </code></pre>
-
 <p>として、実装は<code>handle-response</code>に書きます。…が、tootは<code>response</code>オブジェクトではなく<code>request</code>オブジェクトに変更を加えたものを返すようなので</p>
-
 <pre><code>(lambda (req)
     (handle-response
         req
         (call app (handle-request req)))
 )
 </code></pre>
-
 <p>として、<code>app</code>の返値を元に<code>req</code>を書き換えます。こちらもあまりドキュメントが無いので頑張ってソース読むしかないです。因みに<code>body</code>はパスネームならそのファイルの内容を、文字列のリストならそれぞれを改行(<code>&lt;br&gt;</code>ではなく<code>\n</code>)で連結したものを返す必要があります。</p>
-
 <p>tootハンドラの実装載せときますね。</p>
-
 <pre><code>(defun handle-response (req res)
   (destructuring-bind (status headers body) res
     (etypecase body
@@ -289,21 +251,15 @@ before pass to Clack application.&quot;
        (toot::send-response req (with-output-to-string (s)
       (format s &quot;~{~A~^~%~}&quot; body)))))))
 </code></pre>
-
 <p>です。</p>
-
 <pre><code>(destructuring-bind (status headers body) res
   (etypecase body
     (pathname ...)
     (list ...)))
 </code></pre>
-
 <p>がテンプレートですね。<code>pathname</code>のときはtootに丸投げして<code>list</code>のときは<code>headers</code>とかを真面目に処理してます。</p>
-
-<h3 id="4-エラーハンドリング">4 エラーハンドリング</h3>
-
+<h3 id="4-">4 エラーハンドリング</h3>
 <p>早い話が500 internal server errorです。普通、Lispはエラーが起きるとデバッガに落ちますがサーバーは走り続ける必要がるのであらゆるエラーを無視する必要があります。が、しかしデバッグするとき(<code>run</code>のキーワード引数に<code>debug</code>がありましたね)はデバッガに落ちると嬉しいです。なので例のラムダを少し変更します。</p>
-
 <pre><code>(lambda (req)
               (handle-response
                req
@@ -313,29 +269,17 @@ before pass to Clack application.&quot;
             it
             '(500 nil nil)))))
 </code></pre>
-
 <p>これで完成です。</p>
-
-<h2 id="テスト">テスト</h2>
-
+<h2 id="heading2">テスト</h2>
 <p>Clackにはテストが付いてます。テストケース自体は<code>clack/src/core/test/suite.lisp</code>に書かれてます。</p>
-
 <p><code>clack/t/core/handler/hunchentoot.lisp</code>を参考に<code>clack/t/core/handler/toot.lisp</code>を作り、<code>clack/clack-test.asd</code>の<code>hunchentoot</code>を<code>toot</code>に書き換えたら準備完了です。<code>(ql:quickload :clack-test)</code>しましょう。テストが走ります。そして恐らくエラーが出て止まるでしょう。変な値を返すとサーバーじゃなくてテストの方がエラーで死ぬんですね。</p>
-
 <p>そしたら<code>clack/src/core/test/suite.lisp</code>を開いて期待された値がなんだったかを調べてサーバーを修正します。で、また<code>(ql:quickload :clack-test)</code>の繰り返し。でも一回<code>quickload</code>しちゃうと読み直してくれないので私は一々<code>M-x slime-restart-inferior-lisp</code>してました。なんか違う気がする。これだけじゃなくてテスト全般。溢れるバッドノウハウ感。</p>
-
 <p>とりあえずバックエンドにバグがあるとかのどうしようもない場合を除いてテストに全部合格すれば完成です</p>
-
-<h2 id="完成したら">完成したら</h2>
-
+<h2 id="heading3">完成したら</h2>
 <p>どうしたらいいんでしょうね。分かんないです。clackにpull-req送るんでしょうか。あるいはquicklispに登録?私はとりあえず <a href="https://github.com/KeenS/clack">ブランチに置いてます</a>が恐らく誰も使ってないですし知らないと思います。</p>
-
-<h2 id="で-何作ればいい">で、何作ればいい？</h2>
-
+<h2 id="heading4">で、何作ればいい？</h2>
 <p><a href="https://github.com/fukamachi/clack/issues?state=open">clackのissue</a>にまだ作られてないものがリストされてます。「自分では需要はないけどなんか作ってみたい」といった奇特な方はそこから試すと良いんじゃないでしょうか。GAEとかmongrel2とか需要ありそうな気がします。</p>
-
-<h2 id="まとめ">まとめ</h2>
-
+<h2 id="heading5">まとめ</h2>
 <p>誰得</p>
                     </section>
                 </article>
