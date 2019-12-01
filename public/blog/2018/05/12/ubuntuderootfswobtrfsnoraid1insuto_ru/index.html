@@ -121,43 +121,62 @@
                     <section>
                         <p>κeenです。Ubuntu 18.04 LTSリリースに合わせてマシンを新調し、ついでにrootfsをRAID1にしたのでそのメモを。
 因みに後述するようにブートに問題を抱えているので一般におすすめできるかは怪しいです。</p>
-<h1 id="heading">動機と構成</h1>
+
+<h1 id="動機と構成">動機と構成</h1>
+
 <p>動機は単純で、普段あまり使わない技術を試してみたかったから。本当はRAID5をやりたかったのですがSSD2つしか用意しなかったのでRAID1で。</p>
+
 <p>UbuntuのRAID1化にはmdadmというRAID化モジュールとファイルシステムによるRAID化があるようです。
 面白いことをしたかったのでmdadmではなくファイルシステムによるものを選択。それなりに多機能でかつ興味のあったbtrfsを選択しました。</p>
+
 <p>結果の構成は</p>
+
 <ul>
 <li>ブートローダ &ndash; grub2を各ディスクに手作業でインストール</li>
 <li>/ &ndash; btrfsによるソフトウェアRAID1</li>
 <li>/boot &ndash; ext2 + mdadmによるソフトウェアRAID1</li>
 </ul>
+
 <p>というようにしました。/bootはブートローダからも読めるように保守的に単純なファイルシステムにしましたが/bootまでbtrfsにする例もあるようです。</p>
-<h1 id="ubuntu">Ubuntuのインストール</h1>
+
+<h1 id="ubuntuのインストール">Ubuntuのインストール</h1>
+
 <p>公式のインストーラを使ってインストールしていきます。ここでは直接RAIDに関わることをしないので既存のシステムがある場合はここを飛ばしても構わないと思います。
 インストール時点でRAID1化してしまって手間を省きたかったのですが叶わず。</p>
+
 <p>言語は日本語を選択してキーボードもそのように。インストールオプションは失敗したらやり直すので最小インストール+アップデートなしが良いでしょう</p>
+
 <p>ディスク構成はカスタムにし、インストールディスクを</p>
+
 <ul>
 <li>ディスク1
+
 <ul>
 <li>512MB, ext2 /boot</li>
 <li>残り全部, btrfs /</li>
-</ul>
-</li>
+</ul></li>
 <li>ディスク2
+
 <ul>
 <li>512MB, ext2</li>
 <li>残り全部, btrfs</li>
+</ul></li>
 </ul>
-</li>
-</ul>
+
 <p>のようにします。要はRAID array全てで同じパーティション構成にします。</p>
+
 <p>残りはインストーラの導きに従ってポチポチしていきます。</p>
+
 <p>インストールが終わったら再起動しましょう。</p>
-<h1 id="bootraid1">/bootのRAID1化</h1>
+
+<h1 id="bootのraid1化">/bootのRAID1化</h1>
+
 <p>/と/bootは別々に作業した方がいいでしょう。起動しなかったときに問題の切り分けが難しいので</p>
+
 <p>作業は概ね<a href="https://centossrv.com/centos5-raid-2.shtml">このエントリ</a>の通りに進めると上手く行きます。</p>
+
 <p>ただし/bootしか作業しないのとfdisk相当の処理をインストーラでやってしまったでかなり簡略化されます。</p>
+
 <p>まずはUbuntuがinstallされて<strong>いない</strong>方のデバイスを準備します。</p>
 <pre><code class="language-console" data-lang="console">$ sudo apt install mdadm
 # RAID1 の準備。なんかメタデータでwarning出るけど強行突破しても問題なさそう
@@ -177,59 +196,79 @@ $ sudo mount /dev/md0 /boot
 # ここでfstabを編集して /boot の起動デバイスを/dev/md0にする
 $ vi /etc/fstab
 # mdadmを使った構成をブートシーケンスに反映させる
-$ sudo update-initramfs -u
-</code></pre><p>因みに<code>update-initramfs</code>は失敗すると起動しなくなるコマンドなので盲目的に叩くのではなくて何をするコマンドなのかは調べてから使いましょう。
+$ sudo update-initramfs -u</code></pre>
+<p>因みに<code>update-initramfs</code>は失敗すると起動しなくなるコマンドなので盲目的に叩くのではなくて何をするコマンドなのかは調べてから使いましょう。
 余談ですが私はこのタイミングで<code>/etc/fstab</code>のswapfsの行を削除して/swapのファイルを消しました。</p>
+
 <p>そして再起動します。</p>
-<h2 id="heading1">再起動後</h2>
+
+<h2 id="再起動後">再起動後</h2>
+
 <p>ここでは既にディスク2の/bootから起動しているはずです。ディスク1の/bootパーティションをこれのRAID1 Arrayに加えます。</p>
-<pre><code class="language-console" data-lang="console">$ sudo mdadm /dev/md0 --add /dev/sda1
-</code></pre><p>最後にgrubをインストールします。</p>
+<pre><code class="language-console" data-lang="console">$ sudo mdadm /dev/md0 --add /dev/sda1</code></pre>
+<p>最後にgrubをインストールします。</p>
 <pre><code class="language-console" data-lang="console">$ sudo install-grub2 /dev/ディスク1
 $ sudo install-grub2 /dev/ディスク2
-$ sudo update-grub
-</code></pre><p>これで再起動して正常に起動したら/bootはmdadm化できました。</p>
-<h1 id="-raid">/ のRAID化</h1>
+$ sudo update-grub</code></pre>
+<p>これで再起動して正常に起動したら/bootはmdadm化できました。</p>
+
+<h1 id="のraid化">/ のRAID化</h1>
+
 <p>簡単ですが鬼門です。本来なら<a href="https://btrfs.wiki.kernel.org/index.php/Using_Btrfs_with_Multiple_Devices">ここ</a>の通りに進めれば上手く行くはずです。</p>
+
 <p>今は / はディスク1から読まれていて、ディスク2が空いてるはずです。これにディスク2を加えます。</p>
+
 <p>btrfsの機能を使うのですぐに終わります。</p>
 <pre><code class="language-console" data-lang="console">$ sudo btrfs device add -f /dev/ディスク2 /mnt
-$ sudo btrfs balance start -dconvert=raid1 -mconvert=raid1 /
-</code></pre><p>これだけ。</p>
+$ sudo btrfs balance start -dconvert=raid1 -mconvert=raid1 /</code></pre>
+<p>これだけ。</p>
+
 <p>…のはずですがinitramfsにバグがあるらしく、これだと起動時にディスク2が見つからずにエラーが出ます。
 色々回避策を試行錯誤したのですが決定的なものは見つかりませんでした。一応観測した状況を書くと、</p>
+
 <ul>
 <li>カーネルのコマンドラインオプションに <code>rootfstype=btrfs rootflags=device=ディスク1,device=ディスク2</code> と書いても起動失敗</li>
 <li>もちろん同様にfstabをいじっても不能</li>
 <li>initramfsに落ちた後に <strong>ディスク2を</strong> マウントしようとするとマウントできる
+
 <ul>
 <li>ディスク1だとエラー</li>
-</ul>
-</li>
+</ul></li>
 <li>initramfsに落ちた後に<code>btrfs device scan</code> をしてからディスク1をマウントすると通る
+
 <ul>
 <li>しかしinitramsが叩くスクリプトを編集してマウント前に<code>btrfs device scan</code>を発行するようにしてもエラー</li>
-</ul>
-</li>
+</ul></li>
 <li>grubのメニューからコマンドラインオプションをいじって<code>root=ディスク2</code>とすると起動する
+
 <ul>
 <li>ディスク1だとエラー</li>
+</ul></li>
 </ul>
-</li>
-</ul>
+
 <p>ということで今安定して起動できる方法は「毎度grubのメニューにいって <code>root=ディスク2</code> を指定」になっています。
 もうちょっとマシな方法があるやろという気もしますが私では見つけられませんでした。</p>
+
 <p>上手くいったのかいってないのかわかりませんがこれで生活してます。どうにかブートシーケンスを改善できたらまた記事を書くことにします。</p>
-<h1 id="heading2">トラブルシューティングの助け</h1>
-<h2 id="grub2">grub2のメニューに遷移</h2>
+
+<h1 id="トラブルシューティングの助け">トラブルシューティングの助け</h1>
+
+<h2 id="grub2のメニューに遷移">grub2のメニューに遷移</h2>
+
 <p>デフォルトだと暗黙にメニューを飛ばしてしまいます。
 Shiftを押しながら起動時するとgrubのメニューにいくようです</p>
-<h2 id="initramfsbusybox">initramfsで落ちたときにbusyboxのコンソールにいく</h2>
+
+<h2 id="initramfsで落ちたときにbusyboxのコンソールにいく">initramfsで落ちたときにbusyboxのコンソールにいく</h2>
+
 <p>Ubuntuの紫の画面の後に黒い画面にいったときの対処方法です。</p>
+
 <p>Ctrl+Alt+F6,Ctrl+Alt+F1とタイプするとコンソールにいくようです。なぜこのシーケンスなのかはよくわかってないので遷移しないときはF7とか色々試してからCtrl+Alt+F1をタイプするとコンソールにいけるようです。
 因みにUbuntuはデフォルトでCtrl+Alt+Fxでコンソール間を遷移できます。</p>
-<h2 id="initramfsrootfs">initramfsからrootfsにいく</h2>
+
+<h2 id="initramfsからrootfsにいく">initramfsからrootfsにいく</h2>
+
 <p>適切なシーケンスを踏んでない(systemdとかを起動してない)ので修正作業用の一時処理です。</p>
+
 <p>Ubuntuのインストーラでbtrfsでフォーマットすると裏で勝手に/用の<code>@</code>と/home用の<code>@home</code>の2つのsubvolumeを作るようです。</p>
 <pre><code class="language-console" data-lang="console">(initramfs) mount -o subvol=@ /dev/ディスク2 /root
 (initramfs) mount -o subvol=@home /dev/ディスク2 /root/home
@@ -238,9 +277,11 @@ Shiftを押しながら起動時するとgrubのメニューにいくようで�
 (initramfs) mount -o move /dev /root/dev
 (initramfs) chroot root
 bash # mdadm --assemble --scan
-bash # mount /dev/md0 /boot
-</code></pre><p>これでfstabやgrubやinitramfsを修正できます。</p>
-<h1 id="heading3">参考</h1>
+bash # mount /dev/md0 /boot</code></pre>
+<p>これでfstabやgrubやinitramfsを修正できます。</p>
+
+<h1 id="参考">参考</h1>
+
 <ul>
 <li><a href="https://centossrv.com/centos5-raid-2.shtml">非RAIDシステムのRAID化</a></li>
 <li><a href="https://btrfs.wiki.kernel.org/index.php/Using_Btrfs_with_Multiple_Devices">Using Btrfs with Multiple Devices</a></li>

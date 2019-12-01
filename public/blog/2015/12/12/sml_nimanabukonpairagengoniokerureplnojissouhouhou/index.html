@@ -20,6 +20,7 @@
         <meta name="twitter:site" content="@blackenedgold" />
         <meta name="twitter:title" content="SML#に学ぶコンパイラ言語におけるREPLの実装方法 | κeenのHappy Hacκing Blog"/>
         <meta name="twitter:description" content="このエントリは言語実装 Advent Calendar 201516日目の記事です。
+
 κeenです。かねてより気になっていたREPLの実装方法について、SML#のソースコードを読んだのでその話でもします。" />
 
         <title>SML#に学ぶコンパイラ言語におけるREPLの実装方法 | κeenのHappy Hacκing Blog</title>
@@ -128,10 +129,13 @@
                     </header>
                     <section>
                         <p>このエントリは<a href="http://qiita.com/advent-calendar/2015/lang_dev">言語実装 Advent Calendar 2015</a>16日目の記事です。</p>
+
 <p>κeenです。かねてより気になっていたREPLの実装方法について、SML#のソースコードを読んだのでその話でもします。</p>
+
 <p>さて、ソースコードを読みながらやっていきましょう。SML# 2.0.0のソースコードです。</p>
+
 <p>REPLのエントリポイントは<a href="https://github.com/smlsharp/smlsharp/blob/master/src/compiler/main/main/SimpleMain.sml#L949">src/compiler/main/main/SimpleMain.smlL949</a>です。</p>
-<pre><code>      | Interactive (options, context) =&gt;
+<pre><code>      | Interactive (options, context) =>
         let
           val newContext =
               Top.loadInteractiveEnv
@@ -140,7 +144,7 @@
                  loadPath = nil}
                 context
                 (Filename.concatPath
-                   (#systemBaseDir options, Filename.fromString &quot;prelude.smi&quot;))
+                   (#systemBaseDir options, Filename.fromString "prelude.smi"))
           val context =
               let
                 val context = Top.extendContext (context, newContext)
@@ -149,13 +153,13 @@
                 context
               end
           val _ = ReifiedTermData.init (#topEnv context)
-                  handle e =&gt; raise e
+                  handle e => raise e
         in
           RunLoop.interactive options context;
           SUCCESS
-        end
+        end</code></pre>
+<p>いろいろごちゃごちゃやってますがオプションと共に<code>RunLoop.interactive</code>を呼んでるだけです。</p>
 
-</code></pre><p>いろいろごちゃごちゃやってますがオプションと共に<code>RunLoop.interactive</code>を呼んでるだけです。</p>
 <p>さて、RunLoop.smlはSimpleMain.smlと同じディレクトリにあります。<code>interactive</code>関数は次のように定義されています。</p>
 <pre><code class="language-sml" data-lang="sml">  fun interactive options context =
       let
@@ -167,45 +171,45 @@
               (Counter.reset();
                NameEvalEnv.intExnConList();
                case run options context input of
-                 SUCCESS newContext =&gt;
+                 SUCCESS newContext =>
                  ....
-               | FAILED =&gt;
+               | FAILED =>
                  loop (Top.incVersion context) (interactiveInput state)
               )
       in
         loop context (interactiveInput state)
-      end
-</code></pre><p>何やら状態を初期化した後は<code>interactiveInput</code>で得られた結果を<code>run</code>に渡しているようです。<code>run</code>を見ましょう。</p>
+      end</code></pre>
+<p>何やら状態を初期化した後は<code>interactiveInput</code>で得られた結果を<code>run</code>に渡しているようです。<code>run</code>を見ましょう。</p>
 <pre><code class="language-sml" data-lang="sml">  fun run ({stdPath, loadPath, LDFLAGS, LIBS, errorOutput, llvmOptions,
             ...}:options)
           context input =
       let
-        fun puts s = TextIO.output (errorOutput, s ^ &quot;\n&quot;)
+        fun puts s = TextIO.output (errorOutput, s ^ "\n")
         val options = {stopAt = Top.NoStop,
                        baseFilename = NONE,
                        stdPath = stdPath,
                        loadPath = loadPath}
         val ({interfaceNameOpt, ...}, result) =
              Top.compile options context input
-             handle e =&gt;
+             handle e =>
              (
                case e of
-                 UserError.UserErrors errs =&gt;
-                 app (fn e =&gt; puts (userErrorToString e)) errs
-               | UserError.UserErrorsWithoutLoc errs =&gt;
-                 app (fn (k,e) =&gt; puts (userErrorToString (Loc.noloc,k,e))) errs
-               | Bug.Bug s =&gt; puts (&quot;Compiler bug:&quot; ^ s)
-               | exn =&gt; raise exn;
+                 UserError.UserErrors errs =>
+                 app (fn e => puts (userErrorToString e)) errs
+               | UserError.UserErrorsWithoutLoc errs =>
+                 app (fn (k,e) => puts (userErrorToString (Loc.noloc,k,e))) errs
+               | Bug.Bug s => puts ("Compiler bug:" ^ s)
+               | exn => raise exn;
                raise CompileError
             )
         val (newContext, module) =
             case result of
-              Top.RETURN (newContext, module) =&gt; (newContext, module)
-            | Top.STOPPED =&gt; raise Bug.Bug &quot;run&quot;
+              Top.RETURN (newContext, module) => (newContext, module)
+            | Top.STOPPED => raise Bug.Bug "run"
       in
         let
-          val objfile = TempFile.create (&quot;.&quot; ^ SMLSharp_Config.OBJEXT ())
-          val asmfile = TempFile.create (&quot;.&quot; ^ SMLSharp_Config.ASMEXT ())
+          val objfile = TempFile.create ("." ^ SMLSharp_Config.OBJEXT ())
+          val asmfile = TempFile.create ("." ^ SMLSharp_Config.ASMEXT ())
           val _ = #start Counter.llvmOutputTimeCounter()
           val _ = LLVM.compile llvmOptions (module, LLVM.AssemblyFile,
                                             Filename.toString asmfile)
@@ -216,21 +220,21 @@
           val sofile = TempFile.create (SMLSharp_Config.DLLEXT ())
           val ldflags =
               case SMLSharp_Config.HOST_OS_TYPE () of
-                SMLSharp_Config.Unix =&gt; nil
-              | SMLSharp_Config.Cygwin =&gt;
-                [&quot;-Wl,-out-implib,&quot;
-                 ^ Filename.toString (Filename.replaceSuffix &quot;lib&quot; sofile)]
-              | SMLSharp_Config.Mingw =&gt;
-                [&quot;-Wl,--out-implib=&quot;
-                 ^ Filename.toString (Filename.replaceSuffix &quot;lib&quot; sofile)]
+                SMLSharp_Config.Unix => nil
+              | SMLSharp_Config.Cygwin =>
+                ["-Wl,-out-implib,"
+                 ^ Filename.toString (Filename.replaceSuffix "lib" sofile)]
+              | SMLSharp_Config.Mingw =>
+                ["-Wl,--out-implib="
+                 ^ Filename.toString (Filename.replaceSuffix "lib" sofile)]
           val libfiles =
               case SMLSharp_Config.HOST_OS_TYPE () of
-                SMLSharp_Config.Unix =&gt; nil
-              | SMLSharp_Config.Cygwin =&gt;
-                map (fn x =&gt; Filename.toString (Filename.replaceSuffix &quot;lib&quot; x))
+                SMLSharp_Config.Unix => nil
+              | SMLSharp_Config.Cygwin =>
+                map (fn x => Filename.toString (Filename.replaceSuffix "lib" x))
                     (!loadedFiles)
-              | SMLSharp_Config.Mingw =&gt;
-                map (fn x =&gt; Filename.toString (Filename.replaceSuffix &quot;lib&quot; x))
+              | SMLSharp_Config.Mingw =>
+                map (fn x => Filename.toString (Filename.replaceSuffix "lib" x))
                     (!loadedFiles)
           val _ = BinUtils.link
                     {flags = SMLSharp_Config.RUNLOOP_DLDFLAGS () :: LDFLAGS
@@ -243,18 +247,18 @@
           val so = DynamicLink.dlopen' (Filename.toString sofile,
                                         DynamicLink.GLOBAL,
                                         DynamicLink.NOW)
-                   handle OS.SysErr (msg, _) =&gt; raise DLError msg
+                   handle OS.SysErr (msg, _) => raise DLError msg
           val {mainSymbol, stackMapSymbol, codeBeginSymbol, ...} =
               GenerateMain.moduleName (interfaceNameOpt, #version context)
           val smap = DynamicLink.dlsym' (so, stackMapSymbol)
-                     handle OS.SysErr (msg, _) =&gt; raise DLError msg
+                     handle OS.SysErr (msg, _) => raise DLError msg
           val base = DynamicLink.dlsym' (so, codeBeginSymbol)
-                     handle OS.SysErr (msg, _) =&gt; raise DLError msg
+                     handle OS.SysErr (msg, _) => raise DLError msg
           val _ = sml_register_stackmap (smap, base)
           val ptr = DynamicLink.dlsym (so, mainSymbol)
-                    handle OS.SysErr (msg, _) =&gt; raise DLError msg
+                    handle OS.SysErr (msg, _) => raise DLError msg
           (*
-           * Note that &quot;ptr&quot; points to an ML toplevel code. This toplevel code
+           * Note that "ptr" points to an ML toplevel code. This toplevel code
            * should be called by the calling convention for ML toplevels of
            * ML object files.  __attribute__((fastcc,no_callback)) is an ad
            * hoc way of yielding this convention code; no_callback avoids
@@ -263,71 +267,74 @@
            * __attribute__ annotation.
            *)
           val mainFn =
-              ptr : _import __attribute__((fastcc,no_callback)) () -&gt; ()
+              ptr : _import __attribute__((fastcc,no_callback)) () -> ()
         in
           loadedFiles := sofile :: !loadedFiles;
-          mainFn () handle e =&gt; raise UncaughtException e;
+          mainFn () handle e => raise UncaughtException e;
           SUCCESS newContext
         end
-        handle e =&gt;
+        handle e =>
           (
             case e of
-              UserError.UserErrors errs =&gt;
-              app (fn e =&gt; puts (userErrorToString e)) errs
-            | UserError.UserErrorsWithoutLoc errs =&gt;
-              app (fn (k,e) =&gt; puts (userErrorToString (Loc.noloc,k,e))) errs
-            | DLError s =&gt;
-              puts (&quot;failed dynamic linking. Perhaps incorrect name in _import declaration: &quot; ^ s)
-            | UncaughtException exn =&gt;
-              puts (&quot;uncaught exception &quot; ^ exnMessage exn)
-            | CoreUtils.Failed {command, message} =&gt;
-              (puts (&quot;command failed: &quot; ^ command); puts message)
-            | _ =&gt; raise e;
+              UserError.UserErrors errs =>
+              app (fn e => puts (userErrorToString e)) errs
+            | UserError.UserErrorsWithoutLoc errs =>
+              app (fn (k,e) => puts (userErrorToString (Loc.noloc,k,e))) errs
+            | DLError s =>
+              puts ("failed dynamic linking. Perhaps incorrect name in _import declaration: " ^ s)
+            | UncaughtException exn =>
+              puts ("uncaught exception " ^ exnMessage exn)
+            | CoreUtils.Failed {command, message} =>
+              (puts ("command failed: " ^ command); puts message)
+            | _ => raise e;
             FAILED
           )
       end
-      handle CompileError =&gt; FAILED
-</code></pre><p>デカいですね。どうやら<code>run</code>がREPLの本体のようです。少しずつ見ていきます。</p>
+      handle CompileError => FAILED</code></pre>
+<p>デカいですね。どうやら<code>run</code>がREPLの本体のようです。少しずつ見ていきます。</p>
+
 <p>まずはコンパイルしているようです。</p>
 <pre><code class="language-sml" data-lang="sml">        val ({interfaceNameOpt, ...}, result) =
-             Top.compile options context input
-</code></pre><p>そして結果からcontextとmoduleを取り出します。</p>
+             Top.compile options context input</code></pre>
+<p>そして結果からcontextとmoduleを取り出します。</p>
 <pre><code class="language-sml" data-lang="sml">        val (newContext, module) =
             case result of
-              Top.RETURN (newContext, module) =&gt; (newContext, module)
-            | Top.STOPPED =&gt; raise Bug.Bug &quot;run&quot;
-</code></pre><p>恐らくcontextが変数名とかを持っているのでしょう。
+              Top.RETURN (newContext, module) => (newContext, module)
+            | Top.STOPPED => raise Bug.Bug "run"</code></pre>
+<p>恐らくcontextが変数名とかを持っているのでしょう。
 moduleに関しては<code>Top.compile</code>が最後にLLVMEmitをしてるのでLLVMのmodule(コンパイルされる最大単位)のことだと思います。だとするとここまではまだコードはメモリ上にあるはずです。</p>
+
 <p>moduleを取り出した後どうしてるかというとオブジェクトファイルを作っているようです。ここでファイルに書き出されました。</p>
-<pre><code>          val objfile = TempFile.create (&quot;.&quot; ^ SMLSharp_Config.OBJEXT ())
-          val asmfile = TempFile.create (&quot;.&quot; ^ SMLSharp_Config.ASMEXT ())
+<pre><code>          val objfile = TempFile.create ("." ^ SMLSharp_Config.OBJEXT ())
+          val asmfile = TempFile.create ("." ^ SMLSharp_Config.ASMEXT ())
           val _ = #start Counter.llvmOutputTimeCounter()
           val _ = LLVM.compile llvmOptions (module, LLVM.AssemblyFile,
                                             Filename.toString asmfile)
           val _ = LLVM.compile llvmOptions (module, LLVM.ObjectFile,
                                             Filename.toString objfile)
           val _ = #stop Counter.llvmOutputTimeCounter()
-          val _ = LLVM.LLVMDisposeModule module
-</code></pre><p>最後に呼んでるDisposeModuleはデストラクタですかね。ちゃんとお片付けしてます。</p>
+          val _ = LLVM.LLVMDisposeModule module</code></pre>
+<p>最後に呼んでるDisposeModuleはデストラクタですかね。ちゃんとお片付けしてます。</p>
+
 <p>さらに、ダイナミックリンクファイルを作るようです。</p>
 <pre><code class="language-sml" data-lang="sml">          val sofile = TempFile.create (SMLSharp_Config.DLLEXT ())
           val ldflags =
               case SMLSharp_Config.HOST_OS_TYPE () of
-                SMLSharp_Config.Unix =&gt; nil
-              | SMLSharp_Config.Cygwin =&gt;
-                [&quot;-Wl,-out-implib,&quot;
-                 ^ Filename.toString (Filename.replaceSuffix &quot;lib&quot; sofile)]
-              | SMLSharp_Config.Mingw =&gt;
-                [&quot;-Wl,--out-implib=&quot;
-                 ^ Filename.toString (Filename.replaceSuffix &quot;lib&quot; sofile)]
+                SMLSharp_Config.Unix => nil
+              | SMLSharp_Config.Cygwin =>
+                ["-Wl,-out-implib,"
+                 ^ Filename.toString (Filename.replaceSuffix "lib" sofile)]
+              | SMLSharp_Config.Mingw =>
+                ["-Wl,--out-implib="
+                 ^ Filename.toString (Filename.replaceSuffix "lib" sofile)]
           val libfiles =
               case SMLSharp_Config.HOST_OS_TYPE () of
-                SMLSharp_Config.Unix =&gt; nil
-              | SMLSharp_Config.Cygwin =&gt;
-                map (fn x =&gt; Filename.toString (Filename.replaceSuffix &quot;lib&quot; x))
+                SMLSharp_Config.Unix => nil
+              | SMLSharp_Config.Cygwin =>
+                map (fn x => Filename.toString (Filename.replaceSuffix "lib" x))
                     (!loadedFiles)
-              | SMLSharp_Config.Mingw =&gt;
-                map (fn x =&gt; Filename.toString (Filename.replaceSuffix &quot;lib&quot; x))
+              | SMLSharp_Config.Mingw =>
+                map (fn x => Filename.toString (Filename.replaceSuffix "lib" x))
                     (!loadedFiles)
           val _ = BinUtils.link
                     {flags = SMLSharp_Config.RUNLOOP_DLDFLAGS () :: LDFLAGS
@@ -336,61 +343,67 @@ moduleに関しては<code>Top.compile</code>が最後にLLVMEmitをしてるの
                      objects = [objfile],
                      dst = sofile,
                      useCXX = false,
-                     quiet = not (!Control.printCommand)}
-</code></pre><p>この時、Windowsでは何かしらの制約があるのか過去にリンクしたダイナミックリンクファイル(libfiles)も今回作るダイナミックリンクファイルにリンクしているようです。</p>
+                     quiet = not (!Control.printCommand)}</code></pre>
+<p>この時、Windowsでは何かしらの制約があるのか過去にリンクしたダイナミックリンクファイル(libfiles)も今回作るダイナミックリンクファイルにリンクしているようです。</p>
+
 <p>さて、ダイナミックリンクファイルを作った後は<code>dlopen</code>を使ってダイナミックリンクします。</p>
 <pre><code class="language-sml" data-lang="sml">          val so = DynamicLink.dlopen' (Filename.toString sofile,
                                         DynamicLink.GLOBAL,
                                         DynamicLink.NOW)
-                   handle OS.SysErr (msg, _) =&gt; raise DLError msg
-</code></pre><p>その後はエントリポイントを捜してインポート、</p>
+                   handle OS.SysErr (msg, _) => raise DLError msg</code></pre>
+<p>その後はエントリポイントを捜してインポート、</p>
 <pre><code class="language-sml" data-lang="sml">          val {mainSymbol, stackMapSymbol, codeBeginSymbol, ...} =
               GenerateMain.moduleName (interfaceNameOpt, #version context)
           val smap = DynamicLink.dlsym' (so, stackMapSymbol)
-                     handle OS.SysErr (msg, _) =&gt; raise DLError msg
+                     handle OS.SysErr (msg, _) => raise DLError msg
           val base = DynamicLink.dlsym' (so, codeBeginSymbol)
-                     handle OS.SysErr (msg, _) =&gt; raise DLError msg
+                     handle OS.SysErr (msg, _) => raise DLError msg
           val _ = sml_register_stackmap (smap, base)
           val ptr = DynamicLink.dlsym (so, mainSymbol)
-                    handle OS.SysErr (msg, _) =&gt; raise DLError msg
-</code></pre><p>そして実行します。</p>
+                    handle OS.SysErr (msg, _) => raise DLError msg</code></pre>
+<p>そして実行します。</p>
 <pre><code class="language-sml" data-lang="sml">          val mainFn =
-              ptr : _import __attribute__((fastcc,no_callback)) () -&gt; ()
+              ptr : _import __attribute__((fastcc,no_callback)) () -> ()
         in
           loadedFiles := sofile :: !loadedFiles;
-          mainFn () handle e =&gt; raise UncaughtException e;
-          SUCCESS newContext
-</code></pre><p>結果を印字しているところが見当らないのですが吐かれたコードに印字部分も入っているんですかね。</p>
+          mainFn () handle e => raise UncaughtException e;
+          SUCCESS newContext</code></pre>
+<p>結果を印字しているところが見当らないのですが吐かれたコードに印字部分も入っているんですかね。</p>
+
 <p>あとは<code>interactive</code>に返ってコンテキストを拡張したりバージョンをインクリメントしたりします。</p>
 <pre><code class="language-sml" data-lang="sml">                   val context = Top.extendContext (context, newContext)
-                   val context = Top.incVersion context
-</code></pre><p>バージョンによってシンボル名を変えることで何度もsoファイルをロードしても大丈夫なようにしてるんですかね。</p>
+                   val context = Top.incVersion context</code></pre>
+<p>バージョンによってシンボル名を変えることで何度もsoファイルをロードしても大丈夫なようにしてるんですかね。</p>
+
 <p>ということでREPLの実装は入力を一旦ダイナミックリンクとしてコンパイルしてからロードしているようでした。</p>
-<h1 id="heading">おまけ</h1>
+
+<h1 id="おまけ">おまけ</h1>
+
 <p>REPLの入力部分は次のようになっています。</p>
-<pre><code class="language-sml" data-lang="sml">
-  fun initInteractive () =
+<pre><code class="language-sml" data-lang="sml">  fun initInteractive () =
       let
         val lineCount = ref 1
         val eof = ref false
         fun read (isFirst, _:int) =
             let
-              val prompt = if isFirst then &quot;# &quot; else &quot;&gt; &quot;
+              val prompt = if isFirst then "# " else "> "
               val _ = TextIO.output (TextIO.stdOut, prompt)
               val _ = TextIO.flushOut TextIO.stdOut
               val line = TextIO.inputLine TextIO.stdIn
               val _ = lineCount := !lineCount + 1
             in
-              case line of NONE =&gt; (eof := true; &quot;&quot;) | SOME s =&gt; s
+              case line of NONE => (eof := true; "") | SOME s => s
             end
       in
         {lineCount = lineCount, eof = eof, read = read}
-      end
+      end</code></pre>
+<p>結構小さいので色々Hack出来ます。例えば<a href="https://github.com/smlsharp/smlsharp/pull/13">hskさんのように</a>REPLを付けることも出来ます。</p>
 
-</code></pre><p>結構小さいので色々Hack出来ます。例えば<a href="https://github.com/smlsharp/smlsharp/pull/13">hskさんのように</a>REPLを付けることも出来ます。</p>
 <p>このパッチで外部コマンドを呼ぶのが少し嫌な人はさらに<code>ioctl(2)</code>を使ってrawモードにするパッチを当てるかlibeditなんかを使ってリッチな入力を実現するかをすればいいでしょう。
 個人利用なら(他人に配布しないなら)GPLv3のreadlineも使えるんですかね（ライセンスに詳しくない）。</p>
-<h1 id="heading1">まとめ</h1>
+
+<h1 id="まとめ">まとめ</h1>
+
 <ul>
 <li>REPLの実装にはダイナミックリンクを使う方法があるよ</li>
 <li>SML#のREPLはHack出来そうだよ</li>

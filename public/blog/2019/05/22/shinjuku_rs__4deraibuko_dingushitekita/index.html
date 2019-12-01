@@ -115,23 +115,32 @@
                     </header>
                     <section>
                         <p>κeenです。勉強会参加報告を書くのも久しぶりですね。<a href="https://forcia.connpass.com/event/124988/">RustのLT会 Shinjuku.rs #4 @FORCIA </a>でライブコーディングしてきたのでそれを書き留めておきます。</p>
+
 <p>当日になって発表枠が2つ分くらい余ってるとのことだったので尺とりそうなライブコーディングをしてきました。
 題材は拙著(共著)<a href="https://gihyo.jp/book/2019/978-4-297-10559-4">実践Rust入門</a>の「9章 パーサを作る」より。
 9章の締めの文にはこう書かれています。</p>
+
 <blockquote>
 <p>ここで構成したインタプリタは簡素なものではありますが、骨子は同じまま複雑な処理をするインタプリタへの応用もできるでしょう。変数、関数、制御構造、ユーザ定義型、と徐々に拡張していけば 1 つ 1 つのステップは難しくないでしょう。</p>
 </blockquote>
+
 <p>これを証明するために変数の追加をライブコーディングしました。何の準備もないぶっつけ本番のやつです。あまり褒められたものではないですね。</p>
+
 <p>9章を通して作るコードはGitHubで<a href="https://github.com/ghmagazine/rustbook">公開されている</a>のでこれをベースに作業をします。</p>
-<h1 id="heading">元の電卓と新しい仕様</h1>
+
+<h1 id="元の電卓と新しい仕様">元の電卓と新しい仕様</h1>
+
 <p>元のコードは以下のようにして式を打ち込むとパースして計算して結果を出してくれる対話環境です。</p>
-<pre><code class="language-console" data-lang="console">&gt; 1 + 1
+<pre><code class="language-console" data-lang="console">> 1 + 1
 Annot { value: BinOp { op: Annot { value: Add, loc: Loc(2, 3) }, l: Annot { value: Num(1), loc: Loc(0, 1) }, r: Annot { value: Num(1), loc: Loc(4, 5) } }, loc: Loc(0, 5) }
 2
-1 1 +
-</code></pre><p>デバッグプリントが出てますが気にせず進めます。2行目にちゃんと <code>2</code> と出ているのが見えるかと思います。こうやって結果を出してくれます。</p>
+1 1 +</code></pre>
+<p>デバッグプリントが出てますが気にせず進めます。2行目にちゃんと <code>2</code> と出ているのが見えるかと思います。こうやって結果を出してくれます。</p>
+
 <p>これにRust風の <code>let &lt;変数&gt; = &lt;式&gt;;</code> を加えるというのが今回の題材です。</p>
-<h1 id="heading1">レキサまで</h1>
+
+<h1 id="レキサまで">レキサまで</h1>
+
 <p>新しく <code>let</code> 、変数、 <code>=</code> 、 <code>;</code> がトークンに加わります。これはそのまま <code>TokenKind</code> に加えればよいでしょう。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#[</span><span class="cp">derive(Debug, Clone, PartialEq, Eq, Hash)</span><span class="cp">]</span><span class="w">
 </span><span class="w"></span><span class="k">enum</span> <span class="nc">TokenKind</span><span class="w"> </span><span class="p">{</span><span class="w">
@@ -145,8 +154,8 @@ Annot { value: BinOp { op: Annot { value: Add, loc: Loc(2, 3) }, l: Annot { valu
 </span><span class="w"></span><span class="w">    </span><span class="sd">/// x
 </span><span class="sd"></span><span class="w">    </span><span class="n">Var</span><span class="p">(</span><span class="nb">String</span><span class="p">)</span><span class="p">,</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="w">
-</span></code></pre></div><p><code>Var</code> の引数に <code>Stringが</code> 入った影響で <code>Copy</code> が自動導出から消えてます。
+</span></code></pre></div>
+<p><code>Var</code> の引数に <code>Stringが</code> 入った影響で <code>Copy</code> が自動導出から消えてます。
 この定義変更から直ちに作業的にヘルパ関数ができあがります。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">impl</span><span class="w"> </span><span class="n">Token</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="c1">// ...
@@ -167,7 +176,8 @@ Annot { value: BinOp { op: Annot { value: Add, loc: Loc(2, 3) }, l: Annot { valu
 </span><span class="w"></span><span class="w">        </span><span class="n">Self</span>::<span class="n">new</span><span class="p">(</span><span class="n">TokenKind</span>::<span class="n">Var</span><span class="p">(</span><span class="n">s</span><span class="p">.</span><span class="n">into</span><span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">,</span><span class="w"> </span><span class="n">loc</span><span class="p">)</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>さて、これからレキサを書いていきますが、その前にテストを準備しましょう。ライブコーディング中はロケーション情報の修正を忘れてたりしましたが、このコードは修正後のものです。</p>
+</span></code></pre></div>
+<p>さて、これからレキサを書いていきますが、その前にテストを準備しましょう。ライブコーディング中はロケーション情報の修正を忘れてたりしましたが、このコードは修正後のものです。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#[</span><span class="cp">test</span><span class="cp">]</span><span class="w">
 </span><span class="w"></span><span class="k">fn</span> <span class="nf">test_lexer2</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="n">assert_eq</span><span class="o">!</span><span class="p">(</span><span class="w">
@@ -181,8 +191,8 @@ Annot { value: BinOp { op: Annot { value: Add, loc: Loc(2, 3) }, l: Annot { valu
 </span><span class="w"></span><span class="w">        </span><span class="p">]</span><span class="p">)</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="p">)</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="w">
-</span></code></pre></div><p>これでレキサを書き始められます。
+</span></code></pre></div>
+<p>これでレキサを書き始められます。
 まずはエントリポイントの <code>lex</code> 関数に処理を加えましょう。今回加わったのは <code>=</code> 、 <code>;</code> 、 <code>let</code> 、 変数ですが、変数と <code>let</code> は最初の文字が被ってる可能性があるので一緒に処理します。なので都合3つの節が新たに加わります。
 ここでaからzまでの範囲の記法を間違えて会場に助けてもらったりしてました。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="sd">/// 字句解析器
@@ -201,15 +211,16 @@ Annot { value: BinOp { op: Annot { value: Add, loc: Loc(2, 3) }, l: Annot { valu
 </span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="nb">Ok</span><span class="p">(</span><span class="n">tokens</span><span class="p">)</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="w">
-</span></code></pre></div><p>このうち <code>=</code> と <code>;</code> はそのまま実装が決まります。</p>
+</span></code></pre></div>
+<p>このうち <code>=</code> と <code>;</code> はそのまま実装が決まります。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">lex_equal</span><span class="p">(</span><span class="n">input</span>: <span class="kp">&amp;</span><span class="p">[</span><span class="kt">u8</span><span class="p">]</span><span class="p">,</span><span class="w"> </span><span class="n">start</span>: <span class="kt">usize</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">Result</span><span class="o">&lt;</span><span class="p">(</span><span class="n">Token</span><span class="p">,</span><span class="w"> </span><span class="kt">usize</span><span class="p">)</span><span class="p">,</span><span class="w"> </span><span class="n">LexError</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="n">consume_byte</span><span class="p">(</span><span class="n">input</span><span class="p">,</span><span class="w"> </span><span class="n">start</span><span class="p">,</span><span class="w"> </span><span class="sc">b&#39;=&#39;</span><span class="p">)</span><span class="p">.</span><span class="n">map</span><span class="p">(</span><span class="o">|</span><span class="p">(</span><span class="n">_</span><span class="p">,</span><span class="w"> </span><span class="n">end</span><span class="p">)</span><span class="o">|</span><span class="w"> </span><span class="p">(</span><span class="n">Token</span>::<span class="n">equal</span><span class="p">(</span><span class="n">Loc</span><span class="p">(</span><span class="n">start</span><span class="p">,</span><span class="w"> </span><span class="n">end</span><span class="p">)</span><span class="p">)</span><span class="p">,</span><span class="w"> </span><span class="n">end</span><span class="p">)</span><span class="p">)</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="k">fn</span> <span class="nf">lex_semicolon</span><span class="p">(</span><span class="n">input</span>: <span class="kp">&amp;</span><span class="p">[</span><span class="kt">u8</span><span class="p">]</span><span class="p">,</span><span class="w"> </span><span class="n">start</span>: <span class="kt">usize</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">Result</span><span class="o">&lt;</span><span class="p">(</span><span class="n">Token</span><span class="p">,</span><span class="w"> </span><span class="kt">usize</span><span class="p">)</span><span class="p">,</span><span class="w"> </span><span class="n">LexError</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="n">consume_byte</span><span class="p">(</span><span class="n">input</span><span class="p">,</span><span class="w"> </span><span class="n">start</span><span class="p">,</span><span class="w"> </span><span class="sc">b&#39;;&#39;</span><span class="p">)</span><span class="p">.</span><span class="n">map</span><span class="p">(</span><span class="o">|</span><span class="p">(</span><span class="n">_</span><span class="p">,</span><span class="w"> </span><span class="n">end</span><span class="p">)</span><span class="o">|</span><span class="w"> </span><span class="p">(</span><span class="n">Token</span>::<span class="n">semicolon</span><span class="p">(</span><span class="n">Loc</span><span class="p">(</span><span class="n">start</span><span class="p">,</span><span class="w"> </span><span class="n">end</span><span class="p">)</span><span class="p">)</span><span class="p">,</span><span class="w"> </span><span class="n">end</span><span class="p">)</span><span class="p">)</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>変数または <code>let</code> は複数のトークンを読む必要があるので、 <code>lex_number</code> をコピペして作りましょう。
+</span></code></pre></div>
+<p>変数または <code>let</code> は複数のトークンを読む必要があるので、 <code>lex_number</code> をコピペして作りましょう。
 ひとまずアルファベットの塊を抜き出してみて <code>let</code> だったら <code>let</code> キーワードに、それ以外だったら変数にするようにします。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">lex_str</span><span class="p">(</span><span class="n">input</span>: <span class="kp">&amp;</span><span class="p">[</span><span class="kt">u8</span><span class="p">]</span><span class="p">,</span><span class="w"> </span><span class="n">pos</span>: <span class="kt">usize</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">Result</span><span class="o">&lt;</span><span class="p">(</span><span class="n">Token</span><span class="p">,</span><span class="w"> </span><span class="kt">usize</span><span class="p">)</span><span class="p">,</span><span class="w"> </span><span class="n">LexError</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="kt">str</span>::<span class="n">from_utf8</span><span class="p">;</span><span class="w">
@@ -225,8 +236,8 @@ Annot { value: BinOp { op: Annot { value: Add, loc: Loc(2, 3) }, l: Annot { valu
 </span><span class="w"></span><span class="w">        </span><span class="nb">Ok</span><span class="p">(</span><span class="p">(</span><span class="n">Token</span>::<span class="n">var</span><span class="p">(</span><span class="n">s</span><span class="p">,</span><span class="w"> </span><span class="n">Loc</span><span class="p">(</span><span class="n">start</span><span class="p">,</span><span class="w"> </span><span class="n">end</span><span class="p">)</span><span class="p">)</span><span class="p">,</span><span class="w"> </span><span class="n">end</span><span class="p">)</span><span class="p">)</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="w">
-</span></code></pre></div><p>これでレキサ部分は実装を終えましたが後の方でコンパイルエラーが出ているので直します。
+</span></code></pre></div>
+<p>これでレキサ部分は実装を終えましたが後の方でコンパイルエラーが出ているので直します。
 <code>TokenKind</code> のDisplayに新たに加えたものの実装を足します。この実装不足をコンパイラが教えてくれるのはいい所ですね。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">impl</span><span class="w"> </span><span class="n">fmt</span>::<span class="n">Display</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">TokenKind</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="k">fn</span> <span class="nf">fmt</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">f</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">fmt</span>::<span class="n">Formatter</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">fmt</span>::<span class="nb">Result</span><span class="w"> </span><span class="p">{</span><span class="w">
@@ -240,8 +251,8 @@ Annot { value: BinOp { op: Annot { value: Add, loc: Loc(2, 3) }, l: Annot { valu
 </span><span class="w"></span><span class="w">        </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="w">
-</span></code></pre></div><p>そして <code>TokenKind</code> から <code>Copy</code> を消した影響で <code>parse_expr1</code> に変更が必要になります。1行目の <code>tok.value</code> に <code>clone</code> がつきます。</p>
+</span></code></pre></div>
+<p>そして <code>TokenKind</code> から <code>Copy</code> を消した影響で <code>parse_expr1</code> に変更が必要になります。1行目の <code>tok.value</code> に <code>clone</code> がつきます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="c1">// expr1
 </span><span class="c1"></span><span class="k">fn</span> <span class="nf">parse_expr1</span><span class="o">&lt;</span><span class="n">Tokens</span><span class="o">&gt;</span><span class="p">(</span><span class="n">tokens</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">Peekable</span><span class="o">&lt;</span><span class="n">Tokens</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">Result</span><span class="o">&lt;</span><span class="n">Ast</span><span class="p">,</span><span class="w"> </span><span class="n">ParseError</span><span class="o">&gt;</span><span class="w">
 </span><span class="w"></span><span class="k">where</span><span class="w">
@@ -250,9 +261,11 @@ Annot { value: BinOp { op: Annot { value: Add, loc: Loc(2, 3) }, l: Annot { valu
 </span><span class="w"></span><span class="w">    </span><span class="k">match</span><span class="w"> </span><span class="n">tokens</span><span class="p">.</span><span class="n">peek</span><span class="p">(</span><span class="p">)</span><span class="p">.</span><span class="n">map</span><span class="p">(</span><span class="o">|</span><span class="n">tok</span><span class="o">|</span><span class="w"> </span><span class="n">tok</span><span class="p">.</span><span class="n">value</span><span class="p">.</span><span class="n">clone</span><span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>これでテストが通るようになった(会場ではテストのロケーションの修正をやった)のでレキサは完成です。</p>
-<pre><code class="language-console" data-lang="console">test test_lexer2 ... ok
-</code></pre><h1 id="heading2">パーサ</h1>
+</span></code></pre></div>
+<p>これでテストが通るようになった(会場ではテストのロケーションの修正をやった)のでレキサは完成です。</p>
+<pre><code class="language-console" data-lang="console">test test_lexer2 ... ok</code></pre>
+<h1 id="パーサ">パーサ</h1>
+
 <p>パーサも作業の流れはレキサと同じです。 <code>let</code> 文を表わすバリアントを追加します。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="sd">/// ASTを表すデータ型
 </span><span class="sd"></span><span class="cp">#[</span><span class="cp">derive(Debug, Clone, PartialEq, Eq, Hash)</span><span class="cp">]</span><span class="w">
@@ -274,7 +287,8 @@ Annot { value: BinOp { op: Annot { value: Add, loc: Loc(2, 3) }, l: Annot { valu
 </span><span class="w"></span><span class="w">        </span><span class="p">)</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>そして対応するテストを追加します。</p>
+</span></code></pre></div>
+<p>そして対応するテストを追加します。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#[</span><span class="cp">test</span><span class="cp">]</span><span class="w">
 </span><span class="w"></span><span class="k">fn</span> <span class="nf">test_parser2</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="c1">// let x = 1;
@@ -294,7 +308,9 @@ Annot { value: BinOp { op: Annot { value: Add, loc: Loc(2, 3) }, l: Annot { valu
 </span><span class="w"></span><span class="w">        </span><span class="p">)</span><span class="p">)</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="p">)</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>テストができました。パーサを作りましょう。</p>
+</span></code></pre></div>
+<p>テストができました。パーサを作りましょう。</p>
+
 <p>いままでは式だけでしたが、<code>let</code> は文なので新たに <code>parse_stmt</code> という関数を追加します。これは <code>parse_expr1</code> からコピペして作ったと思います。長いですが <code>let</code> 、 変数 、 <code>=</code> 、 式 、 <code>;</code> を順番に取り出してるだけです。もし先頭が <code>let</code> でなかったら <code>parse_expr3</code> のパースにフォールバックします。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">parse_stmt</span><span class="o">&lt;</span><span class="n">Tokens</span><span class="o">&gt;</span><span class="p">(</span><span class="n">tokens</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">Peekable</span><span class="o">&lt;</span><span class="n">Tokens</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">Result</span><span class="o">&lt;</span><span class="n">Ast</span><span class="p">,</span><span class="w"> </span><span class="n">ParseError</span><span class="o">&gt;</span><span class="w">
 </span><span class="w"></span><span class="k">where</span><span class="w">
@@ -339,10 +355,12 @@ Annot { value: BinOp { op: Annot { value: Add, loc: Loc(2, 3) }, l: Annot { valu
 </span><span class="w"></span><span class="w">        </span><span class="n">_</span><span class="w"> </span><span class="o">=</span><span class="o">&gt;</span><span class="w"> </span><span class="n">parse_expr3</span><span class="p">(</span><span class="n">tokens</span><span class="p">)</span><span class="p">,</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="w">
-</span></code></pre></div><p>会場では <code>=</code> を取り出すのを忘れていました。また、 <code>unreachable</code> をところどころ使っていますがよく考えると先頭の <code>let</code> 以外は到達可能で、 unexpected tokenのエラーを出すべきですね。
+</span></code></pre></div>
+<p>会場では <code>=</code> を取り出すのを忘れていました。また、 <code>unreachable</code> をところどころ使っていますがよく考えると先頭の <code>let</code> 以外は到達可能で、 unexpected tokenのエラーを出すべきですね。
 煩雑なので <code>consume_token</code> 的な関数を定義しておけばよかったんですがアドリブではそこまで機転が利きませんでした。</p>
+
 <p><code>loc</code> のところでコメントアウトが見られますが最初混乱して書けなくて後回しにしたせいです。</p>
+
 <p>レキサと同じくこれで動作はしますが、後の方でコンパイルエラーが発生してるので直します。 <code>Interpreter</code> の <code>eval</code> です。ここでは <code>unimplemented</code> を使ってコンパイルを通します。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">impl</span><span class="w"> </span><span class="n">Interpreter</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="c1">// ...
@@ -353,16 +371,16 @@ Annot { value: BinOp { op: Annot { value: Add, loc: Loc(2, 3) }, l: Annot { valu
 </span><span class="c1"></span><span class="w">            </span><span class="n">Let</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">.</span><span class="p">.</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="o">=</span><span class="o">&gt;</span><span class="w"> </span><span class="n">unimplemented</span><span class="o">!</span><span class="p">(</span><span class="p">)</span><span class="w">
 </span><span class="w"></span><span class="w">        </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="w">
-</span></code></pre></div><p>同様に、 <code>RpnCompiler</code> でもエラーが出ますが、 <code>unimplemented!()</code> にします。</p>
+</span></code></pre></div>
+<p>同様に、 <code>RpnCompiler</code> でもエラーが出ますが、 <code>unimplemented!()</code> にします。</p>
+
 <p>これでテストを走らせてみましょう。</p>
 <pre><code class="language-console" data-lang="console">---- test_parser2 stdout ----
 thread 'test_parser2' panicked at 'assertion failed: `(left == right)`
   left: `Err(NotExpression(Annot { value: Let, loc: Loc(0, 3) }))`,
- right: `Ok(Annot { value: Let { var: &quot;x&quot;, body: Annot { value: Num(1), loc: Loc(8, 9) } }, loc: Loc(0, 10) })`', src/main.rs:658:5
-note: Run with `RUST_BACKTRACE=1` environment variable to display a backtrace.
-
-</code></pre><p>おや、エラーになります。。どうやら <code>let</code> のパースに失敗してます。よく考えたら <code>parse_stmt</code> を定義したいいですが、使うのを忘れてました。 <code>parse</code> 関数内で <code>parse_expr</code> の代わりに <code>parse_stmt</code> を呼ぶようにしましょう。</p>
+ right: `Ok(Annot { value: Let { var: "x", body: Annot { value: Num(1), loc: Loc(8, 9) } }, loc: Loc(0, 10) })`', src/main.rs:658:5
+note: Run with `RUST_BACKTRACE=1` environment variable to display a backtrace.</code></pre>
+<p>おや、エラーになります。。どうやら <code>let</code> のパースに失敗してます。よく考えたら <code>parse_stmt</code> を定義したいいですが、使うのを忘れてました。 <code>parse</code> 関数内で <code>parse_expr</code> の代わりに <code>parse_stmt</code> を呼ぶようにしましょう。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">parse</span><span class="p">(</span><span class="n">tokens</span>: <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Token</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">Result</span><span class="o">&lt;</span><span class="n">Ast</span><span class="p">,</span><span class="w"> </span><span class="n">ParseError</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="c1">// 入力をイテレータにし、 `Peekable` にする
 </span><span class="c1"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">tokens</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tokens</span><span class="p">.</span><span class="n">into_iter</span><span class="p">(</span><span class="p">)</span><span class="p">.</span><span class="n">peekable</span><span class="p">(</span><span class="p">)</span><span class="p">;</span><span class="w">
@@ -373,11 +391,13 @@ note: Run with `RUST_BACKTRACE=1` environment variable to display a backtrace.
 </span><span class="w"></span><span class="w">        </span><span class="nb">None</span><span class="w"> </span><span class="o">=</span><span class="o">&gt;</span><span class="w"> </span><span class="nb">Ok</span><span class="p">(</span><span class="n">ret</span><span class="p">)</span><span class="p">,</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="w">
-</span></code></pre></div><p>今度こそ。</p>
-<pre><code class="language-console" data-lang="console">test test_parser2 ... ok
-</code></pre><p>通りました。会場では <code>=</code> の処理を忘れていたり、ロケーション情報を修正したりしましたが概ねこのまま動きました。</p>
-<h1 id="heading3">インタプリタ</h1>
+</span></code></pre></div>
+<p>今度こそ。</p>
+<pre><code class="language-console" data-lang="console">test test_parser2 ... ok</code></pre>
+<p>通りました。会場では <code>=</code> の処理を忘れていたり、ロケーション情報を修正したりしましたが概ねこのまま動きました。</p>
+
+<h1 id="インタプリタ">インタプリタ</h1>
+
 <p>RPNコンパイラはそもそもバックエンドの実行器が変数に対応してないのでインタプリタを作ります。
 <code>Interpreter</code> 構造体に変数と値の対応を保持するハッシュマップを持っておきましょう。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">collections</span>::<span class="n">HashMap</span><span class="p">;</span><span class="w">
@@ -390,7 +410,8 @@ note: Run with `RUST_BACKTRACE=1` environment variable to display a backtrace.
 </span><span class="w"></span><span class="w">        </span><span class="n">Interpreter</span><span class="p">(</span><span class="n">HashMap</span>::<span class="n">new</span><span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>これであとは <code>eval</code> の <code>unimplemented</code> の部分を埋めるだけです。
+</span></code></pre></div>
+<p>これであとは <code>eval</code> の <code>unimplemented</code> の部分を埋めるだけです。
 が、文の値というものがここで発生します。普通は文の値は <code>void</code> ですね。
 綺麗にやるなら <code>enum Value {Int(i64), Void}</code> を定義するところですが、時間がないので <code>0</code> を返すことにしました。
 会場ではライフタイムエラーなどありましたがこのコードが出来上がりました。</p>
@@ -404,20 +425,24 @@ note: Run with `RUST_BACKTRACE=1` environment variable to display a backtrace.
 </span><span class="w"></span><span class="w">                </span><span class="bp">self</span><span class="p">.</span><span class="mf">0.</span><span class="n">insert</span><span class="p">(</span><span class="n">var</span><span class="p">.</span><span class="n">clone</span><span class="p">(</span><span class="p">)</span><span class="p">,</span><span class="w"> </span><span class="n">e</span><span class="p">)</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="w">                </span><span class="nb">Ok</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="w">
 </span><span class="w"></span><span class="w">            </span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>これで動くのですが、RPNコンパイラを実装してないのでそれはコメントアウトしておきましょう。</p>
+</span></code></pre></div>
+<p>これで動くのですが、RPNコンパイラを実装してないのでそれはコメントアウトしておきましょう。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="c1">// ...
 </span><span class="c1"></span><span class="w">        </span><span class="c1">// let rpn = compiler.compile(&amp;ast);
 </span><span class="c1"></span><span class="w">        </span><span class="c1">// println!(&#34;{}&#34;, rpn);
 </span><span class="c1"></span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="w">
-</span></code></pre></div><p>それでは試してみます。</p>
-<pre><code class="language-console" data-lang="console">&gt; let x = 1;
-Annot { value: Let { var: &quot;x&quot;, body: Annot { value: Num(1), loc: Loc(8, 9) } }, loc: Loc(0, 10) }
-0
-</code></pre><p>ちゃんと0が返ってきました。めでたしめでたし。ここまで20分ほどだったようです。</p>
+</span></code></pre></div>
+<p>それでは試してみます。</p>
+<pre><code class="language-console" data-lang="console">> let x = 1;
+Annot { value: Let { var: "x", body: Annot { value: Num(1), loc: Loc(8, 9) } }, loc: Loc(0, 10) }
+0</code></pre>
+<p>ちゃんと0が返ってきました。めでたしめでたし。ここまで20分ほどだったようです。</p>
+
 <p>…と会場では締めたのですがこれでは変数を定義するだけで利用できないですね。ついでなのでそれも実装しましょう。</p>
-<h1 id="heading4">変数の参照</h1>
+
+<h1 id="変数の参照">変数の参照</h1>
+
 <p>懇親会中に一人でやってました。レキサは変数を既に扱えるのでパーサ以降をいじります。
 ASTにバリアントを追加してヘルパ関数を定義。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="sd">/// ASTを表すデータ型
@@ -435,7 +460,8 @@ ASTにバリアントを追加してヘルパ関数を定義。</p>
 </span><span class="w"></span><span class="w">        </span><span class="n">Self</span>::<span class="n">new</span><span class="p">(</span><span class="n">AstKind</span>::<span class="n">Var</span><span class="p">(</span><span class="n">var</span><span class="p">)</span><span class="p">,</span><span class="w"> </span><span class="n">loc</span><span class="p">)</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>変数はアトムなので <code>parse_atom</code> をちょこちょこっといじります。</p>
+</span></code></pre></div>
+<p>変数はアトムなので <code>parse_atom</code> をちょこちょこっといじります。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">parse_atom</span><span class="o">&lt;</span><span class="n">Tokens</span><span class="o">&gt;</span><span class="p">(</span><span class="n">tokens</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">Peekable</span><span class="o">&lt;</span><span class="n">Tokens</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">Result</span><span class="o">&lt;</span><span class="n">Ast</span><span class="p">,</span><span class="w"> </span><span class="n">ParseError</span><span class="o">&gt;</span><span class="w">
 </span><span class="w"></span><span class="k">where</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="n">Tokens</span>: <span class="nb">Iterator</span><span class="o">&lt;</span><span class="n">Item</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Token</span><span class="o">&gt;</span><span class="p">,</span><span class="w">
@@ -450,8 +476,8 @@ ASTにバリアントを追加してヘルパ関数を定義。</p>
 </span><span class="w"></span><span class="w">            </span><span class="c1">// ...
 </span><span class="c1"></span><span class="w">        </span><span class="p">}</span><span class="p">)</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="w">
-</span></code></pre></div><p>インタプリタに取り掛かりますが、その前に存在しない変数の参照はエラーなので <code>InterpreterErrorKind</code> を増やします。 <code>description</code> の実装要らない気がするけどなんで残ってるんだろう。</p>
+</span></code></pre></div>
+<p>インタプリタに取り掛かりますが、その前に存在しない変数の参照はエラーなので <code>InterpreterErrorKind</code> を増やします。 <code>description</code> の実装要らない気がするけどなんで残ってるんだろう。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#[</span><span class="cp">derive(Debug, Clone, PartialEq, Eq, Hash)</span><span class="cp">]</span><span class="w">
 </span><span class="w"></span><span class="k">enum</span> <span class="nc">InterpreterErrorKind</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="n">DivisionByZero</span><span class="p">,</span><span class="w">
@@ -477,8 +503,8 @@ ASTにバリアントを追加してヘルパ関数を定義。</p>
 </span><span class="w"></span><span class="w">        </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="w">
-</span></code></pre></div><p>それではインタプリタをば。 ハッシュマップからの <code>get</code> で <code>Option</code> が返るので <code>ok_or</code> で <code>None</code> を <code>UnboundVariable</code> エラーに変換して返ります。</p>
+</span></code></pre></div>
+<p>それではインタプリタをば。 ハッシュマップからの <code>get</code> で <code>Option</code> が返るので <code>ok_or</code> で <code>None</code> を <code>UnboundVariable</code> エラーに変換して返ります。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">eval</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">expr</span>: <span class="kp">&amp;</span><span class="nc">Ast</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">Result</span><span class="o">&lt;</span><span class="kt">i64</span><span class="p">,</span><span class="w"> </span><span class="n">InterpreterError</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">        </span><span class="k">use</span><span class="w"> </span><span class="bp">self</span>::<span class="n">AstKind</span>::<span class="o">*</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="w">        </span><span class="k">match</span><span class="w"> </span><span class="n">expr</span><span class="p">.</span><span class="n">value</span><span class="w"> </span><span class="p">{</span><span class="w">
@@ -489,22 +515,23 @@ ASTにバリアントを追加してヘルパ関数を定義。</p>
 </span><span class="w"></span><span class="w">            </span><span class="p">)</span><span class="p">)</span><span class="p">,</span><span class="w">
 </span><span class="w"></span><span class="w">        </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="w">
-</span></code></pre></div><p>RPNコンパイラの方は相変わらず <code>unimplemented</code> のスタブを刺しておいて下さい。</p>
+</span></code></pre></div>
+<p>RPNコンパイラの方は相変わらず <code>unimplemented</code> のスタブを刺しておいて下さい。</p>
+
 <p>これで実行できます。</p>
-<pre><code class="language-console" data-lang="console">&gt; let x = 1 + 1;
-Annot { value: Let { var: &quot;x&quot;, body: Annot { value: BinOp { op: Annot { value: Add, loc: Loc(10, 11) }, l: Annot { value: Num(1), loc: Loc(8, 9) }, r: Annot { value: Num(1), loc: Loc(12, 13) } }, loc: Loc(8, 13) } }, loc: Loc(0, 14) }
+<pre><code class="language-console" data-lang="console">> let x = 1 + 1;
+Annot { value: Let { var: "x", body: Annot { value: BinOp { op: Annot { value: Add, loc: Loc(10, 11) }, l: Annot { value: Num(1), loc: Loc(8, 9) }, r: Annot { value: Num(1), loc: Loc(12, 13) } }, loc: Loc(8, 13) } }, loc: Loc(0, 14) }
 0
-&gt; x + x * 2
-Annot { value: BinOp { op: Annot { value: Add, loc: Loc(2, 3) }, l: Annot { value: Var(&quot;x&quot;), loc: Loc(0, 1) }, r: Annot { value: BinOp { op: Annot { value: Mult, loc: Loc(6, 7) }, l: Annot { value: Var(&quot;x&quot;), loc: Loc(4, 5) }, r: Annot { value: Num(2), loc: Loc(8, 9) } }, loc: Loc(4, 9) } }, loc: Loc(0, 9) }
+> x + x * 2
+Annot { value: BinOp { op: Annot { value: Add, loc: Loc(2, 3) }, l: Annot { value: Var("x"), loc: Loc(0, 1) }, r: Annot { value: BinOp { op: Annot { value: Mult, loc: Loc(6, 7) }, l: Annot { value: Var("x"), loc: Loc(4, 5) }, r: Annot { value: Num(2), loc: Loc(8, 9) } }, loc: Loc(4, 9) } }, loc: Loc(0, 9) }
 6
-&gt; x + y
-Annot { value: BinOp { op: Annot { value: Add, loc: Loc(2, 3) }, l: Annot { value: Var(&quot;x&quot;), loc: Loc(0, 1) }, r: Annot { value: Var(&quot;y&quot;), loc: Loc(4, 5) } }, loc: Loc(0, 5) }
+> x + y
+Annot { value: BinOp { op: Annot { value: Add, loc: Loc(2, 3) }, l: Annot { value: Var("x"), loc: Loc(0, 1) }, r: Annot { value: Var("y"), loc: Loc(4, 5) } }, loc: Loc(0, 5) }
 variable y is not bound
 x + y
     ^
-variable y is not bound
-</code></pre><p>変数の扱いもunbound variableも扱えます。めでたしめでたし。</p>
+variable y is not bound</code></pre>
+<p>変数の扱いもunbound variableも扱えます。めでたしめでたし。</p>
                     </section>
                 </article>
             </div>

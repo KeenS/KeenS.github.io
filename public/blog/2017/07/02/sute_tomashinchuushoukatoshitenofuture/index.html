@@ -119,27 +119,32 @@
                     </header>
                     <section>
                         <p>κeenです。最近Futureと一口にいってもいくつか種類があるなと気付いたのでRustの<a href="https://github.com/alexcrichton/futures-rs"><code>futures-rs</code></a>に実装されているFutureの挙動を紐解こうと思います。</p>
-<h1 id="io">イベント駆動IO</h1>
+
+<h1 id="イベント駆動io">イベント駆動IO</h1>
+
 <p>TCPサーバをノンブロッキングに書こうとすると、思いの他大変です。
 ブロックせずにIOできるタイミングまで処理を溜めておいて、できるときに読み書きします。ブロックしないタイミングをみつけるのも一苦労なので大抵ライブラリに頼ってライブラリからイベントを通知してもらいます。Rustには<a href="https://github.com/carllerche/mio">mio</a>というライブラリがあります。</p>
+
 <p>さて、これイベントの発見は書かなくてよくなりましたが、まだつらいです。リクエストがないのにレスポンスを返せる訳もないので処理とイベントに依存関係があって、「read readyイベントでデータを読み取って、足りれば処理開始、足りなければまだ読み取る。処理が終わればwrite readyイベントを待って書き込み。その後は次のリクエストに備えてread readyイベント待ち」などの複雑な条件分岐と処理をしなければなりません。しかもクライアントは1つじゃないのでそれらを複数管理しないといけません。やりきれませんね。私が昔書いた<a href="https://github.com/KeenS/chat/blob/master/src/handler.rs#L32">Websocketのechoサーバ</a>を少し見ると大変そうなことが伝わると思います。（余談ですが、つらそうなコードを書いたのは抽象化ライブラリに頼らないコードを実感するためでした）</p>
-<h1 id="heading">ステートマシン</h1>
+
+<h1 id="ステートマシン">ステートマシン</h1>
+
 <p>先程の複雑な条件分岐の例は、「ステート」があることに気付きます。「リクエストがまだ来てない」「リクエストの一部が届いたけど全部でない」「リクエストの処理中」「レスポンスの送信待ち」など。これを明確に「ステート」としてプログラムを書いてあげると綺麗に書くことができます。</p>
-<pre><code>[リクエストがまだ来てない]&lt;----------------+
+<pre><code>[リクエストがまだ来てない]<----------------+
   | read ready                            |
   +------------------------------------+  |
   |                                    |  |
-[リクエストの一部がきたが全部でない]&lt;-+  |  |
+[リクエストの一部がきたが全部でない]<-+  |  |
   | read ready                      |  |  |
   +---------------------------------+  |  |
   |                                    |  |
-[リクエストの処理中]&lt;-------------------+  |
+[リクエストの処理中]<-------------------+  |
   |                                       |
 [レスポンスの書き出し待ち]                 |
   | write ready                           |
-[レスポンスの書き出し完了]-----------------+
+[レスポンスの書き出し完了]-----------------+</code></pre>
+<p>さて、このステートマシンを図に書く範囲では明瞭なのですが、実際のプログラムに落とすとやや見通しが悪いです。</p>
 
-</code></pre><p>さて、このステートマシンを図に書く範囲では明瞭なのですが、実際のプログラムに落とすとやや見通しが悪いです。</p>
 <p>ナイーブな実装を疑似コードで書くとこうなるでしょうか。</p>
 <pre><code>enum State = リクエストがまだ来てない
            | リクエストの一部がきたが全部でない
@@ -152,21 +157,21 @@ event arrived
     when (リクエストがまだ来てない, read ready)
       ...
       if request is complete
-        state &lt;- リクエストの処理中
+        state <- リクエストの処理中
         wait for write ready
       else
-        state &lt;- リクエストの一部がきたが全部でない
+        state <- リクエストの一部がきたが全部でない
         wait for read ready
     when リクエストの一部がきたが全部でない
       ...
       if request is complete
-        state &lt;- リクエストの処理中
+        state <- リクエストの処理中
         wait for write ready
       else
-        state &lt;- リクエストの一部がきたが全部でない
+        state <- リクエストの一部がきたが全部でない
         wait for read ready
-    ...
-</code></pre><p>モデリングは上手くいっているものの実際のコードに落とすとみづらいですね。
+    ...</code></pre>
+<p>モデリングは上手くいっているものの実際のコードに落とすとみづらいですね。
 ナイーブな実装方法の他に、デザインパターンのステートパターンを使う手もあります。まあ、そのまんまですね。
 疑似コードにするとこうなるでしょうか。</p>
 <pre><code>abstract class State
@@ -190,19 +195,25 @@ class リクエストの一部がきたが全部でない
 
 event arrived
   if event equals waiting_event
-    (next_state, waiting_event) &lt;- state.do()
-</code></pre><p>ステートと処理のかたまりで分離することができたのでコードの見通しもよくなりました。</p>
+    (next_state, waiting_event) <- state.do()</code></pre>
+<p>ステートと処理のかたまりで分離することができたのでコードの見通しもよくなりました。</p>
+
 <p>しかし、Rust的にはまだ問題があります。Stateのサブクラスでモデリングしてますが、それだとメソッドのディスパッチが動的ディスパッチになってしまって遅いです。Zero-cost abstractionできてません。</p>
+
 <p>もう1つ問題があって、これでもまだ直感的なコードとはかけ離れてます。本来ならこういうコードを書きたい筈です。</p>
-<pre><code>request &lt;- empty
+<pre><code>request <- empty
 until request is complete
-  request &lt;&lt; input
-response &lt;- // do something with request
-output &lt;&lt; response
-</code></pre><p>これをどうにかできないでしょうか。</p>
+  request << input
+response <- // do something with request
+output << response</code></pre>
+<p>これをどうにかできないでしょうか。</p>
+
 <h1 id="future">Future</h1>
+
 <p>そこでfutures-rsです。ゼロコストでステートマシンを抽象化してくれます。<a href="https://aturon.github.io/blog/2016/08/11/futures/">Zero-cost futures in Rust · Aaron Turon</a>を読んだことのある人も多いでしょう。</p>
+
 <p>基本的なアイディアは、1つのステートとその時の処理を表わす<code>Future</code>の他にステート同士を繋げるコンビネータを用意することで柔軟にプログラムを書けるようにするということです。そしてステートの処理関数が静的ディスパッチされるようにコンビネータを工夫する（基本的には型パラメータに情報を残して静的ディスパッチできるようにする）ことでゼロコスト抽象化を実現しています。</p>
+
 <p>先程のコードをfuturesを使って書くとこのような雰囲気になるでしょうか。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="kd">let</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">loop_fn</span><span class="p">(</span><span class="nb">Vec</span>::<span class="n">new</span><span class="p">(</span><span class="p">)</span><span class="p">,</span><span class="w"> </span><span class="o">|</span><span class="k">mut</span><span class="w"> </span><span class="n">buff</span><span class="o">|</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="n">input</span><span class="p">.</span><span class="n">read</span><span class="p">(</span><span class="p">)</span><span class="w">
@@ -220,14 +231,21 @@ output &lt;&lt; response
 </span><span class="w"></span><span class="w">  </span><span class="p">}</span><span class="p">)</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="w">
 </span><span class="w"></span><span class="n">run</span><span class="p">(</span><span class="n">f</span><span class="p">)</span><span class="w">
-</span></code></pre></div><p>ダイレクトなコードに比べるとまだノイズが多いですが、ステートマシンを陽に作るコードよりは直感的になったと思います。</p>
-<h1 id="future1">他のFutureとの違い</h1>
+</span></code></pre></div>
+<p>ダイレクトなコードに比べるとまだノイズが多いですが、ステートマシンを陽に作るコードよりは直感的になったと思います。</p>
+
+<h1 id="他のfutureとの違い">他のFutureとの違い</h1>
+
 <p>futuers-rsのFutureは1イベント起きる度に(<a href="https://docs.rs/futures/0.1.14/futures/future/trait.Future.html#tymethod.poll"><code>poll</code></a>が呼ばれてReadyになる度に)次のステートの処理をし、その次のステートに移るという流れが基本です。
 次のステートに移っても、即座にそののステートの処理が走る訳ではありません。次に<code>poll</code>が呼ばれるまで処理をしません。つまりマルチスレッドの文脈で語ると、イベントが発火したスレッド <em>ではなく</em> <code>poll</code>を呼んだスレッド、おおむね <strong>Futureを所有しているスレッドで処理が走ります</strong> 。Futureの処理がスレッドを飛び越えたりはしません。ある1つのFutureを別スレッドで計算したければ<a href="https://github.com/alexcrichton/futures-rs/tree/master/futures-cpupool">CPU Pool</a>などが使えますが、その後（<a href="https://docs.rs/futures-cpupool/0.1.5/futures_cpupool/struct.CpuPool.html#method.spawn">spawn</a>の返り値の新たなFuture）に続けた処理は今のスレッドで実行されます。</p>
+
 <p>一方他のFutureはほぼマルチスレッドと密結合したプロミスのようになっていて、</p>
+
 <p>1 Future = 別スレッドで実行される計算への先物。
 コンビネータ(callback) = 別スレッドで実行される計算が終わったあとに同じスレッドで実行されるべき計算</p>
+
 <p>のようなものが多い印象です。要は1つ処理が終わるとそのまま次の処理、その次の処理と自動で発火していく。もちろん、ライブラリの作りによってスレッドとの関係性などにバリエーションはあるでしょうが、Rustのように<a href="https://docs.rs/futures/0.1.14/futures/future/trait.Future.html#tymethod.poll"><code>poll</code></a>を基本とした設計はあまりみません。</p>
+
 <p>このようにFutureにも色々あるうち、Rustでメジャーに使われているfutures-rsの<code>Future</code>はステートマシンの抽象化になっているよ、というお話でした。</p>
                     </section>
                 </article>

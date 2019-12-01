@@ -119,17 +119,25 @@
                     </header>
                     <section>
                         <p>κeenです。進捗ダメです。最近全然コード書いてないのでたまには手を動かすかということでRocksDBにHello Worldしてみます。</p>
-<h1 id="rocksdb">RocksDBとは</h1>
+
+<h1 id="rocksdbとは">RocksDBとは</h1>
+
 <p><a href="http://rocksdb.org/">RocksDB</a>はアプリケーション組み込み向けに作られた永続化KVSです。
 主に高速性、SSDなどの高速なストレージに合わせたアーキテクチャ、アプリケーションとの親和性、基本操作の他マージなどの高度なオペレーションを特徴としているようです。</p>
+
 <p>FacebookのDBエンジニアリングチームが作っていて、<a href="https://github.com/facebook/mysql-5.6">MyRocks</a>なんかのバックエンドに使われています。
 Googleの<a href="https://github.com/google/leveldb">LevelDB</a>を下敷きに作られている模様。</p>
+
 <p>私が知ったきっかけはやはりMySQL互換プロトコルを喋る分散DBの<a href="https://github.com/pingcap/tidb">TiDB</a>がバックエンドに使っているからでした。</p>
+
 <h1 id="hello-rocksdb">Hello, RocksDB</h1>
+
 <p>いくら新しいとはいえ、ただのKVSなので使い方はそんなの難しくないはず。とりあえず使ってみましょう。
 RocksDB自体はC++で書かれているのですが私はC++はわからないのでRustから叩いてみます。</p>
+
 <p>色々ラッパはあるようですがひとまず一番ダウンロードされている<a href="https://crates.io/crates/rocksdb">rocksdb</a>を使います。
 これはあまりラッピングが上手くなく、先述のTiDBは<a href="https://github.com/pingcap/rust-rocksdb">フォークしている</a>など不穏なのですが問題があるなら直せばいいの気持ちでやっていきます。</p>
+
 <p>まずはクレートドキュメントのサンプルコードを動かしてみましょう。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">rocksdb</span>::<span class="n">DB</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="w"> </span><span class="c1">// NB: db is automatically closed at end of lifetime
@@ -141,15 +149,21 @@ RocksDB自体はC++で書かれているのですが私はC++はわからない�
 </span><span class="w"></span><span class="w">    </span><span class="nb">Err</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="o">&gt;</span><span class="w"> </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;operational problem encountered: {}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">e</span><span class="p">)</span><span class="p">,</span><span class="w">
 </span><span class="w"></span><span class="w"> </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="w"> </span><span class="n">db</span><span class="p">.</span><span class="n">delete</span><span class="p">(</span><span class="s">b&#34;</span><span class="s">my key</span><span class="s">&#34;</span><span class="p">)</span><span class="p">.</span><span class="n">unwrap</span><span class="p">(</span><span class="p">)</span><span class="p">;</span><span class="w">
-</span></code></pre></div><p><code>open_default</code> したあとは <code>put</code> , <code>get</code> , <code>delete</code> とわかりやすいですね。
+</span></code></pre></div>
+<p><code>open_default</code> したあとは <code>put</code> , <code>get</code> , <code>delete</code> とわかりやすいですね。
 実行してみます。</p>
 <pre><code class="language-console" data-lang="console">$ cargo run
-retrieved value my value
-</code></pre><p>はい。動きました。</p>
+retrieved value my value</code></pre>
+<p>はい。動きました。</p>
+
 <h1 id="memcached">memcached</h1>
+
 <p>このままだと面白くないのでmemcachedのプロトコルを喋ってみましょう。</p>
+
 <p>プロトコルのドキュメントは<a href="https://github.com/memcached/memcached/blob/master/doc/protocol.txt">ここ</a>にあります。</p>
-<h2 id="heading">エンジン</h2>
+
+<h2 id="エンジン">エンジン</h2>
+
 <p>たくさん実装するのはだるいのでひとまずは <code>set</code>, <code>get</code>, <code>delete</code> を実装します。no_replyとcasは無視しましょう。
 プロトコルを読むに、以下のデータ型を用意すればよさそう。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">type</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span>::<span class="n">std</span>::<span class="n">result</span>::<span class="nb">Result</span><span class="o">&lt;</span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="n">rocksdb</span>::<span class="n">Error</span><span class="o">&gt;</span><span class="p">;</span><span class="w">
@@ -175,7 +189,9 @@ retrieved value my value
 </span><span class="w"></span><span class="w">    </span><span class="n">Deleted</span><span class="p">,</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="n">NotFound</span><span class="p">,</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>getのキーを複数にした人の気がしれませんが仕様にそう書いてあるのでこれでいきます。</p>
+</span></code></pre></div>
+<p>getのキーを複数にした人の気がしれませんが仕様にそう書いてあるのでこれでいきます。</p>
+
 <p>まずは実行部分から。
 イメージ、これが動くようにします。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
@@ -204,7 +220,9 @@ retrieved value my value
 </span><span class="w"></span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>まあ、ただのインタプリタですね。ディスパッチ部分まではサクッと作れます。</p>
+</span></code></pre></div>
+<p>まあ、ただのインタプリタですね。ディスパッチ部分まではサクッと作れます。</p>
+
 <p>と、その前にvalueのシリアライザ/デシリアライザを作っておきましょう。
 データの末尾8byteを使って <code>flags</code> と <code>exptime</code> を保存すればいいですかね。
 <code>exptime</code> はクライアントとのやりとりのために <code>i64</code> にしてますが負値の場合は保存せずにそのまま捨てるので32bitで十分です。</p>
@@ -243,8 +261,8 @@ retrieved value my value
 </span><span class="w"></span><span class="w">        </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="w">
-</span></code></pre></div><p>はい、ではディスパッチ部分まで。</p>
+</span></code></pre></div>
+<p>はい、ではディスパッチ部分まで。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">struct</span> <span class="nc">Engine</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="n">db</span>: <span class="nc">DB</span><span class="p">,</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
@@ -278,7 +296,9 @@ retrieved value my value
 </span><span class="w"></span><span class="w">    </span><span class="k">fn</span> <span class="nf">get</span><span class="o">&lt;</span><span class="na">&#39;a</span><span class="o">&gt;</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">keys</span>: <span class="kp">&amp;</span><span class="na">&#39;a</span><span class="w"> </span><span class="p">[</span><span class="o">&amp;</span><span class="na">&#39;a</span><span class="w"> </span><span class="p">[</span><span class="kt">u8</span><span class="p">]</span><span class="p">]</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">Result</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="p">(</span><span class="o">&amp;</span><span class="na">&#39;a</span><span class="w"> </span><span class="p">[</span><span class="kt">u8</span><span class="p">]</span><span class="p">,</span><span class="w"> </span><span class="n">Value</span><span class="p">)</span><span class="o">&gt;</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="w"> </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="k">fn</span> <span class="nf">delete</span><span class="o">&lt;</span><span class="na">&#39;a</span><span class="o">&gt;</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">key</span>: <span class="kp">&amp;</span><span class="na">&#39;a</span><span class="w"> </span><span class="p">[</span><span class="kt">u8</span><span class="p">]</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">Result</span><span class="o">&lt;</span><span class="kt">bool</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">.</span><span class="p">.</span><span class="p">.</span><span class="w"> </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>この <code>set</code>, <code>get</code>, <code>delete</code> のそれぞれの関数を実装していきます。</p>
+</span></code></pre></div>
+<p>この <code>set</code>, <code>get</code>, <code>delete</code> のそれぞれの関数を実装していきます。</p>
+
 <p>まずは <code>set</code> 。
 exptimeが負値ならばその場でexpireとのことなのでそうします。
 <code>put</code> のセマンティクスがcreate or updateらしいのでそれを使えばOK。</p>
@@ -290,8 +310,11 @@ exptimeが負値ならばその場でexpireとのことなのでそうします�
 </span><span class="w"></span><span class="w">            </span><span class="bp">self</span><span class="p">.</span><span class="n">db</span><span class="p">.</span><span class="n">put</span><span class="p">(</span><span class="o">&amp;</span><span class="n">key</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">value</span><span class="p">.</span><span class="n">pack</span><span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="w">
 </span><span class="w"></span><span class="w">        </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>つぎは<code>get</code>。</p>
+</span></code></pre></div>
+<p>つぎは<code>get</code>。</p>
+
 <p>取得したデータが期限切れしてたら消します。時刻を扱うのに <a href="https://github.com/chronotope/chrono">chrono</a>を使いましょう。</p>
+
 <p>返り値はベクトルです。keysのうち、見つからないものはスルーするらしいです。すごい仕様ですね。
 <code>Result</code> と <code>Vec</code> と <code>Option</code> が出てきて煩雑ですが <a href="https://doc.rust-lang.org/std/iter/trait.Iterator.html"><code>Iterator</code></a> のテクニックを弄することなく地道に手続き的にがんばりましょう。
 因みにRocksDB自体には<a href="https://github.com/facebook/rocksdb/blob/master/db/db_impl.h#L110"><code>MultiGet</code></a>がありますがラッパは作られていません。</p>
@@ -319,13 +342,15 @@ exptimeが負値ならばその場でexpireとのことなのでそうします�
 </span><span class="w"></span><span class="w">        </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="w">        </span><span class="nb">Ok</span><span class="p">(</span><span class="n">ret</span><span class="p">)</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>次に <code>delete</code> です。残念なことに <code>delete</code> のラッパはキーの有無を区別してくれないので削除前に区別する必要があります(RocksDBの<a href="https://github.com/facebook/rocksdb/blob/master/db/db_impl.h#L86"><code>Delete</code></a>自体は <code>Status</code> を返すので判別可能)。
+</span></code></pre></div>
+<p>次に <code>delete</code> です。残念なことに <code>delete</code> のラッパはキーの有無を区別してくれないので削除前に区別する必要があります(RocksDBの<a href="https://github.com/facebook/rocksdb/blob/master/db/db_impl.h#L86"><code>Delete</code></a>自体は <code>Status</code> を返すので判別可能)。
 さらに残念なことに<a href="https://github.com/facebook/rocksdb/blob/master/db/db_impl.h#L135"><code>keyMayExist</code></a>のラッパも存在しないので <code>get</code> をつかってチェックしましょう。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="w">    </span><span class="k">fn</span> <span class="nf">delete</span><span class="o">&lt;</span><span class="na">&#39;a</span><span class="o">&gt;</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">key</span>: <span class="kp">&amp;</span><span class="na">&#39;a</span><span class="w"> </span><span class="p">[</span><span class="kt">u8</span><span class="p">]</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">Result</span><span class="o">&lt;</span><span class="kt">bool</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">exists</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">db</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span><span class="o">?</span><span class="p">.</span><span class="n">is_some</span><span class="p">(</span><span class="p">)</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">db</span><span class="p">.</span><span class="n">delete</span><span class="p">(</span><span class="n">key</span><span class="p">)</span><span class="p">.</span><span class="n">map</span><span class="p">(</span><span class="o">|</span><span class="p">(</span><span class="p">)</span><span class="o">|</span><span class="w"> </span><span class="n">exists</span><span class="p">)</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>あとは出力のために <code>CommandRet</code> に <code>to_vec</code> を用意し、</p>
+</span></code></pre></div>
+<p>あとは出力のために <code>CommandRet</code> に <code>to_vec</code> を用意し、</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">impl</span><span class="o">&lt;</span><span class="na">&#39;a</span><span class="o">&gt;</span><span class="w"> </span><span class="n">CommandRet</span><span class="o">&lt;</span><span class="na">&#39;a</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="k">fn</span> <span class="nf">to_vec</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">Vec</span><span class="o">&lt;</span><span class="kt">u8</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">        </span><span class="k">use</span><span class="w"> </span><span class="bp">self</span>::<span class="n">CommandRet</span>::<span class="o">*</span><span class="p">;</span><span class="w">
@@ -354,8 +379,9 @@ exptimeが負値ならばその場でexpireとのことなのでそうします�
 </span><span class="w"></span><span class="w">        </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="w">
-</span></code></pre></div><p><code>Display</code> を実装してあげます。</p>
+</span></code></pre></div>
+<p><code>Display</code> を実装してあげます。</p>
+
 <p>行儀が悪いですがデバッグでしか使わないので <code>from_utf8</code> して <code>unwrap</code> しちゃいます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">impl</span><span class="o">&lt;</span><span class="na">&#39;a</span><span class="o">&gt;</span><span class="w"> </span><span class="n">fmt</span>::<span class="n">Display</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">CommandRet</span><span class="o">&lt;</span><span class="na">&#39;a</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="k">fn</span> <span class="nf">fmt</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">f</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">fmt</span>::<span class="n">Formatter</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">fmt</span>::<span class="nb">Result</span><span class="w"> </span><span class="p">{</span><span class="w">
@@ -363,7 +389,8 @@ exptimeが負値ならばその場でexpireとのことなのでそうします�
 </span><span class="w"></span><span class="w">        </span><span class="n">write</span><span class="o">!</span><span class="p">(</span><span class="n">f</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">from_utf8</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">.</span><span class="n">to_vec</span><span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">.</span><span class="n">unwrap</span><span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>これで先程の <code>main</code> が動きます。</p>
+</span></code></pre></div>
+<p>これで先程の <code>main</code> が動きます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">$</span><span class="w"> </span><span class="n">cargo</span><span class="w"> </span><span class="n">run</span><span class="w">
 </span><span class="w"></span><span class="n">query</span>: <span class="nc">Set</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">key</span>: <span class="p">[</span><span class="mi">107</span><span class="p">,</span><span class="w"> </span><span class="mi">101</span><span class="p">,</span><span class="w"> </span><span class="mi">121</span><span class="p">]</span><span class="p">,</span><span class="w"> </span><span class="n">value</span>: <span class="nc">Value</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">data</span>: <span class="p">[</span><span class="mi">118</span><span class="p">,</span><span class="w"> </span><span class="mi">97</span><span class="p">,</span><span class="w"> </span><span class="mi">108</span><span class="p">,</span><span class="w"> </span><span class="mi">117</span><span class="p">,</span><span class="w"> </span><span class="mi">101</span><span class="p">]</span><span class="p">,</span><span class="w"> </span><span class="n">flags</span>: <span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">exptime</span>: <span class="mi">0</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="n">STORED</span><span class="w">
@@ -384,12 +411,14 @@ exptimeが負値ならばその場でexpireとのことなのでそうします�
 </span><span class="w"></span><span class="w">
 </span><span class="w"></span><span class="n">query</span>: <span class="nc">Delete</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">key</span>: <span class="p">[</span><span class="mi">107</span><span class="p">,</span><span class="w"> </span><span class="mi">101</span><span class="p">,</span><span class="w"> </span><span class="mi">121</span><span class="p">]</span><span class="w"> </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="n">NOT_FOUND</span><span class="w">
-</span><span class="w"></span><span class="w">
-</span><span class="w"></span><span class="w">
-</span></code></pre></div><p>よし。</p>
-<h2 id="heading1">プロトコル</h2>
+</span></code></pre></div>
+<p>よし。</p>
+
+<h2 id="プロトコル">プロトコル</h2>
+
 <p><code>set key 0 0 value\r\n</code> や <code>get key*</code> なんかのプロトコルをTCP経由で喋ります。
 やや大仰ですがTCPの扱いに <code>tokio</code> を、パーサに <code>nom</code> を使います。<code>tokio</code>を使うとバッファリングを考えなくてよくなります。</p>
+
 <p>実行部分は作ったのでサービス部分はこのコードで十分です。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">tokio_service</span>::<span class="n">Service</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">futures</span>::<span class="p">{</span><span class="n">Future</span><span class="p">,</span><span class="w"> </span><span class="n">IntoFuture</span><span class="p">}</span><span class="p">;</span><span class="w">
@@ -413,7 +442,9 @@ exptimeが負値ならばその場でexpireとのことなのでそうします�
 </span><span class="w"></span><span class="w">        </span><span class="p">)</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><h3 id="parser">Parser</h3>
+</span></code></pre></div>
+<h3 id="parser">Parser</h3>
+
 <p>実際のパーサを作ります。これはRocksDBへのHello, Worldなので適当に。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="kt">str</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="kt">str</span>::<span class="n">FromStr</span><span class="p">;</span><span class="w">
@@ -480,8 +511,11 @@ exptimeが負値ならばその場でexpireとのことなのでそうします�
 </span><span class="w"></span><span class="w">                   </span><span class="n">data</span>: <span class="nc">b</span><span class="s">&#34;hello&#34;</span><span class="p">.</span><span class="n">to_vec</span><span class="p">(</span><span class="p">)</span><span class="p">,</span><span class="w">
 </span><span class="w"></span><span class="w">               </span><span class="p">}</span><span class="p">}</span><span class="p">)</span><span class="p">)</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>はい、できました。</p>
+</span></code></pre></div>
+<p>はい、できました。</p>
+
 <h3 id="codec">Codec</h3>
+
 <p>パーサを使ってtokioのCodecとProtoを実装します。multiplexはしたくないのでpipelineで。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">bytes</span>::<span class="n">BytesMut</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">tokio_io</span>::<span class="n">codec</span>::<span class="p">{</span><span class="n">Encoder</span><span class="p">,</span><span class="w"> </span><span class="n">Decoder</span><span class="p">}</span><span class="p">;</span><span class="w">
@@ -535,7 +569,9 @@ exptimeが負値ならばその場でexpireとのことなのでそうします�
 </span><span class="w"></span><span class="w">        </span><span class="nb">Ok</span><span class="p">(</span><span class="n">io</span><span class="p">.</span><span class="n">framed</span><span class="p">(</span><span class="n">MemcachedCodec</span><span class="p">)</span><span class="p">)</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><h3 id="main">Main</h3>
+</span></code></pre></div>
+<h3 id="main">Main</h3>
+
 <p>最後にmainをサーバに書き換えます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="c1">// Specify the localhost address
@@ -552,7 +588,8 @@ exptimeが負値ならばその場でexpireとのことなのでそうします�
 </span><span class="w"></span><span class="w">        </span><span class="p">}</span><span class="p">)</span><span class="w">
 </span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="p">)</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>動きます。</p>
+</span></code></pre></div>
+<p>動きます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">$</span><span class="w"> </span><span class="n">cargo</span><span class="w"> </span><span class="n">run</span><span class="w">
 </span><span class="w"></span><span class="err">#</span><span class="w"> </span><span class="err">別</span><span class="err">タ</span><span class="err">ー</span><span class="err">ミ</span><span class="err">ナ</span><span class="err">ル</span><span class="err">で</span><span class="w">
 </span><span class="w"></span><span class="cp">$</span><span class="w"> </span><span class="n">telnet</span><span class="w"> </span><span class="n">localhost</span><span class="w"> </span><span class="mi">12345</span><span class="w">
@@ -570,18 +607,25 @@ exptimeが負値ならばその場でexpireとのことなのでそうします�
 </span><span class="w"></span><span class="n">DELETED</span><span class="w">
 </span><span class="w"></span><span class="n">get</span><span class="w"> </span><span class="n">key</span><span class="w">
 </span><span class="w"></span><span class="n">END</span><span class="w">
-</span></code></pre></div><p>良かったですね</p>
-<h1 id="heading2">課題</h1>
+</span></code></pre></div>
+<p>良かったですね</p>
+
+<h1 id="課題">課題</h1>
+
 <p>へっぽこmemcachedサーバは置いとくとして、RustのRocksDBラッパには問題がありましたね。</p>
+
 <ul>
 <li>keyMayExistがない</li>
 <li>deleteがstatusを見ない</li>
 </ul>
+
 <p>さらに、他の問題もあります。</p>
+
 <ul>
 <li>どうやら非同期クエリもできるらしい？だったらTokioと相性よさそう</li>
 <li>複数コマンドを発行しているが、スレッドセーフでない。<a href="https://github.com/facebook/rocksdb/wiki/Transactions">トランザクション</a>が必要だが、Rustのラッパが存在しない</li>
 </ul>
+
 <p>今回はHello Worldなのでまだラッパの方の問題にばかり目が行きますがもう少し掘ると何か出てくるかもしれません。
 今日はこの辺で。</p>
                     </section>

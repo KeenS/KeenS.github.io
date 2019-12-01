@@ -20,6 +20,7 @@
         <meta name="twitter:site" content="@blackenedgold" />
         <meta name="twitter:title" content="パッチを当ててuim-skkをUTF-8化する | κeenのHappy Hacκing Blog"/>
         <meta name="twitter:description" content="κeenです⸜( ¯⌓¯ )⸝。
+
 ずっとuim-skkを使っていての困り事がユニコードの扱いでした。
 uimの内部コーディングはEUC-JPなんですが、「⸜( ¯⌓¯ )⸝」に含まれる「⌓」がEUJ-JP外なので入力できないのです。そこでuim-skk内部や辞書をUTF-8化して入力できるようにしたお話です。" />
 
@@ -117,16 +118,24 @@ uimの内部コーディングはEUC-JPなんですが、「⸜( ¯⌓¯ )⸝」
                     </header>
                     <section>
                         <p>κeenです⸜( ¯⌓¯ )⸝。</p>
+
 <p>ずっとuim-skkを使っていての困り事がユニコードの扱いでした。
 uimの内部コーディングはEUC-JPなんですが、「⸜( ¯⌓¯ )⸝」に含まれる「⌓」がEUJ-JP外なので入力できないのです。そこでuim-skk内部や辞書をUTF-8化して入力できるようにしたお話です。</p>
+
 <p>偉そうに書いてますが本体はこのブログによるものです： <a href="http://harakire.tripod.com/junkies/non-bmp-keyb.html">「𠁣」の文字をどのようにキーボード入力するか</a></p>
+
 <p>ここに書いてある通りでほぼ動くのですが、地味にパッチがコケたりですんなりとは動かなかったのでその作業メモです。</p>
+
 <p>既に <code>sudo apt install uim uim-skk skkdic skkdic-extra</code> くらいは済んでる想定です。</p>
-<h1 id="heading">ブログのパッチを当てる</h1>
+
+<h1 id="ブログのパッチを当てる">ブログのパッチを当てる</h1>
+
 <p><code>/usr/share/uim</code> 以下にuimのSchemeファイルがあるのでそれらにパッチを当てます。
 しかしパッチはuimの1.8.6用に作られてますが、Ubuntu 19.10だと1.8.8が入るので綺麗にパッチが当たりません。
 そこで私がパッチを修正して1.8.8に当たるようにしたものを出しておきます。</p>
+
 <p>これです。 <a href="https://gitlab.com/snippets/1905594">https://gitlab.com/snippets/1905594</a></p>
+
 <p>これを使って以下のスクリプトでえいやと変換できるはずです。</p>
 <div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh"><span class="nb">cd</span> /usr/share/uim
 <span class="k">for</span> f in japanese-act.scm japanese-azik.scm japanese-custom.scm japanese-kana.scm japanese-kzik.scm japanese.scm skk.scm skk-custom.scm
@@ -138,41 +147,60 @@ wget -O /tmp/uim-skk-1.8.8-utf8.patch https://gitlab.com/snippets/1905594/raw
 cat /tmp/uim-skk-1.8.8-utf8.patch <span class="p">|</span> sudo patch -p0 -b --follow-symlink
 sudo mv skk.scm skk.scm.orig <span class="o">&amp;&amp;</span> sudo mv skk-utf8.scm skk.scm
 sudo mv skk-custom.scm skk-custom.scm.orig <span class="o">&amp;&amp;</span> sudo mv skk-custom-utf8.scm skk-custom.scm
-sudo rm japanese-custom-utf8.scm.orig japanese-utf8.scm.orig skk-utf8.scm.orig
-</code></pre></div><p>ここで一旦再起動して、uimでひらがなが入力できるかくらいは確認した方が良いでしょう。</p>
-<h1 id="utf8">辞書のUTF-8化</h1>
+sudo rm japanese-custom-utf8.scm.orig japanese-utf8.scm.orig skk-utf8.scm.orig</code></pre></div>
+<p>ここで一旦再起動して、uimでひらがなが入力できるかくらいは確認した方が良いでしょう。</p>
+
+<h1 id="辞書のutf-8化">辞書のUTF-8化</h1>
+
 <p>次に、既存のSKK辞書をUTF-8化したいです。</p>
+
 <p>ここで問題になるのが私が使っているyaskkservです。
 yaskkservはEUC-JPにハードコードされている<a href="https://github.com/wachikun/yaskkserv/issues/2">らしい</a>のでyaskkservはやめて辞書ファイルに移行することにします。
 uimは1つの辞書ファイルしかサポートしていないので辞書ファイルを結合する処理もします。</p>
+
 <p>uimのGUIから設定する人は[SKK 辞書]からskkservを使わないようにし、テキストで設定する人は<code>~/.uim.d/customs/custom-skk-dict.scm</code> の <code>skk-use-skkserv</code> を <code>#f</code> に設定しましょう。</p>
+
 <p>さて、これで辞書を変換にかかります。
 <code>/usr/share/skk</code> に辞書ファイルが並んでる筈なので、一旦これらを <code>*.utf8</code> 変換したあと、全部入りの辞書ファイル <code>SKK-JISYO.all.utf8</code> を作ります。
 そしてデフォルトの辞書を <code>/usr/share/skk/SKK-JISYO.all.utf8</code> にしておきましょう。</p>
+
 <p>以下のスクリプトで一気にできるはずです。</p>
 <div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh"><span class="nb">cd</span> /usr/share/skk
 <span class="k">for</span> f in SKK-JISYO.*<span class="p">;</span> <span class="k">do</span>
   iconv -f EUC-JP -t UTF-8 &lt; <span class="s2">&#34;</span><span class="nv">$f</span><span class="s2">&#34;</span> <span class="p">|</span> sudo tee <span class="s2">&#34;</span><span class="nv">$f</span><span class="s2">.utf8</span><span class="s2">&#34;</span> &gt; /dev/null
 <span class="k">done</span>
 skkdic-expr2 *.utf8 <span class="p">|</span> sudo tee SKK-JISYO.all.utf8 &gt; /dev/null
-sudo ln -sf /usr/share/skk/SKK-JISYO.all.utf8 /etc/alternatives/SKK-JISYO
-</code></pre></div><p><code>/usr/share</code> に書き込むのが嫌な人は <code>/usr/local/share</code> に作ってもいいでしょう。</p>
+sudo ln -sf /usr/share/skk/SKK-JISYO.all.utf8 /etc/alternatives/SKK-JISYO</code></pre></div>
+<p><code>/usr/share</code> に書き込むのが嫌な人は <code>/usr/local/share</code> に作ってもいいでしょう。</p>
+
 <p>あとは別途、 <code>~/.skk-jisyo</code> や <code>~/.skk-uim-jisyo</code> も変換しておいて下さい。</p>
-<h1 id="heading1">絵文字辞書のインストール</h1>
+
+<h1 id="絵文字辞書のインストール">絵文字辞書のインストール</h1>
+
 <p>ここまで来ると絵文字辞書が使えるようになります。<a href="https://github.com/uasi/skk-emoji-jisyo">skk-emoji-jisyo</a>とか<a href="https://github.com/ymrl/SKK-JISYO.emoji-ja">SKK-JISYO.emoji-ja</a>とか。</p>
+
 <p>これはさっきの辞書を変換するコマンドの引数に絵文字辞書を加えてあげると実現できます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh">skkdic-expr2 /usr/share/skk/*.utf8 /path/to/other_dicks <span class="p">|</span> <span class="se">\
-</span><span class="se"></span>  sudo tee /usr/share/skk/SKK-JISYO.all.utf8 &gt; /dev/null
-</code></pre></div><p>これでSKKユーザでも絵文字が使えるようになりました✌</p>
-<h1 id="heading2">トラブルシューティング</h1>
-<h2 id="uim">uimのログ</h2>
+</span><span class="se"></span>  sudo tee /usr/share/skk/SKK-JISYO.all.utf8 &gt; /dev/null</code></pre></div>
+<p>これでSKKユーザでも絵文字が使えるようになりました✌</p>
+
+<h1 id="トラブルシューティング">トラブルシューティング</h1>
+
+<h2 id="uimのログ">uimのログ</h2>
+
 <p>どこにあるのか分かりませんでした。詳しい人教えて下さい。</p>
-<h2 id="uim1">uimの再起動</h2>
+
+<h2 id="uimの再起動">uimの再起動</h2>
+
 <p>どうやってやるのか分かりませんでした。
 GNOME Shellが管轄してる気がするので多分ですが再起動が一番確実だと思います。</p>
-<h2 id="heading3">辞書のリロード</h2>
+
+<h2 id="辞書のリロード">辞書のリロード</h2>
+
 <p>これはログアウトでできるみたいです。</p>
-<h2 id="heading4">その他絵文字などを追加したい</h2>
+
+<h2 id="その他絵文字などを追加したい">その他絵文字などを追加したい</h2>
+
 <p><code>\u</code> とコードポイントで新しい文字を入力できます。
 普段、シフトによる漢字変換や <code>/</code> によるアルファベット変換ばかり使ってるかと思いますが、 <code>\</code> によるコードポイントの入力もあるのです。そこで <code>u</code> に続いてユニコードのコードポイントを入れると入力できます。
 例えば ✌ であれば <code>\u270c</code> と入力すると入ります。</p>

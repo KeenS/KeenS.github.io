@@ -119,39 +119,54 @@
                     </header>
                     <section>
                         <p>MPlayerを使ってBGMを流すコマンドを作ろうとしたときに困ったことがいくつかあったので誰か解決して下さい。</p>
+
 <p>スクリプトは3年前で更新がとまってる<code>mplayer-ruby</code>を使ってRubyでmplayerを叩く方針。</p>
+
 <p>案の定バグに当りました。スペースの入ってるファイルをうまく処理できない。これは内部的にシェルを呼んでるのですが、そのときにシェルエスケープをしてないためです。<code>require 'shellwords'</code>しとけば<code>String#shellescape</code>メソッドが追加されるので<code>mplayer-ruby</code>の何箇所かにある<code>file</code>を<code>file.shellescape</code>すれば解決しました。</p>
+
 <p>さらにDirty Hack。複数ファイルを<code>load_file</code>で渡してると詰まるようなので思いきって<code>MPlayer::Slave#initialize</code>を改造して引数に再生ファイルの配列(元々はファイル名の文字列)を渡すようにしました。</p>
+
 <p>これで</p>
-<!-- raw HTML omitted -->
-<h1 id="-codingutf8-"><em>*</em> coding:UTF-8 <em>*</em></h1>
+
+<p><script src="https://gist.github.com/KeenS/6308894.js?file=BGM"></script><noscript><pre><code>#!/usr/bin/env ruby -Ku</p>
+
+<h1 id="coding-utf-8"><em>*</em> coding:UTF-8 <em>*</em></h1>
+
 <p>require &lsquo;mplayer-ruby&rsquo;
 require &lsquo;libnotify&rsquo;</p>
+
 <p>class MPlayer::Slave
-def now_playing
-summary = &quot;&rdquo;
-summary += get(:meta_title).chomp
-summary += &quot; &ndash; &quot; + get(:meta_artist).chomp
-body = &ldquo;NowPlaying&rdquo;
-Libnotify.show(body: body, summary: summary)
-end
+  def now_playing
+    summary = &ldquo;&rdquo;
+    summary += get(:meta_title).chomp
+    summary += &ldquo; &ndash; &rdquo; + get(:meta_artist).chomp
+    body = &ldquo;NowPlaying&rdquo;
+    Libnotify.show(body: body, summary: summary)
+  end
 end</p>
+
 <p>music = &ldquo;/your/path/to/music/directory/&rdquo;
-playlist = File.read( music + &ldquo;BGM.list&rdquo;).split(&quot;\n&rdquo;).map{|f| music + f }.shuffle
+playlist = File.read( music + &ldquo;BGM.list&rdquo;).split(&rdquo;\n&rdquo;).map{|f| music + f }.shuffle
 player = MPlayer::Slave.new playlist
 player.loop
 Signal.trap(:INT) {player.quit;exit}
 Signal.trap(:KILL) {player.quit;exit}
 player.now_playing
 while line = player.stdout.gets
-player.now_playing if line =~ /playback/
+  player.now_playing if line =~ /playback/
 end
-<!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --></p>
+</code></pre></noscript></p>
+
 <p>が動くようになりました。</p>
+
 <p>しかし一つ問題がありまして、再生が1曲目で止まっちゃいます。<code>loop</code>を指定してるのにです。mplayerを直接叩いてみるに、mplayerのバグっぽい…複数ファイル指定したときは本来なら全曲1回は再生してくれるはずなのに再生しませんし<code>-loop 0</code>オプションガン無視。今回入れたのはUbuntuのapt-getで入るやつで、バージョン(?)は「MPlayer2 UNKNOWN © 2000-2012 MPlayer Team」だそうです。</p>
+
 <p>Ubuntuはパッケージが古いことが往々にしてあるので冷静に自分でビルドしようとしても<code>fridibi</code>がないとかで怒られる。</p>
+
 <p>どなたか解決方法御存じないですか???</p>
-<h2 id="heading">追記</h2>
+
+<h2 id="追記">追記</h2>
+
 <p><code>-loop -1</code>を渡すとループしてくれました。それドキュメントと逆…</p>
                     </section>
                 </article>

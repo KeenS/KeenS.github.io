@@ -115,6 +115,7 @@
                     </header>
                     <section>
                         <p>κeenです。随分前から書こうと思いつつ先送りになっていた小ネタです。</p>
+
 <p>例えばカレントディレクトリにある<code>some_file.txt</code>に適当なデータを書き込もうとして、以下のようなコードを書いたとします。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">fs</span>::<span class="n">File</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">io</span>::<span class="n">prelude</span>::<span class="o">*</span><span class="p">;</span><span class="w">
@@ -126,18 +127,23 @@
 </span><span class="w"></span><span class="w">    </span><span class="c1">// unwrapを呼んで書き込みエラーを検知
 </span><span class="c1"></span><span class="w">    </span><span class="n">write</span><span class="o">!</span><span class="p">(</span><span class="n">w</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;hello&#34;</span><span class="p">)</span><span class="p">.</span><span class="n">unwrap</span><span class="p">(</span><span class="p">)</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>これを実行してみましょう。</p>
+</span></code></pre></div>
+<p>これを実行してみましょう。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">$</span><span class="w"> </span><span class="n">rustc</span><span class="w"> </span><span class="n">write_file</span><span class="p">.</span><span class="n">rs</span><span class="w">
 </span><span class="w"></span><span class="cp">$</span><span class="w"> </span><span class="p">.</span><span class="o">/</span><span class="n">write_file</span><span class="w">
-</span></code></pre></div><p>特段エラーは出ません。しかしながら<code>some_file.txt</code>の中身は特に書き変わっていません。</p>
+</span></code></pre></div>
+<p>特段エラーは出ません。しかしながら<code>some_file.txt</code>の中身は特に書き変わっていません。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">$</span><span class="w"> </span><span class="n">cat</span><span class="w"> </span><span class="n">some_file</span><span class="p">.</span><span class="n">txt</span><span class="w">
 </span><span class="w"></span><span class="cp">$</span><span class="w">
-</span></code></pre></div><p>これ、パッと原因分かりますか？</p>
+</span></code></pre></div>
+<p>これ、パッと原因分かりますか？</p>
+
 <p>直接の原因は<a href="https://doc.rust-lang.org/std/fs/struct.File.html#method.open"><code>File::open</code></a>です。<code>File::open</code>はリードオンリーでファイルを開くので<code>File::open</code>で開いたファイルに書き込もうとしても書き込めません（書き込みたいなら<a href="https://doc.rust-lang.org/std/fs/struct.File.html#method.create"><code>File::create</code></a>を使います）。
 じゃあなぜエラーが出ないかというと<code>BufWriter</code>のせいです。
 書き込んだ文字列<code>&quot;hello&quot;</code>は短いので<code>write!</code>を発効した時点ではまだデータはバッファに書き込まれるだけです。
 このときにはまだエラーは出ません。
 そして<code>main</code>の末尾で<code>w</code>のライフタイムが終わるときに<code>BufWrite</code>の<a href="https://doc.rust-lang.org/src/std/io/buffered.rs.html#511-518"><code>drop</code></a>が呼ばれますが、ここではエラーが無視されるのでユーザにはエラーが起きてないように見える訳です。</p>
+
 <p>このような事故を防ぐために以下のように<code>flush</code>を呼びましょう。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">fs</span>::<span class="n">File</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">io</span>::<span class="n">prelude</span>::<span class="o">*</span><span class="p">;</span><span class="w">
@@ -155,7 +161,8 @@
 </span><span class="w"></span><span class="cp">$</span><span class="w"> </span><span class="p">.</span><span class="o">/</span><span class="n">write_file</span><span class="w">
 </span><span class="w"></span><span class="n">thread</span><span class="w"> </span><span class="na">&#39;main</span><span class="err">&#39;</span><span class="w"> </span><span class="n">panicked</span><span class="w"> </span><span class="n">at</span><span class="w"> </span><span class="na">&#39;called</span><span class="w"> </span><span class="err">`</span><span class="nb">Result</span>::<span class="n">unwrap</span><span class="p">(</span><span class="p">)</span><span class="err">`</span><span class="w"> </span><span class="n">on</span><span class="w"> </span><span class="n">an</span><span class="w"> </span><span class="err">`</span><span class="nb">Err</span><span class="err">`</span><span class="w"> </span><span class="n">value</span>: <span class="nc">Error</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">repr</span>: <span class="nc">Os</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">code</span>: <span class="mi">9</span><span class="p">,</span><span class="w"> </span><span class="n">message</span>: <span class="s">&#34;Bad file descriptor&#34;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span><span class="err">&#39;</span><span class="p">,</span><span class="w"> </span><span class="o">/</span><span class="n">checkout</span><span class="o">/</span><span class="n">src</span><span class="o">/</span><span class="n">libcore</span><span class="o">/</span><span class="n">result</span><span class="p">.</span><span class="n">rs</span>:<span class="mi">859</span><span class="w">
 </span><span class="w"></span><span class="n">note</span>: <span class="nc">Run</span><span class="w"> </span><span class="n">with</span><span class="w"> </span><span class="err">`</span><span class="n">RUST_BACKTRACE</span><span class="o">=</span><span class="mi">1</span><span class="err">`</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="n">backtrace</span><span class="p">.</span><span class="w">
-</span></code></pre></div><p>参考: <a href="http://keens.github.io/blog/2016/01/08/rusttoiedoriso_sunokaihouhachuui/">Rustといえどリソースの解放は注意 | κeenのHappy Hacκing Blog</a></p>
+</span></code></pre></div>
+<p>参考: <a href="http://keens.github.io/blog/2016/01/08/rusttoiedoriso_sunokaihouhachuui/">Rustといえどリソースの解放は注意 | κeenのHappy Hacκing Blog</a></p>
                     </section>
                 </article>
             </div>
