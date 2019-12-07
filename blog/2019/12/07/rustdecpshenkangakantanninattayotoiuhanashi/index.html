@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+    <head>
+        
+        
+        <script async src="https://www.googletagmanager.com/gtag/js?id=UA-43779888-1"></script>
+        <script>
+         window.dataLayer = window.dataLayer || [];
+         function gtag(){dataLayer.push(arguments);}
+         gtag('js', new Date());
+
+         gtag('config', 'UA-43779888-1');
+        </script>
+        
+
+        <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:site" content="@blackenedgold" />
+        <meta name="twitter:title" content="RustでCPS変換が簡単になったよという話 | κeenのHappy Hacκing Blog"/>
+        <meta name="twitter:description" content="κeenです。このエントリはRust Advent Calendar 2019 - Qiita 8日目の記事です。
+昔書いたRustのコードをもけもけ漁ってたら、しばらく前にRustでCPS変換しようとしてた下書きをたまたま発見しました。
+
+当時はコンパイラの制約で簡単には書けなかったのですが今見ると簡単に書けるようになってたのでRustも進歩してるね、という確認をしたいと思います。" />
+
+        <title>RustでCPS変換が簡単になったよという話 | κeenのHappy Hacκing Blog</title>
+        <link rel="stylesheet" href='//fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css' />
+        <link rel="stylesheet" href="//KeenS.github.io/libraries/normalize.3.0.1.css" />
+        <link rel="stylesheet" href="//KeenS.github.io/css/liquorice.css" />
+        <link rel="apple-touch-icon" sizes="180x180" href="//KeenS.github.io/apple-touch-icon.png">
+        <link rel="icon" type="image/png" href="//KeenS.github.io/favicon-32x32.png" sizes="32x32">
+        <link rel="icon" type="image/png" href="//KeenS.github.io/favicon-16x16.png" sizes="16x16">
+        <link rel="manifest" href="//KeenS.github.io/manifest.json">
+        <link rel="mask-icon" href="//KeenS.github.io/safari-pinned-tab.svg" color="#5bbad5">
+        <meta name="theme-color" content="#ffffff">
+        <link rel="apple-touch-icon-precomposed" href="//KeenS.github.io/apple-touch-icon-144-precomposed.png" sizes="144x144" />
+        <link rel="alternate" href="" type="application/rss+xml" title="κeenのHappy Hacκing Blog" />
+        <link rel="stylesheet" href="//KeenS.github.io/css/syntax-monokai.css" />
+<script type="text/x-mathjax-config">
+ MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
+</script>
+<script async src="//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS_CHTML"></script>
+</script>
+<meta http-equiv="X-UA-Compatible" CONTENT="IE=EmulateIE7" />
+<link rel="stylesheet" href="//unpkg.com/mermaid@7.0.4/dist/mermaid.forest.min.css">
+
+    </head>
+    <body class="li-body">
+
+<header class="li-page-header" id="page-header">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-brand li-left">
+                <a href="//KeenS.github.io/">κeenのHappy Hacκing Blog</a> | Lispエイリアンの狂想曲</div>
+                <div class="li-menu li-right">
+                    <span class="li-menu-icon" onclick="javascript:toggle('menu');">&#9776;</span>
+                    <ul id="menu2" class="li-menu-items">
+                        
+                            <li><a href="//KeenS.github.io/about/"> About </a></li>
+                        
+                            <li><a href="//KeenS.github.io/index.xml"> Atom </a></li>
+                        
+                            <li><a href="//KeenS.github.io/post/"> Blog </a></li>
+                        
+                            <li><a href="//KeenS.github.io/slide/"> Slide </a></li>
+                        
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="sixteen columns">
+                <ul id="menu" class="li-menu-items li-menu-mobile">
+                    
+                        <li><a href="//KeenS.github.io/about/"> About </a></li>
+                    
+                        <li><a href="//KeenS.github.io/index.xml"> Atom </a></li>
+                    
+                        <li><a href="//KeenS.github.io/post/"> Blog </a></li>
+                    
+                        <li><a href="//KeenS.github.io/slide/"> Slide </a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+
+
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <article class="li-article">
+                    <header class="li-article-header">
+                        <h1 class="li-article-title">RustでCPS変換が簡単になったよという話</h1>
+                        <div class="li-article-meta">
+    <time class="li-article-date">2019-12-07</time>
+    <ul class="li-article-tag">
+    
+        <li>
+            <a href="//KeenS.github.io/categories/rust">Rust</a>
+        </li>
+    
+        <li>
+            <a href="//KeenS.github.io/categories/advent-calendar">Advent Calendar</a>
+        </li>
+    
+        <li>
+            <a href="//KeenS.github.io/categories/rust-advent-calendar">Rust Advent Calendar</a>
+        </li>
+    
+        <li>
+            <a href="//KeenS.github.io/categories/%e7%b6%99%e7%b6%9a">継続</a>
+        </li>
+    
+        <li>
+            <a href="//KeenS.github.io/categories/cps">CPS</a>
+        </li>
+    
+</ul>
+
+</div>
+
+                    </header>
+                    <section>
+                        <p>κeenです。このエントリは<a href="https://qiita.com/advent-calendar/2019/rust">Rust Advent Calendar 2019 - Qiita</a> 8日目の記事です。
+昔書いたRustのコードをもけもけ漁ってたら、しばらく前にRustでCPS変換しようとしてた下書きをたまたま発見しました。</p>
+
+<p>当時はコンパイラの制約で簡単には書けなかったのですが今見ると簡単に書けるようになってたのでRustも進歩してるね、という確認をしたいと思います。</p>
+
+<h1 id="cps変換とは">CPS変換とは</h1>
+
+<p>CPS変換とは、プログラムを継続渡し形式(Continuation-Passing Style)に変換することです。
+じゃあCPSとはというと、雑に言えば「ネストした関数の呼び出し禁止」の形式です。
+…ちょっと雑すぎますね。
+プログラムのコントロールフロー(<code>if</code> 式や 関数呼出)を陽に受け取った継続で記述する形式です。
+この形式はよくコンパイラの内部表現なんかに使われます。
+変数束縛の右側に <code>if</code> 式や関数呼び出しがこないという制約がつくので解析がやりやすくなるんですね。</p>
+
+<p>例えば以下のコードをCPS変換してみましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">add</span><span class="p">(</span><span class="n">x</span>: <span class="kt">i32</span><span class="p">,</span><span class="w"> </span><span class="n">y</span>: <span class="kt">i32</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">i32</span> <span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">x</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">y</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="k">fn</span> <span class="nf">sub</span><span class="p">(</span><span class="n">x</span>: <span class="kt">i32</span><span class="p">,</span><span class="w"> </span><span class="n">y</span>: <span class="kt">i32</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">i32</span> <span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">x</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">y</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="c1">// ↓ これ
+</span><span class="c1"></span><span class="n">sub</span><span class="p">(</span><span class="n">add</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="p">,</span><span class="w"> </span><span class="mi">5</span><span class="p">)</span><span class="w">
+</span></code></pre></div>
+<p>関数呼出がネストしてますね。これを書き換えたいです。
+しかし変数束縛の右側に関数呼び出しを置くのは禁止なのでちょっと困ります。</p>
+
+<p>関数内の末尾で関数を呼出すのは可能なので、「後でやりたい事を関数で渡して関数内で呼んでもらう」という戦略でいきましょう。</p>
+
+<p>そのためには <code>add</code> を「最後に呼ぶ関数」を受け取るように変換する必要があります。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">add_cps</span><span class="o">&lt;</span><span class="n">R</span><span class="o">&gt;</span><span class="p">(</span><span class="n">x</span>: <span class="kt">i32</span><span class="p">,</span><span class="w"> </span><span class="n">y</span>: <span class="kt">i32</span><span class="p">,</span><span class="w"> </span><span class="n">c</span>: <span class="nc">impl</span><span class="w"> </span><span class="nb">FnOnce</span><span class="p">(</span><span class="kt">i32</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">R</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">R</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">c</span><span class="p">(</span><span class="n">x</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">y</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="k">fn</span> <span class="nf">sub</span><span class="p">(</span><span class="n">x</span>: <span class="kt">i32</span><span class="p">,</span><span class="w"> </span><span class="n">y</span>: <span class="kt">i32</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">i32</span> <span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">x</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">y</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="n">add_cps</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="o">|</span><span class="n">ret</span><span class="o">|</span><span class="w"> </span><span class="n">sub</span><span class="p">(</span><span class="n">ret</span><span class="p">,</span><span class="w"> </span><span class="mi">5</span><span class="p">)</span><span class="p">)</span><span class="w">
+</span></code></pre></div>
+<p><code>add</code> だけ変換してると今度は <code>add</code> して <code>sub</code> したくなったときにまた不都合なので <code>sub</code> の方も変換しておきましょう。 <code>sub</code> の引数が1つ浮つくので <code>id</code> を渡してそのまま結果を返すようにしておきましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">add_cps</span><span class="o">&lt;</span><span class="n">R</span><span class="o">&gt;</span><span class="p">(</span><span class="n">x</span>: <span class="kt">i32</span><span class="p">,</span><span class="w"> </span><span class="n">y</span>: <span class="kt">i32</span><span class="p">,</span><span class="w"> </span><span class="n">c</span>: <span class="nc">impl</span><span class="w"> </span><span class="nb">FnOnce</span><span class="p">(</span><span class="kt">i32</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">R</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">R</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">c</span><span class="p">(</span><span class="n">x</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">y</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="k">fn</span> <span class="nf">sub_cps</span><span class="o">&lt;</span><span class="n">R</span><span class="o">&gt;</span><span class="p">(</span><span class="n">x</span>: <span class="kt">i32</span><span class="p">,</span><span class="w"> </span><span class="n">y</span>: <span class="kt">i32</span><span class="p">,</span><span class="w"> </span><span class="n">c</span>: <span class="nc">impl</span><span class="w"> </span><span class="nb">FnOnce</span><span class="p">(</span><span class="kt">i32</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">R</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">R</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">c</span><span class="p">(</span><span class="n">x</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">y</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="k">fn</span> <span class="nf">id</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="p">(</span><span class="n">t</span>: <span class="nc">T</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">T</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">t</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="n">add_cps</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="o">|</span><span class="n">ret</span><span class="o">|</span><span class="w"> </span><span class="n">sub_cps</span><span class="p">(</span><span class="n">ret</span><span class="p">,</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span><span class="w"> </span><span class="n">id</span><span class="p">)</span><span class="p">)</span><span class="w">
+</span></code></pre></div>
+<p>こういうのがCPS変換です（雑）。
+制御フロー構文の多いRustで「RustにおけるCPS変換」をバシっと定義するのは難しいのでふわっとしたまま進んでいきます。</p>
+
+<p>もう少し例を見ましょう <code>if</code> 式の場合です。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">max_1</span><span class="p">(</span><span class="n">x</span>: <span class="kt">i32</span><span class="p">,</span><span class="w"> </span><span class="n">y</span>: <span class="kt">i32</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">i32</span> <span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">   </span><span class="kd">let</span><span class="w"> </span><span class="n">max</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">y</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">y</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">x</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">add</span><span class="p">(</span><span class="n">max</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>変数束縛の右側にif を置くのも禁止なのでこれも変換します。</p>
+
+<p>これも <code>if</code> から返ったあとの処理を一旦関数にまとめて、then/else節でそれを呼んであげます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">max_1_cps</span><span class="o">&lt;</span><span class="n">R</span><span class="o">&gt;</span><span class="p">(</span><span class="n">x</span>: <span class="kt">i32</span><span class="p">,</span><span class="w"> </span><span class="n">y</span>: <span class="kt">i32</span><span class="p">,</span><span class="w"> </span><span class="n">c</span>: <span class="nc">impl</span><span class="w"> </span><span class="nb">FnOnce</span><span class="p">(</span><span class="kt">i32</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">R</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">R</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">   </span><span class="kd">let</span><span class="w"> </span><span class="n">c</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">|</span><span class="n">max</span><span class="o">|</span><span class="w"> </span><span class="p">{</span><span class="n">add_cps</span><span class="p">(</span><span class="n">max</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">c</span><span class="p">)</span><span class="w"> </span><span class="p">}</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">   </span><span class="k">if</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">y</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">c</span><span class="p">(</span><span class="n">y</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">c</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>変数束縛の関数「呼び出し」は禁止されてますが、関数（クロージャ）の「定義」は可能なのでこれで問題ありません。</p>
+
+<p>CPS変換は自然に体が求めるものなので、いつでもできるようにしておきたいですね。</p>
+
+<h1 id="問題のコード">問題のコード</h1>
+
+<p>「関数呼び出しや <code>if</code> の後の処理（＝継続）を一旦クロージャにして引数に渡す」という戦略でCPS変換はできるのですが、Rustでは別の問題が起きます。</p>
+
+<p>フィボナッチ数列を求める関数をCPSで書いてみましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">add_cps</span><span class="o">&lt;</span><span class="n">R</span><span class="o">&gt;</span><span class="p">(</span><span class="n">x</span>: <span class="kt">u64</span><span class="p">,</span><span class="w"> </span><span class="n">y</span>: <span class="kt">u64</span><span class="p">,</span><span class="w"> </span><span class="n">c</span>: <span class="nc">impl</span><span class="w"> </span><span class="nb">FnOnce</span><span class="p">(</span><span class="kt">u64</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">R</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">R</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">c</span><span class="p">(</span><span class="n">x</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">y</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="k">fn</span> <span class="nf">sub_cps</span><span class="o">&lt;</span><span class="n">R</span><span class="o">&gt;</span><span class="p">(</span><span class="n">x</span>: <span class="kt">u64</span><span class="p">,</span><span class="w"> </span><span class="n">y</span>: <span class="kt">u64</span><span class="p">,</span><span class="w"> </span><span class="n">c</span>: <span class="nc">impl</span><span class="w"> </span><span class="nb">FnOnce</span><span class="p">(</span><span class="kt">u64</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">R</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">R</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">c</span><span class="p">(</span><span class="n">x</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">y</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="k">fn</span> <span class="nf">fib_cps</span><span class="o">&lt;</span><span class="n">R</span><span class="o">&gt;</span><span class="p">(</span><span class="n">n</span>: <span class="kt">u64</span><span class="p">,</span><span class="w"> </span><span class="n">c</span>: <span class="nc">impl</span><span class="w"> </span><span class="nb">FnOnce</span><span class="p">(</span><span class="kt">u64</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">R</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">R</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">c</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="c1">// fib(n - 1) + fib(n - 2)の変換
+</span><span class="c1"></span><span class="w">        </span><span class="c1">// -&gt; add(fib(sub(n, 1)), fib(sub(n, 2)))
+</span><span class="c1"></span><span class="w">        </span><span class="c1">// -&gt; let n1 = sub(n, 1);
+</span><span class="c1"></span><span class="w">        </span><span class="c1">//    let f1 = fib(n1);
+</span><span class="c1"></span><span class="w">        </span><span class="c1">//    let n2 = sub(n, 2);
+</span><span class="c1"></span><span class="w">        </span><span class="c1">//    let f2 = fib(n2);
+</span><span class="c1"></span><span class="w">        </span><span class="c1">//    add(f1, f2)
+</span><span class="c1"></span><span class="w">        </span><span class="c1">//  -&gt;
+</span><span class="c1"></span><span class="w">        </span><span class="n">sub_cps</span><span class="p">(</span><span class="n">n</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="k">move</span><span class="w"> </span><span class="o">|</span><span class="n">n1</span><span class="o">|</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="n">fib_cps</span><span class="p">(</span><span class="n">n1</span><span class="p">,</span><span class="w"> </span><span class="k">move</span><span class="w"> </span><span class="o">|</span><span class="n">f1</span><span class="o">|</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">                </span><span class="n">sub_cps</span><span class="p">(</span><span class="n">n</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="k">move</span><span class="w"> </span><span class="o">|</span><span class="n">n2</span><span class="o">|</span><span class="w"> </span><span class="n">fib_cps</span><span class="p">(</span><span class="n">n2</span><span class="p">,</span><span class="w"> </span><span class="k">move</span><span class="w"> </span><span class="o">|</span><span class="n">f2</span><span class="o">|</span><span class="w"> </span><span class="n">add_cps</span><span class="p">(</span><span class="n">f1</span><span class="p">,</span><span class="w"> </span><span class="n">f2</span><span class="p">,</span><span class="w"> </span><span class="n">c</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="p">}</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="p">}</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>これでロジックは正しいんですが、呼び出そうとするとコンパイルエラーです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="n">fib_cps</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="w"> </span><span class="n">id</span><span class="p">)</span><span class="w">
+</span></code></pre></div><div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">error: reached the type-length limit while instantiating `sub_cps::&lt;u64, [closure@cps_fib....64 {id::&lt;u64&gt;}]]]]]]]]]]]]]]]]]&gt;`
+  --&gt; cps_fib.rs:23:1
+   |
+23 | / fn sub_cps&lt;R&gt;(x: u64, y: u64, c: impl FnOnce(u64) -&gt; R) -&gt; R {
+24 | |     c(x - y)
+25 | | }
+   | |_^
+   |
+   = note: consider adding a `#![type_length_limit=&#34;1310713&#34;]` attribute to your crate</code></pre></div>
+<p>Rustのジェネリクス（<code>impl FnOnce</code>）はC++のテンプレートと同じく実装をコピーしていることを思い出して下さい。
+さらに、クロージャも1回書く毎に別々の型が生成されることを思い出して下さい。
+その上で <code>fib_cps</code> の末尾を見てみましょう。<code>fib_cps</code> は引数の型に応じて本体をコピーしますが、その中でクロージャを <code>fib_cps</code> に渡しているので新たな本体のコピーを作らないといけません。
+するとまたクロージャのコピーが増えて…新しい生まれてしまい…と、いくつコピーが必要か計算しようとすると無限に再帰してしまうので型チェックに失敗するのです。</p>
+
+<p>別の解釈をすると、CPS変換はスタックを使うコードをヒープを使うコードに変換します。
+Rustはジェネリクスで受け取ったデータ型の大きさを静的に決定しようとします。
+ところが <code>fib</code> で使うスタックサイズ（呼び出しのネストの深さ）は静的には決まらないので当然 <code>fib_cps</code> が受け取る <code>c</code> のサイズも決定できずにコンパイルエラーになっています。</p>
+
+<p>これはジェネリクスをやめれば解決するはずです。 <code>Box&lt;dyn FnOnce&gt;</code> を使ってみましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">add_cps</span><span class="o">&lt;</span><span class="n">R</span><span class="o">&gt;</span><span class="p">(</span><span class="n">x</span>: <span class="kt">u64</span><span class="p">,</span><span class="w"> </span><span class="n">y</span>: <span class="kt">u64</span><span class="p">,</span><span class="w"> </span><span class="n">c</span>: <span class="nb">Box</span><span class="o">&lt;</span><span class="n">dyn</span><span class="w"> </span><span class="nb">FnOnce</span><span class="p">(</span><span class="kt">u64</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">R</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">R</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">c</span><span class="p">(</span><span class="n">x</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">y</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="k">fn</span> <span class="nf">sub_cps</span><span class="o">&lt;</span><span class="n">R</span><span class="o">&gt;</span><span class="p">(</span><span class="n">x</span>: <span class="kt">u64</span><span class="p">,</span><span class="w"> </span><span class="n">y</span>: <span class="kt">u64</span><span class="p">,</span><span class="w"> </span><span class="n">c</span>: <span class="nb">Box</span><span class="o">&lt;</span><span class="n">dyn</span><span class="w"> </span><span class="nb">FnOnce</span><span class="p">(</span><span class="kt">u64</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">R</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">R</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">c</span><span class="p">(</span><span class="n">x</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">y</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="k">fn</span> <span class="nf">fib_cps</span><span class="o">&lt;</span><span class="n">R</span>: <span class="nb">&#39;static</span><span class="o">&gt;</span><span class="p">(</span><span class="n">n</span>: <span class="kt">u64</span><span class="p">,</span><span class="w"> </span><span class="n">c</span>: <span class="nb">Box</span><span class="o">&lt;</span><span class="n">dyn</span><span class="w"> </span><span class="nb">FnOnce</span><span class="p">(</span><span class="kt">u64</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">R</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">R</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">c</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">sub_cps</span><span class="p">(</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="n">n</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="mi">1</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="k">move</span><span class="w"> </span><span class="o">|</span><span class="n">n1</span><span class="o">|</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">                </span><span class="n">fib_cps</span><span class="p">(</span><span class="w">
+</span><span class="w"></span><span class="w">                    </span><span class="n">n1</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">                    </span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="k">move</span><span class="w"> </span><span class="o">|</span><span class="n">f1</span><span class="o">|</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">                        </span><span class="n">sub_cps</span><span class="p">(</span><span class="w">
+</span><span class="w"></span><span class="w">                            </span><span class="n">n</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">                            </span><span class="mi">2</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">                            </span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="k">move</span><span class="w"> </span><span class="o">|</span><span class="n">n2</span><span class="o">|</span><span class="w"> </span><span class="n">fib_cps</span><span class="p">(</span><span class="n">n2</span><span class="p">,</span><span class="w"> </span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="k">move</span><span class="w"> </span><span class="o">|</span><span class="n">f2</span><span class="o">|</span><span class="w"> </span><span class="n">add_cps</span><span class="p">(</span><span class="n">f1</span><span class="p">,</span><span class="w"> </span><span class="n">f2</span><span class="p">,</span><span class="w"> </span><span class="n">c</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">                        </span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="w">                    </span><span class="p">}</span><span class="p">)</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">                </span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="p">}</span><span class="p">)</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p><code>Box::new</code> が増えた分冗長になりましたがまあ、前と変わらないコードです。
+<code>Box::new</code> の呼び出しがネストしてる点については目を瞑って下さい。</p>
+
+<p>これを実行してみましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">ret</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fib_cps</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="w"> </span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="n">id</span><span class="p">)</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;fib(10) = {}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">ret</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div><div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">fib(10) = 89</code></pre></div>
+<p>無事実行できました。めでたしめでたし。</p>
+
+<h1 id="rust-1-35-0">Rust 1.35.0</h1>
+
+<p>…と、今のRust (1.39)であれば問題ないんですが、つい最近まではこのコードはコンパイルできませんでした。
+試しに 1.35.0 より前のコンパイラでこのコードをコンパイルしてみましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">$ rustc +1.34.2 cps_fib.rs
+error[E0161]: cannot move a value of type (dyn std::ops::FnOnce(u64) -&gt; R + &#39;static): the size of (dyn std::ops::FnOnce(u64) -&gt; R + &#39;static) cannot be statically determined
+  --&gt; cps_fib.rs:74:5
+   |
+74 |     c(x + y)
+   |     ^
+
+error: aborting due to previous error
+
+For more information about this error, try `rustc --explain E0161`.</code></pre></div>
+<p>エラーが出てしまいました。当時のRustでは <code>Box&lt;dyn FnOnce&gt;</code> を呼び出せなかったのです。
+<code>FnOnce</code> は捕捉した環境をby moveで渡す + FnOnceはクロージャなのでサイズが静的に決まらない + Rustはサイズが静的に決まらない値を関数の引数に渡せないというコンボが決まった結果です。
+詳しくは以下のブログを読んで下さい。こちらでもfibのCPS変換が出てきていますね。人類の自然な欲求なのでまあ、よくあることでしょう。</p>
+
+<p><a href="http://qnighy.hatenablog.com/entry/2017/05/24/070000">FnBoxについて - 簡潔なQ</a></p>
+
+<p>というのが1.35.0より前の話。
+Rust 1.35.0からこの問題が解決されました。1.35.0の<a href="https://github.com/rust-lang/rust/blob/master/RELEASES.md#language-4">リリースノート</a>を見てみるとこう書かれてます。</p>
+
+<blockquote>
+<p><a href="https://github.com/rust-lang/rust/pull/59500/"><code>FnOnce</code>, <code>FnMut</code>, and the <code>Fn</code> traits are now implemented for <code>Box&lt;FnOnce&gt;</code>, <code>Box&lt;FnMut&gt;</code>, and <code>Box&lt;Fn&gt;</code> respectively.</a></p>
+</blockquote>
+
+<p>こうやってRustでもCPS変換が簡単に書けるようになりました。</p>
+
+<h1 id="rust-1-35-0より前">Rust 1.35.0より前</h1>
+
+<p>CPS変換は体が自然に求めるものなので 1.35.0より前でも人類はどうにかしてRustでCPS変換をしていました。
+折角なのでそのときのテクニックを紹介します。</p>
+
+<p>まず、 <code>Box</code> にされたトレイトが呼び出せないならはじめから <code>Box</code> を受け取るようなコードを書けばいいだけです。
+こういうトレイトを用意しましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">trait</span><span class="w"> </span><span class="n">FnBox</span><span class="o">&lt;</span><span class="n">A</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">type</span> <span class="nc">Out</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">fn</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span>: <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Self</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="n">A</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span>::<span class="n">Out</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>これはNightlyにある<a href="https://doc.rust-lang.org/alloc/boxed/trait.FnBox.html">FnBox</a>と同じものですが、4行のためにNightlyを使う意味は薄いのでコピペしてStableコンパイラで使います。</p>
+
+<p>あとはこれを使ってクロージャを作ります。
+クロージャはただの <code>Fn*</code> トレイトを実装した構造体なのでした。
+それくらいならマクロで自動生成できます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="n">macro_rules</span><span class="o">!</span><span class="w"> </span><span class="n">cls</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="c1">// 捕捉する環境、引数、返り型、本体を受け取る
+</span><span class="c1"></span><span class="w">    </span><span class="p">(</span><span class="p">[</span><span class="cp">$(</span><span class="cp">$env</span>:<span class="nc">ident</span><span class="w"> </span>: <span class="cp">$env_ty</span>: <span class="nc">ty</span><span class="p">)</span><span class="p">,</span><span class="o">*</span><span class="p">]</span><span class="o">|</span><span class="cp">$(</span><span class="cp">$param</span>:<span class="nc">ident</span><span class="w"> </span>: <span class="cp">$param_ty</span>: <span class="nc">ty</span><span class="p">)</span><span class="p">,</span><span class="o">*</span><span class="o">|</span><span class="w"> </span>-&gt; <span class="cp">$out_ty</span>: <span class="nc">ty</span><span class="w"> </span><span class="p">{</span><span class="cp">$body</span>:<span class="nc">expr</span><span class="p">}</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="c1">// 捕捉する環境は構造体にエンコード
+</span><span class="c1"></span><span class="w">            </span><span class="k">struct</span> <span class="nc">Cls</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">                </span><span class="cp">$(</span><span class="cp">$env</span>: <span class="cp">$env_ty</span><span class="p">)</span><span class="p">,</span><span class="o">*</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="c1">// あとはそれにFnトレイトを実装
+</span><span class="c1"></span><span class="w">            </span><span class="k">impl</span><span class="w"> </span><span class="n">FnBox</span><span class="o">&lt;</span><span class="p">(</span><span class="cp">$(</span><span class="cp">$param_ty</span><span class="p">,</span><span class="p">)</span><span class="o">*</span><span class="p">)</span><span class="o">&gt;</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">Cls</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">                </span><span class="k">type</span> <span class="nc">Out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="cp">$out_ty</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">                </span><span class="k">fn</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span>: <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Self</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="cp">$(</span><span class="cp">$param</span><span class="p">)</span><span class="p">,</span><span class="o">*</span><span class="w"> </span>: <span class="p">(</span><span class="cp">$(</span><span class="cp">$param_ty</span><span class="p">,</span><span class="p">)</span><span class="o">*</span><span class="p">)</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span>::<span class="n">Out</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">                    </span><span class="cp">$(</span><span class="kd">let</span><span class="w"> </span><span class="cp">$env</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="cp">$env</span><span class="p">;</span><span class="p">)</span><span class="o">*</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">                    </span><span class="cp">$body</span><span class="w">
+</span><span class="w"></span><span class="w">                </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="c1">// ここからFnBoxを作る
+</span><span class="c1"></span><span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">bx</span>:<span class="nb">Box</span><span class="o">&lt;</span><span class="n">dyn</span><span class="w"> </span><span class="n">FnBox</span><span class="o">&lt;</span><span class="p">(</span><span class="cp">$(</span><span class="cp">$param_ty</span><span class="p">,</span><span class="p">)</span><span class="o">*</span><span class="p">)</span><span class="p">,</span><span class="w"> </span><span class="n">Out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="cp">$out_ty</span><span class="o">&gt;</span><span class="o">&gt;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="n">Cls</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">                </span><span class="cp">$(</span><span class="cp">$env</span><span class="p">)</span><span class="p">,</span><span class="o">*</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="p">}</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="n">bx</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>さて、 <code>fib_cps</code> を定義しましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">add_cps</span><span class="o">&lt;</span><span class="n">R</span><span class="o">&gt;</span><span class="p">(</span><span class="n">x</span>: <span class="kt">u64</span><span class="p">,</span><span class="w"> </span><span class="n">y</span>: <span class="kt">u64</span><span class="p">,</span><span class="w"> </span><span class="n">c</span>: <span class="nb">Box</span><span class="o">&lt;</span><span class="n">dyn</span><span class="w"> </span><span class="n">FnBox</span><span class="o">&lt;</span><span class="p">(</span><span class="kt">u64</span><span class="p">,</span><span class="p">)</span><span class="p">,</span><span class="w"> </span><span class="n">Out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">R</span><span class="o">&gt;</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">R</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">c</span><span class="p">.</span><span class="n">call</span><span class="p">(</span><span class="p">(</span><span class="n">x</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">y</span><span class="p">,</span><span class="p">)</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="k">fn</span> <span class="nf">sub_cps</span><span class="o">&lt;</span><span class="n">R</span><span class="o">&gt;</span><span class="p">(</span><span class="n">x</span>: <span class="kt">u64</span><span class="p">,</span><span class="w"> </span><span class="n">y</span>: <span class="kt">u64</span><span class="p">,</span><span class="w"> </span><span class="n">c</span>: <span class="nb">Box</span><span class="o">&lt;</span><span class="n">dyn</span><span class="w"> </span><span class="n">FnBox</span><span class="o">&lt;</span><span class="p">(</span><span class="kt">u64</span><span class="p">,</span><span class="p">)</span><span class="p">,</span><span class="w"> </span><span class="n">Out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">R</span><span class="o">&gt;</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">R</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">c</span><span class="p">.</span><span class="n">call</span><span class="p">(</span><span class="p">(</span><span class="n">x</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">y</span><span class="p">,</span><span class="p">)</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="k">fn</span> <span class="nf">fib_cps</span><span class="o">&lt;</span><span class="n">R</span>: <span class="nb">&#39;static</span><span class="o">&gt;</span><span class="p">(</span><span class="n">n</span>: <span class="kt">u64</span><span class="p">,</span><span class="w"> </span><span class="n">c</span>: <span class="nb">Box</span><span class="o">&lt;</span><span class="n">dyn</span><span class="w"> </span><span class="n">FnBox</span><span class="o">&lt;</span><span class="p">(</span><span class="kt">u64</span><span class="p">,</span><span class="p">)</span><span class="p">,</span><span class="w"> </span><span class="n">Out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">R</span><span class="o">&gt;</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">R</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">c</span><span class="p">.</span><span class="n">call</span><span class="p">(</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="p">)</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">sub_cps</span><span class="p">(</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="n">n</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="mi">1</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="c1">// ここで関数のジェネリックパラメータを参照してエラー
+</span><span class="c1"></span><span class="w">            </span><span class="n">cls</span><span class="o">!</span><span class="p">(</span><span class="p">[</span><span class="n">c</span>:<span class="nb">Box</span><span class="o">&lt;</span><span class="n">dyn</span><span class="w"> </span><span class="n">FnBox</span><span class="o">&lt;</span><span class="kt">u64</span><span class="p">,</span><span class="w"> </span><span class="n">Out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">R</span><span class="o">&gt;</span><span class="o">&gt;</span><span class="p">]</span><span class="o">|</span><span class="n">n1</span>: <span class="kt">u64</span><span class="o">|</span><span class="w"> </span>-&gt; <span class="nc">R</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">c</span><span class="p">.</span><span class="n">call</span><span class="p">(</span><span class="n">n1</span><span class="p">)</span><span class="w"> </span><span class="p">}</span><span class="p">)</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>残念ながら、この戦略は失敗します。
+<code>FnBox</code> を実装するときに <code>fib</code> の帰り型の <code>R</code> を参照する必要が出てきますが、これは許可されていません。</p>
+
+<p>さて、失敗してしまったので戦略を練り直します。
+もっと視座を高くして継続の気持になってみましょう。
+第一級市民になって引数を渡り歩く生活。道すがら環境を捕捉して旅をしつつ呼び出されていきます。
+旅の終着点は？最後は初期継続を得て値となります。</p>
+
+<p>そう、分かりましたね。つまるところ、「既に受け取ってしまった継続」で使われている型パラメータを参照してしまうのが問題です。
+受け取った時点で型が固定されているのに、ジェネリクスなので参照できないというジレンマが生じている訳です。</p>
+
+<p>ということは「継続を後で受け取る」ようにすれば、型パラメータはそのときまで固定されないので問題は解決します。</p>
+
+<p>「継続を後で受け取る」トレイトを定義してあげましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="c1">// 今までの
+</span><span class="c1"></span><span class="k">trait</span><span class="w"> </span><span class="n">FnBox</span><span class="o">&lt;</span><span class="n">A</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">type</span> <span class="nc">Out</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">fn</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span>: <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Self</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="n">arg</span>: <span class="nc">A</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span>::<span class="n">Out</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="c1">// 継続変換された値を表わすトレイト。 型パラメータは値と継続の返り値の型
+</span><span class="c1"></span><span class="k">trait</span><span class="w"> </span><span class="n">Cont</span><span class="o">&lt;</span><span class="n">A</span><span class="p">,</span><span class="w"> </span><span class="n">R</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">fn</span> <span class="nf">cont</span><span class="p">(</span><span class="bp">self</span>: <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Self</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="n">c</span>: <span class="nb">Box</span><span class="o">&lt;</span><span class="n">dyn</span><span class="w"> </span><span class="n">FnBox</span><span class="o">&lt;</span><span class="n">A</span><span class="p">,</span><span class="w"> </span><span class="n">Out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">R</span><span class="o">&gt;</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">R</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p><code>Cont</code> はメソッド <code>cont</code> で起動できます。
+このときに初期継続を渡してあげます。
+<code>Cont</code> に型パラメータ <code>R</code> を保持しているので関数のジェネリクスにある浮いたパラメータを参照しなくてよくなります。</p>
+
+<p>定数のCPS変換は <code>Cont</code> 流にやるとこうなります。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">struct</span> <span class="nc">Const</span><span class="o">&lt;</span><span class="n">C</span><span class="o">&gt;</span><span class="p">(</span><span class="n">C</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="k">impl</span><span class="o">&lt;</span><span class="n">C</span><span class="p">,</span><span class="w"> </span><span class="n">R</span><span class="o">&gt;</span><span class="w"> </span><span class="n">Cont</span><span class="o">&lt;</span><span class="n">C</span><span class="p">,</span><span class="w"> </span><span class="n">R</span><span class="o">&gt;</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">Const</span><span class="o">&lt;</span><span class="n">C</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">fn</span> <span class="nf">cont</span><span class="p">(</span><span class="bp">self</span>: <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Self</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="n">c</span>: <span class="nb">Box</span><span class="o">&lt;</span><span class="n">dyn</span><span class="w"> </span><span class="n">FnBox</span><span class="o">&lt;</span><span class="n">C</span><span class="p">,</span><span class="w"> </span><span class="n">Out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">R</span><span class="o">&gt;</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">R</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">c</span><span class="p">.</span><span class="n">call</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="mi">0</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>難しいですか？まあ、でも使ってみれば簡単です。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">add_cps</span><span class="o">&lt;</span><span class="n">R</span><span class="o">&gt;</span><span class="p">(</span><span class="n">x</span>: <span class="kt">u64</span><span class="p">,</span><span class="w"> </span><span class="n">y</span>: <span class="kt">u64</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">Box</span><span class="o">&lt;</span><span class="n">dyn</span><span class="w"> </span><span class="n">Cont</span><span class="o">&lt;</span><span class="kt">u64</span><span class="p">,</span><span class="w"> </span><span class="n">R</span><span class="o">&gt;</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="n">Const</span><span class="p">(</span><span class="n">x</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">y</span><span class="p">)</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="k">fn</span> <span class="nf">sub_cps</span><span class="o">&lt;</span><span class="n">R</span><span class="o">&gt;</span><span class="p">(</span><span class="n">x</span>: <span class="kt">u64</span><span class="p">,</span><span class="w"> </span><span class="n">y</span>: <span class="kt">u64</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">Box</span><span class="o">&lt;</span><span class="n">dyn</span><span class="w"> </span><span class="n">Cont</span><span class="o">&lt;</span><span class="kt">u64</span><span class="p">,</span><span class="w"> </span><span class="n">R</span><span class="o">&gt;</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="n">Const</span><span class="p">(</span><span class="n">x</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">y</span><span class="p">)</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>さて、 <code>fib</code> はネストした継続が出てくるので少しばかり面倒です。</p>
+
+<p>まずは <code>cls</code> マクロを改造しておきます。型パラメータを取れるようになりました。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="n">macro_rules</span><span class="o">!</span><span class="w"> </span><span class="n">cls</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">(</span><span class="o">&lt;</span><span class="cp">$(</span><span class="cp">$ty</span>: <span class="nc">ident</span><span class="p">)</span><span class="p">,</span><span class="o">*</span><span class="o">&gt;</span><span class="p">[</span><span class="cp">$(</span><span class="cp">$env</span>:<span class="nc">ident</span><span class="w"> </span>: <span class="cp">$env_ty</span>: <span class="nc">ty</span><span class="p">)</span><span class="p">,</span><span class="o">*</span><span class="p">]</span><span class="o">|</span><span class="cp">$(</span><span class="cp">$param</span>:<span class="nc">ident</span><span class="w"> </span>: <span class="cp">$param_ty</span>: <span class="nc">ty</span><span class="p">)</span><span class="p">,</span><span class="o">*</span><span class="o">|</span><span class="w"> </span>-&gt; <span class="cp">$out_ty</span>: <span class="nc">ty</span><span class="w"> </span><span class="p">{</span><span class="cp">$body</span>:<span class="nc">expr</span><span class="p">}</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">marker</span>::<span class="n">PhantomData</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="k">struct</span> <span class="nc">Cls</span><span class="o">&lt;</span><span class="cp">$(</span><span class="cp">$ty</span><span class="p">)</span><span class="p">,</span><span class="o">*</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">                </span><span class="cp">$(</span><span class="cp">$env</span>: <span class="cp">$env_ty</span><span class="p">,</span><span class="p">)</span><span class="o">*</span><span class="w">
+</span><span class="w"></span><span class="w">                    </span><span class="n">_p</span>: <span class="nc">PhantomData</span><span class="o">&lt;</span><span class="p">(</span><span class="cp">$(</span><span class="cp">$ty</span><span class="p">)</span><span class="p">,</span><span class="o">*</span><span class="p">)</span><span class="o">&gt;</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="k">impl</span><span class="o">&lt;</span><span class="cp">$(</span><span class="cp">$ty</span>: <span class="nb">&#39;static</span><span class="p">)</span><span class="p">,</span><span class="o">*</span><span class="o">&gt;</span><span class="w"> </span><span class="n">FnBox</span><span class="o">&lt;</span><span class="p">(</span><span class="cp">$(</span><span class="cp">$param_ty</span><span class="p">)</span><span class="p">,</span><span class="o">*</span><span class="p">)</span><span class="o">&gt;</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">Cls</span><span class="o">&lt;</span><span class="cp">$(</span><span class="cp">$ty</span><span class="p">)</span><span class="p">,</span><span class="o">*</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">                </span><span class="k">type</span> <span class="nc">Out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="cp">$out_ty</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">                </span><span class="k">fn</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span>: <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Self</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="cp">$(</span><span class="cp">$param</span><span class="p">)</span><span class="p">,</span><span class="o">*</span><span class="w"> </span>: <span class="p">(</span><span class="cp">$(</span><span class="cp">$param_ty</span><span class="p">)</span><span class="p">,</span><span class="o">*</span><span class="p">)</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span>::<span class="n">Out</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">                    </span><span class="kd">let</span><span class="w"> </span><span class="n">s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">*</span><span class="bp">self</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">                    </span><span class="kd">let</span><span class="w"> </span><span class="n">Cls</span><span class="w"> </span><span class="p">{</span><span class="n">_p</span><span class="p">,</span><span class="w"> </span><span class="cp">$(</span><span class="cp">$env</span><span class="p">)</span><span class="p">,</span><span class="o">*</span><span class="p">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">s</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">                    </span><span class="cp">$body</span><span class="w">
+</span><span class="w"></span><span class="w">                </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">bx</span>:<span class="nb">Box</span><span class="o">&lt;</span><span class="n">dyn</span><span class="w"> </span><span class="n">FnBox</span><span class="o">&lt;</span><span class="p">(</span><span class="cp">$(</span><span class="cp">$param_ty</span><span class="p">)</span><span class="p">,</span><span class="o">*</span><span class="p">)</span><span class="p">,</span><span class="w"> </span><span class="n">Out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="cp">$out_ty</span><span class="o">&gt;</span><span class="o">&gt;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="n">Cls</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">                </span><span class="cp">$(</span><span class="cp">$env</span><span class="p">,</span><span class="p">)</span><span class="o">*</span><span class="w">
+</span><span class="w"></span><span class="w">                    </span><span class="n">_p</span>: <span class="nc">PhantomData</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="p">}</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="n">bx</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>その上で、便利な道具として <code>and_then</code> を定義しておきましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">and_then</span><span class="o">&lt;</span><span class="n">A</span>: <span class="nb">&#39;static</span><span class="p">,</span><span class="w"> </span><span class="n">B</span>: <span class="nb">&#39;static</span><span class="p">,</span><span class="w"> </span><span class="n">R</span>: <span class="nb">&#39;static</span><span class="o">&gt;</span><span class="p">(</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">c</span>: <span class="nb">Box</span><span class="o">&lt;</span><span class="n">dyn</span><span class="w"> </span><span class="n">Cont</span><span class="o">&lt;</span><span class="n">A</span><span class="p">,</span><span class="w"> </span><span class="n">R</span><span class="o">&gt;</span><span class="o">&gt;</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">f</span>: <span class="nb">Box</span><span class="o">&lt;</span><span class="n">dyn</span><span class="w"> </span><span class="n">FnBox</span><span class="o">&lt;</span><span class="n">A</span><span class="p">,</span><span class="w"> </span><span class="n">Out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Box</span><span class="o">&lt;</span><span class="n">dyn</span><span class="w"> </span><span class="n">Cont</span><span class="o">&lt;</span><span class="n">B</span><span class="p">,</span><span class="w"> </span><span class="n">R</span><span class="o">&gt;</span><span class="o">&gt;</span><span class="o">&gt;</span><span class="o">&gt;</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">Box</span><span class="o">&lt;</span><span class="n">dyn</span><span class="w"> </span><span class="n">Cont</span><span class="o">&lt;</span><span class="n">B</span><span class="p">,</span><span class="w"> </span><span class="n">R</span><span class="o">&gt;</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="n">AndThen</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">c</span>: <span class="nc">c</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">f</span>: <span class="nc">f</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">_phantom</span>: <span class="nc">PhantomData</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">marker</span>::<span class="n">PhantomData</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="k">struct</span> <span class="nc">AndThen</span><span class="o">&lt;</span><span class="n">A</span><span class="p">,</span><span class="w"> </span><span class="n">B</span><span class="p">,</span><span class="w"> </span><span class="n">R</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">c</span>: <span class="nb">Box</span><span class="o">&lt;</span><span class="n">dyn</span><span class="w"> </span><span class="n">Cont</span><span class="o">&lt;</span><span class="n">A</span><span class="p">,</span><span class="w"> </span><span class="n">R</span><span class="o">&gt;</span><span class="o">&gt;</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">f</span>: <span class="nb">Box</span><span class="o">&lt;</span><span class="n">dyn</span><span class="w"> </span><span class="n">FnBox</span><span class="o">&lt;</span><span class="n">A</span><span class="p">,</span><span class="w"> </span><span class="n">Out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Box</span><span class="o">&lt;</span><span class="n">dyn</span><span class="w"> </span><span class="n">Cont</span><span class="o">&lt;</span><span class="n">B</span><span class="p">,</span><span class="w"> </span><span class="n">R</span><span class="o">&gt;</span><span class="o">&gt;</span><span class="o">&gt;</span><span class="o">&gt;</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">_phantom</span>: <span class="nc">PhantomData</span><span class="o">&lt;</span><span class="n">B</span><span class="o">&gt;</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">
+</span><span class="w"></span><span class="k">impl</span><span class="o">&lt;</span><span class="n">A</span>: <span class="nb">&#39;static</span><span class="p">,</span><span class="w"> </span><span class="n">B</span>: <span class="nb">&#39;static</span><span class="p">,</span><span class="w"> </span><span class="n">R</span>: <span class="nb">&#39;static</span><span class="o">&gt;</span><span class="w"> </span><span class="n">Cont</span><span class="o">&lt;</span><span class="n">B</span><span class="p">,</span><span class="w"> </span><span class="n">R</span><span class="o">&gt;</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">AndThen</span><span class="o">&lt;</span><span class="n">A</span><span class="p">,</span><span class="w"> </span><span class="n">B</span><span class="p">,</span><span class="w"> </span><span class="n">R</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">fn</span> <span class="nf">cont</span><span class="p">(</span><span class="bp">self</span>: <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Self</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="n">cont</span>: <span class="nb">Box</span><span class="o">&lt;</span><span class="n">dyn</span><span class="w"> </span><span class="n">FnBox</span><span class="o">&lt;</span><span class="n">B</span><span class="p">,</span><span class="w"> </span><span class="n">Out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">R</span><span class="o">&gt;</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">R</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">*</span><span class="bp">self</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">AndThen</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">c</span><span class="p">,</span><span class="w"> </span><span class="n">f</span><span class="p">,</span><span class="w"> </span><span class="p">.</span><span class="p">.</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">s</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">c</span><span class="p">.</span><span class="n">cont</span><span class="p">(</span><span class="n">cls</span><span class="o">!</span><span class="p">(</span><span class="o">&lt;</span><span class="n">A</span><span class="p">,</span><span class="w"> </span><span class="n">B</span><span class="p">,</span><span class="w"> </span><span class="n">R</span><span class="o">&gt;</span><span class="p">[</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="n">f</span>: <span class="nb">Box</span><span class="o">&lt;</span><span class="n">dyn</span><span class="w"> </span><span class="n">FnBox</span><span class="o">&lt;</span><span class="n">A</span><span class="p">,</span><span class="w"> </span><span class="n">Out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Box</span><span class="o">&lt;</span><span class="n">dyn</span><span class="w"> </span><span class="n">Cont</span><span class="o">&lt;</span><span class="n">B</span><span class="p">,</span><span class="w"> </span><span class="n">R</span><span class="o">&gt;</span><span class="o">&gt;</span><span class="o">&gt;</span><span class="o">&gt;</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="n">cont</span>: <span class="nb">Box</span><span class="o">&lt;</span><span class="n">dyn</span><span class="w"> </span><span class="n">FnBox</span><span class="o">&lt;</span><span class="n">B</span><span class="p">,</span><span class="w"> </span><span class="n">Out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">R</span><span class="o">&gt;</span><span class="o">&gt;</span><span class="p">]</span><span class="w">
+</span><span class="w"></span><span class="w">                    </span><span class="o">|</span><span class="n">arg</span>: <span class="nc">A</span><span class="o">|</span><span class="w"> </span>-&gt; <span class="nc">R</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">(</span><span class="n">f</span><span class="p">)</span><span class="p">.</span><span class="n">call</span><span class="p">(</span><span class="n">arg</span><span class="p">)</span><span class="p">.</span><span class="n">cont</span><span class="p">(</span><span class="n">cont</span><span class="p">)</span><span class="w"> </span><span class="p">}</span><span class="p">)</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>見た目はごちゃっとしてますけど「よくある」 <code>and_then</code> のコードです。</p>
+
+<p>いよいよラスト、<code>and_then</code> と <code>cls</code> を駆使して <code>fib</code> のCPS変換をします。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">fib_cps</span><span class="o">&lt;</span><span class="n">R</span>: <span class="nb">&#39;static</span><span class="o">&gt;</span><span class="p">(</span><span class="n">n</span>: <span class="kt">u64</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">Box</span><span class="o">&lt;</span><span class="n">dyn</span><span class="w"> </span><span class="n">Cont</span><span class="o">&lt;</span><span class="kt">u64</span><span class="p">,</span><span class="w"> </span><span class="n">R</span><span class="o">&gt;</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="n">Const</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="n">and_then</span><span class="p">(</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="n">and_then</span><span class="p">(</span><span class="w">
+</span><span class="w"></span><span class="w">                </span><span class="n">sub_cps</span><span class="p">(</span><span class="n">n</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">                </span><span class="n">cls</span><span class="o">!</span><span class="p">(</span><span class="p">[</span><span class="p">]</span><span class="o">&lt;</span><span class="n">R</span><span class="o">&gt;</span><span class="o">|</span><span class="n">n1</span>: <span class="kt">u64</span><span class="o">|</span><span class="w"> </span>-&gt; <span class="nb">Box</span><span class="o">&lt;</span><span class="n">dyn</span><span class="w"> </span><span class="n">Cont</span><span class="o">&lt;</span><span class="kt">u64</span><span class="p">,</span><span class="w"> </span><span class="n">R</span><span class="o">&gt;</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">fib_cps</span><span class="p">(</span><span class="n">n1</span><span class="p">)</span><span class="w"> </span><span class="p">}</span><span class="p">)</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="p">)</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="n">cls</span><span class="o">!</span><span class="p">(</span><span class="p">[</span><span class="n">n</span>: <span class="kt">u64</span><span class="p">]</span><span class="o">&lt;</span><span class="n">R</span><span class="o">&gt;</span><span class="o">|</span><span class="n">f1</span>: <span class="kt">u64</span><span class="o">|</span><span class="w"> </span>-&gt; <span class="nb">Box</span><span class="o">&lt;</span><span class="n">dyn</span><span class="w"> </span><span class="n">Cont</span><span class="o">&lt;</span><span class="kt">u64</span><span class="p">,</span><span class="w"> </span><span class="n">R</span><span class="o">&gt;</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">                </span><span class="n">and_then</span><span class="p">(</span><span class="w">
+</span><span class="w"></span><span class="w">                    </span><span class="n">and_then</span><span class="p">(</span><span class="w">
+</span><span class="w"></span><span class="w">                        </span><span class="n">sub_cps</span><span class="p">(</span><span class="n">n</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">                        </span><span class="n">cls</span><span class="o">!</span><span class="p">(</span><span class="p">[</span><span class="p">]</span><span class="o">&lt;</span><span class="n">R</span><span class="o">&gt;</span><span class="o">|</span><span class="n">n2</span>: <span class="kt">u64</span><span class="o">|</span><span class="w"> </span>-&gt; <span class="nb">Box</span><span class="o">&lt;</span><span class="n">dyn</span><span class="w"> </span><span class="n">Cont</span><span class="o">&lt;</span><span class="kt">u64</span><span class="p">,</span><span class="w"> </span><span class="n">R</span><span class="o">&gt;</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">fib_cps</span><span class="p">(</span><span class="n">n2</span><span class="p">)</span><span class="w"> </span><span class="p">}</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="w">                    </span><span class="p">)</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">                    </span><span class="n">cls</span><span class="o">!</span><span class="p">(</span><span class="p">[</span><span class="n">f1</span>: <span class="kt">u64</span><span class="p">]</span><span class="o">&lt;</span><span class="n">R</span><span class="o">&gt;</span><span class="o">|</span><span class="n">f2</span>: <span class="kt">u64</span><span class="o">|</span><span class="w"> </span>-&gt; <span class="nb">Box</span><span class="o">&lt;</span><span class="n">dyn</span><span class="w"> </span><span class="n">Cont</span><span class="o">&lt;</span><span class="kt">u64</span><span class="p">,</span><span class="w"> </span><span class="n">R</span><span class="o">&gt;</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">                        </span><span class="n">add_cps</span><span class="p">(</span><span class="n">f1</span><span class="p">,</span><span class="w"> </span><span class="n">f2</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="w">                    </span><span class="p">}</span><span class="p">)</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="p">}</span><span class="p">)</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>やった！できた！
+あとは適当に初期継続 <code>Id</code> を用意してあげれば呼び出せます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">struct</span> <span class="nc">Id</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="k">impl</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="n">FnBox</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">Id</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="k">type</span> <span class="nc">Out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">T</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="k">fn</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span>: <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Self</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="n">t</span>: <span class="nc">T</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span>::<span class="n">Out</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="w">            </span><span class="n">t</span><span class="w">
+</span><span class="w"></span><span class="w">        </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">ret</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fib_cps</span>::<span class="o">&lt;</span><span class="kt">u64</span><span class="o">&gt;</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span><span class="p">.</span><span class="n">cont</span><span class="p">(</span><span class="nb">Box</span>::<span class="n">new</span><span class="p">(</span><span class="n">Id</span><span class="p">)</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="w">    </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;fib(10) = {}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">ret</span><span class="p">)</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>Rust 1.34.2でコンパイルしてみましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">$ rustc +1.34.2 cps_fib.rs
+$ ./cps_fib
+fib(10) = 89</code></pre></div>
+<p>できました！！いつの時代でも欲求は満たされることが分かりました。</p>
+
+<h1 id="まとめ">まとめ</h1>
+
+<p>Rust 1.35.0より前の世界では苦労して得ていたCPS形式のプログラムも1.35.0からは簡単に得られるようになりました。
+時代は進むし世の中便利になっていくのです。</p>
+                    </section>
+                </article>
+            </div>
+        </div>
+
+        <div class="row li-author">
+    <div class="sixteen columns">
+        Written by <strong>κeen</strong>
+    </div>
+</div>
+
+
+        <div class="row li-pagination">
+            <div class="eight columns">
+                <div class="li-pagination-previous">
+                    
+                        &nbsp;
+                    
+                </div>
+            </div>
+            <div class="eight columns">
+                <div class="li-pagination-next">
+                    
+                        Older article<br />
+                        <a href="//KeenS.github.io/blog/2019/12/07/dieseldeselectsurukaramuwo1tsunimatomeru/"> dieselでselectするカラムを1箇所にまとめる</a>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+<footer class="li-page-footer">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-page-footer-legal">
+                    &copy; 2019. All rights reserved. 
+                </div>
+                <div class="li-page-footer-theme">
+                    <span class=""><a href="https://github.com/eliasson/liquorice/">liquorice</a> is a theme for <a href="http://hugo.spf13.com">hugo</a></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<script type="text/javascript">
+ function toggle(id) {
+     var e = document.getElementById(id);
+     e.style.display == 'block' ? e.style.display = 'none' : e.style.display = 'block';
+ }
+</script>
+<script src="https://unpkg.com/mermaid@7.0.4/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({startOnLoad:true
+     });</script>
+
+    </body>
+</html>
+
