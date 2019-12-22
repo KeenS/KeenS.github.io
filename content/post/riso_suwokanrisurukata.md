@@ -1,5 +1,5 @@
 ---
-categories: ["型", "smlsharp"]
+categories: ["型", "SMLSharp"]
 date: 2019-12-21T22:31:35+09:00
 title: "リソースを管理する型"
 ---

@@ -4,7 +4,7 @@ title: "Shell Scriptでオプションをパースするときの必勝法"
 date: 2014-02-19
 comments: true
 sharing: true
-categories: [Command Line, Shell Script]
+categories: [CLI, Shell Script]
 ---
 κeenです。CIMの解説 実装編の執筆はもうちょい掛かりそうです。だいたいコードが落ち着いたら書きます。
 

@@ -1,5 +1,5 @@
 ---
-categories: [hugo,mermaid.js]
+categories: [Hugo, Mermaid.js]
 date: 2017-08-27T09:57:09+09:00
 title: "Hugoにシーケンス図を埋め込むその2"
 ---

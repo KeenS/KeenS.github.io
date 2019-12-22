@@ -1,5 +1,5 @@
 ---
-categories: [shell, シェル芸]
+categories: [Shell, シェル芸]
 date: 2016-07-13T23:34:03+09:00
 title: シェル芸十八般
 ---

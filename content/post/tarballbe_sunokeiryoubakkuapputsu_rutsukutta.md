@@ -1,5 +1,5 @@
 ---
-categories: [Shell, Command Line]
+categories: [Shell, CLI]
 date: 2015-05-06T20:45:53+09:00
 title: tarballベースの軽量バックアップツール'Sheltar'を作った
 ---

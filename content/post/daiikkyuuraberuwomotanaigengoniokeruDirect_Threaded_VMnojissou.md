@@ -1,5 +1,5 @@
 ---
-categories: [SML, 言語処理系]
+categories: [ML, SML, 言語実装]
 date: 2015-05-29T20:26:41+09:00
 title: 第一級ラベルを持たない言語におけるDirect Threaded VMの実装
 ---

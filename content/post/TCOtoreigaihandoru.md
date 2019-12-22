@@ -1,5 +1,5 @@
 ---
-categories: [言語処理系, SML]
+categories: [言語実装, SML]
 date: 2015-05-31T21:02:08+09:00
 title: TCOと例外ハンドル
 ---

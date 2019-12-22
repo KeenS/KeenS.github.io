@@ -1,5 +1,5 @@
 ---
-categories: [isucon, isucon5]
+categories: [ISUCON, ISUCON5]
 date: 2015-09-27T23:58:24+09:00
 title: isucon にCommon Lispチームで出た
 ---

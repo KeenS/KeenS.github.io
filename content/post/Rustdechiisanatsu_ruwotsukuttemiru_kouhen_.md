@@ -1,5 +1,5 @@
 ---
-categories: [Rust, Advent Calendar, Advent Calendar 2015]
+categories: [Rust, Advent Calendar, Advent Calendar 2015, Rust Advent Calendar]
 date: 2015-11-29T13:54:39+09:00
 title: Rustで小さなツールを作ってみる(後編)
 ---

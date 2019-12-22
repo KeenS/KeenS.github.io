@@ -4,7 +4,7 @@ title: "Mpd 小ネタ"
 date: 2014-01-21
 comments: true
 sharing: true
-categories: [Raspberry Pi, mpd, Command Line]
+categories: [Raspberry Pi, mpd, CLI]
 ---
 mpdのちょっとした便利な使い方。
 

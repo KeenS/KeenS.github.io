@@ -1,5 +1,5 @@
 ---
-categories: [SML, SMLSharp, emacs, flymake]
+categories: [ML, SML, SMLSharp, Emacs, flymake]
 date: 2015-04-23T23:01:17+09:00
 title: SMLSharpを使ってSMLのon-the-flyエラーチェック
 ---

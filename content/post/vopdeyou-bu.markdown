@@ -3,7 +3,7 @@ type: post
 title: "VOPで遊ぶ"
 date: 2014-12-02
 comments: true
-categories: [Lisp, Common Lisp, SBCL, VOP, Advent Calendar]
+categories: [Lisp, Common Lisp, SBCL, VOP, Advent Calendar, Advent Calendar 2014, Lisp Advent Calendar]
 ---
 (:meta  
  ((:this "[Lisp Advent Calendar 2014](http://qiita.com/advent-calendar/2014/lisp)の3日目の記事")  

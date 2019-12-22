@@ -1,5 +1,5 @@
 ---
-categories: [Rust, Advent Calendar, Advent Calendar 2017]
+categories: [Rust, Advent Calendar, Advent Calendar 2017, Rust Advent Calendar]
 date: 2017-12-01T21:10:52+09:00
 title: "RustのDI"
 ---

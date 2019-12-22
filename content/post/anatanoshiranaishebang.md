@@ -1,5 +1,5 @@
 ---
-categories: [Command Line, Shell Script, Lisp, Common Lisp]
+categories: [CLI, Shell Script, Lisp, Common Lisp]
 date: 2015-06-26T23:24:44+09:00
 title: あなたの知らないShebang
 ---

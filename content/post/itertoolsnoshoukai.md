@@ -1,5 +1,5 @@
 ---
-categories: ["Rust", "Advent Calendar", "Advent Calendar 2019"]
+categories: ["Rust", "Advent Calendar", "Advent Calendar 2019", "Rust Advent Calendar"]
 date: 2019-12-06T02:36:37+09:00
 title: "itertoolsの紹介"
 ---

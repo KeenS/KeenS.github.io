@@ -1,5 +1,5 @@
 ---
-categories: [Rust, 言語実装, Advent Calendar, Advent Calendar 2016]
+categories: [Rust, 言語実装, Advent Calendar, Advent Calendar 2016, 言語実装 Advent Calendar]
 date: 2016-12-02T14:00:11+09:00
 title: 新しいコンパイラバックエンドcretonne
 ---

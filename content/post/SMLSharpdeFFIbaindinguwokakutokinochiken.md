@@ -1,5 +1,5 @@
 ---
-categories: [SML, SMLSharp]
+categories: [ML, SML, SMLSharp]
 date: 2015-04-19T13:51:33+09:00
 title: SMLSharpでFFIバインディングを書く時の知見
 ---

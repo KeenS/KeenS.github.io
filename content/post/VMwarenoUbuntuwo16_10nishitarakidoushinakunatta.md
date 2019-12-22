@@ -1,5 +1,5 @@
 ---
-categories: [Ubuntu, VMware]
+categories: [Linux, Ubuntu, VMware]
 date: 2016-10-31T22:06:17+09:00
 title: VMwareのUbuntuを16.10にしたら起動しなくなった
 ---

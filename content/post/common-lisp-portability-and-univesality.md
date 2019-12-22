@@ -1,5 +1,5 @@
 ---
-categories: [Lisp, Common Lisp, Command Line]
+categories: [Lisp, Common Lisp, CLI]
 date: 2015-01-22T07:51:02Z
 title: Common Lispのポータビリティとユニバーサリティ
 ---

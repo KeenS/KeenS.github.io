@@ -1,5 +1,5 @@
 ---
-categories: [WebAssembly, compiler]
+categories: [WebAssembly, Compiler]
 date: 2017-01-22T13:35:46+09:00
 description: "コンパイラ勉強会での発表用"
 title: コンパイラの人からみたWebAssembly

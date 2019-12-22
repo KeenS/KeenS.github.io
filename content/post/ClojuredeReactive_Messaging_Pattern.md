@@ -1,5 +1,5 @@
 ---
-categories: [Lisp, Clojure, Advent Calendar, Advent Calendar 2015]
+categories: [Lisp, Clojure, Advent Calendar, Advent Calendar 2015, Lisp Advent Calendar]
 date: 2015-12-19T22:30:19+09:00
 title: ClojureでReactive Messaging Pattern
 ---

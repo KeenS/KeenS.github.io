@@ -1,5 +1,5 @@
 ---
-categories: [ML, ATS2, 依存型]
+categories: [ML, ATS2, 依存型, 型]
 date: 2015-12-29T23:40:45+09:00
 title: ATS2の依存型を使ってAVL木
 ---

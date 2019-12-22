@@ -1,5 +1,5 @@
 ---
-categories: [SML, smlsharp, Advent Calendar, Advent Calendar 2016]
+categories: [ML, SML, smlsharp, Advent Calendar, Advent Calendar 2016, ML Advent Calendar]
 date: 2016-11-30T15:18:58+09:00
 title: SML#をUbuntu 16.10で動かす
 ---

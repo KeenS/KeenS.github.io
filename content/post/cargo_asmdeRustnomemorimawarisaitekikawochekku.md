@@ -1,5 +1,5 @@
 ---
-categories: [Rust]
+categories: [Rust, Cargo]
 date: 2018-04-04T06:00:57+09:00
 title: "cargo asmでRustのメモリ周り最適化をチェック"
 ---

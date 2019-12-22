@@ -4,7 +4,7 @@ title: "CIMの解説をしてみる コマンド編"
 date: 2014-01-27
 comments: true
 sharing: true
-categories: [CIM, Command Line, Common Lisp, Lisp]
+categories: [CIM, CLI, Common Lisp, Lisp]
 ---
 先日LTで紹介したCIMが思いの外反響を呼んでる(Githubのstarが15)ので解説でもしてみます。
 

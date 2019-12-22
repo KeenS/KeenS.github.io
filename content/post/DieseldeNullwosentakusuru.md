@@ -1,5 +1,5 @@
 ---
-categories: [Rust, diesel]
+categories: [Rust, Diesel]
 date: 2018-02-26T15:51:08+09:00
 title: "DieselでSELECT NULLする"
 ---

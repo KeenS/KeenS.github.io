@@ -1,5 +1,5 @@
 ---
-categories: [Lisp, SKK, Rust, Advent Calendar, Advent Calendar 2015]
+categories: [Lisp, SKK, Rust, Advent Calendar, Advent Calendar 2015, Lisp Advent Calendar]
 date: 2015-12-20T22:40:16+09:00
 title: 最近作ってるLispの話
 ---

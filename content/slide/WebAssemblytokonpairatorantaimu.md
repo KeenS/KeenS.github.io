@@ -1,5 +1,5 @@
 ---
-categories: [WebAssembly, compiler, runtime]
+categories: [WebAssembly, Compiler, Runtime]
 date: 2017-02-16T15:46:21+09:00
 description: null
 title: WebAssemblyとコンパイラとランタイム

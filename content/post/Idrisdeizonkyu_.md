@@ -1,5 +1,5 @@
 ---
-categories: [Idris]
+categories: [Idris, 型, 依存型]
 date: 2019-02-28T00:32:46+09:00
 title: "Idrisで依存キュー"
 ---

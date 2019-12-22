@@ -1,5 +1,5 @@
 ---
-categories: [Scala, Isabelle, ScalaMeetup, 社内]
+categories: [Scala, Isabelle, ScalaMeetUp, 社内]
 date: 2016-10-05T00:10:25+09:00
 description: "
 社内のScala Meet Upでの発表用。テストがテーマ。

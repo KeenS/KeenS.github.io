@@ -1,5 +1,5 @@
 ---
-categories: [Rust, Advent Calendar, Advent Calendar 2016]
+categories: [Rust, Advent Calendar, Advent Calendar 2016, Rust Advent Calendar]
 date: 2016-12-01T14:29:33+09:00
 title: Rustでバイト列を扱う時のtips
 ---

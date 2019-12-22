@@ -1,5 +1,5 @@
 ---
-categories: [ML, SML, Advent Calendar, Advent Calendar 2017]
+categories: [ML, SML, Advent Calendar, Advent Calendar 2017, ML Advent Calendar]
 date: 2017-12-24T21:18:14+09:00
 title: "SMLのエコシステム（？）"
 ---

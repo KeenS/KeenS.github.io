@@ -1,5 +1,5 @@
 ---
-categories: ["小ネタ", "git"]
+categories: ["小ネタ", "Git"]
 date: 2019-01-24T14:18:40+09:00
 title: "gitのrebaseでsquashをワンライナーで"
 ---

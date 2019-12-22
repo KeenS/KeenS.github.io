@@ -1,5 +1,5 @@
 ---
-categories: [Rust, Advent Calendar, Advent Calendar 2016]
+categories: [Rust, Advent Calendar, Advent Calendar 2016, Rust Advent Calendar]
 date: 2016-12-24T22:51:46+09:00
 title: Rustのライフタイムを使ったスコープ解析
 ---

@@ -1,5 +1,5 @@
 ---
-categories: [SML, SMLSharp, Advent Calendar, Advent Calendar 2015]
+categories: [ML, SML, SMLSharp, Advent Calendar, Advent Calendar 2015, ML Advent Calendar]
 date: 2015-12-05T22:04:25+09:00
 title: SML#でDBに接続
 ---

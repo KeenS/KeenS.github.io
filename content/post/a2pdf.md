@@ -1,5 +1,5 @@
 ---
-categories: [Command Line, PDF, 小ネタ]
+categories: [CLI, PDF, 小ネタ]
 date: 2015-01-24T10:23:00Z
 title: 印刷フォマット済みのテキストファイルをPDF化する
 ---

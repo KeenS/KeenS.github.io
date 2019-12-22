@@ -1,5 +1,5 @@
 ---
-categories: [SML, SMLSharp, Advent Calendar, Advent Calendar 2015, 言語処理系]
+categories: [ML, SML, SMLSharp, Advent Calendar, Advent Calendar 2015, 言語実装, 言語実装 Advent Calendar]
 date: 2015-12-12T19:42:52+09:00
 title: SML#に学ぶコンパイラ言語におけるREPLの実装方法
 ---

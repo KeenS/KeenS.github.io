@@ -1,5 +1,5 @@
 ---
-categories: ["Rust", "AdventCalendar", "Advent Calendar 2018", "Rustで強めに型をつける"]
+categories: ["Rust", "Advent Calendar", "Advent Calendar 2018", "Rustで強めに型をつける", "Rust Advent Calendar"]
 date: 2018-12-15T04:15:08+09:00
 title: "Rustで強めに型をつけるPart 1: New Type Pattern"
 ---

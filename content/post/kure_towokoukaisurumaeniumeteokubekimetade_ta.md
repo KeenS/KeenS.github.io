@@ -1,5 +1,5 @@
 ---
-categories: [Rust, Advent Calendar, Advent Calendar 2017]
+categories: [Rust, Advent Calendar, Advent Calendar 2017, Rust Advent Calendar]
 date: 2017-12-03T23:14:35+09:00
 title: "クレートを公開する前に埋めておくべきメタデータ"
 ---

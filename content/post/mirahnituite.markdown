@@ -3,7 +3,7 @@ type: post
 title: "mirahについて"
 date: 2014-12-04
 comments: true
-categories: [Advent Calendar, Mirah]
+categories: [Advent Calendar, Mirah, Advent Calendar 2014]
 ---
 このエントリーは[マイナー言語 Advent Calendar 2014 - Qiita](http://qiita.com/advent-calendar/2014/minor-language)4日目の記事です。  
 前: ksmakotoさんで[マクロ、拙作のテキストマクロ言語m55について主に - ksmakotoのhatenadiary](http://ksmakoto.hatenadiary.com/entry/2014/12/03/002435)

@@ -1,5 +1,5 @@
 ---
-categories: [hugo,plantuml,ditaa]
+categories: [Hugo, PlantUML, Ditaa]
 date: 2017-08-26T15:20:21+09:00
 title: "Hugoにシーケンス図を埋め込む"
 ---

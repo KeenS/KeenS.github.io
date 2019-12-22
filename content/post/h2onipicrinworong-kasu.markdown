@@ -3,7 +3,7 @@ type: post
 title: "H2Oにpicrinを溶かす"
 date: 2014-12-07
 comments: true
-categories: [Lisp, Scheme, picrin, H2O, Advent Calendar]
+categories: [Lisp, Scheme, Picrin, H2O, Advent Calendar, Advent Calendar 2014]
 ---
 このエントリーは  
 [Lisp Advent Calendar](http://qiita.com/advent-calendar/2014/lisp) 7日目  

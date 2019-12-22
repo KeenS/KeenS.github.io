@@ -1,5 +1,5 @@
 ---
-categories: [SML]
+categories: [ML, SML]
 date: 2015-05-03T13:23:17+09:00
 title: SMLを書くLisperの悩み
 ---

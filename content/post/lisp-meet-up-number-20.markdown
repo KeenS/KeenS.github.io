@@ -3,7 +3,7 @@ type: post
 title: "Lisp Meet Up #20でLTしてきました"
 date: 2014-09-30T09:35:05Z
 comments: true
-categories: [lisp, scheme, picrin, lisp meet up]
+categories: [Lisp, Scheme, Picrin, Lisp Meet Up]
 ---
 κeenです。lisp meet up # 20に参加したのでレポートです。
 <!--more-->

@@ -1,5 +1,5 @@
 ---
-categories: ["Rust", "AdventCalendar", "Advent Calendar 2018"]
+categories: ["Rust", "Advent Calendar", "Advent Calendar 2018", "Rust Advent Calendar"]
 date: 2018-12-25T16:20:46+09:00
 title: "Rustのマクロでネストした呼び出しを実現するために"
 ---

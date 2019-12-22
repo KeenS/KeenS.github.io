@@ -4,7 +4,7 @@ title: "Rsync小ネタ"
 date: 2013-11-30
 comments: true
 sharing: true
-categories: [rsync, Command Line, 小ネタ]
+categories: [rsync, CLI, 小ネタ]
 ---
 [mpdを導入したとき](/blog/2013/11/13/what-recent/)にrsyncでパーミッションの問題が発生したと言ってましたが解決策がありました。
 

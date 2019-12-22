@@ -1,5 +1,5 @@
 ---
-categories: [SML, SMLSharp]
+categories: [ML, SML, SMLSharp]
 date: 2015-04-29T16:09:08+09:00
 title: SML#をMacでビルドする
 ---

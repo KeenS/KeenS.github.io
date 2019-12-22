@@ -1,5 +1,5 @@
 ---
-categories: ["言語処理系", "言語実装 Adevnt Calendar", "言語実装 Adevnt Calendar 2018", "Adevnt Calendar", "Adevnt Calendar 2018"]
+categories: ["言語処理系", "言語実装 Adevnt Calendar", "Advent Calendar", "Advent Calendar 2018"]
 date: 2018-12-01T19:20:40+09:00
 title: "JITあれこれ"
 ---

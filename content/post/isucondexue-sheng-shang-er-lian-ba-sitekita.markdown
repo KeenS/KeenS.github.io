@@ -3,7 +3,7 @@ type: post
 title: "#isucon で学生賞二連覇してきた"
 date: 2014-11-09
 comments: true
-categories: [isucon]
+categories: [ISUCON]
 ---
 κeenです。@nemunemu3desuさん（ねむさん）、@cocodripsさん（くーむさん）とチーム「(ρ_-)/超銀杏バスターズ&#92;(･ω･ o)」で[ISUCON4](http://isucon.net/)で学生賞とってきた。二連覇わーい。
 <!--more-->

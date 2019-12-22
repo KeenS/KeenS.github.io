@@ -1,5 +1,5 @@
 ---
-categories: ["ML", "OCaml", "言語処理系", "compiler"]
+categories: ["ML", "OCaml", "言語実装", "Compiler"]
 date: 2018-09-16T01:26:15+09:00
 description: "ML Day #2 での発表用。パターンマッチの実装について"
 title: "Inside Pattern Matchings"

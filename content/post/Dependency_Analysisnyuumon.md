@@ -1,5 +1,5 @@
 ---
-categories: ["言語実装", "Advent Calendar"]
+categories: ["言語実装", "Advent Calendar", "Advent Calendar 2019", "言語実装 Advent Calendar"]
 date: 2019-12-15T00:34:30+09:00
 title: "Dependency Analysis入門"
 ---

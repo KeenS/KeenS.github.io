@@ -4,7 +4,7 @@ title: "FreeBSDのmanページを手動インストールする"
 date: 2014-02-01
 comments: true
 sharing: true
-categories: [Command Line, FreeBSD, 小ネタ]
+categories: [CLI, FreeBSD, 小ネタ]
 ---
 FreeBSD10をインストールするときにdocをインストールしなかったら後で困ったのでメモ。環境はUbuntu13.10上のkvmに入れたFreeBSD10です。
 

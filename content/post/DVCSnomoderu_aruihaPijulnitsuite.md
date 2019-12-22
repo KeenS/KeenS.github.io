@@ -1,5 +1,5 @@
 ---
-categories: [git, pijul]
+categories: [Git, Pijul]
 date: 2016-02-14T17:12:01+09:00
 title: 分散VCSのモデル、あるいはPijulについて
 ---

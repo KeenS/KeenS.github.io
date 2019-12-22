@@ -1,5 +1,5 @@
 ---
-categories: [Command Line, 備忘録]
+categories: [CLI , 備忘録]
 date: 2015-07-05T14:18:37+09:00
 title: ファイル削除コマンド色々
 ---

@@ -4,7 +4,7 @@ title: "ここ１ヶ月くらいの近況"
 date: 2013-11-13
 comments: true
 sharing: true
-categories: [CIM, Common Lisp, Emacs, Octomacs, fluentd, mpd, Command Line]
+categories: [CIM, Common Lisp, Emacs, Octomacs, fluentd, mpd, CLI]
 ---
  #isucon 参戦記がフォロワーの多い@tagomorisさんとか@nitro\_idiotさんとかにツイートされて普段の数十倍のアクセスが来てテンション上がったので近況書きますね。
 

@@ -4,7 +4,7 @@ title: "Octopressのgistプラグインが動かなかったので修正した"
 date: 2013-09-26T22:57:00Z
 comments: true
 sharing: true
-categories: [Github, Octopress, Ruby]
+categories: [GitHub, Octopress, Ruby]
 ---
 どうもGithubのgistのURLが変わってる(?)っぽくてOctopressのgistプラグインが動いてくれなかったので修正しました。
 

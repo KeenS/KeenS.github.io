@@ -1,5 +1,5 @@
 ---
-categories: [isucon]
+categories: [ISUCON]
 date: 2015-09-04T08:47:05+09:00
 description: "予備に作ったスライド"
 title: ISUCONこれまでの流れ

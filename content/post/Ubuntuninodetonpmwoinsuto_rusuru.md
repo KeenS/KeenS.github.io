@@ -1,5 +1,5 @@
 ---
-categories: ["Ubuntu", "nodejs", "npm", "JavaScript"]
+categories: ["Linux", "Ubuntu", "nodejs", "npm", "JavaScript"]
 date: 2019-02-16T15:23:21+09:00
 title: "Ubuntuにnodeとnpmをインストールする"
 ---

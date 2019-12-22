@@ -4,7 +4,7 @@ title: "Tiarraにercで接続したときの/loadの問題"
 date: 2013-10-06
 comments: true
 sharing: true
-categories: [Emacs, irc, 備忘録, 小ネタ]
+categories: [Emacs, IRC, 備忘録, 小ネタ]
 ---
 [tiarra](http://www.clovery.jp/tiarra/)に [erc](http://www.emacswiki.org/ERC)で接続したときの/loadの問題。
 

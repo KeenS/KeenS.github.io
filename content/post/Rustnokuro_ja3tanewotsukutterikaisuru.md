@@ -1,5 +1,5 @@
 ---
-categories: [Rust, 言語実装。]
+categories: [Rust, 言語実装]
 date: 2016-10-10T16:48:43+09:00
 title: Rustのクロージャ3種を作って理解する
 ---

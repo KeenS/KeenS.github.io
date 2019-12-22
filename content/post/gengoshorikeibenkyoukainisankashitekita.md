@@ -1,5 +1,5 @@
 ---
-categories: ["言語処理系", "言語実装", "Lisp", "Common Lisp"]
+categories: ["言語実装", "Lisp", "Common Lisp"]
 date: 2018-11-17T22:59:16+09:00
 title: "言語処理系勉強会に参加してきた"
 ---

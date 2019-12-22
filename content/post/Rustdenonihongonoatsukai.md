@@ -1,5 +1,5 @@
 ---
-categories: [Rust, Advent Calendar, Advent Calendar 2015, 小ネタ]
+categories: [Rust, Advent Calendar, Advent Calendar 2015, 小ネタ, Rust Advent Calendar]
 date: 2015-12-13T17:14:18+09:00
 title: Rustでの日本語の扱い
 ---

@@ -1,5 +1,5 @@
 ---
-categories: [型クラス]
+categories: [型クラス, 型]
 date: 2016-07-16T02:53:49+09:00
 description: "
 型クラス勉強会での発表用。Rustのトレイトについて。

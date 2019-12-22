@@ -1,5 +1,5 @@
 ---
-categories: [言語実装, マクロ, Advent Calendar, Advent Calendar 2016]
+categories: [言語実装, マクロ, Advent Calendar, Advent Calendar 2016, 言語実装 Advent Calendar]
 date: 2016-12-01T13:29:52+09:00
 title: マクロやコンパイラプラグインの実装方法色々
 ---

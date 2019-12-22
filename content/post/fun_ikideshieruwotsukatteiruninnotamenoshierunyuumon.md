@@ -1,5 +1,5 @@
 ---
-categories: [shell, Shell Script, CLI, Command Line]
+categories: [Shell, Shell Script, CLI]
 date: 2017-10-17T22:36:14+09:00
 title: "雰囲気でシェルを使っている人のためのシェル入門"
 ---

@@ -3,7 +3,7 @@ type: post
 title: "claspがアップデートされたよ"
 date: 2014-12-06
 comments: true
-categories: [Lisp, Common Lisp, Advent Calendar]
+categories: [Lisp, Common Lisp, Advent Calendar, Lisp Advent Calendar]
 ---
 このエントリーは[Lisp Advent Calendar 2014](http://qiita.com/advent-calendar/2014/lisp)6日目の記事です。  
 前: nobkzさんで [lfe - (lisp (flavored (erlang)))について基本その1 - Qiita](http://qiita.com/nobkz/items/2be2b6806237d8ea6e21)  

@@ -1,5 +1,5 @@
 ---
-categories: [SML, mlyacc, Prolog]
+categories: [ML, SML, mlyacc, Prolog]
 date: 2015-01-31T11:55:51Z
 title: mlyaccを使ってみてハマったところ
 ---

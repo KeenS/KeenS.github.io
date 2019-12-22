@@ -1,5 +1,5 @@
 ---
-categories: ["Ubuntu", "zfs"]
+categories: ["Linux", "Ubuntu", "zfs"]
 date: 2019-10-19T12:17:24+09:00
 title: "Ubuntu 19.10でzfs root試してみた"
 ---

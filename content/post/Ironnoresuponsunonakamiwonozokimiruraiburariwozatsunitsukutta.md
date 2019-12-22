@@ -1,5 +1,5 @@
 ---
-categories: [Rust, Advent Calendar, Advent Calendar 2017, Iron, 小ネタ, Web]
+categories: [Rust, Advent Calendar, Advent Calendar 2017, Iron, 小ネタ, Web, Rust Advent Calendar]
 date: 2017-12-02T17:23:53+09:00
 title: "Ironのレスポンスの中身を覗き見るライブラリを雑に作った"
 ---

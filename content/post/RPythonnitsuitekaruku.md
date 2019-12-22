@@ -1,5 +1,5 @@
 ---
-categories: [言語実装, RPython, Interpreter, Advent Calendar, Advent Calendar 2017]
+categories: [言語実装, RPython, Interpreter, Advent Calendar, Advent Calendar 2017, 言語実装 Advent Calendar]
 date: 2017-12-12T20:25:00+09:00
 title: "RPythonについて軽く"
 ---

@@ -4,7 +4,7 @@ title: ".emacsの整理をした話 + EmacsとViとShellとLispを悪魔合体�
 date: 2013-12-13
 comments: true
 sharing: true
-categories: [Emacs, Emacs Lisp, Lisp, shell, vi]
+categories: [Emacs, Emacs Lisp, Lisp, Shell, vi]
 ---
 やや長いタイトルですが・・・年末になって大掃除がやってきましたね。みなさんもそろそろ.emacsの大掃除をしましょう。
 

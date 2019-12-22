@@ -1,5 +1,5 @@
 ---
-categories: [rust]
+categories: [Rust]
 date: 2015-09-23T22:43:14+09:00
 title: rust初心者へのガイド
 ---

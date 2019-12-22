@@ -4,7 +4,7 @@ title: "PDFユーティリティ"
 date: 2013-09-03T23:34:00Z
 comments: true
 sharing: true
-categories: [PDF, Utility, Command Line, 備忘録]
+categories: [PDF, Utility, CLI, 備忘録]
 ---
 小ネタ。コマンドラインからPDFを編集した話の備忘録。
 

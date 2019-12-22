@@ -3,7 +3,7 @@ type: post
 title: "Shibuya.lisp Tech Talk #8を運営&LTしてきました"
 date: 2014-09-16
 comments: true
-categories: [Shibuya.lisp, Lisp, Common Lisp, mocl, Android]
+categories: [Shibuya.lisp, Lisp, Common Lisp, MOCL, Android]
 ---
 κeenです。レポートに追われ試験があり合宿に行きで2週間以上空きましたが8/30にShibuya.lisp TT #8の運営をしつつLT枠での参加もしてきたので報告です。何かそこそこ大きなイベントの運営をされる方の参考になれば。
 <!--more-->

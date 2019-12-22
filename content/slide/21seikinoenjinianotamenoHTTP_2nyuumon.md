@@ -1,5 +1,5 @@
 ---
-categories: [HTTP, Web]
+categories: [HTTP, Web, FRESH勉強会]
 date: 2015-05-18T00:24:08+09:00
 description: "第3会FRESH勉強会で発表予定のスライド。HTTPについて詳しくない人のために
 HTTPの概要から先日RFC化されたHTTP/2の新機能、使いどころを解説します。

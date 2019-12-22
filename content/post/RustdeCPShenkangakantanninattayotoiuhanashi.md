@@ -1,5 +1,5 @@
 ---
-categories: ["Rust", "Advent Calendar", "Rust Advent Calendar", "継続", "CPS"]
+categories: ["Rust", "Advent Calendar", "Rust Advent Calendar", "Advent Calendar 2019", "継続", "CPS"]
 date: 2019-12-07T17:59:51+09:00
 title: "RustでCPS変換が簡単になったよという話"
 ---

@@ -4,7 +4,7 @@ title: "ClackのHandlerの書き方"
 date: 2013-12-06
 comments: true
 sharing: true
-categories: [Advent Calendar, Clack, Common Lisp, Lisp]
+categories: [Advent Calendar, Clack, Common Lisp, Lisp, Lisp Advent Calendar]
 ---
 (この記事は [Lisp Advent Calendar](http://qiita.com/advent-calendar/2013/lisp) 7日目のためのエントリです。  
  ( [6日目](http://meymao.hatenablog.com/entry/2013/12/06/140029) meymaoさんより「Lisperがクリスマスに贈るべきプレゼント三選」)  

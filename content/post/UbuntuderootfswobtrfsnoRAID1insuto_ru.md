@@ -1,5 +1,5 @@
 ---
-categories: [Ubuntu, btrfs, RAID1]
+categories: [Linux, Ubuntu, btrfs, RAID1]
 date: 2018-05-12T20:44:22+09:00
 title: "UbuntuでrootfsをbtrfsのRAID1インストール"
 ---

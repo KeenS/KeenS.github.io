@@ -1,5 +1,5 @@
 ---
-categories: [druid]
+categories: [druid, DB]
 date: 2016-02-27T21:28:16+09:00
 title: druidというリアルタイムデータ分析ツールを知った
 ---

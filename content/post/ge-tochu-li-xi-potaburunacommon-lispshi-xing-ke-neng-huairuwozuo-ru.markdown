@@ -3,7 +3,7 @@ type: post
 title: "割と処理系ポータブルなCommon Lisp実行可能ファイルを作る"
 date: 2014-12-08
 comments: true
-categories: [Lisp, Common Lisp, Shell, Command Line]
+categories: [Lisp, Common Lisp, Shell, CLI]
 ---
 κeenです。Lisp Advent Calendarはもう枠埋まっちゃったので普通にブログで。
 

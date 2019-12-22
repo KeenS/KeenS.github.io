@@ -1,5 +1,5 @@
 ---
-categories: [Rust, Command Line, 小ネタ]
+categories: [Rust, CLI, 小ネタ]
 date: 2015-11-29T23:25:54+09:00
 title: Cargoの使い方
 ---

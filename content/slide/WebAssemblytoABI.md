@@ -1,5 +1,5 @@
 ---
-categories: ["WebAssembly", "コンパイラ"]
+categories: ["WebAssembly", "Compiler"]
 date: 2018-11-10T00:49:26+09:00
 description:
 title: "WebAssemblyとABI"

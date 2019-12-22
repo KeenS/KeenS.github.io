@@ -1,5 +1,5 @@
 ---
-categories: [言語実装, JVM, Advent Calendar, Advent Calendar 2017]
+categories: [言語実装, JVM, Advent Calendar, Advent Calendar 2017, 言語実装 Advent Calendar]
 date: 2017-12-13T20:32:41+09:00
 title: "Graal/Truffleについて軽く"
 ---

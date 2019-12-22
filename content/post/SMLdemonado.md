@@ -1,5 +1,5 @@
 ---
-categories: [SML]
+categories: [ML, SML]
 date: 2016-10-10T11:05:38+09:00
 title: SMLでモナド
 ---

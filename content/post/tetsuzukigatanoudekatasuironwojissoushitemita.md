@@ -1,5 +1,5 @@
 ---
-categories: ["型", "型推論", "言語実装","Advent Calendar"]
+categories: ["型", "型推論", "言語実装","Advent Calendar", "Advent Calendar 2019"]
 date: 2019-12-08T16:58:42+09:00
 title: "手続き型脳で型推論を実装してみた"
 ---

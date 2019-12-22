@@ -1,5 +1,5 @@
 ---
-categories: ["Rust", "Advent Calendar", "Advent Calendar 2019"]
+categories: ["Rust", "Advent Calendar", "Advent Calendar 2019", "Rust Advent Calendar"]
 date: 2019-12-03T00:12:31+09:00
 title: "Rustのturbofishを理解する"
 ---

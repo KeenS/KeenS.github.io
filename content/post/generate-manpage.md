@@ -1,5 +1,5 @@
 ---
-categories: [AsciiDoc, Command Line, Document]
+categories: [AsciiDoc, CLI, Document]
 date: 2015-01-24T10:58:29Z
 title: AsciiDocを使ってお手軽manページ生成
 ---

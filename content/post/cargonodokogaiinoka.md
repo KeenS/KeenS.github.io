@@ -1,5 +1,5 @@
 ---
-categories: ["Rust"]
+categories: ["Rust", "Cargo"]
 date: 2018-08-26T21:49:51+09:00
 title: "cargoのどこがいいのか"
 ---

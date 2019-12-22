@@ -3,7 +3,7 @@ type: post
 title: "#関数型なんたら で喋ってきた"
 date: 2014-10-26T17:14:10Z
 comments: true
-categories: [Lisp, Scheme, picrin, Scala]
+categories: [Lisp, Scheme, Picrin, Scala]
 ---
 κeenです。昨日[函数型なんたらの集い](http://connpass.com/event/8634/)に参加してきたので報告/感想です。
 <!--more-->

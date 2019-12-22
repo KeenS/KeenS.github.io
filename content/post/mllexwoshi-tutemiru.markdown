@@ -3,7 +3,7 @@ type: post
 title: "mllexを使ってみる。あるいはlexユーザーに対するmllexの解説"
 date: 2014-12-10
 comments: true
-categories: [SML, Prolog, mllex, Advent Calendar]
+categories: [ML, SML, Prolog, mllex, Advent Calendar, ML Advent Calendar, Advent Calendar 2014]
 ---
 このエントリーは[ML Advent Calendar 10日目](http://qiita.com/advent-calendar/2014/ml)の記事です。  
 前 [OCamlで作ったgoma言語 - h_sakurai's diary](http://h-sakurai.hatenablog.com/entry/2014/12/09/144655)

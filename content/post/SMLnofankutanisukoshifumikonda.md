@@ -1,5 +1,5 @@
 ---
-categories: [SML]
+categories: [ML, SML]
 date: 2015-04-12T19:49:41+09:00
 title: SMLのファンクタに少し踏み込んだ
 ---

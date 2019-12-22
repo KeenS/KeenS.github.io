@@ -1,5 +1,5 @@
 ---
-categories: ["Rust", "isucon"]
+categories: ["Rust", "ISUCON"]
 date: 2018-09-02T05:53:50+09:00
 title: "isucon7予選のアプリをRustに移植したから解説するね"
 ---

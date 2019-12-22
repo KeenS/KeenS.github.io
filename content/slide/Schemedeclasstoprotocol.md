@@ -1,5 +1,5 @@
 ---
-categories: [Lisp, Scheme, LispMeetUp]
+categories: [Lisp, Scheme, Lisp Meet Up]
 date: 2016-11-28T15:41:36+09:00
 description: null
 title: SchemeでClassとProtocol

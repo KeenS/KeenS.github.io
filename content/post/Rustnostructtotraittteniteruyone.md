@@ -1,5 +1,5 @@
 ---
-categories: [Rust, 関連型, 小ネタ]
+categories: [Rust, 関連型, 小ネタ, 型]
 date: 2016-12-03T22:06:18+09:00
 title: Rustのstructとtraitって似てるよね
 ---

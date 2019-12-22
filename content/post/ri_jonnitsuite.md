@@ -1,5 +1,5 @@
 ---
-categories: [Advent Calendar, Advent Calendar 2015]
+categories: [Advent Calendar, Advent Calendar 2015, 言語実装 Advent Calendar]
 date: 2015-12-09T22:16:50+09:00
 title: リージョンについて
 ---

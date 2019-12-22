@@ -1,5 +1,5 @@
 ---
-categories: [mirah]
+categories: [Mirah]
 date: 2016-08-11T15:32:39+09:00
 title: mirah 0.2がリリースされました。
 ---

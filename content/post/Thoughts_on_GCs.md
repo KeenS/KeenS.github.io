@@ -1,5 +1,5 @@
 ---
-categories: ["GC", "メモリ管理"]
+categories: ["GC", "メモリ管理", "言語実装"]
 date: 2018-09-09T09:34:53+09:00
 title: "Thoughts on GCs"
 ---

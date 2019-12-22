@@ -1,5 +1,5 @@
 ---
-categories: ["Rust", "Advent Calendar", "Rust Advent Calendar", "diesel", "小ネタ"]
+categories: ["Rust", "Advent Calendar", "Rust Advent Calendar", "Advent Calendar 2019", "Diesel", "小ネタ"]
 date: 2019-12-07T01:59:08+09:00
 title: "dieselでselectするカラムを1箇所にまとめる"
 ---

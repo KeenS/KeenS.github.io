@@ -1,5 +1,5 @@
 ---
-categories: [rust, rustup]
+categories: [RUST, rustup]
 date: 2016-06-12T15:23:06+09:00
 title: multirustが非推奨になったようなのでrustupに移行する
 ---

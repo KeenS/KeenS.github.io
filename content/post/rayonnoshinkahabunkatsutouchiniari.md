@@ -1,5 +1,5 @@
 ---
-categories: [rust, rayon, アルゴリズム]
+categories: [Rust, rayon, アルゴリズム]
 date: 2018-04-08T22:50:43+09:00
 title: "rayonの真価は分割統治にアリ"
 ---
