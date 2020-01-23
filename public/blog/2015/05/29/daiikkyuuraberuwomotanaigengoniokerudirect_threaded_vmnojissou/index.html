@@ -204,164 +204,164 @@ label2:
 <p><a href="https://github.com/KeenS/SML-VM">ソースコード全体</a>はGithuに上げてます。SML/NJで動きます。SML#向けのインターフェースファイルを書いていますが何故かコンパイルが通りません。</p>
 
 <p>次のようなASTを実行するインタプリタ、VM、Direct Threaded VMを実装しました。但し、VMとDTVMはクロージャをサポートしていません。</p>
-<pre><code class="language-sml" data-lang="sml">datatype monoop
-  = Not
+<div class="highlight"><pre class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">datatype</span> <span class="kt">monoop</span>
+  <span class="p">=</span> <span class="nc">Not</span>
 
-datatype binop
-  = Equal
-  | GreaterThan
-  | Add
+<span class="kr">datatype</span> <span class="kt">binop</span>
+  <span class="p">=</span> <span class="nc">Equal</span>
+  <span class="p">|</span> <span class="nc">GreaterThan</span>
+  <span class="p">|</span> <span class="nc">Add</span>
 
-datatype t
-  = Int of int
-  | Bool of bool
-  | MonoOp of monoop * t
-  | BinOp of binop * t * t
-  | Bind of t * t
-  | If of t * t * t
-  | Var of string
-  | Lambda of t list * t
-  | Call of t * t list
-  | Progn of t list</code></pre>
+<span class="kr">datatype</span> <span class="kt">t</span>
+  <span class="p">=</span> <span class="nc">Int</span> <span class="kr">of</span> <span class="n">int</span>
+  <span class="p">|</span> <span class="nc">Bool</span> <span class="kr">of</span> <span class="n">bool</span>
+  <span class="p">|</span> <span class="nc">MonoOp</span> <span class="kr">of</span> <span class="n">monoop</span> <span class="n">*</span> <span class="n">t</span>
+  <span class="p">|</span> <span class="nc">BinOp</span> <span class="kr">of</span> <span class="n">binop</span> <span class="n">*</span> <span class="n">t</span> <span class="n">*</span> <span class="n">t</span>
+  <span class="p">|</span> <span class="nc">Bind</span> <span class="kr">of</span> <span class="n">t</span> <span class="n">*</span> <span class="n">t</span>
+  <span class="p">|</span> <span class="nc">If</span> <span class="kr">of</span> <span class="n">t</span> <span class="n">*</span> <span class="n">t</span> <span class="n">*</span> <span class="n">t</span>
+  <span class="p">|</span> <span class="nc">Var</span> <span class="kr">of</span> <span class="n">string</span>
+  <span class="p">|</span> <span class="nc">Lambda</span> <span class="kr">of</span> <span class="n">t</span> <span class="n">list</span> <span class="n">*</span> <span class="n">t</span>
+  <span class="p">|</span> <span class="nc">Call</span> <span class="kr">of</span> <span class="n">t</span> <span class="n">*</span> <span class="n">t</span> <span class="n">list</span>
+  <span class="p">|</span> <span class="nc">Progn</span> <span class="kr">of</span> <span class="n">t</span> <span class="n">list</span></code></pre></div>
 <p>インタプリタはこのASTを解釈実行、VMはいくつかの中間表現を経てオペコードにコンパイルし、それを実行します。尚、最適化は行いません。</p>
 
 <p>VMのディスパッチ部分は次のような実装になっています。</p>
-<pre><code class="language-sml" data-lang="sml">    fun aux () = (
-        case  (Array.sub(ops, !pc)) of
-            O.Not => (case pop vm of
-                         V.Bool x => push vm (V.Bool (not x))
-                       | _ => raise Type)
-          | O.Add => (case (pop vm, pop vm) of
-                         (V.Int x, V.Int y) => push vm (V.Int (x + y))
-                       | _ => raise Type)
-          | O.Eq => (case (pop vm, pop vm) of
-                        (V.Int x, V.Int y) => push vm (V.Bool (x = y))
-                      | (V.Bool x, V.Bool y) => push vm (V.Bool (x = y))
-                      | _ => raise Type)
-          | O.Gt => (case (pop vm, pop vm) of
-                        (V.Int x, V.Int y) => push vm (V.Bool (x < y))
-                      | _ => raise Type)
-          | O.Jump label => pc := (label - 1)
-          | O.Jtrue label => (case pop vm of
-                                 V.Bool true => pc := (label - 1)
-                               | V.Bool false => ()
-                               | _ => raise Type)
-          | O.Call i => (case (pop vm) of
-                            V.Lambda label => (
-                             pushCi vm;
-                             fp := (!fp) - i;
-                             pc := (label - 1))
-                          | _ => raise Type)
-          | O.Ret => (Array.update(stack, !fp, Array.sub(stack, (!sp) - 1));
-                     popCi vm;
-                     pc := (!pc))
-          | O.Push v => push vm v
-          | O.Pop => (pop vm;())
-          | O.Lref i => push vm (Array.sub(stack, (!fp) + i))
-          | O.Lset i =>  ((Array.update(stack, (!fp) + i, pop vm));
-                         push vm (V.Bool true))
-          | O.Gref i => push vm (Array.sub(pool, i))
-          | O.Gset i =>  (Array.update(pool, i, pop vm); push vm (V.Bool true))
-          | O.Nop => ()
-          | O.End => raise Exit
-      ;
-        pc := (!pc) + 1;
-      aux ())</code></pre>
+<div class="highlight"><pre class="chroma"><code class="language-sml" data-lang="sml">    <span class="kr">fun</span> <span class="nf">aux</span> <span class="p">(</span><span class="p">)</span> <span class="n">=</span> <span class="p">(</span>
+        <span class="kr">case</span>  <span class="p">(</span><span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">ops</span><span class="p">,</span> <span class="n">!</span><span class="n">pc</span><span class="p">)</span><span class="p">)</span> <span class="kr">of</span>
+            <span class="nn">O.</span><span class="n">Not</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="kr">case</span> <span class="n">pop</span> <span class="n">vm</span> <span class="kr">of</span>
+                         <span class="nn">V.</span><span class="n">Bool</span> <span class="n">x</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="p">(</span><span class="n">not</span> <span class="n">x</span><span class="p">)</span><span class="p">)</span>
+                       <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">)</span>
+          <span class="n">|</span> <span class="nn">O.</span><span class="n">Add</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="kr">case</span> <span class="p">(</span><span class="n">pop</span> <span class="n">vm</span><span class="p">,</span> <span class="n">pop</span> <span class="n">vm</span><span class="p">)</span> <span class="kr">of</span>
+                         <span class="p">(</span><span class="nn">V.</span><span class="n">Int</span> <span class="n">x</span><span class="p">,</span> <span class="nn">V.</span><span class="n">Int</span> <span class="n">y</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Int</span> <span class="p">(</span><span class="n">x</span> <span class="n">+</span> <span class="n">y</span><span class="p">)</span><span class="p">)</span>
+                       <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">)</span>
+          <span class="n">|</span> <span class="nn">O.</span><span class="n">Eq</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="kr">case</span> <span class="p">(</span><span class="n">pop</span> <span class="n">vm</span><span class="p">,</span> <span class="n">pop</span> <span class="n">vm</span><span class="p">)</span> <span class="kr">of</span>
+                        <span class="p">(</span><span class="nn">V.</span><span class="n">Int</span> <span class="n">x</span><span class="p">,</span> <span class="nn">V.</span><span class="n">Int</span> <span class="n">y</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="p">(</span><span class="n">x</span> <span class="n">=</span> <span class="n">y</span><span class="p">)</span><span class="p">)</span>
+                      <span class="n">|</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="n">x</span><span class="p">,</span> <span class="nn">V.</span><span class="n">Bool</span> <span class="n">y</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="p">(</span><span class="n">x</span> <span class="n">=</span> <span class="n">y</span><span class="p">)</span><span class="p">)</span>
+                      <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">)</span>
+          <span class="n">|</span> <span class="nn">O.</span><span class="n">Gt</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="kr">case</span> <span class="p">(</span><span class="n">pop</span> <span class="n">vm</span><span class="p">,</span> <span class="n">pop</span> <span class="n">vm</span><span class="p">)</span> <span class="kr">of</span>
+                        <span class="p">(</span><span class="nn">V.</span><span class="n">Int</span> <span class="n">x</span><span class="p">,</span> <span class="nn">V.</span><span class="n">Int</span> <span class="n">y</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="p">(</span><span class="n">x</span> <span class="n">&lt;</span> <span class="n">y</span><span class="p">)</span><span class="p">)</span>
+                      <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">)</span>
+          <span class="n">|</span> <span class="nn">O.</span><span class="n">Jump</span> <span class="n">label</span> <span class="n">=&gt;</span> <span class="n">pc</span> <span class="n">:=</span> <span class="p">(</span><span class="n">label</span> <span class="n">-</span> <span class="mi">1</span><span class="p">)</span>
+          <span class="n">|</span> <span class="nn">O.</span><span class="n">Jtrue</span> <span class="n">label</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="kr">case</span> <span class="n">pop</span> <span class="n">vm</span> <span class="kr">of</span>
+                                 <span class="nn">V.</span><span class="n">Bool</span> <span class="n">true</span> <span class="n">=&gt;</span> <span class="n">pc</span> <span class="n">:=</span> <span class="p">(</span><span class="n">label</span> <span class="n">-</span> <span class="mi">1</span><span class="p">)</span>
+                               <span class="n">|</span> <span class="nn">V.</span><span class="n">Bool</span> <span class="n">false</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="p">)</span>
+                               <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">)</span>
+          <span class="n">|</span> <span class="nn">O.</span><span class="n">Call</span> <span class="n">i</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="kr">case</span> <span class="p">(</span><span class="n">pop</span> <span class="n">vm</span><span class="p">)</span> <span class="kr">of</span>
+                            <span class="nn">V.</span><span class="n">Lambda</span> <span class="n">label</span> <span class="n">=&gt;</span> <span class="p">(</span>
+                             <span class="n">pushCi</span> <span class="n">vm</span><span class="p">;</span>
+                             <span class="n">fp</span> <span class="n">:=</span> <span class="p">(</span><span class="n">!</span><span class="n">fp</span><span class="p">)</span> <span class="n">-</span> <span class="n">i</span><span class="p">;</span>
+                             <span class="n">pc</span> <span class="n">:=</span> <span class="p">(</span><span class="n">label</span> <span class="n">-</span> <span class="mi">1</span><span class="p">)</span><span class="p">)</span>
+                          <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">)</span>
+          <span class="n">|</span> <span class="nn">O.</span><span class="n">Ret</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="nn">Array.</span><span class="n">update</span><span class="p">(</span><span class="n">stack</span><span class="p">,</span> <span class="n">!</span><span class="n">fp</span><span class="p">,</span> <span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">stack</span><span class="p">,</span> <span class="p">(</span><span class="n">!</span><span class="n">sp</span><span class="p">)</span> <span class="n">-</span> <span class="mi">1</span><span class="p">)</span><span class="p">)</span><span class="p">;</span>
+                     <span class="n">popCi</span> <span class="n">vm</span><span class="p">;</span>
+                     <span class="n">pc</span> <span class="n">:=</span> <span class="p">(</span><span class="n">!</span><span class="n">pc</span><span class="p">)</span><span class="p">)</span>
+          <span class="n">|</span> <span class="nn">O.</span><span class="n">Push</span> <span class="n">v</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="n">v</span>
+          <span class="n">|</span> <span class="nn">O.</span><span class="n">Pop</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="n">pop</span> <span class="n">vm</span><span class="p">;</span><span class="p">(</span><span class="p">)</span><span class="p">)</span>
+          <span class="n">|</span> <span class="nn">O.</span><span class="n">Lref</span> <span class="n">i</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">stack</span><span class="p">,</span> <span class="p">(</span><span class="n">!</span><span class="n">fp</span><span class="p">)</span> <span class="n">+</span> <span class="n">i</span><span class="p">)</span><span class="p">)</span>
+          <span class="n">|</span> <span class="nn">O.</span><span class="n">Lset</span> <span class="n">i</span> <span class="n">=&gt;</span>  <span class="p">(</span><span class="p">(</span><span class="nn">Array.</span><span class="n">update</span><span class="p">(</span><span class="n">stack</span><span class="p">,</span> <span class="p">(</span><span class="n">!</span><span class="n">fp</span><span class="p">)</span> <span class="n">+</span> <span class="n">i</span><span class="p">,</span> <span class="n">pop</span> <span class="n">vm</span><span class="p">)</span><span class="p">)</span><span class="p">;</span>
+                         <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="n">true</span><span class="p">)</span><span class="p">)</span>
+          <span class="n">|</span> <span class="nn">O.</span><span class="n">Gref</span> <span class="n">i</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">pool</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span><span class="p">)</span>
+          <span class="n">|</span> <span class="nn">O.</span><span class="n">Gset</span> <span class="n">i</span> <span class="n">=&gt;</span>  <span class="p">(</span><span class="nn">Array.</span><span class="n">update</span><span class="p">(</span><span class="n">pool</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">pop</span> <span class="n">vm</span><span class="p">)</span><span class="p">;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="n">true</span><span class="p">)</span><span class="p">)</span>
+          <span class="n">|</span> <span class="nn">O.</span><span class="n">Nop</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="p">)</span>
+          <span class="n">|</span> <span class="nn">O.</span><span class="n">End</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Exit</span>
+      <span class="p">;</span>
+        <span class="n">pc</span> <span class="n">:=</span> <span class="p">(</span><span class="n">!</span><span class="n">pc</span><span class="p">)</span> <span class="n">+</span> <span class="mi">1</span><span class="p">;</span>
+      <span class="n">aux</span> <span class="p">(</span><span class="p">)</span><span class="p">)</span></code></pre></div>
 <p>DT VMではこれを次のように書き換えました。</p>
-<pre><code class="language-sml" data-lang="sml">fun next () = let
-    val () = pc := (!pc) + 1;
-    val (index, arg) = Array.sub(cops, !pc) in
-    Array.sub(opArray, index) arg
-end
+<div class="highlight"><pre class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">fun</span> <span class="nf">next</span> <span class="p">(</span><span class="p">)</span> <span class="n">=</span> <span class="kr">let</span>
+    <span class="kr">val</span> <span class="p">(</span><span class="p">)</span> <span class="nv">=</span> <span class="n">pc</span> <span class="n">:=</span> <span class="p">(</span><span class="n">!</span><span class="n">pc</span><span class="p">)</span> <span class="n">+</span> <span class="mi">1</span><span class="p">;</span>
+    <span class="kr">val</span> <span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">arg</span><span class="p">)</span> <span class="nv">=</span> <span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">cops</span><span class="p">,</span> <span class="n">!</span><span class="n">pc</span><span class="p">)</span> <span class="kr">in</span>
+    <span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">opArray</span><span class="p">,</span> <span class="n">index</span><span class="p">)</span> <span class="n">arg</span>
+<span class="kr">end</span>
 
-Array.fromList [
-            (* Not *)
-            fn _ =>
-                (case pop vm of
-                    V.Bool x => push vm (V.Bool (not x))
-                  | _ => raise Type;
-                next ()),
-            (* Add *)
-            fn _ =>
-                (case (pop vm, pop vm) of
-                    (V.Int x, V.Int y) => push vm (V.Int (x + y))
-                  | _ => raise Type;
-                 next ()),
-            (* Eq *)
-            fn _ =>
-                (case (pop vm, pop vm) of
-                    (V.Int x, V.Int y) => push vm (V.Bool (x = y))
-                  | (V.Bool x, V.Bool y) => push vm (V.Bool (x = y))
-                  | _ => raise Type;
-                  next ()),
-            (* Gt *)
-            fn _ =>
-                (case (pop vm, pop vm) of
-                    (V.Int x, V.Int y) => push vm (V.Bool (x < y))
-                  | _ => raise Type;
-                 next ()),
-            (* Jump *)
-            fn ({int = label, ...}: oparg) =>
-               (pc := (label - 1);
-               next ()),
-            (* Jtrue *)
-            fn ({int = label, ...}: oparg) =>
-                (case pop vm of
-                    V.Bool true => pc := (label - 1)
-                  | V.Bool false => ()
-                  | _ => raise Type;
-                next ()),
-            (* Call *)
-            fn ({int = i, ...}: oparg) =>
-                (case (pop vm) of
-                    V.Lambda label => (
-                     pushCi vm;
-                     fp := (!fp) - i;
-                     pc := (label - 1))
-                  | _ => raise Type;
-                next ()),
-            (* Ret *)
-            fn _ =>
-                (Array.update(stack, !fp, Array.sub(stack, (!sp) - 1));
-                 popCi vm;
-                 pc := (!pc);
-                next ()),
-            (* Push *)
-            fn ({vmvalue = v, ...}: oparg) =>
-               (push vm v;
-               next ()),
-            (* Pop *)
-            fn _ =>
-               (pop vm;
-                next ()),
-            (* Lref *)
-            fn ({int = i, ...}: oparg) =>
-               (push vm (Array.sub(stack, (!fp) + i));
-               next ()),
-            (* Lset *)
-            fn ({int = i, ...}: oparg) =>
-                ((Array.update(stack, (!fp) + i, pop vm));
-                 push vm (V.Bool true);
-                next ()),
-            (* Gref *)
-            fn ({int = i, ...}: oparg) =>
-               (push vm (Array.sub(pool, i));
-               next ()),
-            (* Gset *)
-            fn ({int = i, ...}: oparg) =>
-               (Array.update(pool, i, pop vm);
-                push vm (V.Bool true);
-               next ()),
-            (* Nop *)
-            (fn _ =>
-                next ()),
-            (fn _ =>
-                raise Exit)
-        ]
+<span class="nn">Array.</span><span class="n">fromList</span> <span class="p">[</span>
+            <span class="cm">(*</span><span class="cm"> </span><span class="cm">N</span><span class="cm">o</span><span class="cm">t</span><span class="cm"> </span><span class="cm">*)</span>
+            <span class="kr">fn</span> <span class="p">_</span> <span class="n">=&gt;</span>
+                <span class="p">(</span><span class="kr">case</span> <span class="n">pop</span> <span class="n">vm</span> <span class="kr">of</span>
+                    <span class="nn">V.</span><span class="n">Bool</span> <span class="n">x</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="p">(</span><span class="n">not</span> <span class="n">x</span><span class="p">)</span><span class="p">)</span>
+                  <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">;</span>
+                <span class="n">next</span> <span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">,</span>
+            <span class="cm">(*</span><span class="cm"> </span><span class="cm">A</span><span class="cm">d</span><span class="cm">d</span><span class="cm"> </span><span class="cm">*)</span>
+            <span class="kr">fn</span> <span class="p">_</span> <span class="n">=&gt;</span>
+                <span class="p">(</span><span class="kr">case</span> <span class="p">(</span><span class="n">pop</span> <span class="n">vm</span><span class="p">,</span> <span class="n">pop</span> <span class="n">vm</span><span class="p">)</span> <span class="kr">of</span>
+                    <span class="p">(</span><span class="nn">V.</span><span class="n">Int</span> <span class="n">x</span><span class="p">,</span> <span class="nn">V.</span><span class="n">Int</span> <span class="n">y</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Int</span> <span class="p">(</span><span class="n">x</span> <span class="n">+</span> <span class="n">y</span><span class="p">)</span><span class="p">)</span>
+                  <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">;</span>
+                 <span class="n">next</span> <span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">,</span>
+            <span class="cm">(*</span><span class="cm"> </span><span class="cm">E</span><span class="cm">q</span><span class="cm"> </span><span class="cm">*)</span>
+            <span class="kr">fn</span> <span class="p">_</span> <span class="n">=&gt;</span>
+                <span class="p">(</span><span class="kr">case</span> <span class="p">(</span><span class="n">pop</span> <span class="n">vm</span><span class="p">,</span> <span class="n">pop</span> <span class="n">vm</span><span class="p">)</span> <span class="kr">of</span>
+                    <span class="p">(</span><span class="nn">V.</span><span class="n">Int</span> <span class="n">x</span><span class="p">,</span> <span class="nn">V.</span><span class="n">Int</span> <span class="n">y</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="p">(</span><span class="n">x</span> <span class="n">=</span> <span class="n">y</span><span class="p">)</span><span class="p">)</span>
+                  <span class="n">|</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="n">x</span><span class="p">,</span> <span class="nn">V.</span><span class="n">Bool</span> <span class="n">y</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="p">(</span><span class="n">x</span> <span class="n">=</span> <span class="n">y</span><span class="p">)</span><span class="p">)</span>
+                  <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">;</span>
+                  <span class="n">next</span> <span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">,</span>
+            <span class="cm">(*</span><span class="cm"> </span><span class="cm">G</span><span class="cm">t</span><span class="cm"> </span><span class="cm">*)</span>
+            <span class="kr">fn</span> <span class="p">_</span> <span class="n">=&gt;</span>
+                <span class="p">(</span><span class="kr">case</span> <span class="p">(</span><span class="n">pop</span> <span class="n">vm</span><span class="p">,</span> <span class="n">pop</span> <span class="n">vm</span><span class="p">)</span> <span class="kr">of</span>
+                    <span class="p">(</span><span class="nn">V.</span><span class="n">Int</span> <span class="n">x</span><span class="p">,</span> <span class="nn">V.</span><span class="n">Int</span> <span class="n">y</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="p">(</span><span class="n">x</span> <span class="n">&lt;</span> <span class="n">y</span><span class="p">)</span><span class="p">)</span>
+                  <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">;</span>
+                 <span class="n">next</span> <span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">,</span>
+            <span class="cm">(*</span><span class="cm"> </span><span class="cm">J</span><span class="cm">u</span><span class="cm">m</span><span class="cm">p</span><span class="cm"> </span><span class="cm">*)</span>
+            <span class="kr">fn</span> <span class="p">(</span><span class="p">{</span><span class="n">int</span> <span class="n">=</span> <span class="n">label</span><span class="p">,</span> <span class="p">...</span><span class="p">}</span><span class="n">:</span> <span class="n">oparg</span><span class="p">)</span> <span class="n">=&gt;</span>
+               <span class="p">(</span><span class="n">pc</span> <span class="n">:=</span> <span class="p">(</span><span class="n">label</span> <span class="n">-</span> <span class="mi">1</span><span class="p">)</span><span class="p">;</span>
+               <span class="n">next</span> <span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">,</span>
+            <span class="cm">(*</span><span class="cm"> </span><span class="cm">J</span><span class="cm">t</span><span class="cm">r</span><span class="cm">u</span><span class="cm">e</span><span class="cm"> </span><span class="cm">*)</span>
+            <span class="kr">fn</span> <span class="p">(</span><span class="p">{</span><span class="n">int</span> <span class="n">=</span> <span class="n">label</span><span class="p">,</span> <span class="p">...</span><span class="p">}</span><span class="n">:</span> <span class="n">oparg</span><span class="p">)</span> <span class="n">=&gt;</span>
+                <span class="p">(</span><span class="kr">case</span> <span class="n">pop</span> <span class="n">vm</span> <span class="kr">of</span>
+                    <span class="nn">V.</span><span class="n">Bool</span> <span class="n">true</span> <span class="n">=&gt;</span> <span class="n">pc</span> <span class="n">:=</span> <span class="p">(</span><span class="n">label</span> <span class="n">-</span> <span class="mi">1</span><span class="p">)</span>
+                  <span class="n">|</span> <span class="nn">V.</span><span class="n">Bool</span> <span class="n">false</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="p">)</span>
+                  <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">;</span>
+                <span class="n">next</span> <span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">,</span>
+            <span class="cm">(*</span><span class="cm"> </span><span class="cm">C</span><span class="cm">a</span><span class="cm">l</span><span class="cm">l</span><span class="cm"> </span><span class="cm">*)</span>
+            <span class="kr">fn</span> <span class="p">(</span><span class="p">{</span><span class="n">int</span> <span class="n">=</span> <span class="n">i</span><span class="p">,</span> <span class="p">...</span><span class="p">}</span><span class="n">:</span> <span class="n">oparg</span><span class="p">)</span> <span class="n">=&gt;</span>
+                <span class="p">(</span><span class="kr">case</span> <span class="p">(</span><span class="n">pop</span> <span class="n">vm</span><span class="p">)</span> <span class="kr">of</span>
+                    <span class="nn">V.</span><span class="n">Lambda</span> <span class="n">label</span> <span class="n">=&gt;</span> <span class="p">(</span>
+                     <span class="n">pushCi</span> <span class="n">vm</span><span class="p">;</span>
+                     <span class="n">fp</span> <span class="n">:=</span> <span class="p">(</span><span class="n">!</span><span class="n">fp</span><span class="p">)</span> <span class="n">-</span> <span class="n">i</span><span class="p">;</span>
+                     <span class="n">pc</span> <span class="n">:=</span> <span class="p">(</span><span class="n">label</span> <span class="n">-</span> <span class="mi">1</span><span class="p">)</span><span class="p">)</span>
+                  <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">;</span>
+                <span class="n">next</span> <span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">,</span>
+            <span class="cm">(*</span><span class="cm"> </span><span class="cm">R</span><span class="cm">e</span><span class="cm">t</span><span class="cm"> </span><span class="cm">*)</span>
+            <span class="kr">fn</span> <span class="p">_</span> <span class="n">=&gt;</span>
+                <span class="p">(</span><span class="nn">Array.</span><span class="n">update</span><span class="p">(</span><span class="n">stack</span><span class="p">,</span> <span class="n">!</span><span class="n">fp</span><span class="p">,</span> <span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">stack</span><span class="p">,</span> <span class="p">(</span><span class="n">!</span><span class="n">sp</span><span class="p">)</span> <span class="n">-</span> <span class="mi">1</span><span class="p">)</span><span class="p">)</span><span class="p">;</span>
+                 <span class="n">popCi</span> <span class="n">vm</span><span class="p">;</span>
+                 <span class="n">pc</span> <span class="n">:=</span> <span class="p">(</span><span class="n">!</span><span class="n">pc</span><span class="p">)</span><span class="p">;</span>
+                <span class="n">next</span> <span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">,</span>
+            <span class="cm">(*</span><span class="cm"> </span><span class="cm">P</span><span class="cm">u</span><span class="cm">s</span><span class="cm">h</span><span class="cm"> </span><span class="cm">*)</span>
+            <span class="kr">fn</span> <span class="p">(</span><span class="p">{</span><span class="n">vmvalue</span> <span class="n">=</span> <span class="n">v</span><span class="p">,</span> <span class="p">...</span><span class="p">}</span><span class="n">:</span> <span class="n">oparg</span><span class="p">)</span> <span class="n">=&gt;</span>
+               <span class="p">(</span><span class="n">push</span> <span class="n">vm</span> <span class="n">v</span><span class="p">;</span>
+               <span class="n">next</span> <span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">,</span>
+            <span class="cm">(*</span><span class="cm"> </span><span class="cm">P</span><span class="cm">o</span><span class="cm">p</span><span class="cm"> </span><span class="cm">*)</span>
+            <span class="kr">fn</span> <span class="p">_</span> <span class="n">=&gt;</span>
+               <span class="p">(</span><span class="n">pop</span> <span class="n">vm</span><span class="p">;</span>
+                <span class="n">next</span> <span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">,</span>
+            <span class="cm">(*</span><span class="cm"> </span><span class="cm">L</span><span class="cm">r</span><span class="cm">e</span><span class="cm">f</span><span class="cm"> </span><span class="cm">*)</span>
+            <span class="kr">fn</span> <span class="p">(</span><span class="p">{</span><span class="n">int</span> <span class="n">=</span> <span class="n">i</span><span class="p">,</span> <span class="p">...</span><span class="p">}</span><span class="n">:</span> <span class="n">oparg</span><span class="p">)</span> <span class="n">=&gt;</span>
+               <span class="p">(</span><span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">stack</span><span class="p">,</span> <span class="p">(</span><span class="n">!</span><span class="n">fp</span><span class="p">)</span> <span class="n">+</span> <span class="n">i</span><span class="p">)</span><span class="p">)</span><span class="p">;</span>
+               <span class="n">next</span> <span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">,</span>
+            <span class="cm">(*</span><span class="cm"> </span><span class="cm">L</span><span class="cm">s</span><span class="cm">e</span><span class="cm">t</span><span class="cm"> </span><span class="cm">*)</span>
+            <span class="kr">fn</span> <span class="p">(</span><span class="p">{</span><span class="n">int</span> <span class="n">=</span> <span class="n">i</span><span class="p">,</span> <span class="p">...</span><span class="p">}</span><span class="n">:</span> <span class="n">oparg</span><span class="p">)</span> <span class="n">=&gt;</span>
+                <span class="p">(</span><span class="p">(</span><span class="nn">Array.</span><span class="n">update</span><span class="p">(</span><span class="n">stack</span><span class="p">,</span> <span class="p">(</span><span class="n">!</span><span class="n">fp</span><span class="p">)</span> <span class="n">+</span> <span class="n">i</span><span class="p">,</span> <span class="n">pop</span> <span class="n">vm</span><span class="p">)</span><span class="p">)</span><span class="p">;</span>
+                 <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="n">true</span><span class="p">)</span><span class="p">;</span>
+                <span class="n">next</span> <span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">,</span>
+            <span class="cm">(*</span><span class="cm"> </span><span class="cm">G</span><span class="cm">r</span><span class="cm">e</span><span class="cm">f</span><span class="cm"> </span><span class="cm">*)</span>
+            <span class="kr">fn</span> <span class="p">(</span><span class="p">{</span><span class="n">int</span> <span class="n">=</span> <span class="n">i</span><span class="p">,</span> <span class="p">...</span><span class="p">}</span><span class="n">:</span> <span class="n">oparg</span><span class="p">)</span> <span class="n">=&gt;</span>
+               <span class="p">(</span><span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">pool</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span><span class="p">)</span><span class="p">;</span>
+               <span class="n">next</span> <span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">,</span>
+            <span class="cm">(*</span><span class="cm"> </span><span class="cm">G</span><span class="cm">s</span><span class="cm">e</span><span class="cm">t</span><span class="cm"> </span><span class="cm">*)</span>
+            <span class="kr">fn</span> <span class="p">(</span><span class="p">{</span><span class="n">int</span> <span class="n">=</span> <span class="n">i</span><span class="p">,</span> <span class="p">...</span><span class="p">}</span><span class="n">:</span> <span class="n">oparg</span><span class="p">)</span> <span class="n">=&gt;</span>
+               <span class="p">(</span><span class="nn">Array.</span><span class="n">update</span><span class="p">(</span><span class="n">pool</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">pop</span> <span class="n">vm</span><span class="p">)</span><span class="p">;</span>
+                <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="n">true</span><span class="p">)</span><span class="p">;</span>
+               <span class="n">next</span> <span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">,</span>
+            <span class="cm">(*</span><span class="cm"> </span><span class="cm">N</span><span class="cm">o</span><span class="cm">p</span><span class="cm"> </span><span class="cm">*)</span>
+            <span class="p">(</span><span class="kr">fn</span> <span class="p">_</span> <span class="n">=&gt;</span>
+                <span class="n">next</span> <span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">,</span>
+            <span class="p">(</span><span class="kr">fn</span> <span class="p">_</span> <span class="n">=&gt;</span>
+                <span class="kr">raise</span> <span class="n">Exit</span><span class="p">)</span>
+        <span class="p">]</span>
 
-fun aux () = let val (index, arg) = Array.sub(cops, !pc) in
-                 Array.sub(opArray, index) arg
-             end</code></pre>
+<span class="kr">fun</span> <span class="nf">aux</span> <span class="p">(</span><span class="p">)</span> <span class="n">=</span> <span class="kr">let</span> <span class="kr">val</span> <span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">arg</span><span class="p">)</span> <span class="nv">=</span> <span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">cops</span><span class="p">,</span> <span class="n">!</span><span class="n">pc</span><span class="p">)</span> <span class="kr">in</span>
+                 <span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">opArray</span><span class="p">,</span> <span class="n">index</span><span class="p">)</span> <span class="n">arg</span>
+             <span class="kr">end</span></code></pre></div>
 <p>1引数を受け取ってunitを返す関数の配列としてVMを表しています。
 1つ注意点として、前処理としてタグ付き共用体として表されている命令をタグ(配列のインデックス)と共用体に分解するのですが、SMLに共用体はないので構造体で代用しています。 <code>oparg</code> 型がそれにあたります。</p>
 
@@ -380,21 +380,21 @@ fun aux () = let val (index, arg) = Array.sub(cops, !pc) in
 <h2 id="計測">計測</h2>
 
 <p>今回、次のようなフィボナッチ数列を計算するコードの実行速度を計測しました。</p>
-<pre><code class="language-sml" data-lang="sml">fun fib n = (Progn [
-                Bind (Var "fib",
-                      Lambda([Var "n"],
-                               (If (BinOp(GreaterThan,
-                                          (Int 2),
-                                          (Var "n")),
-                                    Int(1),
-                                    BinOp(Add,
-                                          Call(Var "fib", [BinOp(Add,
-                                                                 Var "n",
-                                                                 Int ~1)]),
-                                          Call(Var "fib", [BinOp(Add,
-                                                                 Var "n",
-                                                                 Int ~2)])))))),
-                Call(Var "fib", [Int n])])</code></pre>
+<div class="highlight"><pre class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">fun</span> <span class="nf">fib</span> <span class="n">n</span> <span class="n">=</span> <span class="p">(</span><span class="n">Progn</span> <span class="p">[</span>
+                <span class="n">Bind</span> <span class="p">(</span><span class="n">Var</span> <span class="s2">&#34;</span><span class="s2">f</span><span class="s2">i</span><span class="s2">b</span><span class="s2">&#34;</span><span class="p">,</span>
+                      <span class="n">Lambda</span><span class="p">(</span><span class="p">[</span><span class="n">Var</span> <span class="s2">&#34;</span><span class="s2">n</span><span class="s2">&#34;</span><span class="p">]</span><span class="p">,</span>
+                               <span class="p">(</span><span class="n">If</span> <span class="p">(</span><span class="n">BinOp</span><span class="p">(</span><span class="n">GreaterThan</span><span class="p">,</span>
+                                          <span class="p">(</span><span class="n">Int</span> <span class="mi">2</span><span class="p">)</span><span class="p">,</span>
+                                          <span class="p">(</span><span class="n">Var</span> <span class="s2">&#34;</span><span class="s2">n</span><span class="s2">&#34;</span><span class="p">)</span><span class="p">)</span><span class="p">,</span>
+                                    <span class="n">Int</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="p">,</span>
+                                    <span class="n">BinOp</span><span class="p">(</span><span class="n">Add</span><span class="p">,</span>
+                                          <span class="n">Call</span><span class="p">(</span><span class="n">Var</span> <span class="s2">&#34;</span><span class="s2">f</span><span class="s2">i</span><span class="s2">b</span><span class="s2">&#34;</span><span class="p">,</span> <span class="p">[</span><span class="n">BinOp</span><span class="p">(</span><span class="n">Add</span><span class="p">,</span>
+                                                                 <span class="n">Var</span> <span class="s2">&#34;</span><span class="s2">n</span><span class="s2">&#34;</span><span class="p">,</span>
+                                                                 <span class="n">Int</span> <span class="mi">~1</span><span class="p">)</span><span class="p">]</span><span class="p">)</span><span class="p">,</span>
+                                          <span class="n">Call</span><span class="p">(</span><span class="n">Var</span> <span class="s2">&#34;</span><span class="s2">f</span><span class="s2">i</span><span class="s2">b</span><span class="s2">&#34;</span><span class="p">,</span> <span class="p">[</span><span class="n">BinOp</span><span class="p">(</span><span class="n">Add</span><span class="p">,</span>
+                                                                 <span class="n">Var</span> <span class="s2">&#34;</span><span class="s2">n</span><span class="s2">&#34;</span><span class="p">,</span>
+                                                                 <span class="n">Int</span> <span class="mi">~2</span><span class="p">)</span><span class="p">]</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">,</span>
+                <span class="n">Call</span><span class="p">(</span><span class="n">Var</span> <span class="s2">&#34;</span><span class="s2">f</span><span class="s2">i</span><span class="s2">b</span><span class="s2">&#34;</span><span class="p">,</span> <span class="p">[</span><span class="n">Int</span> <span class="n">n</span><span class="p">]</span><span class="p">)</span><span class="p">]</span><span class="p">)</span></code></pre></div>
 <p>コンパイラは以下のような命令列を吐きます。命令の内部表現が違うだけで命令列自体はVMとDTVMで共通です。
 繰り返しますが、最適化はしてないのでL25で次の命令にジャンプしてるだとか目に見えて無駄なコードもあります。</p>
 <pre><code>0	Push Lambda 7
@@ -425,20 +425,20 @@ fun aux () = let val (index, arg) = Array.sub(cops, !pc) in
 25	Jump 26
 26	Ret</code></pre>
 <p>計測には次のようなコードを使いました。コンパイラは実行効率を無視して書いたのでベンチマークには含めていません。</p>
-<pre><code class="language-sml" data-lang="sml">val target = (AST.fib 35)
-val compiled = VM.compile target
-val dtcompiled = DTVM.compile target
-val vm = VM.new ()
-val dtvm = DTVM.new ()
+<div class="highlight"><pre class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">val</span> <span class="nv">target</span> <span class="p">=</span> <span class="p">(</span><span class="nn">AST.</span><span class="n">fib</span> <span class="mi">35</span><span class="p">)</span>
+<span class="kr">val</span> <span class="nv">compiled</span> <span class="p">=</span> <span class="nn">VM.</span><span class="n">compile</span> <span class="n">target</span>
+<span class="kr">val</span> <span class="nv">dtcompiled</span> <span class="p">=</span> <span class="nn">DTVM.</span><span class="n">compile</span> <span class="n">target</span>
+<span class="kr">val</span> <span class="nv">vm</span> <span class="p">=</span> <span class="nn">VM.</span><span class="n">new</span> <span class="p">(</span><span class="p">)</span>
+<span class="kr">val</span> <span class="nv">dtvm</span> <span class="p">=</span> <span class="nn">DTVM.</span><span class="n">new</span> <span class="p">(</span><span class="p">)</span>
 
-val _ = Benchmark.benchset "fib 35" 1 [
-        ("Interpreter",
-         fn () => (Interp.run target; ())),
-        ("Normal VM",
-         fn () => (VM.run vm compiled; ())),
-        ("Direct Threaded VM",
-         fn () => (DTVM.run dtvm dtcompiled; ()))
-    ]</code></pre>
+<span class="kr">val</span> <span class="p">_</span> <span class="n">=</span> <span class="nn">Benchmark.</span><span class="n">benchset</span> <span class="s2">&#34;</span><span class="s2">f</span><span class="s2">i</span><span class="s2">b</span><span class="s2"> </span><span class="s2">3</span><span class="s2">5</span><span class="s2">&#34;</span> <span class="mi">1</span> <span class="p">[</span>
+        <span class="p">(</span><span class="s2">&#34;</span><span class="s2">I</span><span class="s2">n</span><span class="s2">t</span><span class="s2">e</span><span class="s2">r</span><span class="s2">p</span><span class="s2">r</span><span class="s2">e</span><span class="s2">t</span><span class="s2">e</span><span class="s2">r</span><span class="s2">&#34;</span><span class="p">,</span>
+         <span class="kr">fn</span> <span class="p">(</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="nn">Interp.</span><span class="n">run</span> <span class="n">target</span><span class="p">;</span> <span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">,</span>
+        <span class="p">(</span><span class="s2">&#34;</span><span class="s2">N</span><span class="s2">o</span><span class="s2">r</span><span class="s2">m</span><span class="s2">a</span><span class="s2">l</span><span class="s2"> </span><span class="s2">V</span><span class="s2">M</span><span class="s2">&#34;</span><span class="p">,</span>
+         <span class="kr">fn</span> <span class="p">(</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="nn">VM.</span><span class="n">run</span> <span class="n">vm</span> <span class="n">compiled</span><span class="p">;</span> <span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">,</span>
+        <span class="p">(</span><span class="s2">&#34;</span><span class="s2">D</span><span class="s2">i</span><span class="s2">r</span><span class="s2">e</span><span class="s2">c</span><span class="s2">t</span><span class="s2"> </span><span class="s2">T</span><span class="s2">h</span><span class="s2">r</span><span class="s2">e</span><span class="s2">a</span><span class="s2">d</span><span class="s2">e</span><span class="s2">d</span><span class="s2"> </span><span class="s2">V</span><span class="s2">M</span><span class="s2">&#34;</span><span class="p">,</span>
+         <span class="kr">fn</span> <span class="p">(</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="nn">DTVM.</span><span class="n">run</span> <span class="n">dtvm</span> <span class="n">dtcompiled</span><span class="p">;</span> <span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
+    <span class="p">]</span></code></pre></div>
 <h2 id="結果">結果</h2>
 
 <p>Intel Core i5 M450 2.4GHz 2コア4スレッド、Ubunt 15.04、SML/NJ v110.77で実行しました。</p>
@@ -460,20 +460,20 @@ val _ = Benchmark.benchset "fib 35" 1 [
 <script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script></p>
 
 <p>尚、このつぶやきはfibの引数を小さくして繰り返しを増やした時のものです。多分コンパイルを外に出してるので繰り返しが多いとその分のオーバーヘッドの差が効いてくるのでしょう。</p>
-<pre><code class="language-sml" data-lang="sml">val target = (AST.fib 24)
-val compiled = VM.compile target
-val dtcompiled = DTVM.compile target
-val vm = VM.new ()
-val dtvm = DTVM.new ()
+<div class="highlight"><pre class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">val</span> <span class="nv">target</span> <span class="p">=</span> <span class="p">(</span><span class="nn">AST.</span><span class="n">fib</span> <span class="mi">24</span><span class="p">)</span>
+<span class="kr">val</span> <span class="nv">compiled</span> <span class="p">=</span> <span class="nn">VM.</span><span class="n">compile</span> <span class="n">target</span>
+<span class="kr">val</span> <span class="nv">dtcompiled</span> <span class="p">=</span> <span class="nn">DTVM.</span><span class="n">compile</span> <span class="n">target</span>
+<span class="kr">val</span> <span class="nv">vm</span> <span class="p">=</span> <span class="nn">VM.</span><span class="n">new</span> <span class="p">(</span><span class="p">)</span>
+<span class="kr">val</span> <span class="nv">dtvm</span> <span class="p">=</span> <span class="nn">DTVM.</span><span class="n">new</span> <span class="p">(</span><span class="p">)</span>
 
-val _ = Benchmark.benchset "fib 24" 10 [
-        ("Interpreter",
-         fn () => (Interp.run target; ())),
-        ("Normal VM",
-         fn () => (VM.run vm compiled; ())),
-        ("Direct Threaded VM",
-         fn () => (DTVM.run dtvm dtcompiled; ()))
-    ]</code></pre><pre><code>-------------------+---------------------------------------------------
+<span class="kr">val</span> <span class="p">_</span> <span class="n">=</span> <span class="nn">Benchmark.</span><span class="n">benchset</span> <span class="s2">&#34;</span><span class="s2">f</span><span class="s2">i</span><span class="s2">b</span><span class="s2"> </span><span class="s2">2</span><span class="s2">4</span><span class="s2">&#34;</span> <span class="mi">10</span> <span class="p">[</span>
+        <span class="p">(</span><span class="s2">&#34;</span><span class="s2">I</span><span class="s2">n</span><span class="s2">t</span><span class="s2">e</span><span class="s2">r</span><span class="s2">p</span><span class="s2">r</span><span class="s2">e</span><span class="s2">t</span><span class="s2">e</span><span class="s2">r</span><span class="s2">&#34;</span><span class="p">,</span>
+         <span class="kr">fn</span> <span class="p">(</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="nn">Interp.</span><span class="n">run</span> <span class="n">target</span><span class="p">;</span> <span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">,</span>
+        <span class="p">(</span><span class="s2">&#34;</span><span class="s2">N</span><span class="s2">o</span><span class="s2">r</span><span class="s2">m</span><span class="s2">a</span><span class="s2">l</span><span class="s2"> </span><span class="s2">V</span><span class="s2">M</span><span class="s2">&#34;</span><span class="p">,</span>
+         <span class="kr">fn</span> <span class="p">(</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="nn">VM.</span><span class="n">run</span> <span class="n">vm</span> <span class="n">compiled</span><span class="p">;</span> <span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">)</span><span class="p">,</span>
+        <span class="p">(</span><span class="s2">&#34;</span><span class="s2">D</span><span class="s2">i</span><span class="s2">r</span><span class="s2">e</span><span class="s2">c</span><span class="s2">t</span><span class="s2"> </span><span class="s2">T</span><span class="s2">h</span><span class="s2">r</span><span class="s2">e</span><span class="s2">a</span><span class="s2">d</span><span class="s2">e</span><span class="s2">d</span><span class="s2"> </span><span class="s2">V</span><span class="s2">M</span><span class="s2">&#34;</span><span class="p">,</span>
+         <span class="kr">fn</span> <span class="p">(</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="nn">DTVM.</span><span class="n">run</span> <span class="n">dtvm</span> <span class="n">dtcompiled</span><span class="p">;</span> <span class="p">(</span><span class="p">)</span><span class="p">)</span><span class="p">)</span>
+    <span class="p">]</span></code></pre></div><pre><code>-------------------+---------------------------------------------------
  Interpreter       |************************************************** 2052ms
  Normal VM         |** 104ms
  Direct Threaded VM|***** 238ms
