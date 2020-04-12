@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+    <head>
+        
+        
+        <script async src="https://www.googletagmanager.com/gtag/js?id=UA-43779888-1"></script>
+        <script>
+         window.dataLayer = window.dataLayer || [];
+         function gtag(){dataLayer.push(arguments);}
+         gtag('js', new Date());
+
+         gtag('config', 'UA-43779888-1');
+        </script>
+        
+
+        <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:site" content="@blackenedgold" />
+        <meta name="twitter:title" content="最小限のELF | κeenのHappy Hacκing Blog"/>
+        <meta name="twitter:description" content="κeenです。
+先日の記事で言及した最小限のELFが需要ありそうだったので解説してみます。
+コンパイラを作るときの参考にしてみて下さい" />
+
+        <title>最小限のELF | κeenのHappy Hacκing Blog</title>
+        <link rel="stylesheet" href='//fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css' />
+        <link rel="stylesheet" href="//KeenS.github.io/libraries/normalize.3.0.1.css" />
+        <link rel="stylesheet" href="//KeenS.github.io/css/liquorice.css" />
+        <link rel="apple-touch-icon" sizes="180x180" href="//KeenS.github.io/apple-touch-icon.png">
+        <link rel="icon" type="image/png" href="//KeenS.github.io/favicon-32x32.png" sizes="32x32">
+        <link rel="icon" type="image/png" href="//KeenS.github.io/favicon-16x16.png" sizes="16x16">
+        <link rel="manifest" href="//KeenS.github.io/manifest.json">
+        <link rel="mask-icon" href="//KeenS.github.io/safari-pinned-tab.svg" color="#5bbad5">
+        <meta name="theme-color" content="#ffffff">
+        <link rel="apple-touch-icon-precomposed" href="//KeenS.github.io/apple-touch-icon-144-precomposed.png" sizes="144x144" />
+        <link rel="stylesheet" href="//KeenS.github.io/css/syntax-monokai.css" />
+<script type="text/x-mathjax-config">
+ MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
+</script>
+<script async src="//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS_CHTML"></script>
+</script>
+<meta http-equiv="X-UA-Compatible" CONTENT="IE=EmulateIE7" />
+<link rel="stylesheet" href="//unpkg.com/mermaid@7.0.4/dist/mermaid.forest.min.css">
+
+    </head>
+    <body class="li-body">
+
+<header class="li-page-header" id="page-header">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-brand li-left">
+                <a href="//KeenS.github.io/">κeenのHappy Hacκing Blog</a> | Lispエイリアンの狂想曲</div>
+                <div class="li-menu li-right">
+                    <span class="li-menu-icon" onclick="javascript:toggle('menu');">&#9776;</span>
+                    <ul id="menu2" class="li-menu-items">
+                        
+                            <li><a href="//KeenS.github.io/about/"> About </a></li>
+                        
+                            <li><a href="//KeenS.github.io/index.xml"> Atom </a></li>
+                        
+                            <li><a href="//KeenS.github.io/post/"> Blog </a></li>
+                        
+                            <li><a href="//KeenS.github.io/slide/"> Slide </a></li>
+                        
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="sixteen columns">
+                <ul id="menu" class="li-menu-items li-menu-mobile">
+                    
+                        <li><a href="//KeenS.github.io/about/"> About </a></li>
+                    
+                        <li><a href="//KeenS.github.io/index.xml"> Atom </a></li>
+                    
+                        <li><a href="//KeenS.github.io/post/"> Blog </a></li>
+                    
+                        <li><a href="//KeenS.github.io/slide/"> Slide </a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+
+
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <article class="li-article">
+                    <header class="li-article-header">
+                        <h1 class="li-article-title">最小限のELF</h1>
+                        <div class="li-article-meta">
+    <time class="li-article-date">2020-04-12</time>
+    <ul class="li-article-tag">
+    
+        <li>
+            <a href="//KeenS.github.io/categories/elf">ELF</a>
+        </li>
+    
+        <li>
+            <a href="//KeenS.github.io/categories/compiler">compiler</a>
+        </li>
+    
+</ul>
+
+</div>
+
+                    </header>
+                    <section>
+                        <p>κeenです。
+<a href="//KeenS.github.io/blog/2020/04/01/taneakirakashi__whitespacekonpairawotsukuttahanashinouragawa/">先日の記事</a>で言及した最小限のELFが需要ありそうだったので解説してみます。
+コンパイラを作るときの参考にしてみて下さい</p>
+
+<p>ELFはExecutable and Linkable Formatを表わし、Linuxなどで標準の実行可能ファイルのフォーマットとなっています。
+なんらかの形でこのファイルを生成するのがコンパイラの最終目標となります。
+一般にはアセンブラまで吐いて外部のアセンブラやリンカにELFファイルの生成を任せることが多いのですが、自作するなら最後までやりたいという人向けにとっかかりになる最小限のELFファイルを解説します。
+まずはこのファイルを生成するのを目指して、後から色々追加していけばインクリメンタルにできるよね、という訳です。</p>
+
+<p>一部、「どうしてかは分からないけどこうしたら動く」みたいな箇所もあるので詳しい人がいたら教えて下さい。</p>
+
+<h1 id="全体構成">全体構成</h1>
+
+<p>プログラムそのものの他に、プログラムのメタデータ2種類とファイルのメタデータが1つついています。</p>
+
+<p>フォーマットはおおむね以下のような形になっています。</p>
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">+------------------------+
+|       ELF header       |
++------------------------+
+|+----------------------+|
+|| Program header table ||
+|+----------------------+|
+||+--------------------+||
+|||                    |||
+|||       data         |||
+|||                    |||
+||+--------------------+||
+|+----------------------+|
+|| Setion header table  ||
+|+----------------------+|
++------------------------+</code></pre></div>
+<p>ELFヘッダファイル全体のメタデータで、ELFのバージョンだとか、アーキテクチャだとか、プログラムヘッダテーブルやセクションヘッダテーブルの位置だとかを保持しています。</p>
+
+<p>プログラムヘッダは実行時に関係するメタデータを持っています。プログラムをメモリアドレスのどこにロードするだとかを指定します。</p>
+
+<p>セクションヘッダはリンク時に使う情報を保持しています。プログラムのここからここまでが何々という関数で〜のような情報を指定します。リンクの他にはGDBでデバッグするときの情報なんかも入ってるのかな？</p>
+
+<p>プログラムヘッダとセクションヘッダはそれぞれ独立しているので1つのプログラムに対して別々にメタデータを指定します。極端な話、全然違う領域にメタデータをつけたり片方がなかったりしても問題ないのですが、だいたいのELFはプログラムヘッダが指定した領域を細分するようにセクションヘッダがついているようです。</p>
+
+<p>プログラムヘッダ「テーブル」、セクションヘッダ「テーブル」とあるように、ELFファイル内でそれぞれのヘッダは複数あります。テーブルというかプログラム的な見方をすれば配列ですね。</p>
+
+<p>今回は実行だけできればいいのでセクションヘッダは利用せずにプログラムヘッダだけでいきます。つまり、こうなります。</p>
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">+------------------------+
+|       ELF header       |
++------------------------+
+|+----------------------+|
+|| Program header table ||
+|+----------------------+|
+||+--------------------+||
+|||                    |||
+|||       data         |||
+|||                    |||
+||+--------------------+||
+|+----------------------+|
++------------------------+</code></pre></div>
+<h1 id="実際のデータ">実際のデータ</h1>
+
+<p>べんっと貼ります。Linux on amd64向けのELFファイルです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">00000000: 7f45 4c46 0201 0100 0000 0000 0000 0000  .ELF............
+00000010: 0200 3e00 0100 0000 b000 4000 0000 0000  ..&gt;.......@.....
+00000020: 4000 0000 0000 0000 0000 0000 0000 0000  @...............
+00000030: 0000 0000 4000 3800 0200 4000 0000 0000  ....@.8...@.....
+00000040: 0600 0000 0400 0000 4000 0000 0000 0000  ........@.......
+00000050: 4000 4000 0000 0000 4000 4000 0000 0000  @.@.....@.@.....
+00000060: 7000 0000 0000 0000 7000 0000 0000 0000  p.......p.......
+00000070: 8000 0000 0000 0000 0100 0000 0500 0000  ................
+00000080: 0000 0000 0000 0000 0000 4000 0000 0000  ..........@.....
+00000090: 0000 4000 0000 0000 bc00 0000 0000 0000  ..@.............
+000000a0: bc00 0000 0000 0000 0000 2000 0000 0000  .......... .....
+000000b0: b83c 0000 00bf 0000 0000 0f05            .&lt;..........</code></pre></div>
+<p>思ったより小さいですね。</p>
+
+<p><code>xxd</code> で出力しているので、 <code>xxd -r</code> でバイナリに逆変換できます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash">$ xxd -r <span class="s">&lt;&lt;EOF &gt; elf
+</span><span class="s">
+</span><span class="s">data
+</span><span class="s">
+</span><span class="s">EOF</span>
+$ chmod +x elf
+$ ./elf</code></pre></div>
+<p>さて、これだけだと分かりずらいのでもうちょっと分解してみましょう。
+ELFヘッダ、プログラムヘッダ2つ、実際のプログラムが入っています。</p>
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">         +-----------------------------------------+
+00000000:| 7f45 4c46 0201 0100 0000 0000 0000 0000 |
+00000010:| 0200 3e00 0100 0000 b000 4000 0000 0000 |  ELFヘッダ
+00000020:| 4000 0000 0000 0000 0000 0000 0000 0000 |
+00000030:| 0000 0000 4000 3800 0200 4000 0000 0000 |
+         +-----------------------------------------+
+         +-----------------------------------------+
+00000040:| 0600 0000 0400 0000 4000 0000 0000 0000 |
+00000050:| 4000 4000 0000 0000 4000 4000 0000 0000 | プログラムヘッダ1
+00000060:| 7000 0000 0000 0000 7000 0000 0000 0000 |
+00000070:| 8000 0000 0000 0000 +-------------------+
+         +---------------------+
+                             +---------------------+
+         +-------------------+ 0100 0000 0500 0000 |
+00000080:| 0000 0000 0000 0000 0000 4000 0000 0000 | プログラムヘッダ 2
+00000090:| 0000 4000 0000 0000 bc00 0000 0000 0000 |
+000000a0:| bc00 0000 0000 0000 0000 2000 0000 0000 |
+         +-----------------------------------------+
+         +-----------------------------------------+
+000000b0:| b83c 0000 00bf 0000 0000 0f05           | プログラム
+         +-----------------------------------------+</code></pre></div>
+<p>これをそれぞれ見ていきます。</p>
+
+<p><a href="https://en.wikipedia.org/wiki/Executable_and_Linkable_Format">Wikipedia</a>も併読書としてご利用下さい。</p>
+
+<h2 id="elfヘッダ">ELFヘッダ</h2>
+
+<p>ほとんど固定値が入ります。全部で0x40バイトあります。</p>
+
+<p>意味を持つデータ単位で区切るとこんな感じです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">           1                   2    3    4    5    6    7
+         +-------------------+----+----+----+----+----+----------------------------------+
+00000000:| 7f   45   4c   46 | 02 | 01 | 01 | 00 | 00 | 00   00   00   00   00   00   00 |
+         +-------------------+----+----+----+----+----+----------------------------------+
+           8         9         10                  11
+         +---------+---------+-------------------+---------------------------------------+
+00000010:| 02   00 | 3e   00 | 01   00   00   00 | b0   00   40   00   00   00   00   00 |
+         +---------+---------+-------------------+---------------------------------------+
+           12                                      13
+         +---------------------------------------+---------------------------------------+
+00000020:| 40   00   00   00   00   00   00   00 | 00   00   00   00   00   00   00   00 |
+         +---------------------------------------+---------------------------------------+
+           14                  15        16        17        18        19        20
+         +-------------------+---------+---------+---------+---------+---------+---------+
+00000030:| 00   00   00   00 | 40   00 | 38   00 | 02   00 | 40   00 | 00   00 | 00   00 |
+         +-------------------+---------+---------+---------+---------+---------+---------+</code></pre></div>
+<p>それぞれの番号で説明していきます。</p>
+
+<ol>
+<li>マジックナンバー。ELFファイルであることを表わす。7f 45 4c 46固定。</li>
+<li>クラス。32bit = 0x01、64bit = 0x02。ここでは64向けなので0x02。</li>
+<li>エンディアン。little endian = 0x01、big endian = 0x02。ここではlittle endianで0x01。以降のマルチバイトの数値はリトルエンディアンで解釈される。</li>
+<li>バージョン。0x01。</li>
+<li>OS ABI。どれが何に対応するかはWikipediaの通りだが、多くの場合で0x00（要出典）らしいので0x00にする。</li>
+<li>ABIの細かなバージョン。LinuxかつOS ABIに0x00を指定していれば無視されるらしい。</li>
+<li>空き領域。</li>
+<li>オブジェクトのタイプ。今回はシンプルな実行可能ファイルなので0x02。libcをダイナミックリンクしたりするなら0x03かな？</li>
+<li>マシンタイプ。amd64なので0x3e。</li>
+<li>バージョン。0x01。バージョンが登場するの2回目な気がするんですけどなんででしょうね。</li>
+<li>プログラムのエントリポイント。ここから実行がはじまる。プログラムヘッダでどこにロードするかに依るが、今回は0x4000b0（後述）</li>
+<li>ファイル内でのプログラムヘッダの位置。ELFヘッダの直後に始まっているので0x40。</li>
+<li>ファイル内でのセクションヘッダの位置。今回はセクションヘッダはないので0x00。</li>
+<li>フラグ。ターゲットアーキテクチャ依存でなんか読まれるらしい。よくわからないので0x00。</li>
+<li>このヘッダのサイズ。0x40。</li>
+<li>プログラムヘッダのサイズ。64bitなので0x38。</li>
+<li>プログラムヘッダの数。今回は0x02。</li>
+<li>セクションヘッダのサイズ。64bitなので0x40。</li>
+<li>セクションヘッダの数。今回は0x00。</li>
+<li>セクション名を管理するセクションヘッダのセクションヘッダテーブル内のインデックス。今回は存在しないので0x00を入れといた。</li>
+</ol>
+
+<p>11のエントリポイントについて補足します。今回はこのあとに続くプログラムヘッダでELFファイル全体を0x400000にロードしています。そしてELFファイル内でプログラムは0xb0から始まっているので0x400000に0xb0を足して0x4000b0という訳です。</p>
+
+<p>これらの値は <code>readelf -h</code> で確認できます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">$ readelf -h elf
+ELF ヘッダ:
+  マジック:   7f 45 4c 46 02 01 01 00 00 00 00 00 00 00 00 00
+  クラス:                            ELF64
+  データ:                            2 の補数、リトルエンディアン
+  Version:                           1 (current)
+  OS/ABI:                            UNIX - System V
+  ABI バージョン:                    0
+  型:                                EXEC (実行可能ファイル)
+  マシン:                            Advanced Micro Devices X86-64
+  バージョン:                        0x1
+  エントリポイントアドレス:               0x4000b0
+  プログラムヘッダ始点:          64 (バイト)
+  セクションヘッダ始点:          0 (バイト)
+  フラグ:                            0x0
+  Size of this header:               64 (bytes)
+  Size of program headers:           56 (bytes)
+  Number of program headers:         2
+  Size of section headers:           64 (bytes)
+  Number of section headers:         0
+  Section header string table index: 0</code></pre></div>
+<h2 id="プログラムヘッダ1">プログラムヘッダ1</h2>
+
+<p>続いてプログラムヘッダ1です。これはプログラムヘッダのある領域のメタデータです。
+ぶっちゃけ、このプログラムヘッダが必要なのかよく分かってないのですが、ないと動かなかったので置いています。
+詳しい方、どうしてか教えて下さい。</p>
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">           1                   2                   3
+         +-------------------+-------------------+---------------------------------------+
+00000040:| 06   00   00   00 | 04   00   00   00 | 40   00   00   00   00   00   00   00 |
+         +-------------------+-------------------+---------------------------------------+
+           4                                       5
+         +---------------------------------------+---------------------------------------+
+00000050:| 40   00   40   00   00   00   00   00 | 40   00   40   00   00   00   00   00 |
+         +---------------------------------------+---------------------------------------+
+           6                                       7
+         +---------------------------------------+---------------------------------------+
+00000060:| 70   00   00   00   00   00   00   00 | 70   00   00   00   00   00   00   00 |
+         +---------------------------------------+---------------------------------------+
+           8
+         +---------------------------------------+
+00000070:| 80   00   00   00   00   00   00   00 |
+         +---------------------------------------+</code></pre></div>
+<p>プログラムヘッダは構成がおおぶりで解説が楽ですね。</p>
+
+<ol>
+<li>プログラムヘッダのタイプ。プログラムヘッダそのものの領域を指示する(PT_PHDR)ので0x00000006。</li>
+<li>セグメントに依存したフラグ。Linuxのヘッダファイルを読む限り0x01 = executable、0x02 = writable、0x04 = readableで今回はread onlyの指定で0x04。</li>
+<li>ファイル内でのセグメントのオフセット。プログラムヘッダはELFヘッダの直後（0x40）から始まってるので0x40。</li>
+<li>メモリ内での仮想アドレス。セマンティクスがよく分からないが、恐らく「メモリ内のどこに存在するか」。ELFファイルを0x400000にロードして、プログラムヘッダは0x40から開始するので0x400040。</li>
+<li>メモリ内での物理アドレス。物理アドレスが関係するOS向けらしく、Linuxには関係ない。他のELFを見たら仮想アドレスと同じ値を設定していたのでそれに倣った。</li>
+<li>セグメントのファイル内のサイズ。プログラムヘッダが2つあるので 0x38 + 0x38 = 0x70。</li>
+<li>セグメントのメモリ内のサイズ。ファイル内のサイズと同じく0x70。</li>
+<li>アラインメント。2の羃な値を指定する。どの値が適当か分からなかったので適当に0x80を入れた。0x08を指定してしているファイルもあったしもっと小さくてもよさそう。</li>
+</ol>
+
+<h2 id="プログラムヘッダ2">プログラムヘッダ2</h2>
+
+<p>1と同様に2も解説していきます。2は、プログラムをメモリにロードする方法を指示します。</p>
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">                                                   1                   2
+                                                 +-------------------+-------------------+
+                                                 | 01   00   00   00 | 05   00   00   00 |
+                                                 +-------------------+-------------------+
+           3                                       4
+         +---------------------------------------+---------------------------------------+
+00000080:| 00   00   00   00   00   00   00   00 | 00   00   40   00   00   00   00   00 |
+         +---------------------------------------+---------------------------------------+
+           5                                       6
+         +---------------------------------------+---------------------------------------+
+00000090:| 00   00   40   00   00   00   00   00 | fe   00   00   00   00   00   00   00 |
+         +---------------------------------------+---------------------------------------+
+           7                                       8
+         +---------------------------------------+---------------------------------------+
+000000a0:| fe   00   00   00   00   00   00   00 | 00   00   20   00   00   00   00   00 |
+         +---------------------------------------+---------------------------------------+</code></pre></div>
+<p>バイト数や構成は1と変わらないですね。</p>
+
+<ol>
+<li>プログラムヘッダのタイプ。ロードする領域を指示する(PT_LOAD)ので0x00000001。</li>
+<li>セグメントに依存したフラグ。Linuxのヘッダファイルを読む限り0x01 = executable、0x02 = writable、0x04 = readableで今回はread + executableの指定で0x05。</li>
+<li>ファイル内でのセグメントのオフセット。ファイルの先頭から読むので0x00。</li>
+<li>メモリ内での仮想アドレス。セマンティクスがよく分からないが、恐らく「メモリ内のどこにロードするか」。</li>
+<li>メモリ内での物理アドレス。物理アドレスが関係するOS向けらしく、Linuxには関係ない。他のELFを見たら仮想アドレスと同じ値を設定していたのでそれに倣った。</li>
+<li>セグメントのファイル内のサイズ。ファイルサイズに等しく、今回は0xbc。</li>
+<li>セグメントのメモリ内のサイズ。ファイル内のサイズと同じく0xbc。</li>
+<li>アラインメント。2の羃な値を指定する。他のELFファイルに倣って0x200000を入れた。</li>
+</ol>
+
+<p>プログラムヘッダは <code>readelf -l</code> で読み取ることができます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">$ readelf -l
+
+Elf ファイルタイプは EXEC (実行可能ファイル) です
+エントリポイント 0x4000b0
+There are 2 program headers, starting at offset 64
+
+プログラムヘッダ:
+  タイプ        オフセット          仮想Addr           物理Addr
+                 ファイルサイズ        メモリサイズ         フラグ 整列
+  PHDR           0x0000000000000040 0x0000000000400040 0x0000000000400040
+                 0x0000000000000070 0x0000000000000070  R      0x80
+  LOAD           0x0000000000000000 0x0000000000400000 0x0000000000400000
+                 0x00000000000000bc 0x00000000000000bc  R E    0x200000</code></pre></div>
+<p>libcをダイナミックリンクする際はタイプに <code>PT_DYNAMIC</code> や <code>PT_INTERP</code> を指定するプログラムヘッダが入るっぽいです。</p>
+
+<h2 id="プログラム">プログラム</h2>
+
+<p>ただのアセンブラなんですが、解説しますね。
+手作りのELFファイルでは通常Cを書くときに使う <code>main</code> のような高級なものはありません。
+そういうのはcrt1.oというファイルに既述されており、Cのファイルをコンパイルするときに暗黙的にリンクされます。これをリンクしていないので開始から終了まで全て自分の手書きです。</p>
+
+<p>つまり、プログラムを終了させるのも自分で書かなければなりません。それをアセンブラで書いたのがこれです。
+<code>exit(0)</code> 相当のアセンブラです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">           mov rax, 60              mov rdx, 0               syscall
+         +------------------------+------------------------+---------+
+000000b0:| b8   3c   00   00   00 | bf   00   00   00   00 | 0f   05 |
+         +------------------------+------------------------+---------+</code></pre></div>
+<p>ということでこのファイルを実行すると「無事」exit status 0で終了します。</p>
+
+<h1 id="まとめ">まとめ</h1>
+
+<p>ひとまず、最小限に動くELFファイルの全てのバイトを解説しました。
+まだよく分かってないところもあったり、セクションヘッダを扱ってなかったりするので不十分なところもあるでしょうが、何かのとっかかりになれば幸いです。</p>
+                    </section>
+                </article>
+            </div>
+        </div>
+
+        <div class="row li-author">
+    <div class="sixteen columns">
+        Written by <strong>κeen</strong>
+    </div>
+</div>
+
+
+        <div class="row li-pagination">
+            <div class="eight columns">
+                <div class="li-pagination-previous">
+                    
+                        &nbsp;
+                    
+                </div>
+            </div>
+            <div class="eight columns">
+                <div class="li-pagination-next">
+                    
+                        Older article<br />
+                        <a href="//KeenS.github.io/blog/2020/04/01/taneakirakashi__whitespacekonpairawotsukuttahanashinouragawa/"> タネ明かし: Whitespaceコンパイラを作った話の裏側</a>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+<footer class="li-page-footer">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-page-footer-legal">
+                    &copy; 2020. All rights reserved. 
+                </div>
+                <div class="li-page-footer-theme">
+                    <span class=""><a href="https://github.com/eliasson/liquorice/">liquorice</a> is a theme for <a href="http://hugo.spf13.com">hugo</a></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<script type="text/javascript">
+ function toggle(id) {
+     var e = document.getElementById(id);
+     e.style.display == 'block' ? e.style.display = 'none' : e.style.display = 'block';
+ }
+</script>
+<script src="https://unpkg.com/mermaid@7.0.4/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({startOnLoad:true
+     });</script>
+
+    </body>
+</html>
+
