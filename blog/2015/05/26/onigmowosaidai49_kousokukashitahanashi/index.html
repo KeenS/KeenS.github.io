@@ -181,45 +181,45 @@
 
 <p>元のコードで</p>
 <div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="k">case</span> <span class="nl">OP_XXX</span><span class="p">:</span>
-   <span class="p">.</span><span class="p">.</span><span class="p">.</span>
+   <span class="p">...</span>
    <span class="k">continue</span><span class="p">;</span>
    <span class="k">break</span><span class="p">;</span></code></pre></div>
 <p>というパターンが割と現れます。<code>continue</code>の後の<code>break</code>は本来なら不要ですが<code>case</code>を書く際の作法というか癖というか
 とにかく<code>break</code>を付けるスタイルもあります。これもそうなのでしょう。こいつらをマクロで書き換える時に愚直に</p>
 <div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="n">CASE</span><span class="p">(</span><span class="n">OP_XXX</span><span class="p">)</span>
-   <span class="p">.</span><span class="p">.</span><span class="p">.</span>
+   <span class="p">...</span>
    <span class="n">JUMP</span><span class="p">;</span>
    <span class="n">NEXT</span><span class="p">;</span></code></pre></div>
 <p>としてました。ここで、</p>
-<div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="cp">#</span><span class="cp">if USE_DIRECT_THREADED_VM</span><span class="cp">
-</span><span class="cp"></span><span class="cp">#</span><span class="cp">define NEXT sprev = sbegin; JUMP</span><span class="cp">
-</span><span class="cp"></span><span class="cp">#</span><span class="cp">define JUMP goto *oplabels[*p++]</span><span class="cp">
-</span><span class="cp"></span><span class="cp">#</span><span class="cp">else</span><span class="cp">
-</span><span class="cp"></span><span class="cp">#</span><span class="cp">define NEXT break</span><span class="cp">
-</span><span class="cp"></span><span class="cp">#</span><span class="cp">define JUMP continue</span><span class="cp">
-</span><span class="cp"></span><span class="cp">#</span><span class="cp">endif</span></code></pre></div>
+<div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="cp">#if USE_DIRECT_THREADED_VM
+</span><span class="cp">#define NEXT sprev = sbegin; JUMP
+</span><span class="cp">#define JUMP goto *oplabels[*p++]
+</span><span class="cp">#else
+</span><span class="cp">#define NEXT break
+</span><span class="cp">#define JUMP continue
+</span><span class="cp">#endif</span></code></pre></div>
 <p>です。これはUSE_DIRECT_THREADED_VMが定義されてる時は</p>
 <div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="nl">L_OP_XXX</span><span class="p">:</span>
-   <span class="p">.</span><span class="p">.</span><span class="p">.</span>
-   <span class="k">goto</span> <span class="o">*</span><span class="n">oplabels</span><span class="p">[</span><span class="o">*</span><span class="n">p</span><span class="o">+</span><span class="o">+</span><span class="p">]</span><span class="p">;</span>
-   <span class="n">sprev</span> <span class="o">=</span> <span class="n">sbegin</span><span class="p">;</span><span class="k">goto</span> <span class="o">*</span><span class="n">oplabels</span><span class="p">[</span><span class="o">*</span><span class="n">p</span><span class="o">+</span><span class="o">+</span><span class="p">]</span><span class="p">;</span></code></pre></div>
+   <span class="p">...</span>
+   <span class="k">goto</span> <span class="o">*</span><span class="n">oplabels</span><span class="p">[</span><span class="o">*</span><span class="n">p</span><span class="o">++</span><span class="p">];</span>
+   <span class="n">sprev</span> <span class="o">=</span> <span class="n">sbegin</span><span class="p">;</span><span class="k">goto</span> <span class="o">*</span><span class="n">oplabels</span><span class="p">[</span><span class="o">*</span><span class="n">p</span><span class="o">++</span><span class="p">];</span></code></pre></div>
 <p>と展開され、<code>goto</code>が2つ現れることになります。どうせ無用コードだし最適化で消えるだろと思ってたらそうでもないらしく、</p>
 <div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="n">CASE</span><span class="p">(</span><span class="n">OP_XXX</span><span class="p">)</span>
-   <span class="p">.</span><span class="p">.</span><span class="p">.</span>
+   <span class="p">...</span>
    <span class="n">JUMP</span><span class="p">;</span>
    <span class="n">NEXT</span><span class="p">;</span></code></pre></div>
 <p>を</p>
 <div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="n">CASE</span><span class="p">(</span><span class="n">OP_XXX</span><span class="p">)</span>
-   <span class="p">.</span><span class="p">.</span><span class="p">.</span>
+   <span class="p">...</span>
    <span class="n">JUMP</span><span class="p">;</span></code></pre></div>
 <p>にし、マクロの方も</p>
-<div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="cp">#</span><span class="cp">if USE_DIRECT_THREADED_VM</span><span class="cp">
-</span><span class="cp"></span><span class="cp">#</span><span class="cp">define NEXT sprev = sbegin; JUMP</span><span class="cp">
-</span><span class="cp"></span><span class="cp">#</span><span class="cp">define JUMP goto *oplabels[*p++]</span><span class="cp">
-</span><span class="cp"></span><span class="cp">#</span><span class="cp">else</span><span class="cp">
-</span><span class="cp"></span><span class="cp">#</span><span class="cp">define NEXT break</span><span class="cp">
-</span><span class="cp"></span><span class="cp">#</span><span class="cp">define JUMP continue; break</span><span class="cp">
-</span><span class="cp"></span><span class="cp">#</span><span class="cp">endif</span></code></pre></div>
+<div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="cp">#if USE_DIRECT_THREADED_VM
+</span><span class="cp">#define NEXT sprev = sbegin; JUMP
+</span><span class="cp">#define JUMP goto *oplabels[*p++]
+</span><span class="cp">#else
+</span><span class="cp">#define NEXT break
+</span><span class="cp">#define JUMP continue; break
+</span><span class="cp">#endif</span></code></pre></div>
 <p>としたらようやく本領発揮してくれました。その結果がこれです。</p>
 
 <table>

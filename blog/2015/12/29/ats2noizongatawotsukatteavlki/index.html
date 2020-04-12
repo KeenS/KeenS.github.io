@@ -155,14 +155,14 @@ AVL木は左右のノードの高さが高々1しか違わない平衡二分木�
 <p>先程も述べた通り、ざっくり言うと型の部分に型以外の項が使える型システムです。</p>
 
 <p>例えば、次のSMLのコードを考えてみましょう。</p>
-<div class="highlight"><pre class="chroma"><code class="language-sml" data-lang="sml"><span class="nn">Array.</span><span class="n">get</span><span class="p">(</span><span class="n">arr</span><span class="n">:</span> <span class="n">int</span> <span class="n">array</span><span class="p">,</span> <span class="n">index</span><span class="n">:</span> <span class="n">int</span><span class="p">)</span><span class="n">:</span> <span class="n">int</span></code></pre></div>
+<div class="highlight"><pre class="chroma"><code class="language-sml" data-lang="sml"><span class="nn">Array.</span><span class="n">get</span><span class="p">(</span><span class="n">arr:</span> <span class="n">int</span> <span class="n">array</span><span class="p">,</span> <span class="n">index:</span> <span class="n">int</span><span class="p">)</span><span class="n">:</span> <span class="n">int</span></code></pre></div>
 <p>型から読み取れるのは「<code>int</code>の配列<code>arr</code>と整数<code>index</code>を受け取って<code>int</code>の値を返す」関数です。
 しかしこの関数は<code>index</code>が<code>arr</code>の長さよりも大きい時に実行時例外を上げます。内部でメモリを護るために境界チェックをして、チェックに落ちた時に例外を挙げている筈です。。
 配列アクセスの度に実行時例外をハンドルするのはコード上もパフォーマンス上も避けたいですよね。
 こういうものをコンパイル時に防ぎたくありませんか？無駄な境界チェックを省きたくありまんか？依存型を使えばそれが出来ます。</p>
 
 <p>例えば</p>
-<pre><code class="language-ats2" data-lang="ats2">array_get{n, i: nat| i < n}(arr: arrayref(int, n), index: int(i)): int</code></pre>
+<pre><code class="language-ats2" data-lang="ats2">array_get{n, i: nat| i &lt; n}(arr: arrayref(int, n), index: int(i)): int</code></pre>
 <p>これは「長さ<code>n</code>の<code>int</code>配列<code>arr</code>と<code>n</code>以下の自然数<code>index</code>を受け取って<code>int</code>の値を返す」関数です。
 正しい入力しか受け取らないので実行時例外が起きませんし内部で境界チェックも必要ありません。面白くないですか？</p>
 
@@ -192,7 +192,7 @@ OCamlのstdlibのMap/Setの実装に使われています。(OCamlは左右の�
 <h2 id="おまじない">おまじない</h2>
 
 <p>標準的な操作を取り込むため、以下をファイルの先頭に書きます。</p>
-<pre><code class="language-ats2" data-lang="ats2">#include "share/atspre_staload.hats"</code></pre>
+<pre><code class="language-ats2" data-lang="ats2">#include &#34;share/atspre_staload.hats&#34;</code></pre>
 <h2 id="データ型">データ型</h2>
 
 <p>高さnのAVL木を表わすデータ型を考えます。このデータ型は、&rdquo;型パラメータとして&rdquo;木の高さnを取ります。</p>
@@ -213,20 +213,20 @@ OCamlのstdlibのMap/Setの実装に使われています。(OCamlは左右の�
 <p>最後の高さの部分で<code>int(n)</code>となっているのは、<code>n</code>は種<code>int</code>であって型ではないので「整数<code>n</code>の<code>int</code>&ldquo;型&rdquo;」にする為に<code>int()</code>を適用する必要があるのです。依存型だと「ただの整数値」だけでなく「整数3」などの型も作れるのです。</p>
 
 <p>さて、このままだと左右の木の高さが高々1しか違わないということを表わせていません。さらにいうと、自身の高さについての制約も書けていません。これらの制約はこう書きます。</p>
-<pre><code class="language-ats2" data-lang="ats2">  | {l, m: nat | <制約> }</code></pre>
+<pre><code class="language-ats2" data-lang="ats2">  | {l, m: nat | &lt;制約&gt; }</code></pre>
 <p>今回の制約はこうなりますね。</p>
 <pre><code class="language-ats2" data-lang="ats2">  | {l, m: nat |
-    (l + 2 == n && m + 1 == n) || // 右が左より1高い 又は
-    (l + 1 == n && m + 1 == n) || // 左右同じ高さ 又は
-    (l + 1 == n && m + 2 == n)    // 左が右より1高い
+    (l + 2 == n &amp;&amp; m + 1 == n) || // 右が左より1高い 又は
+    (l + 1 == n &amp;&amp; m + 1 == n) || // 左右同じ高さ 又は
+    (l + 1 == n &amp;&amp; m + 2 == n)    // 左が右より1高い
     }</code></pre>
 <p>結果、データ型はこうです。</p>
 <pre><code class="language-ats2" data-lang="ats2">datatype avlt(n: int) =
     Empty(0)
   | {l, m: nat |
-    (l + 2 == n && m + 1 == n) ||
-    (l + 1 == n && m + 1 == n) ||
-    (l + 1 == n && m + 2 == n)
+    (l + 2 == n &amp;&amp; m + 1 == n) ||
+    (l + 1 == n &amp;&amp; m + 1 == n) ||
+    (l + 1 == n &amp;&amp; m + 2 == n)
 } Node of (avlt(l), int, avlt(m), int(n))</code></pre>
 <p>中々複雑ですね。</p>
 
@@ -245,8 +245,8 @@ OCamlのstdlibのMap/Setの実装に使われています。(OCamlは左右の�
 <p>関数本体は普通です。</p>
 <pre><code class="language-ats2" data-lang="ats2">fun height{n: nat}(tree: avlt(n)): int(n) = 
   case+ tree of
-  | Empty () => 0
-  | Node (_, _, _, n) => n</code></pre>
+  | Empty () =&gt; 0
+  | Node (_, _, _, n) =&gt; n</code></pre>
 <p>ここで使っている<code>case+</code>ですが、普通の<code>case</code>より強くて網羅性検査に落ちるとコンパイルエラーになります。</p>
 
 <h2 id="create"><code>create</code></h2>
@@ -258,7 +258,7 @@ OCamlのstdlibのMap/Setの実装に使われています。(OCamlは左右の�
   val hl = height l
   val hr = height r
 in
-  if hl >= hr
+  if hl &gt;= hr
   then Node(l, v, r, hl + 1)
   else Node(l, v, r, hr + 1)
 end</code></pre>
@@ -283,11 +283,11 @@ end</code></pre>
   l + 1 == m ||
   l == m + 1 ||
   l == m
-  } (l: avlt(l), v: int, r: avlt(m)): [n: nat | (m > l && n == m + 1) || (l >= m && n == l + 1)] avlt(n) = let
+  } (l: avlt(l), v: int, r: avlt(m)): [n: nat | (m &gt; l &amp;&amp; n == m + 1) || (l &gt;= m &amp;&amp; n == l + 1)] avlt(n) = let
   val hl = height l
   val hr = height r
 in
-  if hl >= hr
+  if hl &gt;= hr
   then Node(l, v, r, hl + 1)
   else Node(l, v, r, hr + 1)
 end</code></pre>
@@ -328,7 +328,7 @@ end</code></pre>
   val hll = height ll
   val hlr = height lr
 in
-  if  hll >= hlr
+  if  hll &gt;= hlr
   then create(ll, lv, create(lr, v, r))
   else let
        val+ Node(lrl, lrv, lrr, _) =  lr
@@ -344,7 +344,7 @@ end</code></pre>
   val hrl = height rl
   val hrr = height rr
 in
-  if  hrr >= hrl
+  if  hrr &gt;= hrl
   then create(create(l, v, rl), rv, rr)
   else let
     val+ Node(rll, rlv, rlr, _) =  rl
@@ -358,15 +358,15 @@ end</code></pre>
 
 <p>型がエグいことになります。</p>
 <pre><code class="language-ats2" data-lang="ats2">fun bal{hl, hr: nat |
-  ~2 <= hl - hr  && hl - hr <= 2
+  ~2 &lt;= hl - hr  &amp;&amp; hl - hr &lt;= 2
 }(l: avlt(hl), v: int, r: avlt(hr)): [n: nat|
- (hl == hr - 2 && n == hr    ) ||
- (hl == hr - 2 && n == hr + 1) ||
- (hl == hr - 1 && n == hr + 1) ||
- (hl == hr     && n == hl + 1) ||
- (hl == hr + 1 && n == hl + 1) ||
- (hl == hr + 2 && n == hl + 1) ||
- (hl == hr + 2 && n == hl    )
+ (hl == hr - 2 &amp;&amp; n == hr    ) ||
+ (hl == hr - 2 &amp;&amp; n == hr + 1) ||
+ (hl == hr - 1 &amp;&amp; n == hr + 1) ||
+ (hl == hr     &amp;&amp; n == hl + 1) ||
+ (hl == hr + 1 &amp;&amp; n == hl + 1) ||
+ (hl == hr + 2 &amp;&amp; n == hl + 1) ||
+ (hl == hr + 2 &amp;&amp; n == hl    )
 ] avlt(n) = let
   val hl = height l
   val hr = height r
@@ -390,25 +390,25 @@ fun singleton(x: int): avlt(1) = Node(Empty, x, Empty, 1)</code></pre>
 <p>ここまで辿りついたらもう難しいところはありません。<code>insert</code>した結果、木の高さが変わらないか1増えるだけです。</p>
 <pre><code class="language-ats2" data-lang="ats2">fun insert{m: nat}(x: int, tree: avlt(m)): [n: nat | n == m || n == m + 1]avlt(n) =
   case+ tree of
-  | Empty () => singleton(x)
-  | t as Node(l, v, r, _) => let
+  | Empty () =&gt; singleton(x)
+  | t as Node(l, v, r, _) =&gt; let
     val c = cmp(x, v)
   in
     if c = 0 then t
-    else if c < 0
+    else if c &lt; 0
     then bal(insert(x, l), v, r)
     else bal(l, v, insert(x, r))
   end</code></pre>
 <h2 id="mem"><code>mem</code></h2>
 <pre><code class="language-ats2" data-lang="ats2">fun mem{m: nat}(x: int, tree: avlt(m)): bool =
   case+ tree of
-  | Empty () => false
-  | Node(l, v, r, _) => let
+  | Empty () =&gt; false
+  | Node(l, v, r, _) =&gt; let
     val c = cmp(x, v)
   in
     if c = 0
     then true
-    else if c < 0
+    else if c &lt; 0
     then mem(x, r)
     else mem(x, l)
   end</code></pre>
