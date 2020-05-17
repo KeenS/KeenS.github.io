@@ -63,7 +63,7 @@ RAIDZを試そうとしましたがZFSはあとからストレージを増減さ
 
 今のところ、Root ZFSをあきらめて[前回](https://keens.github.io/blog/2018/05/12/ubuntuderootfswobtrfsnoraid1insuto_ru/)と似たような形でbtrfsとmdadmの混成でRAIDを組んでます。
 4本を本体用に、2本をバックアップ用に使う予定です。
-本体は/bootをmdadmで4ミラーののRAID1でext4に、/を4本構成のRAID5にしました。
+本体は/bootをmdadmで4ミラーのRAID1でext4に、/を4本構成のRAID5にしました。
 2本のバックアップはZFSのミラー構成にできないかなと思いつつ、まだ初期化していないです。
 
 あ、そうそう。NVMeストレージを4本刺してあるPCIeスロットはBIOSの設定でPCIe x16からPCIe x4 x4にする必要があります。
