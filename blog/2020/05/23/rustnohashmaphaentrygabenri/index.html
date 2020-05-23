@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+    <head>
+        
+        
+        <script async src="https://www.googletagmanager.com/gtag/js?id=UA-43779888-1"></script>
+        <script>
+         window.dataLayer = window.dataLayer || [];
+         function gtag(){dataLayer.push(arguments);}
+         gtag('js', new Date());
+
+         gtag('config', 'UA-43779888-1');
+        </script>
+        
+
+        <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:site" content="@blackenedgold" />
+        <meta name="twitter:title" content="RustのHashMapはentryが便利 | κeenのHappy Hacκing Blog"/>
+        <meta name="twitter:description" content="κeenです。個人的によく設計したなと思っているRustのEntry APIについて紹介します。
+標準ライブラリのHashMapの操作を無駄なく書きたい人におすすめ。" />
+
+        <title>RustのHashMapはentryが便利 | κeenのHappy Hacκing Blog</title>
+        <link rel="stylesheet" href='//fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css' />
+        <link rel="stylesheet" href="/libraries/normalize.3.0.1.css" />
+        <link rel="stylesheet" href="/css/liquorice.css" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+        <link rel="icon" type="image/png" href="/favicon-32x32.png" sizes="32x32">
+        <link rel="icon" type="image/png" href="/favicon-16x16.png" sizes="16x16">
+        <link rel="manifest" href="/manifest.json">
+        <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#5bbad5">
+        <meta name="theme-color" content="#ffffff">
+        <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon-144-precomposed.png" sizes="144x144" />
+        <link rel="stylesheet" href="/css/syntax-monokai.css" />
+<script type="text/x-mathjax-config">
+ MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
+</script>
+<script async src="//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS_CHTML"></script>
+</script>
+<meta http-equiv="X-UA-Compatible" CONTENT="IE=EmulateIE7" />
+<link rel="stylesheet" href="//unpkg.com/mermaid@7.0.4/dist/mermaid.forest.min.css">
+
+    </head>
+    <body class="li-body">
+
+<header class="li-page-header" id="page-header">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-brand li-left">
+                <a href="/">κeenのHappy Hacκing Blog</a> | Lispエイリアンの狂想曲</div>
+                <div class="li-menu li-right">
+                    <span class="li-menu-icon" onclick="javascript:toggle('menu');">&#9776;</span>
+                    <ul id="menu2" class="li-menu-items">
+                        
+                            <li><a href="/about/"> About </a></li>
+                        
+                            <li><a href="/index.xml"> Atom </a></li>
+                        
+                            <li><a href="/post/"> Blog </a></li>
+                        
+                            <li><a href="/slide/"> Slide </a></li>
+                        
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="sixteen columns">
+                <ul id="menu" class="li-menu-items li-menu-mobile">
+                    
+                        <li><a href="/about/"> About </a></li>
+                    
+                        <li><a href="/index.xml"> Atom </a></li>
+                    
+                        <li><a href="/post/"> Blog </a></li>
+                    
+                        <li><a href="/slide/"> Slide </a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+
+
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <article class="li-article">
+                    <header class="li-article-header">
+                        <h1 class="li-article-title">RustのHashMapはentryが便利</h1>
+                        <div class="li-article-meta">
+    <time class="li-article-date">2020-05-23</time>
+    <ul class="li-article-tag">
+    
+        <li>
+            <a href="/categories/rust">Rust</a>
+        </li>
+    
+</ul>
+
+</div>
+
+                    </header>
+                    <section>
+                        <p>κeenです。個人的によく設計したなと思っているRustのEntry APIについて紹介します。
+標準ライブラリのHashMapの操作を無駄なく書きたい人におすすめ。</p>
+
+<h1 id="entry-apiとは">Entry APIとは</h1>
+
+<p><code>HashMap</code> のEntry APIというのは私が勝手に呼んでる名前ですが、 <code>HashMap::entry</code> を起点にして使えるメソッド群のことを指しています。
+これは「<code>HashMap</code> に に対応する値があればそれにXXし、なければYYする」をするときに使います。
+例えば <code>HashMap&lt;String, Vec&lt;String&gt;&gt;</code> にキーに対応する値（<code>Vec&lt;String&gt;</code>）があれば新たな文字列をpushし、なければ空 <code>Vec</code> を作って新たに文字列をpushするという操作をしてみましょう。</p>
+
+<p>素直に <code>HashMap::get_mut</code> とパターンマッチを使って書くとこうなりますね。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="c1">// 準備
+</span><span class="c1"></span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">map</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">HashMap</span>::<span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span><span class="w"> </span><span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;&gt;</span>::<span class="n">new</span><span class="p">();</span><span class="w">
+</span><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&#34;Hoge&#34;</span><span class="p">.</span><span class="n">to_string</span><span class="p">();</span><span class="w">
+</span><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">value</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&#34;Huga&#34;</span><span class="p">.</span><span class="n">to_string</span><span class="p">();</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="c1">// パターンマッチを使ったコード
+</span><span class="c1"></span><span class="k">match</span><span class="w"> </span><span class="n">map</span><span class="p">.</span><span class="n">get_mut</span><span class="p">(</span><span class="o">&amp;</span><span class="n">key</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="nb">Some</span><span class="p">(</span><span class="n">v</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">v</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">value</span><span class="p">),</span><span class="w">
+</span><span class="w">    </span><span class="nb">None</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="n">map</span><span class="p">.</span><span class="n">insert</span><span class="p">(</span><span class="n">key</span><span class="p">,</span><span class="w"> </span><span class="n">vec</span><span class="o">!</span><span class="p">[</span><span class="n">value</span><span class="p">]);</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">};</span><span class="w">
+</span></code></pre></div>
+<p>これをEntry APIを使えば以下のように1式で書けます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="c1">// 準備
+</span><span class="c1"></span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">map</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">HashMap</span>::<span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span><span class="w"> </span><span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;&gt;</span>::<span class="n">new</span><span class="p">();</span><span class="w">
+</span><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&#34;Hoge&#34;</span><span class="p">.</span><span class="n">to_string</span><span class="p">();</span><span class="w">
+</span><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">value</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&#34;Huga&#34;</span><span class="p">.</span><span class="n">to_string</span><span class="p">();</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="c1">// Entry APIを使ったコード
+</span><span class="c1"></span><span class="n">map</span><span class="p">.</span><span class="n">entry</span><span class="p">(</span><span class="n">key</span><span class="p">).</span><span class="n">or_insert_with</span><span class="p">(</span><span class="o">||</span><span class="w"> </span><span class="n">vec</span><span class="o">!</span><span class="p">[]).</span><span class="n">push</span><span class="p">(</span><span class="n">value</span><span class="p">);</span><span class="w">
+</span></code></pre></div>
+<p>綺麗ですね。</p>
+
+<p>上記のコードをよく見ると1つ気付くことがあるかと思います。 <code>map</code> に対して <code>key</code> で検索している回数が2回から1回に減っています。こういった点も含めてEntry APIを深堀りしてみましょう。</p>
+
+<h1 id="entry-api">Entry API</h1>
+
+<p>先程みたとおり、 <a href="https://doc.rust-lang.org/std/collections/hash_map/struct.HashMap.html#method.entry"><code>HashMap::entry</code></a> から始まるAPIです。<code>map.entry(key)</code> のように、探したいキーを渡します。探した結果、なければそのままデータとして挿入するのに使うので、 <code>&amp;key</code> ではなく <code>key</code> になっていることに注意してください。
+<code>entry</code> の返り値は <a href="https://doc.rust-lang.org/std/collections/hash_map/enum.Entry.html"><code>Entry</code></a> になっています。。 この定義を見てみましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">enum</span> <span class="nc">Entry</span><span class="o">&lt;</span><span class="na">&#39;a</span><span class="p">,</span><span class="w"> </span><span class="n">K</span>: <span class="na">&#39;a</span><span class="p">,</span><span class="w"> </span><span class="n">V</span>: <span class="na">&#39;a</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w"></span><span class="sd">/// A view into a single entry in a map, which may either be vacant or occupied.
+</span><span class="sd">///
+</span><span class="sd">/// This `enum` is constructed from the [`entry`] method on [`HashMap`].
+</span><span class="sd">///
+</span><span class="sd">/// [`HashMap`]: struct.HashMap.html
+</span><span class="sd">/// [`entry`]: struct.HashMap.html#method.entry
+</span><span class="sd"></span><span class="cp">#[stable(feature = </span><span class="s">&#34;rust1&#34;</span><span class="cp">, since = </span><span class="s">&#34;1.0.0&#34;</span><span class="cp">)]</span><span class="w">
+</span><span class="w"></span><span class="k">pub</span><span class="w"> </span><span class="k">enum</span> <span class="nc">Entry</span><span class="o">&lt;</span><span class="na">&#39;a</span><span class="p">,</span><span class="w"> </span><span class="n">K</span>: <span class="na">&#39;a</span><span class="p">,</span><span class="w"> </span><span class="n">V</span>: <span class="na">&#39;a</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="sd">/// An occupied entry.
+</span><span class="sd"></span><span class="w">    </span><span class="cp">#[stable(feature = </span><span class="s">&#34;rust1&#34;</span><span class="cp">, since = </span><span class="s">&#34;1.0.0&#34;</span><span class="cp">)]</span><span class="w">
+</span><span class="w">    </span><span class="n">Occupied</span><span class="p">(</span><span class="cp">#[stable(feature = </span><span class="s">&#34;rust1&#34;</span><span class="cp">, since = </span><span class="s">&#34;1.0.0&#34;</span><span class="cp">)]</span><span class="w"> </span><span class="n">OccupiedEntry</span><span class="o">&lt;</span><span class="na">&#39;a</span><span class="p">,</span><span class="w"> </span><span class="n">K</span><span class="p">,</span><span class="w"> </span><span class="n">V</span><span class="o">&gt;</span><span class="p">),</span><span class="w">
+</span><span class="w">
+</span><span class="w">    </span><span class="sd">/// A vacant entry.
+</span><span class="sd"></span><span class="w">    </span><span class="cp">#[stable(feature = </span><span class="s">&#34;rust1&#34;</span><span class="cp">, since = </span><span class="s">&#34;1.0.0&#34;</span><span class="cp">)]</span><span class="w">
+</span><span class="w">    </span><span class="n">Vacant</span><span class="p">(</span><span class="cp">#[stable(feature = </span><span class="s">&#34;rust1&#34;</span><span class="cp">, since = </span><span class="s">&#34;1.0.0&#34;</span><span class="cp">)]</span><span class="w"> </span><span class="n">VacantEntry</span><span class="o">&lt;</span><span class="na">&#39;a</span><span class="p">,</span><span class="w"> </span><span class="n">K</span><span class="p">,</span><span class="w"> </span><span class="n">V</span><span class="o">&gt;</span><span class="p">),</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p><code>Entry</code> は列挙型で定義されていて、キーに対応する値を探した結果キーと値の組があればそれ（<code>Occupied</code>）、なければないことを表わす値（<code>Vacant</code>）をとります。一見 <code>Option</code> でよさそうに見えますが、もうちょっと複雑なことをやっています。</p>
+
+<p>さて、列挙型のの定義を紹介しましたが、実際にこの列挙子を直接使うことは稀でしょう。<code>Entry</code> に生えているメソッドを叩くことが多いです。
+例えば冒頭に出てきた <a href="https://doc.rust-lang.org/std/collections/hash_map/enum.Entry.html#method.or_insert_with"><code>Entry::or_insert_with</code></a> は「キーに対応する値があればそれを使い、なければ引数に渡されたクロージャを評価した値をハッシュマップに挿入した上で使う」という動作をします。これの兄弟メソッドに <a href="https://doc.rust-lang.org/std/collections/hash_map/enum.Entry.html#method.or_insert"><code>Entry::or_insert</code></a> や <a href="https://doc.rust-lang.org/std/collections/hash_map/enum.Entry.html#method.or_default"><code>Entry::or_default</code></a> があります。
+用途によって使い分けましょう。</p>
+
+<h1 id="entry-apiの真価">Entry APIの真価</h1>
+
+<p>説明が長くなるのでまずは使い方だけ説明しました。
+しかしハッシュマップの動作原理を理解しているとEntry APIのありがたみというか、何をしているAPIなのかが分かります。</p>
+
+<h2 id="ハッシュマップの復習">ハッシュマップの復習</h2>
+
+<p>ハッシュマップの動作原理完全理解とはいきませんが、知らない人のために少しだけ説明します。
+以下の事実を知ってる人は飛ばして構いません。</p>
+
+<ul>
+<li>ハッシュマップはキーに対応づけられた場所にキーと値のペアを格納する</li>
+<li>ハッシュマップでキーに対応づけられた場所を探すのは多少の計算を要する</li>
+</ul>
+
+<p>また、もっと詳しく知りたい方は<a href="https://sites.google.com/view/open-data-structures-ja">Open Data Structuresの和訳</a>とかをあたって下さい。
+因みにハッシュテーブルというかハッシュマップというか迷いましたが、ハッシュテーブルをマップとして使っているのでハッシュマップでいきます。</p>
+
+<p>まずはハッシュ関数をおさえましょう。
+ハッシュ関数は与えられた値から、非負整数を算出する関数です。整数になるとコンピュータで扱いやすくなります。
+このとき、「できるだけ値がバラける」ようにハッシュ関数を工夫します。「できるだけ」なので、値が被ることもあります。ハッシュ関数を <code>h</code> としたとき、例えば <code>h(&quot;Hoge&quot;) = 2</code> 、 <code>h(&quot;fuga&quot;) = 110</code> 、 <code>h(&quot;Fuga&quot;) = 2</code> のような結果であることもあります。ハッシュ関数で計算した値をハッシュ値と呼びます。</p>
+
+<p>ハッシュ関数が分かったところでハッシュマップに移りましょう。
+ハッシュマップのデータの実体はただの配列です。配列の要素はキーと値のペアです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">ハッシュマップ
++------+----
+| K, V | ...
++------+----</code></pre></div>
+<p>このハッシュマップにデータを挿入する処理をみてみましょう。
+ハッシュマップにキー <code>&quot;Hoge&quot;</code> でデータを挿入しようとすると、まず <code>&quot;Hoge&quot;</code> のハッシュ値を計算します。
+仮に <code>2</code> と出たとしましょう。すると配列の2番目をみにいきます。
+これは空いているので無事データを書き込めて、ハッシュマップに <code>&quot;Hoge&quot;, &quot;fuga&quot;</code> というデータを保管できました。</p>
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">h(&#34;Hoge&#34;) = 2, 2番目のセルにデータを書く
+
+
+ハッシュマップ
++------+------+----------------+-----
+| //// | //// | &#34;Hoge&#34;, &#34;hoge&#34; | ...
++------+------+----------------+-----
+                        ↑ put data</code></pre></div>
+<p>値を取り出すときも同様です。
+<code>&quot;Hoge&quot;</code> に対応する値が欲しいとします。
+<code>&quot;Hoge&quot;</code> に対応するハッシュ値を計算して2を得ます。
+そして配列の2番目のセルを見るとキーと値が格納されています。
+配列内のキー <code>&quot;Hoge&quot;</code> と検索に使ったキー <code>&quot;Hoge&quot;</code> が一致しているのでこのセルで正解です。
+という訳で対応する値 <code>&quot;hoge&quot;</code> を得ます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">h(&#34;Hoge&#34;) = 2, 2番目のセルを見にいく
+
+
+ハッシュマップ
++------+------+----------------+-----
+| //// | //// | &#34;Hoge&#34;, &#34;hoge&#34; | ...
++------+------+----------------+-----
+                        ↑ get data</code></pre></div>
+<p>これで <code>h(&quot;Hoge&quot;)</code> は操作できました。
+ハッシュ値が <code>&quot;Hoge&quot;</code> と同じ <code>&quot;Fuga&quot;</code> はどうでしょう。
+今までの方法だとハッシュ値に2が出て、そこに書こうとすると既に <code>&quot;Hoge&quot;</code> のデータがあります。</p>
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">h(&#34;Fuga&#34;) = 2, 2番目のセルにデータを書きたい
+
+
+ハッシュマップ
++------+------+----------------+-----
+| //// | //// | &#34;Hoge&#34;, &#34;hoge&#34; | ...
++------+------+----------------+-----
+                ↑ 別のデータが既にある</code></pre></div>
+<p>この場合の解決方法は色々ありますが、ここでは「空いてる場所に置く」という方法を紹介しておきます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">h(&#34;Fuga&#34;) = 2, 2番目のセルにデータを書きたい
+
+
+ハッシュマップ
++------+------+----------------+----------------+----
+| //// | //// | &#34;Hoge&#34;, &#34;hoge&#34; | &#34;Fuga&#34;, &#34;fuga&#34; | ...
++------+------+----------------+----------------+----
+                                 ↑ 2番目ではなく、近くの空いている場所に書く</code></pre></div>
+<p>「その場所は他のキーのハッシュ値とぶつかるのでは？」「他にもハッシュ値が被ったキーがあった場合どうするの？」など色々疑問が湧くかと思いますが、一旦忘れて下さい。
+ハッシュマップは色々な変種があるのでそれぞれで対応方法が違います。
+今回の目的はEntry APIの解説なので微には入らず次に進みます。</p>
+
+<h2 id="entry-が表すもの"><code>Entry</code> が表すもの</h2>
+
+<p>ここまできたら <code>Entry</code> が表すものが分かりますね。「<code>K, V</code> があるはずの場所」です。
+<code>Entry</code> が <code>Occupied</code> なら「ここにあります」、 <code>Vacant</code> なら「そこになければないですね」を表しています。</p>
+
+<p><code>Entry</code> に対して <code>or_insert</code> を呼ぶときは <code>Occupied</code> ならそこにある値を返せばいいですし、なければ <code>or_insert</code> の引数をその場に値を置けばいいです。既に場所が確定したあとなので、値を置くのは一瞬です。
+<code>map.get_mut(&amp;key)</code> からの <code>map.insert(key, value)</code> と比べると場所を探す回数が2回から1回に減っています。</p>
+
+<p>Entry APIは、ハッシュマップの「場所を検索して値を返す」や「場所を検索して値を挿入する」の「場所を検索する」の部分を抜き出したAPIだと言えます。
+因みにこのAPIを提供できるのはRustの借用/所有権システムのおかげです。他言語でこれをやると、 <code>Entry</code> を保持している間にその「場所」に別の値を上書かれてしまった場合に破滅します。
+Rustの場合は所有権のおかげで <code>Entry</code> がある間にハッシュマップを更新できなくなるので破滅を回避できます。
+これを思いついた人すごいなーって思います。</p>
+
+<h2 id="entry-apiの歴史的価値">Entry APIの歴史的価値</h2>
+
+<p>余談になりますが、Entry APIにはもう1つの側面がありました。
+古いRustではパターンマッチを用いた方のコードはコンパイルが通らなかったのです。</p>
+
+<p>Rust 1.35.0で冒頭のコードをコンパイルしてみましょう。</p>
+<pre><code class="language-console" data-lang="console">$ rustc +1.35.0 hashmap_entry.rs
+error[E0499]: cannot borrow `map` as mutable more than once at a time
+  --&gt; hashmap_entry.rs:11:13
+   |
+8  |     match map.get_mut(&amp;key) {
+   |           --- first mutable borrow occurs here
+...
+11 |             map.insert(key, vec![value]);
+   |             ^^^ second mutable borrow occurs here
+12 |         }
+13 |     };
+   |     - first borrow ends here
+
+error: aborting due to previous error
+
+For more information about this error, try `rustc --explain E0499`.</code></pre>
+<p>これは昔のRustの借用検査が粗く、 <code>match</code> 式全体で <code>map</code> を借用していると判断していたためです。
+「ハッシュマップの値を検索して、なければ値を挿入する」というありがちな操作でさえコンパイルエラーになるので初心者殺しのエラーでした。昔に比べるとRustも進化していますね。</p>
+
+<h1 id="まとめ">まとめ</h1>
+
+<p>Rustの標準ライブラリのEntry APIについて解説しました。
+Entry APIはハッシュマップの特性をRustの特徴を上手く使って設計されたAPIで興味をそそるものがあります。
+<code>HashMap</code> を使うときは使ってみて下さい。</p>
+                    </section>
+                </article>
+            </div>
+        </div>
+
+        <div class="row li-author">
+    <div class="sixteen columns">
+        Written by <strong>κeen</strong>
+    </div>
+</div>
+
+
+        <div class="row li-pagination">
+            <div class="eight columns">
+                <div class="li-pagination-previous">
+                    
+                        &nbsp;
+                    
+                </div>
+            </div>
+            <div class="eight columns">
+                <div class="li-pagination-next">
+                    
+                        Older article<br />
+                        <a href="/blog/2020/05/20/twitteruenopuroguramingunyuumonshakansatsunikki/"> Twitter上のプログラミング入門者観察記</a>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+<footer class="li-page-footer">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-page-footer-legal">
+                    &copy; 2020. All rights reserved. 
+                </div>
+                <div class="li-page-footer-theme">
+                    <span class=""><a href="https://github.com/eliasson/liquorice/">liquorice</a> is a theme for <a href="http://hugo.spf13.com">hugo</a></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<script type="text/javascript">
+ function toggle(id) {
+     var e = document.getElementById(id);
+     e.style.display == 'block' ? e.style.display = 'none' : e.style.display = 'block';
+ }
+</script>
+<script src="https://unpkg.com/mermaid@7.0.4/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({startOnLoad:true
+     });</script>
+
+    </body>
+</html>
+
