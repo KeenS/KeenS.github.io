@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+    <head>
+        
+        
+        <script async src="https://www.googletagmanager.com/gtag/js?id=UA-43779888-1"></script>
+        <script>
+         window.dataLayer = window.dataLayer || [];
+         function gtag(){dataLayer.push(arguments);}
+         gtag('js', new Date());
+
+         gtag('config', 'UA-43779888-1');
+        </script>
+        
+
+        <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:site" content="@blackenedgold" />
+        <meta name="twitter:title" content="WasmtimeのimportsにRustの関数を差し込む | κeenのHappy Hacκing Blog"/>
+        <meta name="twitter:description" content="κeenです。WebAssembly/WASIのランタイムWasmtimeをちょっと触ってみたのでそのときのメモを残します。" />
+
+        <title>WasmtimeのimportsにRustの関数を差し込む | κeenのHappy Hacκing Blog</title>
+        <link rel="stylesheet" href='//fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css' />
+        <link rel="stylesheet" href="/libraries/normalize.3.0.1.css" />
+        <link rel="stylesheet" href="/css/liquorice.css" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+        <link rel="icon" type="image/png" href="/favicon-32x32.png" sizes="32x32">
+        <link rel="icon" type="image/png" href="/favicon-16x16.png" sizes="16x16">
+        <link rel="manifest" href="/manifest.json">
+        <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#5bbad5">
+        <meta name="theme-color" content="#ffffff">
+        <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon-144-precomposed.png" sizes="144x144" />
+        <link rel="stylesheet" href="/css/syntax-monokai.css" />
+<script type="text/x-mathjax-config">
+ MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
+</script>
+<script async src="//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS_CHTML"></script>
+</script>
+<meta http-equiv="X-UA-Compatible" CONTENT="IE=EmulateIE7" />
+<link rel="stylesheet" href="//unpkg.com/mermaid@7.0.4/dist/mermaid.forest.min.css">
+
+    </head>
+    <body class="li-body">
+
+<header class="li-page-header" id="page-header">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-brand li-left">
+                <a href="/">κeenのHappy Hacκing Blog</a> | Lispエイリアンの狂想曲</div>
+                <div class="li-menu li-right">
+                    <span class="li-menu-icon" onclick="javascript:toggle('menu');">&#9776;</span>
+                    <ul id="menu2" class="li-menu-items">
+                        
+                            <li><a href="/about/"> About </a></li>
+                        
+                            <li><a href="/index.xml"> Atom </a></li>
+                        
+                            <li><a href="/post/"> Blog </a></li>
+                        
+                            <li><a href="/slide/"> Slide </a></li>
+                        
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="sixteen columns">
+                <ul id="menu" class="li-menu-items li-menu-mobile">
+                    
+                        <li><a href="/about/"> About </a></li>
+                    
+                        <li><a href="/index.xml"> Atom </a></li>
+                    
+                        <li><a href="/post/"> Blog </a></li>
+                    
+                        <li><a href="/slide/"> Slide </a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+
+
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <article class="li-article">
+                    <header class="li-article-header">
+                        <h1 class="li-article-title">WasmtimeのimportsにRustの関数を差し込む</h1>
+                        <div class="li-article-meta">
+    <time class="li-article-date">2020-06-07</time>
+    <ul class="li-article-tag">
+    
+        <li>
+            <a href="/categories/rust">Rust</a>
+        </li>
+    
+        <li>
+            <a href="/categories/webassembly">WebAssembly</a>
+        </li>
+    
+</ul>
+
+</div>
+
+                    </header>
+                    <section>
+                        <p>κeenです。WebAssembly/WASIのランタイム<a href="https://wasmtime.dev/">Wasmtime</a>をちょっと触ってみたのでそのときのメモを残します。</p>
+
+<p>私の手元にブラウザ上で動作するWebAssemblyがあるのですが、その動作のためにJavaScriptの関数をimportsで渡していました。 <code>console.log</code> とか。
+このwasmを毎回ブラウザで動作確認してると手間なので、ローカルで実行することを試みます。そこで <code>console.log</code> 相当の関数をローカルでも用意する必要がでてきました、というお話。</p>
+
+<p>WebAssemblyのランタイムはいくつかあるのですが、今回はRustのライブラリとして使える <a href="https://github.com/bytecodealliance/wasmtime"><code>wasmtime</code></a>を使って、カスタマイズした処理系を用意します。</p>
+
+<p>プロジェクトを用意しましょう。</p>
+<pre><code class="language-console" data-lang="console">$ cargo new wasmtime_imports
+$ cd wasmtime_imports
+$ cargo add wasmtime@0.17.0</code></pre>
+<p>まずはシンプルな、Rustの関数を渡さないモジュールを作ってみましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">wasmtime</span>::<span class="p">{</span><span class="n">Instance</span><span class="p">,</span><span class="w"> </span><span class="n">Module</span><span class="p">,</span><span class="w"> </span><span class="n">Store</span><span class="p">};</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">store</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Store</span>::<span class="n">default</span><span class="p">();</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">module</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Module</span>::<span class="n">new</span><span class="p">(</span><span class="w">
+</span><span class="w">        </span><span class="n">store</span><span class="p">.</span><span class="n">engine</span><span class="p">(),</span><span class="w">
+</span><span class="w">        </span><span class="n">r</span><span class="err">#&#34;</span><span class="w">
+</span><span class="w"></span><span class="p">(</span><span class="n">module</span><span class="w">
+</span><span class="w">  </span><span class="p">(</span><span class="n">func</span><span class="w"> </span><span class="cp">$add</span><span class="w"> </span><span class="p">(</span><span class="n">param</span><span class="w"> </span><span class="kt">i32</span><span class="w"> </span><span class="kt">i32</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="n">result</span><span class="w"> </span><span class="kt">i32</span><span class="p">)</span><span class="w">
+</span><span class="w">    </span><span class="p">(</span><span class="k">return</span><span class="w"> </span><span class="p">(</span><span class="kt">i32</span><span class="p">.</span><span class="n">add</span><span class="w"> </span><span class="p">(</span><span class="n">get_local</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="n">get_local</span><span class="w"> </span><span class="mi">1</span><span class="p">))))</span><span class="w">
+</span><span class="w">  </span><span class="p">(</span><span class="n">func</span><span class="w"> </span><span class="cp">$main</span><span class="w">
+</span><span class="w">    </span><span class="p">(</span><span class="n">drop</span><span class="w"> </span><span class="p">(</span><span class="n">call</span><span class="w"> </span><span class="cp">$add</span><span class="w"> </span><span class="p">(</span><span class="kt">i32</span><span class="p">.</span><span class="k">const</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="kt">i32</span><span class="p">.</span><span class="k">const</span><span class="w"> </span><span class="mi">2</span><span class="p">))))</span><span class="w">
+</span><span class="w">  </span><span class="p">(</span><span class="n">start</span><span class="w"> </span><span class="cp">$main</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="p">)</span><span class="err">&#34;#</span><span class="p">,</span><span class="w">
+</span><span class="w">    </span><span class="p">)</span><span class="w">
+</span><span class="w">    </span><span class="p">.</span><span class="n">expect</span><span class="p">(</span><span class="s">&#34;failed to create module&#34;</span><span class="p">);</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Instance</span>::<span class="n">new</span><span class="p">(</span><span class="o">&amp;</span><span class="n">store</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">module</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="p">[]).</span><span class="n">expect</span><span class="p">(</span><span class="s">&#34;failed to instantiate&#34;</span><span class="p">);</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>これを実行してみると、何も起きずに終了します。</p>
+<pre><code class="language-console" data-lang="console">$ cargo run</code></pre>
+<p>これだと何が起きてるか分かりませんね。結果をコンソールに表示しましょう。
+とはいってもWebAssemblyにはコンソールを扱う機能がありません。
+コンソールに表示する関数をRustから渡してみましょう。</p>
+
+<p>モジュールに <code>imports</code> を渡す機能を担うのが <a href="https://docs.rs/wasmtime/0.17.0/wasmtime/struct.Linker.html"><code>Linker</code></a>です。
+そして <code>Linker::func</code> でRustの関数をリンカに登録できます。やってみましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">wasmtime</span>::<span class="p">{</span><span class="n">Linker</span><span class="p">,</span><span class="w"> </span><span class="n">Module</span><span class="p">,</span><span class="w"> </span><span class="n">Store</span><span class="p">};</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">store</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Store</span>::<span class="n">default</span><span class="p">();</span><span class="w">
+</span><span class="w">    </span><span class="c1">// linkerを準備し、
+</span><span class="c1"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">linker</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Linker</span>::<span class="n">new</span><span class="p">(</span><span class="o">&amp;</span><span class="n">store</span><span class="p">);</span><span class="w">
+</span><span class="w">    </span><span class="c1">// 関数を登録する
+</span><span class="c1"></span><span class="w">    </span><span class="n">linker</span><span class="w">
+</span><span class="w">        </span><span class="p">.</span><span class="n">func</span><span class="p">(</span><span class="s">&#34;ffi&#34;</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;print&#34;</span><span class="p">,</span><span class="w"> </span><span class="o">|</span><span class="n">x</span>: <span class="kt">i32</span><span class="o">|</span><span class="w"> </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">x</span><span class="p">))</span><span class="w">
+</span><span class="w">        </span><span class="p">.</span><span class="n">expect</span><span class="p">(</span><span class="s">&#34;function registration failed&#34;</span><span class="p">);</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">module</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Module</span>::<span class="n">new</span><span class="p">(</span><span class="w">
+</span><span class="w">        </span><span class="n">store</span><span class="p">.</span><span class="n">engine</span><span class="p">(),</span><span class="w">
+</span><span class="w">        </span><span class="c1">// &#34;ffi&#34;モジュールの&#34;print&#34;をimportして使う
+</span><span class="c1"></span><span class="w">        </span><span class="n">r</span><span class="err">#&#34;</span><span class="w">
+</span><span class="w"></span><span class="p">(</span><span class="n">module</span><span class="w">
+</span><span class="w">  </span><span class="p">(</span><span class="n">func</span><span class="w"> </span><span class="cp">$print</span><span class="w"> </span><span class="p">(</span><span class="n">import</span><span class="w"> </span><span class="s">&#34;ffi&#34;</span><span class="w"> </span><span class="s">&#34;print&#34;</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="n">param</span><span class="w"> </span><span class="kt">i32</span><span class="p">))</span><span class="w">
+</span><span class="w">  </span><span class="p">(</span><span class="n">func</span><span class="w"> </span><span class="cp">$add</span><span class="w"> </span><span class="p">(</span><span class="n">param</span><span class="w"> </span><span class="kt">i32</span><span class="w"> </span><span class="kt">i32</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="n">result</span><span class="w"> </span><span class="kt">i32</span><span class="p">)</span><span class="w">
+</span><span class="w">    </span><span class="p">(</span><span class="k">return</span><span class="w"> </span><span class="p">(</span><span class="kt">i32</span><span class="p">.</span><span class="n">add</span><span class="w"> </span><span class="p">(</span><span class="n">get_local</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="n">get_local</span><span class="w"> </span><span class="mi">1</span><span class="p">))))</span><span class="w">
+</span><span class="w">  </span><span class="p">(</span><span class="n">func</span><span class="w"> </span><span class="cp">$main</span><span class="w">
+</span><span class="w">    </span><span class="p">(</span><span class="n">call</span><span class="w"> </span><span class="cp">$print</span><span class="w"> </span><span class="p">(</span><span class="n">call</span><span class="w"> </span><span class="cp">$add</span><span class="w"> </span><span class="p">(</span><span class="kt">i32</span><span class="p">.</span><span class="k">const</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="kt">i32</span><span class="p">.</span><span class="k">const</span><span class="w"> </span><span class="mi">2</span><span class="p">))))</span><span class="w">
+</span><span class="w">  </span><span class="p">(</span><span class="n">start</span><span class="w"> </span><span class="cp">$main</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="p">)</span><span class="err">&#34;#</span><span class="p">,</span><span class="w">
+</span><span class="w">    </span><span class="p">)</span><span class="w">
+</span><span class="w">    </span><span class="p">.</span><span class="n">expect</span><span class="p">(</span><span class="s">&#34;failed to create module&#34;</span><span class="p">);</span><span class="w">
+</span><span class="w">    </span><span class="c1">// linkerを使ってインスタンス化する
+</span><span class="c1"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">linker</span><span class="w">
+</span><span class="w">        </span><span class="p">.</span><span class="n">instantiate</span><span class="p">(</span><span class="o">&amp;</span><span class="n">module</span><span class="p">)</span><span class="w">
+</span><span class="w">        </span><span class="p">.</span><span class="n">expect</span><span class="p">(</span><span class="s">&#34;failed to instantiate module&#34;</span><span class="p">);</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>Linkerを使ってモジュールにRustの関数を渡し、モジュール内でimport funcとして使っています。
+これを実行してみましょう。</p>
+<pre><code class="language-console" data-lang="console">$ cargo run
+3</code></pre>
+<p>ちゃんと3が印字されました。</p>
+
+<p>ということでWasmtimeのランタイムにRustの関数を渡す方法を紹介しました。
+今回のコードは<a href="https://gitlab.com/blackenedgold/wasmtime_imports">こちら</a>に置いておきます。</p>
+                    </section>
+                </article>
+            </div>
+        </div>
+
+        <div class="row li-author">
+    <div class="sixteen columns">
+        Written by <strong>κeen</strong>
+    </div>
+</div>
+
+
+        <div class="row li-pagination">
+            <div class="eight columns">
+                <div class="li-pagination-previous">
+                    
+                        &nbsp;
+                    
+                </div>
+            </div>
+            <div class="eight columns">
+                <div class="li-pagination-next">
+                    
+                        Older article<br />
+                        <a href="/blog/2020/05/23/rustnohashmaphaentrygabenri/"> RustのHashMapはentryが便利</a>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+<footer class="li-page-footer">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-page-footer-legal">
+                    &copy; 2020. All rights reserved. 
+                </div>
+                <div class="li-page-footer-theme">
+                    <span class=""><a href="https://github.com/eliasson/liquorice/">liquorice</a> is a theme for <a href="http://hugo.spf13.com">hugo</a></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<script type="text/javascript">
+ function toggle(id) {
+     var e = document.getElementById(id);
+     e.style.display == 'block' ? e.style.display = 'none' : e.style.display = 'block';
+ }
+</script>
+<script src="https://unpkg.com/mermaid@7.0.4/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({startOnLoad:true
+     });</script>
+
+    </body>
+</html>
+
