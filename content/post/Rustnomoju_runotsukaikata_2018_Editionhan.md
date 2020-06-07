@@ -188,13 +188,14 @@ use self::module_a::name;   // 相対パス
 module_b.rsからは同じく2つが使えますが、相対パスが変わります。
 
 ```
-use crate::module_a::module_a::name;  // 絶対パス
-use super::module_a::a;               // 相対パス
+use crate::module_a::name;  // 絶対パス
+use super::module_a::a;     // 相対パス
 ```
 
 `super`も予約語で、`..`に相当します。
 ファイルが同じディレクトリにいるので分かりづらいですが、libが1つ上の階層で、その下にmodule_aとmodule_bがぶら下がってる感じですね。
 
+2020-06-07追記: 上記の絶対パスが `crate::module_a::module_a::name` になっていたのを `crate::module_a::name` に修正しました。 /追記
 # おじさんと隠し子
 次のように、サブモジュールを作ってみます。
 
