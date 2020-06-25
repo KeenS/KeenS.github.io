@@ -16,7 +16,7 @@ title: "{{ replace .TranslationBaseName "-" " " | title }}"
 ===
 # About Me
 ---------
-![κeenのアイコン](/images/kappa.png) <!-- .element: style="position:absolute;right:0;z-index:-1" width="20%" -->
+![κeenのアイコン](/images/kappa2_vest.png) <!-- .element: style="position:absolute;right:0;z-index:-1" width="20%" -->
 
  * κeen
  * [@blackenedgold](https://twitter.com/blackenedgold)
