@@ -12,7 +12,7 @@ title: RustのちょっとやりすぎなBuilderパターン
 # 目的コード
 以下のような構造体のビルダーを作りたいとします。
 
-```struct
+```rust
 #[derive(Debug)]
 struct Person {
     id: u32,
@@ -143,7 +143,7 @@ impl PersonBuilder {
 
 これは以下のように
 
-```
+```rust
 fn main() {
   let person = PersonBuilder::new()
          .id(1)
@@ -160,7 +160,7 @@ fn main() {
 とりあえず使えそうな気がしますが、型レベルで状態遷移をハードコードしているのでメソッドを呼び出す順番が固定されてしまいます。
 なので以下はエラーです。
 
-```
+```rust
 fn main() {
   let person = PersonBuilder::new()
          // nameとidを逆順に呼び出してみる
@@ -334,7 +334,7 @@ fn main() {
 
 こう書いていたものが
 
-```
+``` rust
 impl<Name, Age> PersonBuilder<Empty, Name, Age> {
     pub fn id(self, id: u32) -> PersonBuilder<Filled, Name, Age> {
         PersonBuilder {
