@@ -245,7 +245,7 @@ Clone::clone(&data)
 データ部分は普通なら `&Data` のように参照を使いますが、 `Waker` はジェネリクスになっていないので型を消すためにポインタにして `()` にキャストしているのでしょう。
 具体的な型を消しつついくつかのメソッドを提供するのはやっていることは `Box<dyn Trait>` とあまり変わらないのですが（というか `dyn Trait` も上記と同じような仕組みで動いている）、 `Box` 部分を抽象化するためなのか `Sized` 制約の扱いの問題からなのか、それを分解したものすごく低レベルなAPIになっていますね。
 
-VTableに入っているメソドは、  `clone` と `drop` は `Waker` の `Clone` と `Drop` で使われ、`wake` と `wake_by_ref` はそのまま`Waker` の `wake` と `wake_by_ref` で使われるようです。
+VTableに入っているメソッドは、  `clone` と `drop` は `Waker` の `Clone` と `Drop` で使われ、`wake` と `wake_by_ref` はそのまま`Waker` の `wake` と `wake_by_ref` で使われるようです。
 
 これで `Waker` の作り方が分かったので `Context` も作れて、 Runner も作れます。
 `Waker` (`Context`) は実際は何もしないので先に Runner の方を作ります。
