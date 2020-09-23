@@ -24,7 +24,7 @@ HKTについて微塵も知らない方にも分かるように解説してい�
 
 ``` rust
 trait Mappable<M<_>, T> where Self: M<T> {
-  fn map<U, F: FunOnce(T) -> U>(self, f: F) -> M<U>;
+  fn map<U, F: FnOnce(T) -> U>(self, f: F) -> M<U>;
 }
 ```
 
@@ -88,7 +88,7 @@ let v: Vec<i32> = ...
 
 ``` rust
 trait Mappable<M<_>, T> where Self: M<T> {
-  fn map<U, F: FunOnce(T) -> U>(self, f: F) -> M<U>;
+  fn map<U, F: FnOnce(T) -> U>(self, f: F) -> M<U>;
 }
 ```
 
@@ -98,7 +98,7 @@ trait Mappable<M<_>, T> where Self: M<T> {
 
 ``` rust
 trait Mappable<T, MT> where Self: MT {
-  fn map<U, MU, F: FunOnce(T) -> U>(self, f: F) -> MU;
+  fn map<U, MU, F: FnOnce(T) -> U>(self, f: F) -> MU;
 }
 ```
 
@@ -106,7 +106,7 @@ trait Mappable<T, MT> where Self: MT {
 
 ``` rust
 impl <T, MT: Option<T> Mappable<MT, T>  for Option<T> {
-  fn map<U, MU, F: FunOnce(T) -> U>(self, f: F) -> MU {...}
+  fn map<U, MU, F: FnOnce(T) -> U>(self, f: F) -> MU {...}
 }
 
 let r: Result<String, ()> = Some(1).map(|i| i.to_string());
@@ -123,7 +123,7 @@ let r: Result<String, ()> = Some(1).map(|i| i.to_string());
 ``` rust
 trait Mappable<T, U, MT> where Self: MT {
   type MU;
-  fn map<F: FunOnce(T) -> U>(self, f: F) -> MU;
+  fn map<F: FnOnce(T) -> U>(self, f: F) -> Self::MU;
 }
 ```
 
@@ -185,7 +185,7 @@ impl <T, U> HKT<U> for Option<T> {
 
 ``` rust
 trait Mappable<U>: HKT<U> {
-  fn map<F: FunOnce(Self::T) -> U>(self, f: F) -> Self::MU;
+  fn map<F: FnOnce(Self::T) -> U>(self, f: F) -> Self::MU;
 }
 ```
 
