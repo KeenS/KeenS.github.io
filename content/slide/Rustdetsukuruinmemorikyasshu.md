@@ -1,7 +1,7 @@
 ---
 categories: []
 date: 2020-10-18T18:22:00+09:00
-description:
+description: "shinjuku.rsでの発表用。"
 title: "Rustで作るインメモリキャッシュ"
 ---
 <section data-markdown
@@ -36,7 +36,9 @@ title: "Rustで作るインメモリキャッシュ"
 
 * アプリケーションでキャッシュしたいよね
   + アクセス数の80%はアクセス頻度上位20%のアイテム
-* 例えば [crates.io](crates.io)のmost downloaded
+  + もうちょっと極端なケースも
+* 例えば [crates.io](https://crates.io)のmost downloaded
+* 少量ならメモリに載るのでDBアクセスを省きたい
 
 ===
 
@@ -343,14 +345,6 @@ impl CacheedDao {
 ------
 
 * LRU + ハッシュマップ
-* LRUは リスト（あるいはベクタ）で簡単に実装できる
-  + しかし効率が悪い
-  + $O(n)$ の計算量
-
-===
-
-# 実装
-------
 
 <svg
    xmlns:dc="http://purl.org/dc/elements/1.1/"
@@ -625,22 +619,23 @@ impl CacheedDao {
 
 ===
 
-# 実装(LRU)
+# 実装
 ------
 
-* LRUを効率的に実装したい
-* 少数（定数）個のバケットを保持するブロックに分ける
-  + 今回は16個
-  + 少数ならビット演算でLRUを実装できる
-* ブロックへの振り分けはハッシュ値を使う
-  + 下4bitをブロック内の振り分けに
-  + 5bit目以降をブロックの振り分けに
-* キャッシュヒット率を捨てて速度をとった
+* LRU + ハッシュマップ
+* LRUは リスト（あるいはベクタ）で簡単に実装できる
+  + しかし効率が悪い
+  + $O(n)$ の計算量
+* ハッシュマップは標準ライブラリのものを使える
+  + でもちょっと無駄がある
+
 
 ===
 
 # 実装(LRU)
 ------
+
+* 少数（定数）個のバケットを保持するブロックに分ける
 
 <svg
    xmlns:dc="http://purl.org/dc/elements/1.1/"
@@ -1261,6 +1256,21 @@ impl CacheedDao {
 
 ===
 
+# 実装(LRU)
+------
+
+* LRUを効率的に実装したい
+* 少数（定数）個のバケットを保持するブロックに分ける
+  + 今回は16個
+  + 少数ならビット演算でLRUを実装できる
+* ブロックへの振り分けはハッシュ値を使う
+  + 下4bitをブロック内の振り分けに
+  + 5bit目以降をブロックの振り分けに
+* キャッシュヒット率を捨てて速度をとった
+
+
+===
+
 # 実装(ハッシュマップ)
 ------
 
@@ -1283,7 +1293,7 @@ impl CacheedDao {
 # chechire
 -----------
 
-* [KeenS/chechire]()
+* [blackenedgold/chechire](https://gitlab.com/blackenedgold/chechire)
   + 発音はチェシャ猫のcheshireと同じ
 * 16-way assosiativeなhashbrownベースのキャッシュ
 * ほぼ標準ライブラリの `HashMap` と同じAPI
@@ -1297,8 +1307,9 @@ impl CacheedDao {
   + chechire
   + LRUを `Vec` で実装した簡易キャッシュ
   + LRUを `VecDeque` で〃
-* 指数関数で重みをつけたランダムアクセス100,000回
-* キャッシュミスすると5msのスリープ
+* キャッシュサイズ16348
+* ベキ分布なランダムアクセス1,000,000回
+* キャッシュミスすると500usのスリープ
   + DB叩くとだいたいこのくらい？
 
 ===
@@ -1319,9 +1330,9 @@ td {
 
 | subject             | hit rate |  time
 |:--------------------|----------|-----------------------------------------------------------------
-| chechire            |  99.78%  | <div class="graph" style="width:calc( 142px * 3);">142ms</div>
-| easy cache (vec)    |  99.72%  | <div class="graph" style="width:calc( 184px * 3);">184ms</div>
-| easy cache (deque)  |  99.71%  | <div class="graph" style="width:calc( 194px * 3);">194ms</div>
+| chechire            |  98.9537%  | <div class="graph" style="width:calc( 5958px * 0.05 );">5958ms</div>
+| easy cache (vec)    |  99.1176%  | <div class="graph" style="width:calc( 6266px * 0.05 );">6266ms</div>
+| easy cache (deque)  |  99.1117%  | <div class="graph" style="width:calc( 6469px * 0.05 );">6469ms</div>
 
 
 ===
