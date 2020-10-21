@@ -1,5 +1,5 @@
 ---
-categories: []
+categories: ["Rust"]
 date: 2020-10-18T18:22:00+09:00
 description: "shinjuku.rsでの発表用。"
 title: "Rustで作るインメモリキャッシュ"
@@ -197,6 +197,7 @@ impl CacheedDao {
     <use xlink:href="#base-box" />
     <use xlink:href="#item-2-1" />
     <use xlink:href="#new-3" />
+  </g>
 </svg>
 
 ===
