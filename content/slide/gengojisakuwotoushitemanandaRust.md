@@ -19,7 +19,7 @@ title: "言語自作を通して学んだRust"
 Note:
 
 Good morning, everyone. I'm κeen.
-First of all, I'd like to say thank you for RustFest's organizers.
+First of all, I'd like to say thank you to RustFest's organizers.
 This is my first time to have a talk at an international conference.
 Because I'm not good at English, attending international conference is not an easy task.
 I guess this is true for most of non native English speakers.
@@ -44,8 +44,8 @@ Then, the rest of my talk is in Japanese.
 Note:
 
 私はκeenといいます。
-右にある画像がTwitterやGitHubで使っているアイコンです。
 TwitterやGitHubのアカウントを持っていて、Ideinという会社で仕事でRustを使っています。
+右にある画像がTwitterやGitHubで使っているアイコンです。
 日本で出版された実践Rust入門という本の著者の一人です。
 またプログラミング言語Rustの初版やRustの公式ウェブサイトの旧版の翻訳に協力したりもしました。
 
@@ -66,12 +66,12 @@ TwitterやGitHubのアカウントを持っていて、Ideinという会社で�
 
 Note:
 
-さてさて、Rustに入門する前に私がどういうことをしてきたかというとおもちゃ言語を色々作ってました。
+さて、Rustに入門する前に私がどういうことをしてきたかというと、おもちゃ言語を色々作ってました。
 一例を挙げるとScheme処理系のコミッタをやってたり、Scalaの型でLispを作ったり、WhitespaceでWhitespaceのコンパイラを書いていたりしました。
 MLやLispといった関数型プログラミング言語が好きです。
 Algebraic data typesやパターンマッチといった機能がインタプリタを書くのに適していたからです。
 Cもほどほどに好きです。
-早くてローレベルなことができるからです。
+速くてローレベルなことができるからです。
 
 ===
 
@@ -104,9 +104,9 @@ Note:
 * When rust was 0.12.0 (just before 1.0-alpha)
 * Seemed an ultimate language to write a language
   + 😊 ADT and pettern matches
-  + 😊 readable and safe
-  + 😊 fast
-  + 😊 rutime-less
+  + 😊 Readable and Safe
+  + 😊 Fast
+  + 😊 Rutime-less
 * → Started using Rust for writing languages
 
 Note:
@@ -131,7 +131,9 @@ Rustには先程あげた機能が全部揃っていたので言語を作ると�
 Note:
 
 そうしてRustで作った言語をいくつか挙げるとこんな感じです。
-Lisp方言だとかシェルだとかまた型レベルLispだとかSMLコンパイラだとかインメモリのWebAssemblyアセンブラだとかalt JSON Schemaだとかを作りました。
+まずはLisp方言。
+それから1年後くらいにシェルだとか、また型レベルLispだとか、SMLコンパイラだとかインメモリのWebAssemblyアセンブラだとかを作りました
+そしてまた1年後くらいにalt JSON Schemaだとかを作りました。
 細かいものを含めたら他にもあるんですがひとまずこんなところです。
 
 ===
@@ -145,8 +147,10 @@ Lisp方言だとかシェルだとかまた型レベルLispだとかSMLコンパ
 
 Note:
 
-本当は全部話したかったんですが時間が足りないので3つ選んで、それぞれの言語を作って何を学んだかを紹介します。
-選んだ3つがこれで、まずκLispからは基礎を学びました。次はWebMLで、メンテナンスするということを学びました。最後がchemaで、使えるものを作るということを学びました。
+本当はこれらの言語を全部話したかったんですが時間が足りないので3つ選んで、それぞれの言語を作って何を学んだかを紹介します。
+選んだ3つがこれで、まずκLispからは基礎を学びました。
+次はWebMLで、メンテナンスするということを学びました。
+最後がchemaで、使えるものを作るということを学びました。
 それではこの三本立てで話していきたいと思います。
 
 ===
@@ -179,6 +183,30 @@ SKKというのは日本語入力メソッドの名前なんですが、この�
 4日というのは日本では秋頃に4連休があるのでその間に作りたかった訳です。
 Lisp処理系は何度か作ったことがあるので4日あれば作れるだろうと踏んでました。
 
+===
+# Basic Items used
+------------------
+
+* Writing a language requires basic knowledge of the host language
+* Many of basic items are used
+* Language featuers:
+  + structs, methods
+  + enums, pattern matches
+  + macros
+  + ...
+* Standard Libraries
+  + iterators
+  + HashMap
+  + ...
+
+Note:
+
+言語処理系を作るのにはホスト言語の色々な基本機能が必要になります。
+使った機能の一例を挙げると、
+言語側だと構造体、メソッド、列挙型、パターンマッチ、マクロなどなど。
+標準ライブラリだとイテレターやハッシュマップなどです。
+こういうった基本機能を駆使しつつインタプリタを書いていきました。
+
 
 ===
 # How I failed
@@ -194,7 +222,8 @@ Lisp処理系は何度か作ったことがあるので4日あれば作れるだ
 Note:
 
 そして、失敗しました。4日では終わりませんでした。
-失敗した理由としてはいくつか難しいところがあって、具体的にはガベージコレクション、ライフタイムと所有権、エラーハンドリングあたりです。
+失敗した理由としてはいくつか難しいところがあったからです。
+具体的にはガベージコレクション、ライフタイムと所有権、エラーハンドリングあたりです。
 ここでRustは難しい言語というのを思い知ることになります。
 
 ===
@@ -215,7 +244,9 @@ Note:
 
 GCで躓いたのはこういう部分です。
 Lispの式（expression）を `Expr` というenumで表現するのですが、そこに出てくるポインタに `Box` 型を使っていました。
-下にコードスニペットがあって `enum Expr` を定義していますね。そこの2つ目のヴァリアントが `Cons` で、ポインタを2つ保持します。そのポインタに `Box` を使っていた訳です。
+下にコードスニペットがあって `enum Expr` を定義していますね。
+そこの2つ目のヴァリアントが `Cons` で、ポインタを2つ保持します。
+そのポインタに `Box` を使っていた訳です。
 
 
 ===
@@ -244,7 +275,7 @@ Note:
 Rustの `Box` 型だとその値を一人しか使えませんが、今回実装しているLispは値を共有できるので、ダメでした。
 正しくは `Box` の代わりに `Rc` を使わないといけません。
 下のコードスニペットでは先程の `Expr` とほぼ同じですが、 `Cons` の保持しているポインタが `Rc` になったものになっています。
-
+これが正しい実装です
 
 ===
 # Lifetime / Ownership
@@ -265,7 +296,7 @@ Note:
 最終的に全体の設計が大事ということに気付きました。
 全体の設計というのは「このデータはランタイムに登録されるから実行が終わるまで生きないといけない、だから所有権を奪ってはいけない」などです。
 あと当時はボローチェッカがレキシカルだったというのもあります。
-有名な `HashMap` に対して `get` して `insert` しようとするとエラーというのも体験しました。
+有名な `HashMap` に対して `get` して `insert` しようとするとエラーというのも実際に体験していました。
 
 ===
 # Error Handling
@@ -288,7 +319,8 @@ Note:
 困った3つ目がエラーハンドリングです。
 正直、どうすればいいか分かりませんでした。
 最初のコードは各所で `panic` を使っていました。
-下に貼ってあるコードスニペットでは `k_add_aux` という関数を定義していて、関数の返り型は `Expr` になっています。関数本体の方では引数に対してパターンマッチするときに想定していないデータだった場合にパニックしています。
+下に貼ってあるコードスニペットでは `k_add_aux` という関数を定義していて、関数の返り型は素の `Expr` になっています。
+関数本体の方では引数に対してパターンマッチするときに想定していないデータだった場合にパニックしています。
 
 ===
 # Option
@@ -336,7 +368,8 @@ Note:
 
 次にエラーには `Result` 型を使うと学んだので使いはじめました。
 しかしエラーは全て `String` でした。
-下に貼ってあるコードスニペットでは `k_funcall` という関数を定義していて、 返り型が `Result<Expr, String>` になっています。関数本体の方では引数に対してパターンマッチするときに想定していないデータだった場合に `Err(format!())` を返しています。
+下に貼ってあるコードスニペットでは `k_funcall` という関数を定義していて、 返り型が `Result<Expr, String>` になっています。
+関数本体の方では引数に対してパターンマッチするときに想定していないデータだった場合に `Err(format!())` を返しています。
 
 
 ===
@@ -363,7 +396,7 @@ pub enum Error {
 Note:
 最後に正しい方法を知りました。
 「Error Handling in Rust」というAndrew Gallantさんのブログです。
-このブログを読んで独自のエラー型を定義しました。
+このブログを読んで独自のエラー型を定義することを覚えました。
 下に貼ってあるコードスニペットでは `Error` という名前のenumを定義していてκLispで起きるエラーをヴァリアントで表現しています。
 
 ===
@@ -567,7 +600,7 @@ Note:
 Rustの型エイリアスはかなり柔軟なのでエイリアスにしてしまえます。
 例えば `CoreExpr` は `Expr` のエイリアスであり、かつ `UntypedCoreExpr` と `TypedCoreExpr` へとエイリアスされます。
 `UntypedCoreExpr` と `TypedCoreExpr` 両方に同じメソッドを定義したかったら `CoreExpr<Ty>` に `impl` してあげればい訳です。
-また、 `Display` のように `Exp` 属全てに実装したいトレイトは型パラメータを全てジェネリクスにすればよいのです。
+また、 `Display` のように `Expr` 属全てに実装したいトレイトは型パラメータを全てジェネリクスにすればよいのです。
 
 ===
 # Lessons learned from WebML <!-- .element: style="font-size: calc(var(--title-font-size) * 0.7)" -->
@@ -693,7 +726,7 @@ Note:
 --------------
 
 ``` text
-$ chema --version
+$ chema --help
 chema 0.0.8
 Sunrin SHIMURA (keen) <3han5chou7@gmail.com>
 An external DSL for JSON Schema
@@ -771,7 +804,7 @@ Note:
 私は言語を色々書きながら成長していきました。
 最初はRustでどうやって書くかでいっぱいっぱいでしたが、コード全体をどうすればいいか、そしてプロジェクト全体としてどうリリースするかなどまで気が回るようになりました。
 もう1つ気付いた方もいるかと思いますが、私が遭遇した壁のいくつかは既にRustのアップデートで解決されています。
-`impl Trait` は忘れもしない 1.26.0で入りました。
+`impl Trait` は今でも覚えてますが1.26.0で入りました。
 複雑なモジュールシステムや融通の効かないライフタイムは2018 editionで解決しました。
 
 ===
