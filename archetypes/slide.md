@@ -18,12 +18,12 @@ title: "{{ replace .TranslationBaseName "-" " " | title }}"
 ---------
 ![κeenのアイコン](/images/kappa2_vest.png) <!-- .element: style="position:absolute;right:0;z-index:-1" width="20%" -->
 
- * κeen
- * [@blackenedgold](https://twitter.com/blackenedgold)
- * Github: [KeenS](https://github.com/KeenS)
- * GitLab: [blackenedgold](https://gitlab.com/blackenedgold)
- * [Idein Inc.](https://idein.jp/)のエンジニア
- * Lisp, ML, Rust, Shell Scriptあたりを書きます
+* κeen
+* [@blackenedgold](https://twitter.com/blackenedgold)
+* GitHub: [KeenS](https://github.com/KeenS)
+* GitLab: [blackenedgold](https://gitlab.com/blackenedgold)
+* [Idein Inc.](https://idein.jp/)のエンジニア
+* Lisp, ML, Rust, Shell Scriptあたりを書きます
 
 </script>
 </section>
