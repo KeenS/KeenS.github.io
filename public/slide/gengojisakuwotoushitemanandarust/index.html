@@ -135,10 +135,11 @@ Note:
 Good morning, everyone. I'm κeen.
 First of all, I'd like to say thank you to RustFest's organizers.
 This is my first time to have a talk at an international conference.
-Because I'm not good at English, attending international conference is not an easy task.
-I guess this is true for most of non native English speakers.
-However, in this time, as we have interpreters there was a chance for me. Thank you.
-Then, the rest of my talk is in Japanese.
+Because I'm not good at English, attending international conferences is not easy.
+I guess this is true for most of those who are not native to English.
+However, in this time, as we have translated subtitles and interpreters there was a chance for me.
+Thank you.
+Then, I'm going to give the rest of my tolk in Japanese.
 
 それでははじめていきます。「言語自作を通して学んだRust」というタイトルで発表していきます。
 
@@ -288,6 +289,10 @@ Note:
 * I tried to write in 4 days
   + I was confident because I was experienced to write Lisp interpreters
 
+``` lisp
+(skk-gadget-units-conversion "mile" 1 "km")
+```
+
 Note:
 
 κLispはSKK Lispを解釈するために作られました。
@@ -297,12 +302,14 @@ SKKというのは日本語入力メソッドの名前なんですが、この�
 4日というのは日本では秋頃に4連休があるのでその間に作りたかった訳です。
 Lisp処理系は何度か作ったことがあるので4日あれば作れるだろうと踏んでました。
 
+下に貼ってあるコードがκLispのコードです。
+`skk-gadget-units-conversion` 関数を呼び出して1マイルを1kmに変換する計算をしています。
+
 ===
-# Basic Items used
+# Learned Basics
 ------------------
 
 * Writing a language requires basic knowledge of the host language
-* Many of basic items are used
 * Language featuers:
   + structs, methods
   + enums, pattern matches
@@ -372,6 +379,7 @@ Lispの式（expression）を `Expr` というenumで表現するのですが、
 * Values must be shared!
   + Lisp allows share values
 * Correct approach is use `Rc` instead of `Box`:
+  + RC (Reference Count) manages the data for you
 
 ```rust
 pub enum Expr {
@@ -388,6 +396,8 @@ Note:
 関数型言語だとGCはあるのでそういうことをすっかり忘れてました。
 Rustの `Box` 型だとその値を一人しか使えませんが、今回実装しているLispは値を共有できるので、ダメでした。
 正しくは `Box` の代わりに `Rc` を使わないといけません。
+RC、参照カウントを使うとデータを管理してくれます。
+
 下のコードスニペットでは先程の `Expr` とほぼ同じですが、 `Cons` の保持しているポインタが `Rc` になったものになっています。
 これが正しい実装です
 
@@ -397,6 +407,33 @@ Rustの `Box` 型だとその値を一人しか使えませんが、今回実装
 
 * It was new notion to me (and I guess to most of you)
 * Taking ownership at argument makes writing funcions easy, but calling them very hard
+
+```rust
+fn eval(env: &mut Env, expr: &Expr) -> Result<Expr> { /* */}
+```
+
+```rust
+fn eval(env: &mut Env, expr: Expr) -> Result<Expr> { /* */}
+```
+
+Note:
+
+次に困ったのがライフタイムと所有権です。
+恐らくほとんどの人もそうだと思いますがこれは初めて体験した概念です。
+関数を定義するときに引数で所有権を取ってしまうと書くのは楽になりますが、呼ぶのが大変になります。
+
+例えば下に貼った2つの `eval` 関数を見てみましょう。
+上の `eval` は引数に `&mut Env` と、 `&Expr` を取っています。2つ目の引数の `Expr` が参照になっているんですね。
+下の `eval` は引数に `&mut Env` と、 `Expr` を取っています。こちらは2つ目の引数の `Expr` が参照になっていません。
+上の方の `eval` は引数が参照になっているので定義するときに `clone` が必要で大変なのですが、呼び出すときには値を貸すだけでいいので楽です。
+一方で下の方が `eval` を定義するには `clone` などを挟まなくていいので便利なのですが、 `eval` を呼び出すときには `clone` が必要になり、大変です。
+このどちらが正しい設計なのか当時は分かりませんでした。
+
+
+===
+# Lifetime / Ownership
+-----------------------
+
 * Eventually I noticed overall design is important
   + Like "This data is registered to the runtime and should live to the end of execution, thus you cannot take its ownership"
 * (The borrow checker was lexical)
@@ -404,13 +441,12 @@ Rustの `Box` 型だとその値を一人しか使えませんが、今回実装
 
 Note:
 
-次に困ったのがライフタイムと所有権です。
-恐らくほとんどの人もそうだと思いますがこれは初めて体験した概念です。
-関数を定義するときに引数で所有権を取ってしまうと書くのは楽になりますが、呼ぶのが大変になります。
 最終的に全体の設計が大事ということに気付きました。
 全体の設計というのは「このデータはランタイムに登録されるから実行が終わるまで生きないといけない、だから所有権を奪ってはいけない」などです。
 あと当時はボローチェッカがレキシカルだったというのもあります。
 有名な `HashMap` に対して `get` して `insert` しようとするとエラーというのも実際に体験していました。
+
+
 
 ===
 # Error Handling
@@ -565,7 +601,8 @@ WebMLはStandard MLからWebAssemblyへのコンパイラです。
 WebAssembler-rsこれのサイドプロジェクトです。
 私の趣味プロジェクトの中で一番規模が大きいです。
 そして私の盆栽プロジェクトでもあります。
-盆栽プロジェクトというのは、下にある画像が盆栽ですが、時間のあるときにちょくちょく手入れして、ずっと続けていくようなプロジェクトのことです。
+下にある画像が盆栽ですが盆栽は長い時間をかけて手入れします。
+その盆栽のように、盆栽プロジェクトというのは、時間のあるときにちょくちょく手入れして、ずっと続けていくようなプロジェクトのことです。
 
 
 ===
@@ -579,6 +616,14 @@ WebAssembler-rsこれのサイドプロジェクトです。
   + It's too complicated to write a parser by hand
 * Many similar types
   + You'll write many similar functions to treat them
+
+``` sml
+infix /: :/ \: :\
+fun init /: operator = List.foldl operator init
+fun f :/ data = f data
+fun data \: operator = fn init => List.foldr operator init data
+fun f :\ init = f init
+```
 
 Note:
 
@@ -642,7 +687,12 @@ SMLパーサは手書きするものではないです。
 これがマクロまみれでした。というのも当時は `impl Trait` がまだなかったので、パフォーマンスの都合でこうなっていたようです。
 
 下に貼ってあるのがnomを使ったパーサのコードです。 `named!` というマクロの引数の中に `do_parse!` だとか `separated_list!` だとか `opt!` だとかマクロがたくさん書かれてます。
-APIを見るとマクロがすごいことになっています。（nom 2.0のAPIドキュメント）
+APIドキュメントを見るとマクロがすごいことになっています。
+（nom 2.0のAPIドキュメント）
+これがnomのAPIドキュメントなんですが、マクロのところを見るとすごい数のマクロが定義されています。
+10や20ではなくて50とかひょっとしたら100くらいのマクロが定義されています。
+（スライドに戻る）
+これらを駆使しながらパーサを書くのですが、マクロのエラーメッセージが分かりづらくてデバッグが大変でした。
 
 ===
 
@@ -689,7 +739,10 @@ Note:
 
 色々試行錯誤するうちに型エイリアスでどうにかできることに気付きました。
 下に掲載したコードはちょっとごちゃっとしてますが、型エイリアスを使った解決です。
-型パラメータで振る舞いを変える `Expr` という型を用意しておいて、望ましい振る舞いをする型パラメータを与えたものをそれぞれ `UntypedExpr` とか `TypedCoreExpr` とかのエイリアスを定義しています。
+型パラメータで振る舞いを変える `Expr` という型を用意しておいて、望ましい振る舞いをする型パラメータを与えたものに名前を与えています。
+例えば `UntypeddExpr` は `Expr` に `Empty` を与えたものです。
+他にも `CoreExpr` というのを定義していて、それに `Empty` を与えたのが `UntypedExpr` 、 `Type` を与えたのが `TypedExpr` です。
+をそれぞれ `UntypedExpr` とか `TypedCoreExpr` とかのエイリアスを定義しています。
 
 ===
 # Alias and Methods
@@ -786,7 +839,7 @@ chemaが何かというと独自記法からJSON Schemaへのコンパイラで�
 要するにalt JSON Schemaとでも呼ぶべきものです。
 これは会社のプロジェクトで使うために作ったので「使える」ものじゃないといけません。
 下に貼ってあるのがchemaの記述例です。
-`/** ~ */` でコメントをはじめたり、 `type name =` で型を定義したりします。
+`/**` 〜 `*/` でコメントを書いたり、 `type name =` で型を定義したりします。
 
 
 ===
@@ -832,7 +885,8 @@ Note:
 そこで `structopt` を採用しました。
 `structopt` の利用例を下に貼りました。
 構造体定義に `#[derive(StructOpt)]` をつけて、それぞれのフィールドの定義に `#[structopt()]` のアトリビュートをつけます。アトリビュートの中には `long` や `help` などが書けます。
-`long` は長いオプション、ここでは `--no-swagger` って書くオプションを指定しています。
+`long` は長いオプションを指定します。
+ここでは `no-swagger` を指定しているのでコマンドラインで `--no-swagger` って書くオプションを指定しています。
 `help` は `--help` で見れるヘルプメッセージですね。
 
 ===
@@ -865,7 +919,7 @@ ARGS:
 Note:
 
 これがstructoptで生成したヘルプメッセージです。
-非常によくできてますね。
+先程説明した `--no-swagger` や `input file` などが生成に使われています。
 
 
 ===
@@ -876,8 +930,8 @@ Note:
   + And it have problems arount cross-compiling
 * Releasing from CI is desired
 * → Introduced [trust](https://github.com/japaric/trust)
-  + A template configuration of Travis CI
-  + It is able to create binary release for many architectures
+  + A template configuration of Travis CI for Rust
+  + It helps you creating binary releases for many architectures
 
 Note:
 
@@ -888,6 +942,7 @@ CIでリリースできるならそれに越したことはありません。
 trustはTravis CIの設定の雛形で、これを使うと複数ターゲットのバイナリを簡単に作れます。
 chemaのリリースをちょっと見てみましょう（chemaのリリースページ）
 こういう風に色んなプラットフォーム向けのリリースを簡単に作れる訳です。
+例えばaarch64のLinuxだとかx86_64のLinuxだとかx86のappleだとか、x86のNetBSDなんかのバイナリも作れます。
 
 ===
 # Lessons learned from chema <!-- .element: style="font-size: calc(var(--title-font-size) * 0.7)" -->
