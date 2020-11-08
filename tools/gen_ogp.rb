@@ -28,7 +28,7 @@ def generate_svg(name, template, metadata)
   IO.write(svg_name, template.result_with_hash(metadata))
 
   title_size =`inkscape #{svg_name} --actions='select-by-id:title;query-width;query-height' 2> /dev/null`
-  title_width, title_height = title_size.split("\n").map(&:to_i)
+  title_width, title_height = title_size.split("\n").map(&:to_f)
   line_height = title_height
   if 1000 < title_width
     length = metadata[:title].length
@@ -38,7 +38,7 @@ def generate_svg(name, template, metadata)
     end
     IO.write(svg_name, template.result_with_hash(metadata))
     title_size =`inkscape #{svg_name} --actions='select-by-id:title;query-width;query-height' 2> /dev/null`
-    title_width, title_height = title_size.split("\n").map(&:to_i)
+    title_width, title_height = title_size.split("\n").map(&:to_f)
 
   end
 
@@ -49,14 +49,14 @@ def generate_svg(name, template, metadata)
   title_y = (630 - 190 - title_height) / 2 + 190 + line_height
 
   widths = `inkscape #{svg_name} --actions='select-by-selector:.tag;query-width' 2> /dev/null`
-  widths = widths.split(",")
+  widths = widths.split(",").map(&:to_f)
   # discard the last element because it will not be used
   widths.pop
   dx = 0
   i = 0
   actions = "select-by-id:title;transform-translate:#{title_x},#{title_y};unselect-by-id:title;"
   for width in widths do
-    dx += width.to_i + 6
+    dx += width + 6
     i +=1
     actions += "select-by-id:tag#{i};transform-translate:#{dx},0;unselect-by-id:tag#{i};"
   end
