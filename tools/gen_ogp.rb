@@ -32,7 +32,7 @@ def generate_svg(name, template, metadata)
   line_height = title_height
   if 1000 < title_width
     length = metadata[:title].length
-    n_parts = (title_width + 1200 - 1) / 1000
+    n_parts = ((title_width + 1200 - 1) / 1000).to_i
     (n_parts - 1).times do |i|
       metadata[:title] = metadata[:title].insert(length * (i + 1) / n_parts, "\n")
     end
