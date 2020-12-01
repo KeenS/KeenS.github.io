@@ -5,8 +5,9 @@ title: "Rustの環境構築（Emacs）"
 ---
 このエントリは[Rust 3 Advent Calendar 2020](https://qiita.com/advent-calendar/2020/rust3)の2日目の記事です。前回はstnaoさんで[Rust,Wasm,Dockerで"hello world"をする MacOs catalina](https://qiita.com/stnao/items/c366cabffa77becdf9ef)でした。
 
-κeenです。そういえばRustの環境構築の記事を最近みかけないなと思ったので書きます。
-それとEmacsのセットアップや開発方法なども記します。
+アドベントカレンダー埋まってないところを埋める担当のκeenです。そういえばRustの環境構築の記事を最近みかけないなと思ったので書きます。
+それと私がEmacs使いなのでEmacsのセットアップや開発方法なども記します。
+
 
 <!--more-->
 
@@ -203,7 +204,10 @@ $ cargo install cargo-edit
 
 あとで紹介するcargo-minor-modeでもサポートがあるのでおすすめです。
 
-# Emacsのセットアップ
+# エディタ（Emacs）のセットアップ
+
+私がEmacs使いなのでEmacsのセットアップ方法を紹介します。
+因みにRustの開発に一番使われているのはVSCodeらしいです。
 
 使ってるパッケージは以下です。
 
