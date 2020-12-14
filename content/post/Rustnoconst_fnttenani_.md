@@ -1,5 +1,5 @@
 ---
-categories: [Rust]
+categories: [Rust, Rust Advent Calendar, Advent Calendar 2020, Advent Calendar]
 date: 2020-12-15T04:26:34+09:00
 title: "Rustのconst fnって何？"
 ---
