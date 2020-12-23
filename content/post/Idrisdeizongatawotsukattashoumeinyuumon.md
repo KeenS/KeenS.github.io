@@ -200,7 +200,7 @@ void : Void -> a
 ド・モルガンの法則はいくつかありますが、まずはこれです。
 
 \\\[
-\lnot(A \lor B) \to (\lnot A \land \lnot B)$
+\lnot(A \lor B) \to (\lnot A \land \lnot B)
 \\\]
 
 この命題をIdrisに対応させると以下の型になります。
@@ -321,7 +321,7 @@ onePlusOneEqualTwo = Refl
 例えば以下のコードはコンパイルエラーになります。
 
 ```idris
-onePlusNEqualNPlusOne : (n: Nat) -> 1 + n = n + 1
+onePlusNEqualNPlusOne : 1 + n = n + 1
 onePlusNEqualNPlusOne = Refl
 ```
 
