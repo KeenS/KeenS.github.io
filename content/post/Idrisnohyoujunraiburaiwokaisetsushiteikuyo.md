@@ -1,7 +1,7 @@
 ---
 categories: [Idris]
 date: 2020-12-27T21:15:10+09:00
-title: "Idrisの標準ライブライを解説していくよ"
+title: "Idrisの標準ライブラリを解説していくよ"
 ---
 
 κeenです。俺たちのAdvent Calendarはまだまだ続くぜ！
