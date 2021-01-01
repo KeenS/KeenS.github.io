@@ -177,6 +177,36 @@ natInd : Not (P Z) -> ((k: Nat) -> Not (P k) -> Not (P (S k))) -> Not (n: Nat **
 
 うまく証明できる方は教えて下さい。
 
+## 追記
+
+形式証明のプロから排中律が必要そうとの示唆をもらいました。
+
+<blockquote class="twitter-tweet"><p lang="ja" dir="ltr">数学的帰納法で無限降下法を証明するのは直観主義論理でできそうに見えるけど，逆はなんか排中律要りそうな気がする（完全に見た目だけで判断しています）</p>&mdash; . (@fetburner) <a href="https://twitter.com/fetburner/status/1344927189909684225?ref_src=twsrc%5Etfw">January 1, 2021</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script> 
+
+排中律を仮定して証明しましょう。
+
+
+``` idris
+lawOfExcludedMiddle : {A: Type} -> Either A (Not A)
+lawOfExcludedMiddle = believe_me "axiom"
+```
+
+すると以下のように再帰を使わずに証明できます。
+
+``` idris
+natInd : (P : Nat -> Type) -> Not (P Z) -> ((k: Nat) -> Not (P k) -> Not (P (S k))) -> Not (n: Nat ** P n)
+natInd P npz step =
+  infDescent sub
+where
+  sub :  (n: Nat) -> P n -> (m : Nat ** (m `LT` n, P m))
+  sub    Z  pz  = absurd $ npz pz
+  sub (S k) psk = case lawOfExcludedMiddle {A = P k} of
+    Left pk   => (k ** (lteRefl, pk))
+    Right npk => absurd $ (step k npk) psk
+```
+
+プロの直感ってすごいですね。
+
 # まとめ
 
 素朴な数学的帰納法を使って発展的な無限降下法を証明しました。
