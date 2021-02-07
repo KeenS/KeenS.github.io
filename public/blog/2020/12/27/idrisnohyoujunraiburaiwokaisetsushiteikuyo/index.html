@@ -488,6 +488,42 @@ interface <span class="kt">Arrow</span> arr <span class="ow">=&gt;</span> <span 
   <span class="nf">loop</span> <span class="ow">:</span> arr <span class="ow">(</span><span class="kt">Pair</span> a c<span class="ow">)</span> <span class="ow">(</span><span class="kt">Pair</span> b c<span class="ow">)</span> <span class="ow">-&gt;</span> arr a b</code></pre></div>
 <p>記号だらけで、個人的にこれを本当に全部覚えてつかいこなしている人がいるのかは疑問に思ってます。</p>
 
+<p><code>Category</code> と <code>Arrow</code> は関数の抽象化を提供しています。
+関数の抽象化しているというのは「普通じゃない」関数とかを定義してもそれを他の関数と同じように扱えるということです。</p>
+
+<p>例えばCPS変換した関数とかですね。</p>
+<div class="highlight"><pre class="chroma"><code class="language-idris" data-lang="idris"><span class="kr">import</span> <span class="nn">Control.Category</span>
+<span class="kr">import</span> <span class="nn">Control.Arrow</span>
+
+
+<span class="kr">record</span> <span class="kt">CpsMorphism</span> r a b <span class="kr">where</span>
+  constructor <span class="kt">Cps</span>
+  <span class="nf">applyCps</span> <span class="ow">:</span> a <span class="ow">-&gt;</span> <span class="ow">((</span>b <span class="ow">-&gt;</span> r<span class="ow">)</span> <span class="ow">-&gt;</span> r<span class="ow">)</span>
+
+<span class="nf">cps</span> <span class="ow">:</span> <span class="ow">(</span>a <span class="ow">-&gt;</span> b<span class="ow">)</span> <span class="ow">-&gt;</span> <span class="ow">(</span>a <span class="ow">-&gt;</span> <span class="ow">(</span>b <span class="ow">-&gt;</span> r<span class="ow">)</span> <span class="ow">-&gt;</span> r<span class="ow">)</span>
+cps f a k <span class="ow">=</span> k <span class="ow">$</span> f a
+
+<span class="nf">cpsCompose</span> <span class="ow">:</span> <span class="ow">(</span>b <span class="ow">-&gt;</span> <span class="ow">((</span>c <span class="ow">-&gt;</span> r<span class="ow">)</span> <span class="ow">-&gt;</span> r<span class="ow">))</span> <span class="ow">-&gt;</span> <span class="ow">(</span>a <span class="ow">-&gt;</span> <span class="ow">((</span>b <span class="ow">-&gt;</span> r<span class="ow">)</span> <span class="ow">-&gt;</span> r<span class="ow">))</span> <span class="ow">-&gt;</span> a <span class="ow">-&gt;</span> <span class="ow">((</span>c <span class="ow">-&gt;</span> r<span class="ow">)</span> <span class="ow">-&gt;</span> r<span class="ow">)</span>
+cpsCompose f g x k <span class="ow">=</span> g x <span class="ow">$</span> <span class="ow">\</span>b <span class="ow">=&gt;</span> f b k
+
+<span class="kt">Category</span> <span class="ow">(</span><span class="kt">CpsMorphism</span> r<span class="ow">)</span> <span class="kr">where</span>
+  id  <span class="ow">=</span> <span class="kt">Cps</span> <span class="ow">$</span> cps id
+  <span class="ow">(.)</span> <span class="ow">(</span><span class="kt">Cps</span> f<span class="ow">)</span> <span class="ow">(</span><span class="kt">Cps</span> g<span class="ow">)</span> <span class="ow">=</span> <span class="kt">Cps</span> <span class="ow">(</span>cpsCompose f g<span class="ow">)</span>
+
+
+<span class="kt">Arrow</span> <span class="ow">(</span><span class="kt">CpsMorphism</span> r<span class="ow">)</span> <span class="kr">where</span>
+  arrow f <span class="ow">=</span> <span class="kt">Cps</span> <span class="ow">(\</span>x, k <span class="ow">=&gt;</span> k <span class="ow">$</span> f x<span class="ow">)</span>
+  first <span class="ow">(</span><span class="kt">Cps</span> f<span class="ow">)</span> <span class="ow">=</span> <span class="kt">Cps</span> <span class="ow">$</span> <span class="ow">\(</span>a, c<span class="ow">)</span>, k <span class="ow">=&gt;</span> f a <span class="ow">(\</span>b <span class="ow">=&gt;</span> k <span class="ow">(</span>b, c<span class="ow">))</span>
+
+<span class="kt">ArrowChoice</span> <span class="ow">(</span><span class="kt">CpsMorphism</span> r<span class="ow">)</span> <span class="kr">where</span>
+  left f                  <span class="ow">=</span> f          <span class="ow">+++</span> <span class="ow">(</span>arrow id<span class="ow">)</span>
+  right f                 <span class="ow">=</span> <span class="ow">(</span>arrow id<span class="ow">)</span> <span class="ow">+++</span> f
+  f           <span class="ow">+++</span> g       <span class="ow">=</span> <span class="ow">(</span>f <span class="ow">&gt;&gt;&gt;</span> <span class="ow">(</span>arrow <span class="kt">Left</span><span class="ow">))</span> <span class="ow">\|/</span> <span class="ow">(</span>g <span class="ow">&gt;&gt;&gt;</span> <span class="ow">(</span>arrow <span class="kt">Right</span><span class="ow">))</span>
+  <span class="ow">(</span><span class="kt">Cps</span> f<span class="ow">)</span>     <span class="ow">\|/</span> <span class="ow">(</span><span class="kt">Cps</span> g<span class="ow">)</span> <span class="ow">=</span>   <span class="kt">Cps</span> <span class="ow">(</span>either f g<span class="ow">)</span>
+
+
+<span class="kt">ArrowApply</span> <span class="ow">(</span><span class="kt">CpsMorphism</span> r<span class="ow">)</span> <span class="kr">where</span>
+  app <span class="ow">=</span> <span class="kt">Cps</span> <span class="ow">$</span> <span class="ow">\(</span><span class="kt">Cps</span> f, x<span class="ow">)</span> <span class="ow">=&gt;</span> f x</code></pre></div>
 <h2 id="control-isomorphism"><code>Control.Isomorphism</code></h2>
 
 <p>同型を表わすデータ型です。
