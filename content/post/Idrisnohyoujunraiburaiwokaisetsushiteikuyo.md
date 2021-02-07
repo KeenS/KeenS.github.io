@@ -511,6 +511,46 @@ interface Arrow arr => ArrowLoop (arr : Type -> Type -> Type) where
 
 記号だらけで、個人的にこれを本当に全部覚えてつかいこなしている人がいるのかは疑問に思ってます。
 
+`Category` と `Arrow` は関数の抽象化を提供しています。
+関数の抽象化しているというのは「普通じゃない」関数とかを定義してもそれを他の関数と同じように扱えるということです。
+
+例えばCPS変換した関数とかですね。
+
+``` idris
+import Control.Category
+import Control.Arrow
+
+
+record CpsMorphism r a b where
+  constructor Cps
+  applyCps : a -> ((b -> r) -> r)
+
+cps : (a -> b) -> (a -> (b -> r) -> r)
+cps f a k = k $ f a
+
+cpsCompose : (b -> ((c -> r) -> r)) -> (a -> ((b -> r) -> r)) -> a -> ((c -> r) -> r)
+cpsCompose f g x k = g x $ \b => f b k
+
+Category (CpsMorphism r) where
+  id  = Cps $ cps id
+  (.) (Cps f) (Cps g) = Cps (cpsCompose f g)
+
+
+Arrow (CpsMorphism r) where
+  arrow f = Cps (\x, k => k $ f x)
+  first (Cps f) = Cps $ \(a, c), k => f a (\b => k (b, c))
+
+ArrowChoice (CpsMorphism r) where
+  left f                  = f          +++ (arrow id)
+  right f                 = (arrow id) +++ f
+  f           +++ g       = (f >>> (arrow Left)) \|/ (g >>> (arrow Right))
+  (Cps f)     \|/ (Cps g) =   Cps (either f g)
+
+
+ArrowApply (CpsMorphism r) where
+  app = Cps $ \(Cps f, x) => f x
+```
+
 ## `Control.Isomorphism`
 
 同型を表わすデータ型です。
