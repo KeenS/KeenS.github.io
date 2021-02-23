@@ -4,7 +4,7 @@ title: "Qiitaのユーザーヒアリングを受けてきました。"
 date: 2013-09-13
 comments: true
 sharing: true
-categories: 
+categories: []
 ---
 今日の夕方、Qiitaのユーザーヒアリングを受けたのでその報告です。
 

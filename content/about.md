@@ -7,7 +7,9 @@ sharing: true
 footer: true
 nopaging: true
 menu: "main"
+categiores: []
 ---
+
 ## Me
 
 - 2011-04 - 2013-03 東京大学理科I類

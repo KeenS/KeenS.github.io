@@ -4,7 +4,7 @@ title: "ブログ開設しました"
 date: 2013-09-01
 comments: true
 sharing: true
-categories: 
+categories: []
 ---
 はじめまして。κeenです。今までLispでblogエンジンを作ってblogを開設したいと思いつつも時間がなかったりWifiアダプタ失くしたりして結局あきらめ、github+octopressでblog作ることにしました。
 

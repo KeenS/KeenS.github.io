@@ -4,7 +4,7 @@ title: "Lisp Meet Up #11でLTしてきました"
 date: 2013-11-29
 comments: true
 sharing: true
-categories: 
+categories: []
 ---
 「Makefile書けない人がMake 4.0触ってみた」での発表です。
 
