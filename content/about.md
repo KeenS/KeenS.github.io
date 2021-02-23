@@ -6,7 +6,6 @@ comments: true
 sharing: true
 footer: true
 nopaging: true
-menu: "main"
 categiores: []
 ---
 
