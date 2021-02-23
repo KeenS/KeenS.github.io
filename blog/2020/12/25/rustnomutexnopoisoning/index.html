@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+    <head>
+        
+        
+        <script async src="https://www.googletagmanager.com/gtag/js?id=UA-43779888-1"></script>
+        <script>
+         window.dataLayer = window.dataLayer || [];
+         function gtag(){dataLayer.push(arguments);}
+         gtag('js', new Date());
+
+         gtag('config', 'UA-43779888-1');
+        </script>
+        
+
+        <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+
+        <meta name="twitter:site" content="@blackenedgold" />
+        <meta name="twitter:title" content="RustのMutexのPoisoning | κeenのHappy Hacκing Blog"/>
+        <meta name="twitter:description" content="このエントリはRust 3 Advent Calendar 2020の16日目の記事です。
+前はbantechさんでactix-webでformいろいろ、後はkaz399さんで2020年 Rust で使える Bluetooth Low Energy ライブラリはどうなってるの (Windows10) - Qiitaでした。
+
+空いている日を埋める担当のκeenです。
+最近RustのMutexのPoisoningについて動向があったので紹介します。" />
+        <meta property="og:title" content="RustのMutexのPoisoning | κeenのHappy Hacκing Blog" />
+        <meta property="og:type" content="article" />
+        <meta property="og:url" content="https://KeenS.github.io/blog/2020/12/25/rustnomutexnopoisoning/" />
+        <meta property="og:description" content="このエントリはRust 3 Advent Calendar 2020の16日目の記事です。
+前はbantechさんでactix-webでformいろいろ、後はkaz399さんで2020年 Rust で使える Bluetooth Low Energy ライブラリはどうなってるの (Windows10) - Qiitaでした。
+
+空いている日を埋める担当のκeenです。
+最近RustのMutexのPoisoningについて動向があったので紹介します。" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta property="og:image" content="https://KeenS.github.io/images/ogp/post/RustnoMutexnoPoisoning.png" />
+        <meta name="twitter:image" content="https://KeenS.github.io/images/ogp/post/RustnoMutexnoPoisoning.png" />
+        
+        <meta property="og:article:published_time" content="2020-12-25 23:08:50 &#43;0900 JST" />
+        <meta property="og:article:modified_time" content="2020-12-25 23:08:50 &#43;0900 JST" />
+        
+        <meta property="og:article:author" content="κeen" />
+
+        <title>RustのMutexのPoisoning | κeenのHappy Hacκing Blog</title>
+        <link rel="stylesheet" href='//fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css' />
+        <link rel="stylesheet" href="https://KeenS.github.io/libraries/normalize.3.0.1.css" />
+        <link rel="stylesheet" href="https://KeenS.github.io/css/liquorice.css" />
+        <link rel="apple-touch-icon" sizes="180x180" href="https://KeenS.github.io/apple-touch-icon.png">
+        <link rel="icon" type="image/png" href="https://KeenS.github.io/favicon-32x32.png" sizes="32x32">
+        <link rel="icon" type="image/png" href="https://KeenS.github.io/favicon-16x16.png" sizes="16x16">
+        <link rel="manifest" href="https://KeenS.github.io/manifest.json">
+        <link rel="mask-icon" href="https://KeenS.github.io/safari-pinned-tab.svg" color="#5bbad5">
+        <meta name="theme-color" content="#ffffff">
+        <link rel="apple-touch-icon-precomposed" href="https://KeenS.github.io/apple-touch-icon-144-precomposed.png" sizes="144x144" />
+        <link rel="stylesheet" href="https://KeenS.github.io/css/syntax-monokai.css" />
+<script type="text/x-mathjax-config">
+ MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
+</script>
+<script async src="//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS_CHTML"></script>
+</script>
+<meta http-equiv="X-UA-Compatible" CONTENT="IE=EmulateIE7" />
+<link rel="stylesheet" href="//unpkg.com/mermaid@7.0.4/dist/mermaid.forest.min.css">
+
+    </head>
+    <body class="li-body">
+
+<header class="li-page-header" id="page-header">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-brand li-left">
+                <a href="https://KeenS.github.io/">κeenのHappy Hacκing Blog</a> | Lispエイリアンの狂想曲</div>
+                <div class="li-menu li-right">
+                    <span class="li-menu-icon" onclick="javascript:toggle('menu');">&#9776;</span>
+                    <ul id="menu2" class="li-menu-items">
+                        
+                            <li><a href="https://KeenS.github.io/about/"> About </a></li>
+                        
+                            <li><a href="https://KeenS.github.io/index.xml"> Atom </a></li>
+                        
+                            <li><a href="https://KeenS.github.io/post/"> Blog </a></li>
+                        
+                            <li><a href="https://KeenS.github.io/slide/"> Slide </a></li>
+                        
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="sixteen columns">
+                <ul id="menu" class="li-menu-items li-menu-mobile">
+                    
+                        <li><a href="https://KeenS.github.io/about/"> About </a></li>
+                    
+                        <li><a href="https://KeenS.github.io/index.xml"> Atom </a></li>
+                    
+                        <li><a href="https://KeenS.github.io/post/"> Blog </a></li>
+                    
+                        <li><a href="https://KeenS.github.io/slide/"> Slide </a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+
+
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <article class="li-article">
+                    <header class="li-article-header">
+                        <h1 class="li-article-title">RustのMutexのPoisoning</h1>
+                        <div class="li-article-meta">
+    <time class="li-article-date">2020-12-25</time>
+    <ul class="li-article-tag">
+    
+        <li>
+            <a href="https://KeenS.github.io/categories/rust">Rust</a>
+        </li>
+    
+        <li>
+            <a href="https://KeenS.github.io/categories/rust-advent-calendar">Rust Advent Calendar</a>
+        </li>
+    
+        <li>
+            <a href="https://KeenS.github.io/categories/advent-calendar-2020">Advent Calendar 2020</a>
+        </li>
+    
+        <li>
+            <a href="https://KeenS.github.io/categories/advent-calendar">Advent Calendar</a>
+        </li>
+    
+</ul>
+
+</div>
+
+                    </header>
+                    <section>
+                        <p>このエントリは<a href="https://qiita.com/advent-calendar/2020/rust3">Rust 3 Advent Calendar 2020</a>の16日目の記事です。
+前はbantechさんで<a href="https://banatech.net/blog/view/46">actix-webでformいろいろ</a>、後はkaz399さんで<a href="https://qiita.com/kaz399/items/efee902888869efec8e3">2020年 Rust で使える Bluetooth Low Energy ライブラリはどうなってるの (Windows10) - Qiita</a>でした。</p>
+
+<p>空いている日を埋める担当のκeenです。
+最近RustのMutexのPoisoningについて動向があったので紹介します。</p>
+
+<p><a href="https://doc.rust-lang.org/std/sync/struct.Mutex.html#method.lock"><code>Mutex::lock</code></a> は以下の型をしています。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">lock</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">LockResult</span><span class="o">&lt;</span><span class="n">MutexGuard</span><span class="o">&lt;</span><span class="na">&#39;_</span><span class="p">,</span><span class="w"> </span><span class="n">T</span><span class="o">&gt;&gt;</span><span class="w">
+</span></code></pre></div>
+<p>ここで <code>LockResult</code> はこう定義されています。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">type</span> <span class="nc">LockResult</span><span class="o">&lt;</span><span class="n">Guard</span><span class="o">&gt;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Result</span><span class="o">&lt;</span><span class="n">Guard</span><span class="p">,</span><span class="w"> </span><span class="n">PoisonError</span><span class="o">&lt;</span><span class="n">Guard</span><span class="o">&gt;&gt;</span><span class="p">;</span><span class="w">
+</span></code></pre></div>
+<p>なにやら <code>PoisonError</code> というのが返っていますね。
+<a href="https://doc.rust-lang.org/std/sync/struct.PoisonError.html">ドキュメント</a>を読んでみましょう。</p>
+
+<p>ロックというのは他のスレッドに割り込まれたくない一連の操作（<a href="https://ja.wikipedia.org/wiki/クリティカルセクション">クリティカルセクション</a>）を保護するのに使いますよね。つまり操作の途中の状態を見られたくない訳です。
+ではその操作の途中でスレッドがパニックしたらどうなるでしょう。
+見られたくない中途半端な状態で処理が止まってしまいます。
+そういう場合にロックを開放するのもロックを掴みっぱなしにするのもどうなの、ということで標準ライブラリの <code>Mutex</code> は「このロックで保護されてる値は中途半端な状態かもよ」というマークをつけます。それがPoisoningです。</p>
+
+<p>以下のコードを走らせるとPoisoningが確認できます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">sync</span>::<span class="p">{</span><span class="n">Arc</span><span class="p">,</span><span class="w"> </span><span class="n">Mutex</span><span class="p">};</span><span class="w">
+</span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">thread</span><span class="p">;</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">mutex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Arc</span>::<span class="n">new</span><span class="p">(</span><span class="n">Mutex</span>::<span class="n">new</span><span class="p">(</span><span class="mi">1</span><span class="p">));</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="c1">// poison the mutex
+</span><span class="c1"></span><span class="kd">let</span><span class="w"> </span><span class="n">c_mutex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Arc</span>::<span class="n">clone</span><span class="p">(</span><span class="o">&amp;</span><span class="n">mutex</span><span class="p">);</span><span class="w">
+</span><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">thread</span>::<span class="n">spawn</span><span class="p">(</span><span class="k">move</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c_mutex</span><span class="p">.</span><span class="n">lock</span><span class="p">().</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
+</span><span class="w">    </span><span class="o">*</span><span class="n">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="p">;</span><span class="w">
+</span><span class="w">    </span><span class="n">panic</span><span class="o">!</span><span class="p">();</span><span class="w">
+</span><span class="w"></span><span class="p">}).</span><span class="n">join</span><span class="p">();</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="k">match</span><span class="w"> </span><span class="n">mutex</span><span class="p">.</span><span class="n">lock</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="nb">Ok</span><span class="p">(</span><span class="n">_</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">unreachable</span><span class="o">!</span><span class="p">(),</span><span class="w">
+</span><span class="w">    </span><span class="nb">Err</span><span class="p">(</span><span class="n">p_err</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">p_err</span><span class="p">.</span><span class="n">get_ref</span><span class="p">();</span><span class="w">
+</span><span class="w">        </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;recovered: {}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">data</span><span class="p">);</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">};</span><span class="w">
+</span></code></pre></div>
+<p>ロックを取ったスレッドがパニックして、ロックが汚染された状態になります。
+それを検知したメインッスレッドでは <code>println!(&quot;recovered: {}&quot;, data)</code> と、エラーから回復します。</p>
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">thread &#39;&lt;unnamed&gt;&#39; panicked at &#39;explicit panic&#39;, poison.rs:12:9
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+recovered: 2</code></pre></div>
+<h1 id="poisoningの問題点">Poisoningの問題点</h1>
+
+<p>2点問題点が指摘されています。</p>
+
+<h2 id="ゼロオーバーヘッド原理">ゼロオーバーヘッド原理</h2>
+
+<p>Poisoning自体はすごく有用なテクニックです。ですが、それを標準ライブラリでやる必要ある？というツッコミです。
+ロックを掴んだままスレッドがパニックしたときに「中途半端な状態」になるケースもあればならないケースもあります。
+これはどういうコードを書いたか次第です。</p>
+
+<p>中途半端にならないケースではPoisoningの処理は無駄になる訳です。
+C++の標語ですが、「ゼロオーバヘッド原理」というのがあります。
+「使ってないもののコストを支払わなくていい」と説明されるように、あらゆる処理は必要な人にしか行なわないようにしようという目標です。
+RustもC++と同じくシステムプログラミング言語ですから必要のないものはできればやらない方がいいですよね。
+その観点からするとPoisoningは余計な処理になってしまう訳です。</p>
+
+<p>ここで「Rustは安全な言語だから仕方がない」という意見があります。
+しかしRustの保証する安全性はプログラムのロジックにバグがないことではなく、メモリ破壊などの未定義動作が起きないということです。
+Poisoningで防げるバグはプログラムのロジックのバグなので、テリトリーが違うのではないかと言われています。</p>
+
+<h2 id="エラーとパニック問題">エラーとパニック問題</h2>
+
+<p>プログラムのエラーには2種類あります。
+1つは予期されたエラー。これはユーザの入力が期待と違うなどの、プログラムを書いている時点で想定されたエラーです。もう1つは予期しないエラー。これは言ってしまえばプログラムのバグです。
+Rustでは前者を <code>Result&lt;T, E&gt;</code> で、 後者をパニックで表現します。</p>
+
+<p>ここでPoisoningを振り返ってみましょう。
+ロックが汚染された状態はスレッドがパニックした場合に起きます。つまりプログラムバグがあった場合ですね。
+ですが、 <code>Mutex::lock</code> が返すのは <code>Result</code> です。想定内のエラーということになっています。
+このパニック → <code>Result</code> の変換はよくないんじゃないのというツッコミです。</p>
+
+<h1 id="今後の話">今後の話</h1>
+
+<p>問題があるとして、そのあとに取れるアクションの可能性は複数あります。
+既にあるAPIだから変えない、Poisoningをやめる、Poisonしてたら <code>Result</code> を返すのではなくパニックする、ロックとPoisoningをそれぞれ別のAPIで提供するなどなど。</p>
+
+<p>Rustの公式でどうしようというサーベイが走っています。</p>
+
+<ul>
+<li><a href="https://blog.rust-lang.org/2020/12/11/lock-poisoning-survey.html">Launching the Lock Poisoning Survey | Rust Blog</a></li>
+<li><a href="https://docs.google.com/forms/d/e/1FAIpQLSehk-GkwoCag_w3YfXDfgeANulR0h5m2d3EzUMQaiY1vRfIEw/viewform">Poisoning Survey</a></li>
+</ul>
+
+<p>期限がいつまでなのかわかりませんが、今のところまだアンケートは回答可能なようなので興味を持った方は回答してみて下さい。</p>
+
+<p>本件についてrust-analyzerの中の人のmatklad氏が大変示唆に富むブログを書いていたので併せて紹介しておきます。</p>
+
+<p><a href="https://matklad.github.io/2020/12/12/notes-on-lock-poisoning.html">Notes On Lock Poisoning</a></p>
+                    </section>
+                </article>
+            </div>
+        </div>
+
+        <div class="row li-author">
+    <div class="sixteen columns">
+        Written by <strong>κeen</strong>
+    </div>
+</div>
+
+
+        <div class="row li-pagination">
+            <div class="eight columns">
+                <div class="li-pagination-previous">
+                    
+                        Later article<br />
+                        <a href="https://KeenS.github.io/blog/2020/12/26/idrisdetadashiimonoidowoteigishitai/"> Idrisで正しいモノイドを定義したい</a>
+                    
+                </div>
+            </div>
+            <div class="eight columns">
+                <div class="li-pagination-next">
+                    
+                        Older article<br />
+                        <a href="https://KeenS.github.io/blog/2020/12/25/idrisnoelaboratorderifurekushon/"> IdrisのElaboratorリフレクションでメタプログラミング</a>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+<footer class="li-page-footer">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-page-footer-legal">
+                    &copy; 2021. All rights reserved. 
+                </div>
+                <div class="li-page-footer-theme">
+                    <span class=""><a href="https://github.com/eliasson/liquorice/">liquorice</a> is a theme for <a href="http://hugo.spf13.com">hugo</a></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<script type="text/javascript">
+ function toggle(id) {
+     var e = document.getElementById(id);
+     e.style.display == 'block' ? e.style.display = 'none' : e.style.display = 'block';
+ }
+</script>
+<script src="https://unpkg.com/mermaid@7.0.4/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({startOnLoad:true
+     });</script>
+
+    </body>
+</html>
+

@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+    <head>
+        
+        
+        <script async src="https://www.googletagmanager.com/gtag/js?id=UA-43779888-1"></script>
+        <script>
+         window.dataLayer = window.dataLayer || [];
+         function gtag(){dataLayer.push(arguments);}
+         gtag('js', new Date());
+
+         gtag('config', 'UA-43779888-1');
+        </script>
+        
+
+        <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+
+        <meta name="twitter:site" content="@blackenedgold" />
+        <meta name="twitter:title" content="epollで作るチャットサーバ | κeenのHappy Hacκing Blog"/>
+        <meta name="twitter:description" content="κeenです。
+普段お世話になってるけど使ったことのないAPIを叩いてみよう、ということで epoll(7) を使ってみます。" />
+        <meta property="og:title" content="epollで作るチャットサーバ | κeenのHappy Hacκing Blog" />
+        <meta property="og:type" content="article" />
+        <meta property="og:url" content="https://KeenS.github.io/blog/2021/02/01/epolldetsukuruchattosa_ba/" />
+        <meta property="og:description" content="κeenです。
+普段お世話になってるけど使ったことのないAPIを叩いてみよう、ということで epoll(7) を使ってみます。" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta property="og:image" content="https://KeenS.github.io/images/ogp/post/epolldetsukuruchattosa_ba.png" />
+        <meta name="twitter:image" content="https://KeenS.github.io/images/ogp/post/epolldetsukuruchattosa_ba.png" />
+        
+        <meta property="og:article:published_time" content="2021-02-01 00:09:28 &#43;0900 JST" />
+        <meta property="og:article:modified_time" content="2021-02-01 00:09:28 &#43;0900 JST" />
+        
+        <meta property="og:article:author" content="κeen" />
+
+        <title>epollで作るチャットサーバ | κeenのHappy Hacκing Blog</title>
+        <link rel="stylesheet" href='//fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css' />
+        <link rel="stylesheet" href="https://KeenS.github.io/libraries/normalize.3.0.1.css" />
+        <link rel="stylesheet" href="https://KeenS.github.io/css/liquorice.css" />
+        <link rel="apple-touch-icon" sizes="180x180" href="https://KeenS.github.io/apple-touch-icon.png">
+        <link rel="icon" type="image/png" href="https://KeenS.github.io/favicon-32x32.png" sizes="32x32">
+        <link rel="icon" type="image/png" href="https://KeenS.github.io/favicon-16x16.png" sizes="16x16">
+        <link rel="manifest" href="https://KeenS.github.io/manifest.json">
+        <link rel="mask-icon" href="https://KeenS.github.io/safari-pinned-tab.svg" color="#5bbad5">
+        <meta name="theme-color" content="#ffffff">
+        <link rel="apple-touch-icon-precomposed" href="https://KeenS.github.io/apple-touch-icon-144-precomposed.png" sizes="144x144" />
+        <link rel="stylesheet" href="https://KeenS.github.io/css/syntax-monokai.css" />
+<script type="text/x-mathjax-config">
+ MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
+</script>
+<script async src="//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS_CHTML"></script>
+</script>
+<meta http-equiv="X-UA-Compatible" CONTENT="IE=EmulateIE7" />
+<link rel="stylesheet" href="//unpkg.com/mermaid@7.0.4/dist/mermaid.forest.min.css">
+
+    </head>
+    <body class="li-body">
+
+<header class="li-page-header" id="page-header">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-brand li-left">
+                <a href="https://KeenS.github.io/">κeenのHappy Hacκing Blog</a> | Lispエイリアンの狂想曲</div>
+                <div class="li-menu li-right">
+                    <span class="li-menu-icon" onclick="javascript:toggle('menu');">&#9776;</span>
+                    <ul id="menu2" class="li-menu-items">
+                        
+                            <li><a href="https://KeenS.github.io/about/"> About </a></li>
+                        
+                            <li><a href="https://KeenS.github.io/index.xml"> Atom </a></li>
+                        
+                            <li><a href="https://KeenS.github.io/post/"> Blog </a></li>
+                        
+                            <li><a href="https://KeenS.github.io/slide/"> Slide </a></li>
+                        
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="sixteen columns">
+                <ul id="menu" class="li-menu-items li-menu-mobile">
+                    
+                        <li><a href="https://KeenS.github.io/about/"> About </a></li>
+                    
+                        <li><a href="https://KeenS.github.io/index.xml"> Atom </a></li>
+                    
+                        <li><a href="https://KeenS.github.io/post/"> Blog </a></li>
+                    
+                        <li><a href="https://KeenS.github.io/slide/"> Slide </a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+
+
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <article class="li-article">
+                    <header class="li-article-header">
+                        <h1 class="li-article-title">epollで作るチャットサーバ</h1>
+                        <div class="li-article-meta">
+    <time class="li-article-date">2021-02-01</time>
+    <ul class="li-article-tag">
+    
+        <li>
+            <a href="https://KeenS.github.io/categories/rust">Rust</a>
+        </li>
+    
+        <li>
+            <a href="https://KeenS.github.io/categories/linux">Linux</a>
+        </li>
+    
+</ul>
+
+</div>
+
+                    </header>
+                    <section>
+                        <p>κeenです。
+普段お世話になってるけど使ったことのないAPIを叩いてみよう、ということで <code>epoll(7)</code> を使ってみます。</p>
+
+<h1 id="epollとは">Epollとは</h1>
+
+<p><a href="https://linuxjm.osdn.jp/html/LDP_man-pages/man7/epoll.7.html"><code>epoll(7)</code></a> はLinux固有のAPIで、パイプやソケットなど出入力に待ちが発生する対象を複数同時に待つ、いわゆるIOの多重化の機能を提供します。
+同等のことをするAPIはUNIX全般で使える <code>select(2)</code> や <code>poll(2)</code> などもありますが、使い勝手やパフォーマンスの面で <code>epoll</code> が勝るようです。</p>
+
+<p>一方で <code>epoll(7)</code> はLinux固有のAPIなのでmacOSやFreeBSDでは使えません。それらのOSでは別のAPI（<code>kqueue(2)</code>）を叩くことになります。
+Rustなら<a href="https://github.com/tokio-rs/mio">mio</a>が互換レイヤとして存在し、LinuxでもBSDでもmacOSでも使えるライブラリになっています。
+mioはTokioなんかで使われていますね。ですが今回はその内側を覗いてみようという趣旨なので直接 <code>epoll(7)</code> を叩きます。。</p>
+
+<h1 id="epoll-api">Epoll API</h1>
+
+<p><code>epoll(7)</code> と呼んでますが、実際のAPIは複数の関数からなります。</p>
+
+<ul>
+<li><code>epoll_create</code> , <code>epoll_create1</code>: 初期化</li>
+<li><code>epoll_ctl</code>: 待つ対象の登録、変更などの操作</li>
+<li><code>epoll_wait</code>, <code>epoll_pwait</code>: 実際に待つ</li>
+</ul>
+
+<p>ざっくりと、Rust風の疑似コードで以下のようなコードを書くことになります。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="c1">// 初期化
+</span><span class="c1"></span><span class="kd">let</span><span class="w"> </span><span class="n">epoll_fd</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">epoll_create</span><span class="p">();</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="c1">// 監視対象の追加
+</span><span class="c1"></span><span class="kd">let</span><span class="w"> </span><span class="n">some_fd</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="cm">/* 監視対象 */</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">some_event</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="cm">/* 監視するイベント + データ */</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">epoll_ctl</span><span class="p">(</span><span class="n">epoll_fd</span><span class="p">,</span><span class="w"> </span><span class="n">EPOLL_CTL_ADD</span><span class="p">,</span><span class="w"> </span><span class="n">some_fd</span><span class="p">,</span><span class="w"> </span><span class="n">some_event</span><span class="p">);</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">events</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="cm">/* バッファの確保 */</span><span class="w">
+</span><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">timeout</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span><span class="p">;</span><span class="w"> </span><span class="c1">// -1 = タイムアウトしない
+</span><span class="c1"></span><span class="w">
+</span><span class="w"></span><span class="k">loop</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">  </span><span class="c1">// 実際に待つ
+</span><span class="c1"></span><span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">epoll_wait</span><span class="p">(</span><span class="n">epoll_fd</span><span class="p">,</span><span class="w"> </span><span class="n">events</span><span class="p">,</span><span class="w"> </span><span class="n">timeout</span><span class="p">);</span><span class="w">
+</span><span class="w">
+</span><span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="n">event</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="n">events</span><span class="p">[</span><span class="mi">0</span><span class="p">..</span><span class="n">n</span><span class="p">]</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="c1">// 何かする
+</span><span class="c1"></span><span class="w">
+</span><span class="w">    </span><span class="c1">// 次に必要なイベントを登録する
+</span><span class="c1"></span><span class="w">    </span><span class="n">epoll_ctl</span><span class="p">(</span><span class="n">epoll_fd</span><span class="p">,</span><span class="w"> </span><span class="n">EPOLL_CTL_ADD</span><span class="p">,</span><span class="w"> </span><span class="n">some_fd</span><span class="p">,</span><span class="w"> </span><span class="n">some_event</span><span class="p">);</span><span class="w">
+</span><span class="w">  </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p><code>epoll_create()</code> してループの中で <code>epoll_wait</code> します。
+そして適宜 <code>epoll_ctl</code> でpoll対象を操作します。</p>
+
+<p><code>fd</code> はFile Descriptorのことです。fdについて知らない方は適当にググって下さい。</p>
+
+<p>ここで、 <code>epoll_wait</code> の結果得られるのは <code>event</code> であることに注目です。
+<code>event</code> の中身はCで以下のように定義されています。</p>
+<div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="k">typedef</span> <span class="k">union</span> <span class="n">epoll_data</span> <span class="p">{</span>
+    <span class="kt">void</span>        <span class="o">*</span><span class="n">ptr</span><span class="p">;</span>
+    <span class="kt">int</span>          <span class="n">fd</span><span class="p">;</span>
+    <span class="n">uint32_t</span>     <span class="n">u32</span><span class="p">;</span>
+    <span class="n">uint64_t</span>     <span class="n">u64</span><span class="p">;</span>
+<span class="p">}</span> <span class="n">epoll_data_t</span><span class="p">;</span>
+
+<span class="k">struct</span> <span class="n">epoll_event</span> <span class="p">{</span>
+    <span class="n">uint32_t</span>     <span class="n">events</span><span class="p">;</span>      <span class="cm">/* Epoll events */</span>
+    <span class="n">epoll_data_t</span> <span class="n">data</span><span class="p">;</span>        <span class="cm">/* User data variable */</span>
+<span class="p">};</span></code></pre></div>
+<p><code>events</code> に何が起きたか（read/writeが可能になった、クライアントが切断した、など）、<code>data</code> に <code>epoll_ctl</code> のときに任意に持たせたデータを保持しています。
+簡単には <code>fd</code> を持たせればそのまま読み書きができます。
+しかし複雑なアプリケーションになるともうちょっと色々データを持たせたくなります。
+そこで <code>data</code> にIDを登録しておいて、アプリケーション側で <code>HashMap</code> なんかで実際のデータを管理することになるでしょう。</p>
+
+<h1 id="epollで作るチャットサーバ-in-rust">Epollで作るチャットサーバ in Rust</h1>
+
+<p>IOの多重化を必要とするアプリケーションとしてチャットサーバをRustで作ってみようと思います。コードはGitHubに上げておくので、この記事内では要点を絞って解説していきます。</p>
+
+<ul>
+<li><a href="https://github.com/KeenS/epoll-chat">epoll-chat</a></li>
+</ul>
+
+<p>作るチャットサーバは簡素なものです。telnetで接続すると名前を聞かれるので答えます。
+するとログインに相当し、以後入力したものがそのまま自分の発言として他のユーザに表示されます。
+入力は1行（telnetなので改行は <code>\r\n</code>）が1単位です。
+ログアウトするにはコネクションを切断します。</p>
+
+<p>このチャットサーバを作っていきましょう。</p>
+
+<h2 id="nix">Nix</h2>
+
+<p>Rustからepollを叩く手段はいくつかありますが、ここでは <a href="https://crates.io/crates/nix"><code>nix</code></a>によるラッパを使います。<a href="https://docs.rs/nix/0.19.1/nix/sys/epoll/index.html"><code>nix::sys::epoll</code> のドキュメント</a>を見て分かるとおり割と素直にRustでラップできているので使い勝手がよいです。</p>
+
+<p>例えば <code>epoll_create</code> は以下のように使えます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">nix</span>::<span class="n">sys</span>::<span class="n">epoll</span>::<span class="o">*</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">epoll_fd</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">epoll_create</span><span class="p">().</span><span class="n">expect</span><span class="p">(</span><span class="s">&#34;can create epoll queue&#34;</span><span class="p">)</span><span class="w">
+</span></code></pre></div>
+<p><code>unsafe</code> がなく、しかも <code>epoll_create</code> はRustの <code>Result</code> として返っているのでRustにとって自然に使えるようになっています。</p>
+
+<h2 id="コネクションの受け付け">コネクションの受け付け</h2>
+
+<p><code>TcpListener</code> でアドレスにバインドしておきます。そして <code>epoll</code> で使うために <code>set_nonblocking</code> しておきます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="kd">let</span><span class="w"> </span><span class="n">listener</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">TcpListener</span>::<span class="n">bind</span><span class="p">(</span><span class="n">addr</span><span class="p">)</span><span class="o">?</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="n">listener</span><span class="p">.</span><span class="n">set_nonblocking</span><span class="p">(</span><span class="kc">true</span><span class="p">)</span><span class="o">?</span><span class="p">;</span><span class="w">
+</span></code></pre></div>
+<p>これも新しいコネクションがきたことを <code>epoll</code> で観察できるので <code>epoll_ctl</code> で監視対象に追加します。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">const</span><span class="w"> </span><span class="n">NEW_CONNECTION</span>: <span class="kt">u64</span> <span class="o">=</span><span class="w"> </span><span class="mi">100</span><span class="p">;</span><span class="w">
+</span><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">event</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">EpollEvent</span>::<span class="n">new</span><span class="p">(</span><span class="n">EpollFlags</span>::<span class="n">EPOLLRDHUP</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">EpollFlags</span>::<span class="n">EPOLLIN</span><span class="p">,</span><span class="w"> </span><span class="n">NEW_CONNECTION</span><span class="p">);</span><span class="w">
+</span><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">fd</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">listener</span><span class="p">.</span><span class="n">as_raw_fd</span><span class="p">()</span><span class="w">
+</span><span class="w"></span><span class="n">epoll_ctl</span><span class="p">(</span><span class="n">epoll_fd</span><span class="p">,</span><span class="w"> </span><span class="n">EpollOp</span>::<span class="n">EpollCtlAdd</span><span class="p">,</span><span class="w"> </span><span class="n">fd</span><span class="p">,</span><span class="w"> </span><span class="n">event</span><span class="p">)</span><span class="w">
+</span><span class="w">    </span><span class="p">.</span><span class="n">map_err</span><span class="p">(</span><span class="o">|</span><span class="n">e</span><span class="o">|</span><span class="w"> </span><span class="n">io</span>::<span class="n">Error</span>::<span class="n">new</span><span class="p">(</span><span class="n">io</span>::<span class="n">ErrorKind</span>::<span class="n">Other</span><span class="p">,</span><span class="w"> </span><span class="n">e</span><span class="p">))</span><span class="w">
+</span></code></pre></div>
+<p>ポイントは以下の2点です。</p>
+
+<ul>
+<li><code>listener</code> のfdを <code>EPOLLRDHUP</code> （切断検知）と <code>EPOLLIN</code> （read ready待ち）で監視対象にいれる</li>
+<li><code>listener</code> に固有のID 、 <code>NEW_CONNECTION</code> を与える</li>
+</ul>
+
+<p>上の <code>epoll(7)</code> の紹介のところでも触れたのですが、 <code>epoll_wait</code> で読み取りできるようになった <code>fd</code> を管理するのにIDを使います。
+ここでは <code>listener</code> の管理をするIDに <code>NEW_CONNECTION</code> を使っています。</p>
+
+<h3 id="メインループ">メインループ</h3>
+
+<p>受け付け準備ができたらメインループを書きましょう。
+新しいコネクションがきたら <code>handle_new_connection</code> を呼ぶことにして、以下のようなコードを書きます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">events</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vec</span><span class="o">!</span><span class="p">[</span><span class="n">EpollEvent</span>::<span class="n">empty</span><span class="p">();</span><span class="w"> </span><span class="mi">1024</span><span class="p">];</span><span class="w">
+</span><span class="w"></span><span class="k">loop</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;clients connected: {}&#34;</span><span class="p">,</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">users</span><span class="p">.</span><span class="n">len</span><span class="p">());</span><span class="w">
+</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">res</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">match</span><span class="w"> </span><span class="n">epoll_wait</span><span class="p">(</span><span class="n">epoll_fd</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">events</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="nb">Ok</span><span class="p">(</span><span class="n">v</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">v</span><span class="p">,</span><span class="w">
+</span><span class="w">        </span><span class="nb">Err</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">panic</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;error during epoll wait: {}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">e</span><span class="p">),</span><span class="w">
+</span><span class="w">    </span><span class="p">};</span><span class="w">
+</span><span class="w">
+</span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">ev</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="o">&amp;</span><span class="n">events</span><span class="p">[</span><span class="mi">0</span><span class="p">..</span><span class="n">res</span><span class="p">]</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="k">match</span><span class="w"> </span><span class="n">ev</span><span class="p">.</span><span class="n">data</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">            </span><span class="n">NEW_CONNECTION</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">handle_new_connection</span><span class="p">(</span><span class="o">&amp;</span><span class="n">listener</span><span class="p">)</span><span class="o">?</span><span class="p">,</span><span class="w">
+</span><span class="w">            </span><span class="n">_</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">todo</span><span class="o">!</span><span class="p">(),</span><span class="w">
+</span><span class="w">        </span><span class="p">}</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>ポイントは以下の3点です。</p>
+
+<ul>
+<li><code>epoll_wait</code> の第2引数に事前に確保した配列を渡す</li>
+<li><code>epoll_wait</code> の第3引数にタイムアウト値を渡す（-1はタイムアウトしない）</li>
+<li><code>epoll_wait</code> の返り値で読み書き可能になった対象の数を知る</li>
+</ul>
+
+<h2 id="ユーザを作る">ユーザを作る</h2>
+
+<p><code>handle_new_connection</code> では <code>accept</code> でコネクションを取り出せます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">handle_new_connection</span><span class="p">(</span><span class="n">listener</span>: <span class="kp">&amp;</span><span class="nc">TcpListener</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">io</span>::<span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="k">match</span><span class="w"> </span><span class="n">listener</span><span class="p">.</span><span class="n">accept</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="nb">Ok</span><span class="p">((</span><span class="n">stream</span><span class="p">,</span><span class="w"> </span><span class="n">addr</span><span class="p">))</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">            </span><span class="n">stream</span><span class="p">.</span><span class="n">set_nonblocking</span><span class="p">(</span><span class="kc">true</span><span class="p">)</span><span class="o">?</span><span class="p">;</span><span class="w">
+</span><span class="w">            </span><span class="c1">// do something
+</span><span class="c1"></span><span class="w">        </span><span class="p">}</span><span class="w">
+</span><span class="w">        </span><span class="nb">Err</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">eprintln</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;couldn&#39;t accept: {}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">e</span><span class="p">),</span><span class="w">
+</span><span class="w">    </span><span class="p">};</span><span class="w">
+</span><span class="w">    </span><span class="nb">Ok</span><span class="p">(())</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>この <code>stream</code> が1クライアントに相当します。これを管理する構造体 <code>User</code> を定義しましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#[derive(Debug)]</span><span class="w">
+</span><span class="w"></span><span class="k">struct</span> <span class="nc">User</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="n">stream</span>: <span class="nc">TcpStream</span><span class="p">,</span><span class="w">
+</span><span class="w">    </span><span class="n">queue</span>: <span class="nc">VecDeque</span><span class="o">&lt;</span><span class="n">Arc</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;&gt;</span><span class="p">,</span><span class="w">
+</span><span class="w">    </span><span class="c1">// and other fields
+</span><span class="c1"></span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="n">User</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="k">fn</span> <span class="nf">new</span><span class="p">(</span><span class="n">stream</span>: <span class="nc">TcpStream</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="n">Self</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">            </span><span class="n">stream</span><span class="p">,</span><span class="w">
+</span><span class="w">            </span><span class="n">queue</span>: <span class="nc">VecDeque</span>::<span class="n">new</span><span class="p">(),</span><span class="w">
+</span><span class="w">            </span><span class="c1">// and other fields
+</span><span class="c1"></span><span class="w">        </span><span class="p">}</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w">    </span><span class="k">fn</span> <span class="nf">push_message</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">message</span>: <span class="nc">Arc</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">queue</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="n">message</span><span class="p">)</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w">    </span><span class="k">fn</span> <span class="nf">pop_message</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">Option</span><span class="o">&lt;</span><span class="n">Arc</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">queue</span><span class="p">.</span><span class="n">pop_front</span><span class="p">()</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w">    </span><span class="k">fn</span> <span class="nf">raw_fd</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">i32</span> <span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">stream</span><span class="p">.</span><span class="n">as_raw_fd</span><span class="p">()</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p><code>User</code> はコネクションとそのユーザに送られるメッセージキューを保持します。
+メッセージを実際に送る部分は後で実装するとして、ひとまず初回接続時のメッセージを出すのはこう書けます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="w">        </span><span class="nb">Ok</span><span class="p">((</span><span class="n">stream</span><span class="p">,</span><span class="w"> </span><span class="n">addr</span><span class="p">))</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">            </span><span class="n">stream</span><span class="p">.</span><span class="n">set_nonblocking</span><span class="p">(</span><span class="kc">true</span><span class="p">)</span><span class="o">?</span><span class="p">;</span><span class="w">
+</span><span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">user</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">User</span>::<span class="n">new</span><span class="p">(</span><span class="n">stream</span><span class="p">);</span><span class="w">
+</span><span class="w">            </span><span class="n">user</span><span class="p">.</span><span class="n">push_message</span><span class="p">(</span><span class="n">Arc</span>::<span class="n">new</span><span class="p">(</span><span class="s">&#34;Enter your name: &#34;</span><span class="p">.</span><span class="n">into</span><span class="p">()));</span><span class="w">
+</span><span class="w">            </span><span class="c1">// and others
+</span><span class="c1"></span><span class="w">        </span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>さて、ここで作った <code>User</code> を <code>epoll</code> に登録したりIDで管理したりしたいのですが、このままだとやりづらいですね。<code>Server</code> 構造体を作りましょう。</p>
+
+<h2 id="サーバを作る">サーバを作る</h2>
+
+<p>ユーザなどを管理するためのサーバを作りましょう。</p>
+
+<h3 id="id生成器">ID生成器</h3>
+
+<p>…とその前に <code>User</code> のIDを管理するためのID生成器を作ります。
+<code>User</code> のIDはメインループで使った <code>NEW_CONNECTION</code> のものと被ってはいけないので <code>NEW_CONNECTION</code> の次の番号から返すようにしておきます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#[derive(Debug)]</span><span class="w">
+</span><span class="w"></span><span class="k">struct</span> <span class="nc">IdGenerator</span><span class="p">(</span><span class="kt">u64</span><span class="p">);</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="n">IdGenerator</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="k">fn</span> <span class="nf">new</span><span class="p">()</span><span class="w"> </span>-&gt; <span class="nc">Self</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="n">Self</span><span class="p">(</span><span class="n">NEW_CONNECTION</span><span class="p">)</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w">    </span><span class="k">fn</span> <span class="nf">next</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">u64</span> <span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="mi">0</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="mi">0</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<h3 id="server"><code>Server</code></h3>
+
+<p><code>Server</code> を以下のように定義します。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#[derive(Debug)]</span><span class="w">
+</span><span class="w"></span><span class="k">struct</span> <span class="nc">Server</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="n">epoll_fd</span>: <span class="nc">RawFd</span><span class="p">,</span><span class="w">
+</span><span class="w">    </span><span class="n">id_gen</span>: <span class="nc">IdGenerator</span><span class="p">,</span><span class="w">
+</span><span class="w">    </span><span class="n">users</span>: <span class="nc">HashMap</span><span class="o">&lt;</span><span class="kt">u64</span><span class="p">,</span><span class="w"> </span><span class="n">User</span><span class="o">&gt;</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>今まで出てきたコードは以下のように整理しておきましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">impl</span><span class="w"> </span><span class="n">User</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="k">fn</span> <span class="nf">new</span><span class="p">()</span><span class="w"> </span>-&gt; <span class="nc">Self</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="n">Self</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">            </span><span class="n">epoll_fd</span>: <span class="nc">epoll_create</span><span class="p">().</span><span class="n">expect</span><span class="p">(</span><span class="s">&#34;can create epoll queue&#34;</span><span class="p">),</span><span class="w">
+</span><span class="w">            </span><span class="n">id_gen</span>: <span class="nc">IdGenerator</span>::<span class="n">new</span><span class="p">(),</span><span class="w">
+</span><span class="w">            </span><span class="n">users</span>: <span class="nc">HashMap</span>::<span class="n">new</span><span class="p">(),</span><span class="w">
+</span><span class="w">        </span><span class="p">}</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w">    </span><span class="k">fn</span> <span class="nf">add_interest</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">fd</span>: <span class="nc">RawFd</span><span class="p">,</span><span class="w"> </span><span class="n">event</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">EpollEvent</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">io</span>::<span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="n">epoll_ctl</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">epoll_fd</span><span class="p">,</span><span class="w"> </span><span class="n">EpollOp</span>::<span class="n">EpollCtlAdd</span><span class="p">,</span><span class="w"> </span><span class="n">fd</span><span class="p">,</span><span class="w"> </span><span class="n">event</span><span class="p">)</span><span class="w">
+</span><span class="w">            </span><span class="p">.</span><span class="n">map_err</span><span class="p">(</span><span class="o">|</span><span class="n">e</span><span class="o">|</span><span class="w"> </span><span class="n">io</span>::<span class="n">Error</span>::<span class="n">new</span><span class="p">(</span><span class="n">io</span>::<span class="n">ErrorKind</span>::<span class="n">Other</span><span class="p">,</span><span class="w"> </span><span class="n">e</span><span class="p">))</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w">
+</span><span class="w">    </span><span class="k">fn</span> <span class="nf">handle_new_connection</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">listener</span>: <span class="kp">&amp;</span><span class="nc">TcpListener</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">io</span>::<span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="c1">// ...
+</span><span class="c1"></span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w">    </span><span class="k">fn</span> <span class="nf">run</span><span class="o">&lt;</span><span class="n">A</span>: <span class="nc">ToSocketAddrs</span><span class="o">&gt;</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">addr</span>: <span class="nc">A</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">io</span>::<span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">listener</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">TcpListener</span>::<span class="n">bind</span><span class="p">(</span><span class="n">addr</span><span class="p">)</span><span class="o">?</span><span class="p">;</span><span class="w">
+</span><span class="w">        </span><span class="n">listener</span><span class="p">.</span><span class="n">set_nonblocking</span><span class="p">(</span><span class="kc">true</span><span class="p">)</span><span class="o">?</span><span class="p">;</span><span class="w">
+</span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">add_interest</span><span class="p">(</span><span class="w">
+</span><span class="w">            </span><span class="n">listener</span><span class="p">.</span><span class="n">as_raw_fd</span><span class="p">(),</span><span class="w">
+</span><span class="w">            </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">listener_read_event</span><span class="p">(</span><span class="n">NEW_CONNECTION</span><span class="p">),</span><span class="w">
+</span><span class="w">        </span><span class="p">)</span><span class="o">?</span><span class="p">;</span><span class="w">
+</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">events</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vec</span><span class="o">!</span><span class="p">[</span><span class="n">EpollEvent</span>::<span class="n">empty</span><span class="p">();</span><span class="w"> </span><span class="mi">1024</span><span class="p">];</span><span class="w">
+</span><span class="w">
+</span><span class="w">        </span><span class="k">loop</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">            </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;clients connected: {}&#34;</span><span class="p">,</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">users</span><span class="p">.</span><span class="n">len</span><span class="p">());</span><span class="w">
+</span><span class="w">
+</span><span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">res</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">match</span><span class="w"> </span><span class="n">epoll_wait</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">epoll_fd</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">events</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">                </span><span class="nb">Ok</span><span class="p">(</span><span class="n">v</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">v</span><span class="p">,</span><span class="w">
+</span><span class="w">                </span><span class="nb">Err</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">panic</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;error during epoll wait: {}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">e</span><span class="p">),</span><span class="w">
+</span><span class="w">            </span><span class="p">};</span><span class="w">
+</span><span class="w">
+</span><span class="w">            </span><span class="k">for</span><span class="w"> </span><span class="n">ev</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="o">&amp;</span><span class="n">events</span><span class="p">[</span><span class="mi">0</span><span class="p">..</span><span class="n">res</span><span class="p">]</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">                </span><span class="k">match</span><span class="w"> </span><span class="n">ev</span><span class="p">.</span><span class="n">data</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">                    </span><span class="n">NEW_CONNECTION</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">handle_new_connection</span><span class="p">(</span><span class="o">&amp;</span><span class="n">listener</span><span class="p">)</span><span class="o">?</span><span class="p">,</span><span class="w">
+</span><span class="w">                    </span><span class="n">_</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">todo</span><span class="o">!</span><span class="p">(),</span><span class="w">
+</span><span class="w">                </span><span class="p">}</span><span class="w">
+</span><span class="w">            </span><span class="p">}</span><span class="w">
+</span><span class="w">        </span><span class="p">}</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>監視するイベントについてもここでまとめてしまっています。
+イベントについては色々ありえるのですが、今回のチャットサーバにおいては2種類しか必要ありません。すなわちコネクションの切断+read readyか、それに加えてwrite readyまで見るかです。それを以下のように定義してしまいます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">listener_read_event</span><span class="p">(</span><span class="n">key</span>: <span class="kt">u64</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">EpollEvent</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="n">EpollEvent</span>::<span class="n">new</span><span class="p">(</span><span class="n">EpollFlags</span>::<span class="n">EPOLLRDHUP</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">EpollFlags</span>::<span class="n">EPOLLIN</span><span class="p">,</span><span class="w"> </span><span class="n">key</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="k">fn</span> <span class="nf">listener_read_write_event</span><span class="p">(</span><span class="n">key</span>: <span class="kt">u64</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">EpollEvent</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="n">EpollEvent</span>::<span class="n">new</span><span class="p">(</span><span class="w">
+</span><span class="w">        </span><span class="n">EpollFlags</span>::<span class="n">EPOLLRDHUP</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">EpollFlags</span>::<span class="n">EPOLLIN</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">EpollFlags</span>::<span class="n">EPOLLOUT</span><span class="p">,</span><span class="w">
+</span><span class="w">        </span><span class="n">key</span><span class="p">,</span><span class="w">
+</span><span class="w">    </span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<h3 id="ユーザの管理">ユーザの管理</h3>
+
+<p>これからユーザを管理するので、そのためのメソッドを生やしておきます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">impl</span><span class="w"> </span><span class="n">Server</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="k">fn</span> <span class="nf">add_user</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">key</span>: <span class="kt">u64</span><span class="p">,</span><span class="w"> </span><span class="n">user</span>: <span class="nc">User</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">users</span><span class="p">.</span><span class="n">insert</span><span class="p">(</span><span class="n">key</span><span class="p">,</span><span class="w"> </span><span class="n">user</span><span class="p">);</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w">    </span><span class="k">fn</span> <span class="nf">watch</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">user</span>: <span class="kp">&amp;</span><span class="nc">User</span><span class="p">,</span><span class="w"> </span><span class="n">event</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">EpollEvent</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">io</span>::<span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="n">epoll_ctl</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">epoll_fd</span><span class="p">,</span><span class="w"> </span><span class="n">EpollOp</span>::<span class="n">EpollCtlAdd</span><span class="p">,</span><span class="w"> </span><span class="n">user</span><span class="p">.</span><span class="n">raw_fd</span><span class="p">(),</span><span class="w"> </span><span class="n">event</span><span class="p">)</span><span class="w">
+</span><span class="w">            </span><span class="p">.</span><span class="n">map_err</span><span class="p">(</span><span class="o">|</span><span class="n">e</span><span class="o">|</span><span class="w"> </span><span class="n">io</span>::<span class="n">Error</span>::<span class="n">new</span><span class="p">(</span><span class="n">io</span>::<span class="n">ErrorKind</span>::<span class="n">Other</span><span class="p">,</span><span class="w"> </span><span class="n">e</span><span class="p">))</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w">    </span><span class="k">fn</span> <span class="nf">change_event</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">user</span>: <span class="kp">&amp;</span><span class="nc">User</span><span class="p">,</span><span class="w"> </span><span class="n">event</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">EpollEvent</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">io</span>::<span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="n">epoll_ctl</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">epoll_fd</span><span class="p">,</span><span class="w"> </span><span class="n">EpollOp</span>::<span class="n">EpollCtlMod</span><span class="p">,</span><span class="w"> </span><span class="n">user</span><span class="p">.</span><span class="n">raw_fd</span><span class="p">(),</span><span class="w"> </span><span class="n">event</span><span class="p">)</span><span class="w">
+</span><span class="w">            </span><span class="p">.</span><span class="n">map_err</span><span class="p">(</span><span class="o">|</span><span class="n">e</span><span class="o">|</span><span class="w"> </span><span class="n">io</span>::<span class="n">Error</span>::<span class="n">new</span><span class="p">(</span><span class="n">io</span>::<span class="n">ErrorKind</span>::<span class="n">Other</span><span class="p">,</span><span class="w"> </span><span class="n">e</span><span class="p">))</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w">    </span><span class="k">fn</span> <span class="nf">unwatch</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">user</span>: <span class="kp">&amp;</span><span class="nc">User</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">io</span>::<span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="n">epoll_ctl</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">epoll_fd</span><span class="p">,</span><span class="w"> </span><span class="n">EpollOp</span>::<span class="n">EpollCtlDel</span><span class="p">,</span><span class="w"> </span><span class="n">user</span><span class="p">.</span><span class="n">raw_fd</span><span class="p">(),</span><span class="w"> </span><span class="nb">None</span><span class="p">)</span><span class="w">
+</span><span class="w">            </span><span class="p">.</span><span class="n">map_err</span><span class="p">(</span><span class="o">|</span><span class="n">e</span><span class="o">|</span><span class="w"> </span><span class="n">io</span>::<span class="n">Error</span>::<span class="n">new</span><span class="p">(</span><span class="n">io</span>::<span class="n">ErrorKind</span>::<span class="n">Other</span><span class="p">,</span><span class="w"> </span><span class="n">e</span><span class="p">))</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p><code>add_user</code> はいいとして、 <code>watch</code> / <code>change_event</code> / <code>unwatch</code> について触れます。これらは全て <code>epoll_ctl</code> のラッパです。
+<code>watch</code> は <code>epoll</code> への登録、 <code>unwatch</code> は登録解除、 <code>change_event</code> は監視イベントの変更を担当し、それぞれ <code>EpollCtlAdd</code> 、 <code>EpollCtlDel</code> 、 <code>EpollCtlMod</code> を呼んでいます。</p>
+
+<p>これらのAPIを使って <code>handle_new_connection</code> を完成させられます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="w">    </span><span class="k">fn</span> <span class="nf">handle_new_connection</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">listener</span>: <span class="kp">&amp;</span><span class="nc">TcpListener</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">io</span>::<span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="k">match</span><span class="w"> </span><span class="n">listener</span><span class="p">.</span><span class="n">accept</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">            </span><span class="nb">Ok</span><span class="p">((</span><span class="n">stream</span><span class="p">,</span><span class="w"> </span><span class="n">addr</span><span class="p">))</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">                </span><span class="n">stream</span><span class="p">.</span><span class="n">set_nonblocking</span><span class="p">(</span><span class="kc">true</span><span class="p">)</span><span class="o">?</span><span class="p">;</span><span class="w">
+</span><span class="w">                </span><span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;new client: {}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">addr</span><span class="p">);</span><span class="w">
+</span><span class="w">                </span><span class="kd">let</span><span class="w"> </span><span class="n">key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">id_gen</span><span class="p">.</span><span class="n">next</span><span class="p">();</span><span class="w">
+</span><span class="w">                </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">user</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">User</span>::<span class="n">new</span><span class="p">(</span><span class="n">stream</span><span class="p">);</span><span class="w">
+</span><span class="w">                </span><span class="n">user</span><span class="p">.</span><span class="n">push_message</span><span class="p">(</span><span class="n">Arc</span>::<span class="n">new</span><span class="p">(</span><span class="s">&#34;Enter your name: &#34;</span><span class="p">.</span><span class="n">into</span><span class="p">()));</span><span class="w">
+</span><span class="w">                </span><span class="bp">self</span><span class="p">.</span><span class="n">watch</span><span class="p">(</span><span class="o">&amp;</span><span class="n">user</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">listener_read_write_event</span><span class="p">(</span><span class="n">key</span><span class="p">))</span><span class="o">?</span><span class="p">;</span><span class="w">
+</span><span class="w">                </span><span class="bp">self</span><span class="p">.</span><span class="n">add_user</span><span class="p">(</span><span class="n">key</span><span class="p">,</span><span class="w"> </span><span class="n">user</span><span class="p">);</span><span class="w">
+</span><span class="w">            </span><span class="p">}</span><span class="w">
+</span><span class="w">            </span><span class="nb">Err</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">eprintln</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;couldn&#39;t accept: {}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">e</span><span class="p">),</span><span class="w">
+</span><span class="w">        </span><span class="p">};</span><span class="w">
+</span><span class="w">        </span><span class="nb">Ok</span><span class="p">(())</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p><code>user</code> を <code>watch</code> していますね。</p>
+
+<h2 id="ユーザイベントを処理する">ユーザイベントを処理する</h2>
+
+<p>ここまでで <code>User</code> を作ってメッセージをキュー入れ、 <code>epoll</code> に登録するところまできました。
+<code>epoll_wait</code> で <code>User</code> も監視できるようになっているので、 <code>User</code> で何か動向があったときの処理も書きましょう。
+処理本体は <code>handle_user_event</code> というメソッドに書くとして、メインループでは以下のように <code>NEW_CONNECTION</code> か否かで処理を振り分けることになるでしょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">loop</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="c1">// ...
+</span><span class="c1"></span><span class="w">
+</span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">ev</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="o">&amp;</span><span class="n">events</span><span class="p">[</span><span class="mi">0</span><span class="p">..</span><span class="n">res</span><span class="p">]</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="k">match</span><span class="w"> </span><span class="n">ev</span><span class="p">.</span><span class="n">data</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">            </span><span class="n">NEW_CONNECTION</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">handle_new_connection</span><span class="p">(</span><span class="o">&amp;</span><span class="n">listener</span><span class="p">)</span><span class="o">?</span><span class="p">,</span><span class="w">
+</span><span class="w">            </span><span class="c1">// ここ↓↓
+</span><span class="c1"></span><span class="w">            </span><span class="n">_</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">handle_user_event</span><span class="p">(</span><span class="o">*</span><span class="n">ev</span><span class="p">)</span><span class="o">?</span><span class="p">,</span><span class="w">
+</span><span class="w">        </span><span class="p">}</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>そして肝心の <code>handle_user_event</code> についてです。
+このメソッドユーザに動向があったときに毎回呼ばれるので内部でどのイベントで呼ばれたのかで処理を振り分けることにします。
+中々本丸に到達しませんね。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="w">    </span><span class="k">fn</span> <span class="nf">handle_user_event</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">ev</span>: <span class="nc">EpollEvent</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">io</span>::<span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ev</span><span class="p">.</span><span class="n">data</span><span class="p">();</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">events</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ev</span><span class="p">.</span><span class="n">events</span><span class="p">();</span><span class="w">
+</span><span class="w">
+</span><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="kd">let</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="k">mut</span><span class="w"> </span><span class="n">user</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">users</span><span class="p">.</span><span class="n">remove</span><span class="p">(</span><span class="o">&amp;</span><span class="n">key</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="n">events</span><span class="p">.</span><span class="n">contains</span><span class="p">(</span><span class="n">EpollFlags</span>::<span class="n">EPOLLIN</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">                </span><span class="bp">self</span><span class="p">.</span><span class="n">handle_user_readable</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">user</span><span class="p">)</span><span class="o">?</span><span class="p">;</span><span class="w">
+</span><span class="w">            </span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="n">events</span><span class="p">.</span><span class="n">contains</span><span class="p">(</span><span class="n">EpollFlags</span>::<span class="n">EPOLLOUT</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">                </span><span class="bp">self</span><span class="p">.</span><span class="n">handle_user_writable</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">user</span><span class="p">,</span><span class="w"> </span><span class="n">key</span><span class="p">)</span><span class="o">?</span><span class="p">;</span><span class="w">
+</span><span class="w">            </span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="n">events</span><span class="p">.</span><span class="n">contains</span><span class="p">(</span><span class="n">EpollFlags</span>::<span class="n">EPOLLRDHUP</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">                </span><span class="bp">self</span><span class="p">.</span><span class="n">handle_user_closed</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">user</span><span class="p">)</span><span class="o">?</span><span class="p">;</span><span class="w">
+</span><span class="w">            </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">                </span><span class="bp">self</span><span class="p">.</span><span class="n">add_user</span><span class="p">(</span><span class="n">key</span><span class="p">,</span><span class="w"> </span><span class="n">user</span><span class="p">)</span><span class="w">
+</span><span class="w">            </span><span class="p">}</span><span class="w">
+</span><span class="w">        </span><span class="p">}</span><span class="w">
+</span><span class="w">        </span><span class="nb">Ok</span><span class="p">(())</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p>ところでこのコード、 <code>if { ... } else if { ... }</code> ではなく <code>if { ... }</code> の連続である点に注意して下さい。
+<code>User</code> が同時にreadableかつwritableになることもあるので複数のイベントを同時に処理します。</p>
+
+<p>それではwritableの場合の処理に進みましょう。 <code>User</code> がwritableになったらwritableのコールバックを呼びます。そしてキューが空になっていたらwritableの購読をやめます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="w">    </span><span class="k">fn</span> <span class="nf">handle_user_writable</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">user</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">User</span><span class="p">,</span><span class="w"> </span><span class="n">key</span>: <span class="kt">u64</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">io</span>::<span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="n">user</span><span class="p">.</span><span class="n">write_cb</span><span class="p">()</span><span class="o">?</span><span class="p">;</span><span class="w">
+</span><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="n">user</span><span class="p">.</span><span class="n">queue</span><span class="p">.</span><span class="n">is_empty</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">            </span><span class="bp">self</span><span class="p">.</span><span class="n">change_event</span><span class="p">(</span><span class="o">&amp;</span><span class="n">user</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">listener_read_event</span><span class="p">(</span><span class="n">key</span><span class="p">))</span><span class="o">?</span><span class="p">;</span><span class="w">
+</span><span class="w">        </span><span class="p">}</span><span class="w">
+</span><span class="w">        </span><span class="nb">Ok</span><span class="p">(())</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p><code>User::write_cb</code> はキューにあるメッセージを書けるだけ書くだけです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="w">    </span><span class="k">fn</span> <span class="nf">write_cb</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">io</span>::<span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="k">while</span><span class="w"> </span><span class="kd">let</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">pop_message</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">            </span><span class="k">match</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">stream</span><span class="p">.</span><span class="n">write</span><span class="p">(</span><span class="n">msg</span><span class="p">.</span><span class="n">as_bytes</span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">                </span><span class="nb">Ok</span><span class="p">(</span><span class="n">_</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">(),</span><span class="w">
+</span><span class="w">                </span><span class="nb">Err</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">e</span><span class="p">.</span><span class="n">kind</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">io</span>::<span class="n">ErrorKind</span>::<span class="n">WouldBlock</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="k">break</span><span class="p">,</span><span class="w">
+</span><span class="w">                </span><span class="nb">Err</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">eprintln</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;could not write message to {:?}, {}&#34;</span><span class="p">,</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">name</span><span class="p">,</span><span class="w"> </span><span class="n">e</span><span class="p">),</span><span class="w">
+</span><span class="w">            </span><span class="p">};</span><span class="w">
+</span><span class="w">        </span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w">        </span><span class="nb">Ok</span><span class="p">(())</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+<p><code>set_nonblocking</code> しているのでブロックしそうになったら（＝OS内部のバッファが一杯になったら） <code>WouldBlock</code> が返ります。そうしたら書き出しを止めて次にバッファが空になるのを <code>epoll_wait</code> で待つようにします。</p>
+
+<p>ざっとこういう流れで <code>epoll</code> を使っていきます。</p>
+
+<p><code>handle_user_readable</code> については状態を持っていてややこしいのでこの記事では触れないことにします。<code>handle_user_closed</code> は自明なので気にしなくていいですよね。</p>
+
+<p>書き終わったら実行してみましょう。</p>
+
+<h2 id="動作例">動作例</h2>
+
+<p>サーバとクライアント2つがいるのでターミナル（A、B、C）を2つ開きます。</p>
+
+<p>まずはターミナルCでサーバを立てます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">$ cargo run
+    Finished dev [unoptimized + debuginfo] target(s) in 0.00s
+     Running `target/debug/epoll-chat`
+clients connected: 0</code></pre></div>
+<p>ターミナルAでAliceをログインさせましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">$ telnet localhost 8000
+Trying 127.0.0.1...
+Connected to localhost.
+Escape character is &#39;^]&#39;.
+Enter your name: alice</code></pre></div>
+<p>ターミナルBでBobをログインさせます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">$ telnet localhost 8000
+Trying 127.0.0.1...
+Connected to localhost.
+Escape character is &#39;^]&#39;.
+Enter your name: bob</code></pre></div>
+<p>あとはなんか適当に会話するとチャットっぽくなります。
+tmuxで左右分割をしたターミナルでの動作例を貼っておきます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">$ telnet localhost 8000         │$ telnet localhost 8000
+Trying 127.0.0.1...             │Trying 127.0.0.1...
+Connected to localhost.         │Connected to localhost.
+Escape character is &#39;^]&#39;.       │Escape character is &#39;^]&#39;.
+Enter your name: alice          │Enter your name: bob
+bob: hello                      │hello
+hello, I&#39;m Alice                │alice: hello, I&#39;m Alice
+bob: I&#39;m Bob                    │I&#39;m Bob
+bob: bye                        │bye
+^]                              │^]
+telnet&gt; Connection closed.      │telnet&gt; Connection closed.</code></pre></div>
+<p>こんな具合にチャットができます。</p>
+
+<h1 id="まとめ">まとめ</h1>
+
+<p>IOの多重化をしてくれるEpoll APIを使ってチャットサーバを作りました。ざっくりと <code>epoll_create</code> で用意したfdに監視したいfdを <code>epoll_ctl</code> で登録し、 <code>epoll_wait</code> で待つループを書けば作れました。
+関連するURLを貼っておきます。</p>
+
+<ul>
+<li><a href="https://github.com/KeenS/epoll-chat">epoll-chat</a>：今回のコード</li>
+<li><a href="https://zupzup.org/epoll-with-rust/">Basic non-blocking IO using epoll in Rust - zupzup</a>：今回参考にした記事</li>
+</ul>
+
+<p>また、Epoll APIに関連していくつか面白fdを作れるAPIが存在するようです。</p>
+
+<ul>
+<li><a href="http://linuxjm.osdn.jp/html/LDP_man-pages/man2/timerfd_create.2.html">timerfd</a></li>
+<li><a href="http://linuxjm.osdn.jp/html/LDP_man-pages/man2/signalfd.2.html">signalfd</a></li>
+<li><a href="http://linuxjm.osdn.jp/html/LDP_man-pages/man2/eventfd.2.html">eventfd</a></li>
+</ul>
+
+<p>興味のある方は触ってみて下さい。</p>
+                    </section>
+                </article>
+            </div>
+        </div>
+
+        <div class="row li-author">
+    <div class="sixteen columns">
+        Written by <strong>κeen</strong>
+    </div>
+</div>
+
+
+        <div class="row li-pagination">
+            <div class="eight columns">
+                <div class="li-pagination-previous">
+                    
+                        Later article<br />
+                        <a href="https://KeenS.github.io/blog/2021/02/08/io_uringdekousokuioshori___/"> io_uringで高速IO処理（？）</a>
+                    
+                </div>
+            </div>
+            <div class="eight columns">
+                <div class="li-pagination-next">
+                    
+                        Older article<br />
+                        <a href="https://KeenS.github.io/blog/2021/01/04/future_of_proguramming_languages/"> プログラミング言語の未来はどうなるか</a>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+<footer class="li-page-footer">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-page-footer-legal">
+                    &copy; 2021. All rights reserved. 
+                </div>
+                <div class="li-page-footer-theme">
+                    <span class=""><a href="https://github.com/eliasson/liquorice/">liquorice</a> is a theme for <a href="http://hugo.spf13.com">hugo</a></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<script type="text/javascript">
+ function toggle(id) {
+     var e = document.getElementById(id);
+     e.style.display == 'block' ? e.style.display = 'none' : e.style.display = 'block';
+ }
+</script>
+<script src="https://unpkg.com/mermaid@7.0.4/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({startOnLoad:true
+     });</script>
+
+    </body>
+</html>
+

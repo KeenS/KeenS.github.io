@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+    <head>
+        
+        
+        <script async src="https://www.googletagmanager.com/gtag/js?id=UA-43779888-1"></script>
+        <script>
+         window.dataLayer = window.dataLayer || [];
+         function gtag(){dataLayer.push(arguments);}
+         gtag('js', new Date());
+
+         gtag('config', 'UA-43779888-1');
+        </script>
+        
+
+        <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+
+        <meta name="twitter:site" content="@blackenedgold" />
+        <meta name="twitter:title" content="IdrisのFFIとCodegen（C、JavaScript） | κeenのHappy Hacκing Blog"/>
+        <meta name="twitter:description" content="このエントリはIdris Advent Calendar 2020の24日目の記事です。
+前はhiropon21さんでSnocList recursive viewを型駆動開発してみよう in Idris2 でした。
+Idris2は1と比べて型システムが微妙に変わっており、ところどころ 0 a のようにその値を使える回数が表示されていたりしますね。
+
+κeenです。今回はIdrisのFFIとCodegenについて触れたいと思います。" />
+        <meta property="og:title" content="IdrisのFFIとCodegen（C、JavaScript） | κeenのHappy Hacκing Blog" />
+        <meta property="og:type" content="article" />
+        <meta property="og:url" content="https://KeenS.github.io/blog/2020/12/24/idrisnoffitocodegen_c_javascript_/" />
+        <meta property="og:description" content="このエントリはIdris Advent Calendar 2020の24日目の記事です。
+前はhiropon21さんでSnocList recursive viewを型駆動開発してみよう in Idris2 でした。
+Idris2は1と比べて型システムが微妙に変わっており、ところどころ 0 a のようにその値を使える回数が表示されていたりしますね。
+
+κeenです。今回はIdrisのFFIとCodegenについて触れたいと思います。" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta property="og:image" content="https://KeenS.github.io/images/ogp/post/IdrisnoFFItoCodegen_C_JavaScript_.png" />
+        <meta name="twitter:image" content="https://KeenS.github.io/images/ogp/post/IdrisnoFFItoCodegen_C_JavaScript_.png" />
+        
+        <meta property="og:article:published_time" content="2020-12-24 20:48:08 &#43;0900 JST" />
+        <meta property="og:article:modified_time" content="2020-12-24 20:48:08 &#43;0900 JST" />
+        
+        <meta property="og:article:author" content="κeen" />
+
+        <title>IdrisのFFIとCodegen（C、JavaScript） | κeenのHappy Hacκing Blog</title>
+        <link rel="stylesheet" href='//fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css' />
+        <link rel="stylesheet" href="https://KeenS.github.io/libraries/normalize.3.0.1.css" />
+        <link rel="stylesheet" href="https://KeenS.github.io/css/liquorice.css" />
+        <link rel="apple-touch-icon" sizes="180x180" href="https://KeenS.github.io/apple-touch-icon.png">
+        <link rel="icon" type="image/png" href="https://KeenS.github.io/favicon-32x32.png" sizes="32x32">
+        <link rel="icon" type="image/png" href="https://KeenS.github.io/favicon-16x16.png" sizes="16x16">
+        <link rel="manifest" href="https://KeenS.github.io/manifest.json">
+        <link rel="mask-icon" href="https://KeenS.github.io/safari-pinned-tab.svg" color="#5bbad5">
+        <meta name="theme-color" content="#ffffff">
+        <link rel="apple-touch-icon-precomposed" href="https://KeenS.github.io/apple-touch-icon-144-precomposed.png" sizes="144x144" />
+        <link rel="stylesheet" href="https://KeenS.github.io/css/syntax-monokai.css" />
+<script type="text/x-mathjax-config">
+ MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
+</script>
+<script async src="//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS_CHTML"></script>
+</script>
+<meta http-equiv="X-UA-Compatible" CONTENT="IE=EmulateIE7" />
+<link rel="stylesheet" href="//unpkg.com/mermaid@7.0.4/dist/mermaid.forest.min.css">
+
+    </head>
+    <body class="li-body">
+
+<header class="li-page-header" id="page-header">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-brand li-left">
+                <a href="https://KeenS.github.io/">κeenのHappy Hacκing Blog</a> | Lispエイリアンの狂想曲</div>
+                <div class="li-menu li-right">
+                    <span class="li-menu-icon" onclick="javascript:toggle('menu');">&#9776;</span>
+                    <ul id="menu2" class="li-menu-items">
+                        
+                            <li><a href="https://KeenS.github.io/about/"> About </a></li>
+                        
+                            <li><a href="https://KeenS.github.io/index.xml"> Atom </a></li>
+                        
+                            <li><a href="https://KeenS.github.io/post/"> Blog </a></li>
+                        
+                            <li><a href="https://KeenS.github.io/slide/"> Slide </a></li>
+                        
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="sixteen columns">
+                <ul id="menu" class="li-menu-items li-menu-mobile">
+                    
+                        <li><a href="https://KeenS.github.io/about/"> About </a></li>
+                    
+                        <li><a href="https://KeenS.github.io/index.xml"> Atom </a></li>
+                    
+                        <li><a href="https://KeenS.github.io/post/"> Blog </a></li>
+                    
+                        <li><a href="https://KeenS.github.io/slide/"> Slide </a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+
+
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <article class="li-article">
+                    <header class="li-article-header">
+                        <h1 class="li-article-title">IdrisのFFIとCodegen（C、JavaScript）</h1>
+                        <div class="li-article-meta">
+    <time class="li-article-date">2020-12-24</time>
+    <ul class="li-article-tag">
+    
+        <li>
+            <a href="https://KeenS.github.io/categories/idris">Idris</a>
+        </li>
+    
+        <li>
+            <a href="https://KeenS.github.io/categories/idris-advent-calendar">Idris Advent Calendar</a>
+        </li>
+    
+        <li>
+            <a href="https://KeenS.github.io/categories/advent-calendar-2020">Advent Calendar 2020</a>
+        </li>
+    
+        <li>
+            <a href="https://KeenS.github.io/categories/advent-calendar">Advent Calendar</a>
+        </li>
+    
+</ul>
+
+</div>
+
+                    </header>
+                    <section>
+                        <p>このエントリは<a href="https://qiita.com/advent-calendar/2020/idris">Idris Advent Calendar 2020</a>の24日目の記事です。
+前はhiropon21さんで<a href="https://zenn.dev/hiropon21/articles/d9331813644265">SnocList recursive viewを型駆動開発してみよう in Idris2 </a>でした。
+Idris2は1と比べて型システムが微妙に変わっており、ところどころ <code>0 a</code> のようにその値を使える回数が表示されていたりしますね。</p>
+
+<p>κeenです。今回はIdrisのFFIとCodegenについて触れたいと思います。</p>
+
+<h1 id="c-codegen">C Codegen</h1>
+
+<p>いままであまり触れてきませんでしたが、Idrisは裏でCのコードを生成し、Cコンパイラがバイナリを作っています。コンパイラオプションをいじることでそれを垣間見ることができます。</p>
+
+<p>簡単なコードを書いて実験してみましょう。
+<code>codegen.idr</code> という名前でファイルを保存します。</p>
+<div class="highlight"><pre class="chroma"><code class="language-idris" data-lang="idris"><span class="nf">main</span> <span class="ow">:</span> <span class="kt">IO</span> <span class="ow">()</span>
+main <span class="ow">=</span> putStrLn <span class="s">&#34;Hello&#34;</span></code></pre></div>
+<p>コンパイラに <code>-S</code> （<code>--codegenonly</code>）オプションを渡すことで生成したCコードがみれます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">$ idris -S codegen.idr -o codegen.c
+$ ls codegen.c
+codegen.c</code></pre></div>
+<p>中身を覗いてみましょう。長いので一部省略します。</p>
+<div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="cp">#include</span> <span class="cpf">&#34;math.h&#34;</span><span class="cp">
+</span><span class="cp">#include</span> <span class="cpf">&#34;idris_rts.h&#34;</span><span class="cp">
+</span><span class="cp">#include</span> <span class="cpf">&#34;idris_bitstring.h&#34;</span><span class="cp">
+</span><span class="cp">#include</span> <span class="cpf">&#34;idris_stdfgn.h&#34;</span><span class="cp">
+</span><span class="cp"></span><span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_assert_95_unreachable</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_call_95__95_IO</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_idris_95_crash</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_io_95_bind</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_io_95_pure</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_Main_46_main</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_mkForeignPrim</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_prim_95__95_asPtr</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_prim_95__95_eqManagedPtr</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_prim_95__95_eqPtr</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_prim_95__95_managedNull</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_prim_95__95_null</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_prim_95__95_peek16</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_prim_95__95_peek32</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_prim_95__95_peek64</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_prim_95__95_peek8</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_prim_95__95_peekDouble</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_prim_95__95_peekPtr</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_prim_95__95_peekSingle</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_prim_95__95_poke16</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_prim_95__95_poke32</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_prim_95__95_poke64</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_prim_95__95_poke8</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_prim_95__95_pokeDouble</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_prim_95__95_pokePtr</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_prim_95__95_pokeSingle</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_prim_95__95_ptrOffset</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_prim_95__95_readChars</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_prim_95__95_readFile</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_prim_95__95_registerPtr</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_prim_95__95_sizeofPtr</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_prim_95__95_stderr</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_prim_95__95_stdin</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_prim_95__95_stdout</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_prim_95__95_vm</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_prim_95__95_writeFile</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_prim_95__95_writeString</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_prim_95_io_95_bind</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_run_95__95_IO</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_unsafePerformPrimIO</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_world</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris__123_APPLY_95_0_125_</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris__123_APPLY2_95_0_125_</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris__123_EVAL_95_0_125_</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris__123_runMain_95_0_125_</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_io_95_bind_95_IO_95__95_idr_95_108_95_34_95_108_95_36_95_case</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span><span class="p">);</span>
+
+<span class="c1">// ....
+</span><span class="c1"></span>
+<span class="kt">void</span><span class="o">*</span> <span class="nf">_idris_Main_46_main</span><span class="p">(</span><span class="n">VM</span><span class="o">*</span> <span class="n">vm</span><span class="p">,</span> <span class="n">VAL</span><span class="o">*</span> <span class="n">oldbase</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">INITFRAME</span><span class="p">;</span>
+<span class="nl">loop</span><span class="p">:</span>
+    <span class="n">RESERVE</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+    <span class="n">ADDTOP</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+    <span class="n">LOC</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">=</span> <span class="n">MKSTR</span><span class="p">(</span><span class="n">vm</span><span class="p">,</span> <span class="s">&#34;Hello&#34;&#34;</span><span class="se">\x0a</span><span class="s">&#34;&#34;&#34;</span><span class="p">);</span>
+    <span class="n">LOC</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">=</span> <span class="n">MKINT</span><span class="p">((</span><span class="n">i_int</span><span class="p">)(</span><span class="n">idris_writeStr</span><span class="p">(</span><span class="n">stdout</span><span class="p">,</span><span class="n">GETSTR</span><span class="p">(</span><span class="n">LOC</span><span class="p">(</span><span class="mi">1</span><span class="p">)))));</span>
+    <span class="n">RVAL</span> <span class="o">=</span> <span class="n">NULL_CON</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
+    <span class="n">TOPBASE</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
+    <span class="n">REBASE</span><span class="p">;</span>
+<span class="p">}</span>
+
+
+<span class="o">//</span> <span class="p">...</span></code></pre></div>
+<p>典型的なCコードジェネレータですね。</p>
+
+<p>因みにここで使われている <code>idris_writeStr</code> は <code>idris_stdfgn.c</code> で定義されていて、以下のような実装になっています。</p>
+<div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="kt">int</span> <span class="nf">idris_writeStr</span><span class="p">(</span><span class="kt">void</span><span class="o">*</span> <span class="n">h</span><span class="p">,</span> <span class="kt">char</span><span class="o">*</span> <span class="n">str</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">FILE</span><span class="o">*</span> <span class="n">f</span> <span class="o">=</span> <span class="p">(</span><span class="n">FILE</span><span class="o">*</span><span class="p">)</span><span class="n">h</span><span class="p">;</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">fputs</span><span class="p">(</span><span class="n">str</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span>
+    <span class="p">}</span>
+<span class="p">}</span></code></pre></div>
+<p>意外と素直な実装です。
+その他大文字のものはマクロ（や関数）で定義されています。</p>
+<div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="cp">#define ADDTOP(x) vm-&gt;valstack_top += (x)</span></code></pre></div>
+<h1 id="javascript-codegen">JavaScript Codegen</h1>
+
+<p>Cのコードを吐くのがデフォルトの挙動ですが、別のコードジェネレータを使うこともできます。
+コードジェネレータ自体はプラグインとして作れるのでサードパーティも含めれば色々あるのですが、コンパイラに同梱されているものにJavaScriptがあります。</p>
+
+<p>こちらもコード生成してみましょう。 <code>--codegen javascript</code> をつけるとJavaScriptのコードを吐いてくれます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">$ idris --codegen javascript -S codegen.idr -o codegen.js</code></pre></div>
+<p>JavaScriptのバックエンドの方は比較的小さいのでそのまま貼ってみます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-javascript" data-lang="javascript"><span class="s2">&#34;use strict&#34;</span><span class="p">;</span>
+
+<span class="p">(</span><span class="kd">function</span><span class="p">(){</span>
+
+<span class="kr">const</span> <span class="nx">$JSRTS</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="k">throw</span><span class="o">:</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">x</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">throw</span> <span class="nx">x</span><span class="p">;</span>
+    <span class="p">},</span>
+    <span class="nx">Lazy</span><span class="o">:</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">e</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">this</span><span class="p">.</span><span class="nx">js_idris_lazy_calc</span> <span class="o">=</span> <span class="nx">e</span><span class="p">;</span>
+        <span class="k">this</span><span class="p">.</span><span class="nx">js_idris_lazy_val</span> <span class="o">=</span> <span class="k">void</span> <span class="mi">0</span><span class="p">;</span>
+    <span class="p">},</span>
+    <span class="nx">force</span><span class="o">:</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">x</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">if</span> <span class="p">(</span><span class="nx">x</span> <span class="o">===</span> <span class="kc">undefined</span> <span class="o">||</span> <span class="nx">x</span><span class="p">.</span><span class="nx">js_idris_lazy_calc</span> <span class="o">===</span> <span class="kc">undefined</span><span class="p">)</span> <span class="p">{</span>
+            <span class="k">return</span> <span class="nx">x</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+            <span class="k">if</span> <span class="p">(</span><span class="nx">x</span><span class="p">.</span><span class="nx">js_idris_lazy_val</span> <span class="o">===</span> <span class="kc">undefined</span><span class="p">)</span> <span class="p">{</span>
+                <span class="nx">x</span><span class="p">.</span><span class="nx">js_idris_lazy_val</span> <span class="o">=</span> <span class="nx">x</span><span class="p">.</span><span class="nx">js_idris_lazy_calc</span><span class="p">()</span>
+            <span class="p">}</span>
+            <span class="k">return</span> <span class="nx">x</span><span class="p">.</span><span class="nx">js_idris_lazy_val</span>
+        <span class="p">}</span>
+    <span class="p">},</span>
+    <span class="nx">prim_strSubstr</span><span class="o">:</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">offset</span><span class="p">,</span> <span class="nx">len</span><span class="p">,</span> <span class="nx">str</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="nx">str</span><span class="p">.</span><span class="nx">substr</span><span class="p">(</span><span class="nb">Math</span><span class="p">.</span><span class="nx">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nx">offset</span><span class="p">),</span> <span class="nb">Math</span><span class="p">.</span><span class="nx">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nx">len</span><span class="p">))</span>
+    <span class="p">}</span>
+<span class="p">};</span>
+<span class="nx">$JSRTS</span><span class="p">.</span><span class="nx">prim_systemInfo</span> <span class="o">=</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">index</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">switch</span> <span class="p">(</span><span class="nx">index</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">case</span> <span class="mi">0</span><span class="o">:</span>
+            <span class="k">return</span> <span class="s2">&#34;javascript&#34;</span><span class="p">;</span>
+        <span class="k">case</span> <span class="mi">1</span><span class="o">:</span>
+            <span class="k">return</span> <span class="nx">navigator</span><span class="p">.</span><span class="nx">platform</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="k">return</span> <span class="s2">&#34;&#34;</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="nx">$JSRTS</span><span class="p">.</span><span class="nx">prim_writeStr</span> <span class="o">=</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">x</span><span class="p">)</span> <span class="p">{</span> <span class="k">return</span> <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">x</span><span class="p">)</span> <span class="p">};</span>
+
+<span class="nx">$JSRTS</span><span class="p">.</span><span class="nx">prim_readStr</span> <span class="o">=</span> <span class="kd">function</span> <span class="p">()</span> <span class="p">{</span> <span class="k">return</span> <span class="nx">prompt</span><span class="p">(</span><span class="s1">&#39;Prelude.getLine&#39;</span><span class="p">)</span> <span class="p">};</span>
+
+<span class="nx">$JSRTS</span><span class="p">.</span><span class="nx">die</span> <span class="o">=</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">message</span><span class="p">)</span> <span class="p">{</span> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="nx">message</span><span class="p">)</span> <span class="p">};</span>
+
+
+
+
+<span class="kr">const</span> <span class="nx">$HC_0_0$MkUnit</span> <span class="o">=</span> <span class="p">({</span><span class="nx">type</span><span class="o">:</span> <span class="mi">0</span><span class="p">});</span>
+<span class="c1">// Main.main
+</span><span class="c1"></span>
+<span class="kd">function</span> <span class="nx">Main__main</span><span class="p">(</span><span class="nx">$_0_in</span><span class="p">){</span>
+    <span class="kr">const</span> <span class="nx">$_1_in</span> <span class="o">=</span> <span class="nx">$JSRTS</span><span class="p">.</span><span class="nx">prim_writeStr</span><span class="p">(</span><span class="s2">&#34;Hello\n&#34;</span><span class="p">);</span>
+    <span class="k">return</span> <span class="nx">$HC_0_0$MkUnit</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="c1">// {runMain_0}
+</span><span class="c1"></span><span class="kd">function</span> <span class="nx">$_0_runMain</span><span class="p">(){</span>
+    <span class="k">return</span> <span class="nx">$JSRTS</span><span class="p">.</span><span class="nx">force</span><span class="p">(</span><span class="nx">Main__main</span><span class="p">(</span><span class="kc">null</span><span class="p">));</span>
+<span class="p">}</span>
+
+
+<span class="nx">$_0_runMain</span><span class="p">();</span>
+<span class="p">}.</span><span class="nx">call</span><span class="p">(</span><span class="k">this</span><span class="p">))</span>
+</code></pre></div>
+<p>生成したコードはそのままNodeで動かせます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">$ node codegen.js
+Hello</code></pre></div>
+<p>試してないですがブラウザでも動くはずです。</p>
+
+<p>因みにNode専用ならNodeバックエンドもあるので <code>--codegen node</code> という書き方もできます。
+未確認ですがこっちの方が標準出入力の扱いが上手そうです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-javascript" data-lang="javascript"><span class="c1">// Node codegenのランタイムのコード抜粋
+</span><span class="c1"></span><span class="nx">$JSRTS</span><span class="p">.</span><span class="nx">prim_writeStr</span> <span class="o">=</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">x</span><span class="p">)</span> <span class="p">{</span> <span class="k">return</span> <span class="nx">process</span><span class="p">.</span><span class="nx">stdout</span><span class="p">.</span><span class="nx">write</span><span class="p">(</span><span class="nx">x</span><span class="p">)</span> <span class="p">};</span>
+
+<span class="nx">$JSRTS</span><span class="p">.</span><span class="nx">prim_readStr</span> <span class="o">=</span> <span class="kd">function</span> <span class="p">()</span> <span class="p">{</span>
+    <span class="kd">var</span> <span class="nx">ret</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span><span class="p">;</span>
+    <span class="kd">var</span> <span class="nx">b</span> <span class="o">=</span> <span class="nx">Buffer</span><span class="p">.</span><span class="nx">alloc</span><span class="p">(</span><span class="mi">1024</span><span class="p">);</span>
+    <span class="kd">var</span> <span class="nx">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+    <span class="k">while</span> <span class="p">(</span><span class="kc">true</span><span class="p">)</span> <span class="p">{</span>
+        <span class="nx">$JSRTS</span><span class="p">.</span><span class="nx">fs</span><span class="p">.</span><span class="nx">readSync</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nx">b</span><span class="p">,</span> <span class="nx">i</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="k">if</span> <span class="p">(</span><span class="nx">b</span><span class="p">[</span><span class="nx">i</span><span class="p">]</span> <span class="o">==</span> <span class="mi">10</span><span class="p">)</span> <span class="p">{</span>
+            <span class="nx">ret</span> <span class="o">=</span> <span class="nx">b</span><span class="p">.</span><span class="nx">toString</span><span class="p">(</span><span class="s1">&#39;utf8&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="nx">i</span><span class="p">);</span>
+            <span class="k">break</span><span class="p">;</span>
+        <span class="p">}</span>
+        <span class="nx">i</span><span class="o">++</span><span class="p">;</span>
+        <span class="k">if</span> <span class="p">(</span><span class="nx">i</span> <span class="o">==</span> <span class="nx">b</span><span class="p">.</span><span class="nx">length</span><span class="p">)</span> <span class="p">{</span>
+            <span class="kd">var</span> <span class="nx">nb</span> <span class="o">=</span> <span class="nx">Buffer</span><span class="p">.</span><span class="nx">alloc</span><span class="p">(</span><span class="nx">b</span><span class="p">.</span><span class="nx">length</span> <span class="o">*</span> <span class="mi">2</span><span class="p">);</span>
+            <span class="nx">b</span><span class="p">.</span><span class="nx">copy</span><span class="p">(</span><span class="nx">nb</span><span class="p">)</span>
+            <span class="nx">b</span> <span class="o">=</span> <span class="nx">nb</span><span class="p">;</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+    <span class="k">return</span> <span class="nx">ret</span><span class="p">;</span>
+<span class="p">};</span>
+</code></pre></div>
+<h1 id="c-ffi">C FFI</h1>
+
+<p>IdrisにはFFIの仕組みがあります。
+特にデフォルトのcodegenバックエンドであるCのFFIは重要です。
+例えばプレリュードの <code>File</code> は以下のようにFFIをベースに組み立てられています。</p>
+<div class="highlight"><pre class="chroma"><code class="language-idris" data-lang="idris"><span class="kr">data</span> <span class="kt">File</span> <span class="ow">:</span> <span class="kt">Type</span> <span class="kr">where</span>
+  <span class="nf">FHandle</span> <span class="ow">:</span> <span class="ow">(</span>p <span class="ow">:</span> <span class="kt">Ptr</span><span class="ow">)</span> <span class="ow">-&gt;</span> <span class="kt">File</span>
+
+export
+<span class="nf">fflush</span> <span class="ow">:</span> <span class="kt">File</span> <span class="ow">-&gt;</span> <span class="kt">IO</span> <span class="ow">()</span>
+fflush <span class="ow">(</span><span class="kt">FHandle</span> h<span class="ow">)</span> <span class="ow">=</span> foreign <span class="kt">FFI_C</span> <span class="s">&#34;fflush&#34;</span> <span class="ow">(</span><span class="kt">Ptr</span> <span class="ow">-&gt;</span> <span class="kt">IO</span> <span class="ow">())</span> h</code></pre></div>
+<p>公式でバックエンドを複数提供しつつプレリュードでCに依存するのはどうなんだというツッコみはありますが、それはおいておいてファイルIOなどの基本的操作が言語組み込みではなくてユーザランドで実装されているのは楽しいですね。</p>
+
+<p>さて、もう少しFFIについて解説しておくと、キーになるのは <code>foreign</code> 関数です。</p>
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">Idris&gt; :type foreign
+foreign : (f : FFI) -&gt; ffi_fn f -&gt; (ty : Type) -&gt; {auto fty : FTy f [] ty} -&gt; ty
+Idris&gt; :doc FTy
+Data type FTy : FFI -&gt; List Type -&gt; Type -&gt; Type
+    
+    
+    The function is: public export
+Constructors:
+    FRet : ffi_types f t -&gt; FTy f xs (IO&#39; f t)
+        
+        
+        The function is: public export
+    FFun : ffi_types f s -&gt; FTy f (s :: xs) t -&gt; FTy f xs (s -&gt; t)
+        
+        
+        The function is: public export</code></pre></div>
+<p>C FFIに限っていえば <code>foreign C_FFI &quot;関数名&quot; (対応するIdrisの型)</code> という使い方になるでしょうか。</p>
+
+<p>C FFIを使うにあたって、Cのオブジェクトファイルをリンクする必要がありますよね？
+それ専用のIdrisのディレクティブもあります。
+実例で確かめてみましょう。</p>
+
+<p>まずはリンクするCのオブジェクトファイルを用意しておきましょう。
+一番シンプルな内容でいきます。
+以下の内容を <code>ffi.h</code> に保存しておきます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="kt">int</span>
+<span class="nf">add</span><span class="p">(</span><span class="kt">int</span><span class="p">,</span> <span class="kt">int</span><span class="p">);</span></code></pre></div>
+<p>そして <code>ffi.c</code> に以下を記述します。</p>
+<div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="cp">#include</span> <span class="cpf">&#34;ffi.h&#34;</span><span class="cp">
+</span><span class="cp"></span>
+<span class="kt">int</span>
+<span class="nf">add</span><span class="p">(</span><span class="kt">int</span> <span class="n">x</span><span class="p">,</span> <span class="kt">int</span> <span class="n">y</span><span class="p">)</span> <span class="p">{</span>
+  <span class="k">return</span> <span class="n">x</span> <span class="o">+</span> <span class="n">y</span><span class="p">;</span>
+<span class="p">}</span></code></pre></div>
+<p>これは一旦コンパイルしておきましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">$ gcc -c -o ffi.o ffi.c</code></pre></div>
+<p>これを使うIdrisのコードを書きます。</p>
+
+<p>Cのオブジェクトファイルを使う手段として、2つのディレクティブがあります。
+<code>%include</code> と <code>%link</code> です。それぞれ <code>%include バックエンド &quot;インクルードするファイル名&quot;</code> 、 <code>%link バックエンド &quot;リンクするファイル名&quot;</code> の構文です。
+ちゃんとドキュメントには載ってないのですが、CにおいてはそれぞれCPPの <code>#include</code>  、コンパイラの引数へと変換されると思っていてよさそうです。</p>
+
+<p>これをふまえて、まず <code>ffi.idr</code> の先頭に以下を書きます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-idris" data-lang="idris"><span class="ow">%</span>include <span class="kt">C</span> <span class="s">&#34;ffi.h&#34;</span>
+<span class="ow">%</span>link <span class="kt">C</span> <span class="s">&#34;ffi.o&#34;</span></code></pre></div>
+<p><code>int add(int, int);</code> を呼び出すコードを書きましょう。
+FFIをした返り値は <code>IO</code> でないといけないようなので以下のコードを書きます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-idris" data-lang="idris"><span class="nf">ffiAdd</span> <span class="ow">:</span> <span class="kt">Int</span> <span class="ow">-&gt;</span> <span class="kt">Int</span> <span class="ow">-&gt;</span> <span class="kt">IO</span> <span class="kt">Int</span>
+ffiAdd <span class="ow">=</span> foreign <span class="kt">FFI_C</span> <span class="s">&#34;add&#34;</span> <span class="ow">(</span><span class="kt">Int</span> <span class="ow">-&gt;</span> <span class="kt">Int</span> <span class="ow">-&gt;</span> <span class="kt">IO</span> <span class="kt">Int</span><span class="ow">)</span></code></pre></div>
+<p>これを使う <code>main</code> はこう書きましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-idris" data-lang="idris"><span class="nf">main</span> <span class="ow">:</span> <span class="kt">IO</span> <span class="ow">()</span>
+main <span class="ow">=</span> <span class="kr">do</span>
+  ret <span class="ow">&lt;-</span> ffiAdd <span class="mi">1</span> <span class="mi">2</span>
+  printLn ret</code></pre></div>
+<p>これをコンパイル・実行します。</p>
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">$ idris ffi.idr -o ffi
+$ ./ffi
+3</code></pre></div>
+<p>簡単にではありますがC FFIを実行できました。</p>
+
+<p>因みに <code>%include</code> は本当に <code>#include &quot;...&quot;</code> しているだけのようです。
+試しに <code>%include</code> してcodegenしてみたらファイルの先頭に <code>#include</code> が足されてました。</p>
+<div class="highlight"><pre class="chroma"><code class="language-idris" data-lang="idris"><span class="ow">#</span>include <span class="s">&#34;ffi.h&#34;</span>
+<span class="ow">#</span>include <span class="s">&#34;math.h&#34;</span>
+<span class="ow">#</span>include <span class="s">&#34;idris_rts.h&#34;</span>
+<span class="ow">#</span>include <span class="s">&#34;idris_bitstring.h&#34;</span>
+<span class="ow">#</span>include <span class="s">&#34;idris_stdfgn.h&#34;</span>
+void<span class="ow">*</span> _idris_Prelude_46_Bool_46__38__38_<span class="ow">(</span><span class="kt">VM</span><span class="ow">*</span>, <span class="kt">VAL</span><span class="ow">*)</span>;
+<span class="ow">//</span> <span class="ow">...</span></code></pre></div>
+<h1 id="javascript-ffi">JavaScript FFI</h1>
+
+<p>Cと同様にJavaScrptバックエンドでもFFIができます。</p>
+
+<p>Cと同じように <code>add</code> 関数を定義した <code>ffi.js</code> を用意します。</p>
+<div class="highlight"><pre class="chroma"><code class="language-javascript" data-lang="javascript"><span class="kd">function</span> <span class="nx">add</span><span class="p">(</span><span class="nx">x</span><span class="p">,</span> <span class="nx">y</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">return</span> <span class="nx">x</span> <span class="o">+</span> <span class="nx">y</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div>
+<p><code>%include</code> はCと同様です。
+<code>%link</code> はどうも意味を成さないようです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-idris" data-lang="idris"><span class="ow">%</span>include <span class="kt">JavaScript</span> <span class="s">&#34;ffi.js&#34;</span></code></pre></div>
+<p>C FFIと同じようなコードを書くと、このような書き方になります。</p>
+<div class="highlight"><pre class="chroma"><code class="language-idris" data-lang="idris"><span class="nf">ffiAdd</span> <span class="ow">:</span> <span class="kt">Int</span> <span class="ow">-&gt;</span> <span class="kt">Int</span> <span class="ow">-&gt;</span> <span class="kt">JS_IO</span> <span class="kt">Int</span>
+ffiAdd <span class="ow">=</span> foreign <span class="kt">FFI_JS</span> <span class="s">&#34;add(%0, %1)&#34;</span> <span class="ow">(</span><span class="kt">Int</span> <span class="ow">-&gt;</span> <span class="kt">Int</span> <span class="ow">-&gt;</span> <span class="kt">JS_IO</span> <span class="kt">Int</span><span class="ow">)</span></code></pre></div>
+<ul>
+<li><code>IO</code> は <code>JS_IO</code> になる</li>
+<li>関数名のところは関数名ではなく、テンプレートを書く
+
+<ul>
+<li><code>%0.method(%1, %2)</code> のような書き方もできるよう</li>
+</ul></li>
+</ul>
+
+<p>これを使う <code>main</code>も以下のようになります。</p>
+<div class="highlight"><pre class="chroma"><code class="language-idris" data-lang="idris"><span class="nf">main</span> <span class="ow">:</span> <span class="kt">JS_IO</span> <span class="ow">()</span>
+main <span class="ow">=</span> <span class="kr">do</span>
+  ret <span class="ow">&lt;-</span> ffiAdd <span class="mi">1</span> <span class="mi">2</span>
+  printLn&#39; ret</code></pre></div>
+<p><code>main</code> も <code>IO</code> ではなく <code>JS_IO</code> になります。</p>
+
+<p>このコードをコンパイル・実行してみましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">$ idris --codegen javascript ffi.idr -o ffi_gen.js
+$ node ffi_gen.js
+3</code></pre></div>
+<p>動いているようです。</p>
+
+<p>因みに <code>Node</code> バックエンドを使うときは <code>%include</code> の第一引数が <code>JavaScript</code> ではなく <code>Node</code> になります。それ以外は共通です。
+両方とも同じファイルをインクルードするなら2つともまとめて書いてしまえばよいでしょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-idris" data-lang="idris"><span class="ow">%</span>include <span class="kt">JavaScript</span> <span class="s">&#34;ffi.js&#34;</span>
+<span class="ow">%</span>include <span class="kt">Node</span>       <span class="s">&#34;ffi.js&#34;</span></code></pre></div>
+<p>JavaScriptバックエンドに関しては興味のある方が多いかと思いますが、申し訳ないことに私がそこまで詳しくないのであんまり詳細な内容が書けません。
+参考リンクを貼っておくので各自で試行錯誤してみて下さい。</p>
+
+<ul>
+<li><a href="https://www.slideshare.net/tanakh/idrisweb">IdrisでWebアプリを書く</a></li>
+<li><a href="http://docs.idris-lang.org/en/latest/reference/ffi.html#javascript-ffi-descriptor">New Foreign Function Interface — Idris 1.3.3 documentation</a></li>
+</ul>
+
+<p>因みにCと同様、 <code>%include</code> は本当にファイルの中身を展開しているだけのようです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-javascript" data-lang="javascript"><span class="c1">// ...
+</span><span class="c1"></span>
+<span class="nx">$JSRTS</span><span class="p">.</span><span class="nx">prim_writeStr</span> <span class="o">=</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">x</span><span class="p">)</span> <span class="p">{</span> <span class="k">return</span> <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">x</span><span class="p">)</span> <span class="p">};</span>
+
+<span class="nx">$JSRTS</span><span class="p">.</span><span class="nx">prim_readStr</span> <span class="o">=</span> <span class="kd">function</span> <span class="p">()</span> <span class="p">{</span> <span class="k">return</span> <span class="nx">prompt</span><span class="p">(</span><span class="s1">&#39;Prelude.getLine&#39;</span><span class="p">)</span> <span class="p">};</span>
+
+<span class="nx">$JSRTS</span><span class="p">.</span><span class="nx">die</span> <span class="o">=</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">message</span><span class="p">)</span> <span class="p">{</span> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="nx">message</span><span class="p">)</span> <span class="p">};</span>
+<span class="nx">$JSRTS</span><span class="p">.</span><span class="nx">jsbn</span> <span class="o">=</span> <span class="p">(</span><span class="kd">function</span> <span class="p">()</span> <span class="p">{</span>
+  <span class="c1">// ...
+</span><span class="c1"></span><span class="p">}).</span><span class="nx">call</span><span class="p">(</span><span class="k">this</span><span class="p">);</span>
+
+<span class="kd">function</span> <span class="nx">add</span><span class="p">(</span><span class="nx">x</span><span class="p">,</span> <span class="nx">y</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">return</span> <span class="nx">x</span> <span class="o">+</span> <span class="nx">y</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="c1">// ...
+</span></code></pre></div>
+<h1 id="まとめ">まとめ</h1>
+
+<p>Idrisがバックエンドを複数持つこと、それぞれのバックエンドにFFIがあることを紹介しました。</p>
+                    </section>
+                </article>
+            </div>
+        </div>
+
+        <div class="row li-author">
+    <div class="sixteen columns">
+        Written by <strong>κeen</strong>
+    </div>
+</div>
+
+
+        <div class="row li-pagination">
+            <div class="eight columns">
+                <div class="li-pagination-previous">
+                    
+                        Later article<br />
+                        <a href="https://KeenS.github.io/blog/2020/12/25/idrisnoelaboratorderifurekushon/"> IdrisのElaboratorリフレクションでメタプログラミング</a>
+                    
+                </div>
+            </div>
+            <div class="eight columns">
+                <div class="li-pagination-next">
+                    
+                        Older article<br />
+                        <a href="https://KeenS.github.io/blog/2020/12/23/idrisdetakasaga100_tadashiiavlkiwoteigisuru/"> Idrisの依存型で高さが100%正しいAVL木を定義する</a>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+<footer class="li-page-footer">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-page-footer-legal">
+                    &copy; 2021. All rights reserved. 
+                </div>
+                <div class="li-page-footer-theme">
+                    <span class=""><a href="https://github.com/eliasson/liquorice/">liquorice</a> is a theme for <a href="http://hugo.spf13.com">hugo</a></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<script type="text/javascript">
+ function toggle(id) {
+     var e = document.getElementById(id);
+     e.style.display == 'block' ? e.style.display = 'none' : e.style.display = 'block';
+ }
+</script>
+<script src="https://unpkg.com/mermaid@7.0.4/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({startOnLoad:true
+     });</script>
+
+    </body>
+</html>
+
