@@ -19,9 +19,16 @@ build:
 
 deploy:
 	$(HUGO) -v -t $(THEME)
-	$(GIT) add public
-	$(GIT) commit -m "Site updated at `date '+%Y-%m-%d %H:%M:%S UTC'`"
-	$(GIT) subtree push -P $(BLOG_PATH) $(BLOG_ORIGIN) master
+	cd $(BLOG_PATH) && \
+		$(GIT) add . && \
+		$(GIT) commit -m "Site updated at `date '+%Y-%m-%d %H:%M:%S UTC'`" && \
+		$(GIT) push origin gh-pages
+	$(GIT) add $(BLOG_PATH)
+	$(GIT) commit -m 'update submodule'
+	$(GIT) push origin master
+
+
+deploy_submodule:
 
 push_theme:
 	$(GIT) subtree push -P $(THEME_PATH) $(THEME_ORIGIN) master
