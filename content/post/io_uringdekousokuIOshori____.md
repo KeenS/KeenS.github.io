@@ -4,7 +4,7 @@ date: 2021-02-24T04:11:20+09:00
 title: "io_uringで高速IO処理（！）"
 ---
 
-κeenです。[前回の記事](blog/2021/02/08/io_uringdekousokuioshori___/)にもうちょっと実験を加えたのでその結果を書き留めます。
+κeenです。[前回の記事](/blog/2021/02/08/io_uringdekousokuioshori___/)にもうちょっと実験を加えたのでその結果を書き留めます。
 
 <!--more-->
 
