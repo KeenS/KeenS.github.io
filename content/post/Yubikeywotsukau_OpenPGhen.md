@@ -1,7 +1,7 @@
 ---
 categories: [Yubikey, OpenPGP, GPG]
 date: 2021-03-23T12:18:07+09:00
-title: "Yubikeyを使う：OpenPG編"
+title: "YubikeyでOpenPGP鍵をセキュアに使う"
 ---
 
 κeenです。最近Yubikeyを買ったので色々試しています。今回はそのうちのPGP回です。
