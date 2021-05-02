@@ -174,8 +174,7 @@ mioはTokioなんかで使われていますね。ですが今回はその内側
 </span><span class="w">    </span><span class="c1">// 次に必要なイベントを登録する
 </span><span class="c1"></span><span class="w">    </span><span class="n">epoll_ctl</span><span class="p">(</span><span class="n">epoll_fd</span><span class="p">,</span><span class="w"> </span><span class="n">EPOLL_CTL_ADD</span><span class="p">,</span><span class="w"> </span><span class="n">some_fd</span><span class="p">,</span><span class="w"> </span><span class="n">some_event</span><span class="p">);</span><span class="w">
 </span><span class="w">  </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
+</span><span class="w"></span><span class="p">}</span></code></pre></div>
 <p><code>epoll_create()</code> してループの中で <code>epoll_wait</code> します。
 そして適宜 <code>epoll_ctl</code> でpoll対象を操作します。</p>
 
@@ -220,23 +219,20 @@ mioはTokioなんかで使われていますね。ですが今回はその内側
 
 <p>例えば <code>epoll_create</code> は以下のように使えます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">nix</span>::<span class="n">sys</span>::<span class="n">epoll</span>::<span class="o">*</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">epoll_fd</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">epoll_create</span><span class="p">().</span><span class="n">expect</span><span class="p">(</span><span class="s">&#34;can create epoll queue&#34;</span><span class="p">)</span><span class="w">
-</span></code></pre></div>
+</span><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">epoll_fd</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">epoll_create</span><span class="p">().</span><span class="n">expect</span><span class="p">(</span><span class="s">&#34;can create epoll queue&#34;</span><span class="p">)</span></code></pre></div>
 <p><code>unsafe</code> がなく、しかも <code>epoll_create</code> はRustの <code>Result</code> として返っているのでRustにとって自然に使えるようになっています。</p>
 
 <h2 id="コネクションの受け付け">コネクションの受け付け</h2>
 
 <p><code>TcpListener</code> でアドレスにバインドしておきます。そして <code>epoll</code> で使うために <code>set_nonblocking</code> しておきます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="kd">let</span><span class="w"> </span><span class="n">listener</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">TcpListener</span>::<span class="n">bind</span><span class="p">(</span><span class="n">addr</span><span class="p">)</span><span class="o">?</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="n">listener</span><span class="p">.</span><span class="n">set_nonblocking</span><span class="p">(</span><span class="kc">true</span><span class="p">)</span><span class="o">?</span><span class="p">;</span><span class="w">
-</span></code></pre></div>
+</span><span class="w"></span><span class="n">listener</span><span class="p">.</span><span class="n">set_nonblocking</span><span class="p">(</span><span class="kc">true</span><span class="p">)</span><span class="o">?</span><span class="p">;</span></code></pre></div>
 <p>これも新しいコネクションがきたことを <code>epoll</code> で観察できるので <code>epoll_ctl</code> で監視対象に追加します。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">const</span><span class="w"> </span><span class="n">NEW_CONNECTION</span>: <span class="kt">u64</span> <span class="o">=</span><span class="w"> </span><span class="mi">100</span><span class="p">;</span><span class="w">
 </span><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">event</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">EpollEvent</span>::<span class="n">new</span><span class="p">(</span><span class="n">EpollFlags</span>::<span class="n">EPOLLRDHUP</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">EpollFlags</span>::<span class="n">EPOLLIN</span><span class="p">,</span><span class="w"> </span><span class="n">NEW_CONNECTION</span><span class="p">);</span><span class="w">
 </span><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">fd</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">listener</span><span class="p">.</span><span class="n">as_raw_fd</span><span class="p">()</span><span class="w">
 </span><span class="w"></span><span class="n">epoll_ctl</span><span class="p">(</span><span class="n">epoll_fd</span><span class="p">,</span><span class="w"> </span><span class="n">EpollOp</span>::<span class="n">EpollCtlAdd</span><span class="p">,</span><span class="w"> </span><span class="n">fd</span><span class="p">,</span><span class="w"> </span><span class="n">event</span><span class="p">)</span><span class="w">
-</span><span class="w">    </span><span class="p">.</span><span class="n">map_err</span><span class="p">(</span><span class="o">|</span><span class="n">e</span><span class="o">|</span><span class="w"> </span><span class="n">io</span>::<span class="n">Error</span>::<span class="n">new</span><span class="p">(</span><span class="n">io</span>::<span class="n">ErrorKind</span>::<span class="n">Other</span><span class="p">,</span><span class="w"> </span><span class="n">e</span><span class="p">))</span><span class="w">
-</span></code></pre></div>
+</span><span class="w">    </span><span class="p">.</span><span class="n">map_err</span><span class="p">(</span><span class="o">|</span><span class="n">e</span><span class="o">|</span><span class="w"> </span><span class="n">io</span>::<span class="n">Error</span>::<span class="n">new</span><span class="p">(</span><span class="n">io</span>::<span class="n">ErrorKind</span>::<span class="n">Other</span><span class="p">,</span><span class="w"> </span><span class="n">e</span><span class="p">))</span></code></pre></div>
 <p>ポイントは以下の2点です。</p>
 
 <ul>
@@ -266,8 +262,7 @@ mioはTokioなんかで使われていますね。ですが今回はその内側
 </span><span class="w">            </span><span class="n">_</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">todo</span><span class="o">!</span><span class="p">(),</span><span class="w">
 </span><span class="w">        </span><span class="p">}</span><span class="w">
 </span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
+</span><span class="w"></span><span class="p">}</span></code></pre></div>
 <p>ポイントは以下の3点です。</p>
 
 <ul>
@@ -288,8 +283,7 @@ mioはTokioなんかで使われていますね。ですが今回はその内側
 </span><span class="w">        </span><span class="nb">Err</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">eprintln</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;couldn&#39;t accept: {}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">e</span><span class="p">),</span><span class="w">
 </span><span class="w">    </span><span class="p">};</span><span class="w">
 </span><span class="w">    </span><span class="nb">Ok</span><span class="p">(())</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
+</span><span class="w"></span><span class="p">}</span></code></pre></div>
 <p>この <code>stream</code> が1クライアントに相当します。これを管理する構造体 <code>User</code> を定義しましょう。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#[derive(Debug)]</span><span class="w">
 </span><span class="w"></span><span class="k">struct</span> <span class="nc">User</span><span class="w"> </span><span class="p">{</span><span class="w">
@@ -318,8 +312,7 @@ mioはTokioなんかで使われていますね。ですが今回はその内側
 </span><span class="w">    </span><span class="k">fn</span> <span class="nf">raw_fd</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">i32</span> <span class="p">{</span><span class="w">
 </span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">stream</span><span class="p">.</span><span class="n">as_raw_fd</span><span class="p">()</span><span class="w">
 </span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
+</span><span class="w"></span><span class="p">}</span></code></pre></div>
 <p><code>User</code> はコネクションとそのユーザに送られるメッセージキューを保持します。
 メッセージを実際に送る部分は後で実装するとして、ひとまず初回接続時のメッセージを出すのはこう書けます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="w">        </span><span class="nb">Ok</span><span class="p">((</span><span class="n">stream</span><span class="p">,</span><span class="w"> </span><span class="n">addr</span><span class="p">))</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
@@ -327,8 +320,7 @@ mioはTokioなんかで使われていますね。ですが今回はその内側
 </span><span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">user</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">User</span>::<span class="n">new</span><span class="p">(</span><span class="n">stream</span><span class="p">);</span><span class="w">
 </span><span class="w">            </span><span class="n">user</span><span class="p">.</span><span class="n">push_message</span><span class="p">(</span><span class="n">Arc</span>::<span class="n">new</span><span class="p">(</span><span class="s">&#34;Enter your name: &#34;</span><span class="p">.</span><span class="n">into</span><span class="p">()));</span><span class="w">
 </span><span class="w">            </span><span class="c1">// and others
-</span><span class="c1"></span><span class="w">        </span><span class="p">}</span><span class="w">
-</span></code></pre></div>
+</span><span class="c1"></span><span class="w">        </span><span class="p">}</span></code></pre></div>
 <p>さて、ここで作った <code>User</code> を <code>epoll</code> に登録したりIDで管理したりしたいのですが、このままだとやりづらいですね。<code>Server</code> 構造体を作りましょう。</p>
 
 <h2 id="サーバを作る">サーバを作る</h2>
@@ -351,8 +343,7 @@ mioはTokioなんかで使われていますね。ですが今回はその内側
 </span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="mi">0</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
 </span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="mi">0</span><span class="w">
 </span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
+</span><span class="w"></span><span class="p">}</span></code></pre></div>
 <h3 id="server"><code>Server</code></h3>
 
 <p><code>Server</code> を以下のように定義します。</p>
@@ -361,8 +352,7 @@ mioはTokioなんかで使われていますね。ですが今回はその内側
 </span><span class="w">    </span><span class="n">epoll_fd</span>: <span class="nc">RawFd</span><span class="p">,</span><span class="w">
 </span><span class="w">    </span><span class="n">id_gen</span>: <span class="nc">IdGenerator</span><span class="p">,</span><span class="w">
 </span><span class="w">    </span><span class="n">users</span>: <span class="nc">HashMap</span><span class="o">&lt;</span><span class="kt">u64</span><span class="p">,</span><span class="w"> </span><span class="n">User</span><span class="o">&gt;</span><span class="p">,</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
+</span><span class="w"></span><span class="p">}</span></code></pre></div>
 <p>今まで出てきたコードは以下のように整理しておきましょう。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">impl</span><span class="w"> </span><span class="n">User</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w">    </span><span class="k">fn</span> <span class="nf">new</span><span class="p">()</span><span class="w"> </span>-&gt; <span class="nc">Self</span><span class="w"> </span><span class="p">{</span><span class="w">
@@ -409,8 +399,7 @@ mioはTokioなんかで使われていますね。ですが今回はその内側
 </span><span class="w">            </span><span class="p">}</span><span class="w">
 </span><span class="w">        </span><span class="p">}</span><span class="w">
 </span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
+</span><span class="w"></span><span class="p">}</span></code></pre></div>
 <p>監視するイベントについてもここでまとめてしまっています。
 イベントについては色々ありえるのですが、今回のチャットサーバにおいては2種類しか必要ありません。すなわちコネクションの切断+read readyか、それに加えてwrite readyまで見るかです。それを以下のように定義してしまいます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">listener_read_event</span><span class="p">(</span><span class="n">key</span>: <span class="kt">u64</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">EpollEvent</span><span class="w"> </span><span class="p">{</span><span class="w">
@@ -422,8 +411,7 @@ mioはTokioなんかで使われていますね。ですが今回はその内側
 </span><span class="w">        </span><span class="n">EpollFlags</span>::<span class="n">EPOLLRDHUP</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">EpollFlags</span>::<span class="n">EPOLLIN</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">EpollFlags</span>::<span class="n">EPOLLOUT</span><span class="p">,</span><span class="w">
 </span><span class="w">        </span><span class="n">key</span><span class="p">,</span><span class="w">
 </span><span class="w">    </span><span class="p">)</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
+</span><span class="w"></span><span class="p">}</span></code></pre></div>
 <h3 id="ユーザの管理">ユーザの管理</h3>
 
 <p>これからユーザを管理するので、そのためのメソッドを生やしておきます。</p>
@@ -446,8 +434,7 @@ mioはTokioなんかで使われていますね。ですが今回はその内側
 </span><span class="w">        </span><span class="n">epoll_ctl</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">epoll_fd</span><span class="p">,</span><span class="w"> </span><span class="n">EpollOp</span>::<span class="n">EpollCtlDel</span><span class="p">,</span><span class="w"> </span><span class="n">user</span><span class="p">.</span><span class="n">raw_fd</span><span class="p">(),</span><span class="w"> </span><span class="nb">None</span><span class="p">)</span><span class="w">
 </span><span class="w">            </span><span class="p">.</span><span class="n">map_err</span><span class="p">(</span><span class="o">|</span><span class="n">e</span><span class="o">|</span><span class="w"> </span><span class="n">io</span>::<span class="n">Error</span>::<span class="n">new</span><span class="p">(</span><span class="n">io</span>::<span class="n">ErrorKind</span>::<span class="n">Other</span><span class="p">,</span><span class="w"> </span><span class="n">e</span><span class="p">))</span><span class="w">
 </span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
+</span><span class="w"></span><span class="p">}</span></code></pre></div>
 <p><code>add_user</code> はいいとして、 <code>watch</code> / <code>change_event</code> / <code>unwatch</code> について触れます。これらは全て <code>epoll_ctl</code> のラッパです。
 <code>watch</code> は <code>epoll</code> への登録、 <code>unwatch</code> は登録解除、 <code>change_event</code> は監視イベントの変更を担当し、それぞれ <code>EpollCtlAdd</code> 、 <code>EpollCtlDel</code> 、 <code>EpollCtlMod</code> を呼んでいます。</p>
 
@@ -466,8 +453,7 @@ mioはTokioなんかで使われていますね。ですが今回はその内側
 </span><span class="w">            </span><span class="nb">Err</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">eprintln</span><span class="o">!</span><span class="p">(</span><span class="s">&#34;couldn&#39;t accept: {}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">e</span><span class="p">),</span><span class="w">
 </span><span class="w">        </span><span class="p">};</span><span class="w">
 </span><span class="w">        </span><span class="nb">Ok</span><span class="p">(())</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span></code></pre></div>
+</span><span class="w">    </span><span class="p">}</span></code></pre></div>
 <p><code>user</code> を <code>watch</code> していますね。</p>
 
 <h2 id="ユーザイベントを処理する">ユーザイベントを処理する</h2>
@@ -485,8 +471,7 @@ mioはTokioなんかで使われていますね。ですが今回はその内側
 </span><span class="c1"></span><span class="w">            </span><span class="n">_</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">handle_user_event</span><span class="p">(</span><span class="o">*</span><span class="n">ev</span><span class="p">)</span><span class="o">?</span><span class="p">,</span><span class="w">
 </span><span class="w">        </span><span class="p">}</span><span class="w">
 </span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
+</span><span class="w"></span><span class="p">}</span></code></pre></div>
 <p>そして肝心の <code>handle_user_event</code> についてです。
 このメソッドユーザに動向があったときに毎回呼ばれるので内部でどのイベントで呼ばれたのかで処理を振り分けることにします。
 中々本丸に到達しませんね。</p>
@@ -510,8 +495,7 @@ mioはTokioなんかで使われていますね。ですが今回はその内側
 </span><span class="w">            </span><span class="p">}</span><span class="w">
 </span><span class="w">        </span><span class="p">}</span><span class="w">
 </span><span class="w">        </span><span class="nb">Ok</span><span class="p">(())</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span></code></pre></div>
+</span><span class="w">    </span><span class="p">}</span></code></pre></div>
 <p>ところでこのコード、 <code>if { ... } else if { ... }</code> ではなく <code>if { ... }</code> の連続である点に注意して下さい。
 <code>User</code> が同時にreadableかつwritableになることもあるので複数のイベントを同時に処理します。</p>
 
@@ -522,8 +506,7 @@ mioはTokioなんかで使われていますね。ですが今回はその内側
 </span><span class="w">            </span><span class="bp">self</span><span class="p">.</span><span class="n">change_event</span><span class="p">(</span><span class="o">&amp;</span><span class="n">user</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">listener_read_event</span><span class="p">(</span><span class="n">key</span><span class="p">))</span><span class="o">?</span><span class="p">;</span><span class="w">
 </span><span class="w">        </span><span class="p">}</span><span class="w">
 </span><span class="w">        </span><span class="nb">Ok</span><span class="p">(())</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span></code></pre></div>
+</span><span class="w">    </span><span class="p">}</span></code></pre></div>
 <p><code>User::write_cb</code> はキューにあるメッセージを書けるだけ書くだけです。</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="w">    </span><span class="k">fn</span> <span class="nf">write_cb</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">io</span>::<span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w">        </span><span class="k">while</span><span class="w"> </span><span class="kd">let</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">pop_message</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
@@ -535,8 +518,7 @@ mioはTokioなんかで使われていますね。ですが今回はその内側
 </span><span class="w">        </span><span class="p">}</span><span class="w">
 </span><span class="w">
 </span><span class="w">        </span><span class="nb">Ok</span><span class="p">(())</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span></code></pre></div>
+</span><span class="w">    </span><span class="p">}</span></code></pre></div>
 <p><code>set_nonblocking</code> しているのでブロックしそうになったら（＝OS内部のバッファが一杯になったら） <code>WouldBlock</code> が返ります。そうしたら書き出しを止めて次にバッファが空になるのを <code>epoll_wait</code> で待つようにします。</p>
 
 <p>ざっとこういう流れで <code>epoll</code> を使っていきます。</p>
