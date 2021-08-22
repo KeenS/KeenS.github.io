@@ -347,3 +347,5 @@ h\ (v \cat w) & = foldr\ (\oplus)\ e\ (v \cat w)                & （hは左方�
 
 論文ではこのあと実例が続くんですが（`insert` が右方向かつ左方向であることを使ってインサートソートからマージソートを導出する）、長くなるのでメモは一旦ここまで。
 気が向いたら続きを書きます。
+
+追記： 書きました[論文メモの続き：The Third Homomorphism Theorem | κeenのHappy Hacκing Blog](https://KeenS.github.io/blog/2021/08/22/ronbunmemonotsuzuki_the_third_homomorphism_theorem/)
