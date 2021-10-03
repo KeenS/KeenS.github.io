@@ -145,7 +145,7 @@
 <p>BMI（Bit Manipulation Instruction Set）はその名のとおりビット操作を提供するx86の拡張命令です。IntelのHaswellから導入されてAMDのCPUもサポートしているようです。ABM、 BMI1、 BMI2と関連する拡張が色々あってややこしいので詳しくはWikipediaの記事を参考にして下さい。今回はBMI2を使います。その中のPDEP/PEXTはビットフラグ関連の操作を提供します。PEXTは「ビットマスクでマスクしてシフトでLSBに移動」、PDEPは逆で「マスクの下位の0の分だけMSB側に移動」という操作をします。</p>
 
 <p>CTZ = count trailing zerosとして、以下の等式が成り立つのかな？</p>
-<pre><code>PEXT(data, mask) = (data &amp; mask) &gt;&gt; CTZ(mask)
+<pre tabindex="0"><code>PEXT(data, mask) = (data &amp; mask) &gt;&gt; CTZ(mask)
 PDEP(data, mask) = data &lt;&lt; CTZ(mask)</code></pre>
 <p>追記
 Twitterで指摘がきました。</p>
@@ -163,11 +163,11 @@ Twitterで指摘がきました。</p>
 <p>まあ、普通にintrinsicsとして実装されています。具体的には<a href="https://doc.rust-lang.org/core/arch/x86_64/index.html"><code>core::arch::x86_64</code></a>に<a href="https://doc.rust-lang.org/core/arch/x86_64/fn._pdep_u32.html">_pdep_u32</a>と<a href="https://doc.rust-lang.org/core/arch/x86_64/fn._pext_u32.html">_pext_u32</a>、あとそれぞれの <code>_u64</code> 版が実装されています。<a href="https://doc.rust-lang.org/core/arch/x86/index.html"><code>core::arch::x86</code></a>にも <code>_u32</code> はありますが付け加えるまでもないですね。</p>
 
 <p>この2つの関数を使ってみましょう。データのLSBから数えて5bit目から8bit目までを取り出したいとします。</p>
-<pre><code>0b11110111_00110001
+<pre tabindex="0"><code>0b11110111_00110001
            ^^^^
         この4bitを取り出したい</code></pre>
 <p>すると以下のようなコードを書くことになります。</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">arch</span>::<span class="n">x86_64</span>::<span class="n">_pext_u64</span><span class="p">;</span><span class="w">
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">arch</span>::<span class="n">x86_64</span>::<span class="n">_pext_u64</span><span class="p">;</span><span class="w">
 </span><span class="w">
 </span><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mb">0b11110111_00110001</span><span class="p">;</span><span class="w">
@@ -179,11 +179,11 @@ Twitterで指摘がきました。</p>
 <p>BMI2をサポートしているCPU上で実行すると結果は期待とおり <code>0b0000000000000011</code> になります。</p>
 
 <p>逆に <code>PDEP</code> だとデータをマスクにフィットするようにします。</p>
-<pre><code>0b11110111_00110001
+<pre tabindex="0"><code>0b11110111_00110001
                ^^^^
        この4bitをマスクの位置に移動したい</code></pre>
 <p>先のコードの <code>pext</code> を <code>pdep</code> に書き換えてみましょう。</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">arch</span>::<span class="n">x86_64</span>::<span class="n">_pdep_u64</span><span class="p">;</span><span class="w">
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">arch</span>::<span class="n">x86_64</span>::<span class="n">_pdep_u64</span><span class="p">;</span><span class="w">
 </span><span class="w">
 </span><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mb">0b11110111_00110001</span><span class="p">;</span><span class="w">
@@ -203,11 +203,11 @@ Twitterで指摘がきました。</p>
 <h1 id="追補">追補</h1>
 
 <p>PEXT/PDEPの挙動の説明が間違っていたので訂正します。私の説明はmask bitが連続している場合は正しかったのですが、離れていた場合には異なる挙動をします。例えば以下のようにmask bitが離れていた場合、</p>
-<pre><code>0b11110111_00110001
+<pre tabindex="0"><code>0b11110111_00110001
      ^   ^    ^   ^
         この4bitを取り出したい</code></pre>
 <p>取り出されるのはこれらを一箇所に集めた <code>0b00000000_00001111</code> です。実際、以下のコードを走らせるとそのような結果が得られます</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">arch</span>::<span class="n">x86_64</span>::<span class="n">_pext_u64</span><span class="p">;</span><span class="w">
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">arch</span>::<span class="n">x86_64</span>::<span class="n">_pext_u64</span><span class="p">;</span><span class="w">
 </span><span class="w">
 </span><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mb">0b11110111_00110001</span><span class="p">;</span><span class="w">
@@ -217,7 +217,7 @@ Twitterで指摘がきました。</p>
 </span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span></code></pre></div>
 <p>逆に PDEPは <code>0b00000000_00001111</code> に対して <code>0b00010001_00010001</code> のマスクをあてがうと、 下位4bitをそれぞれマスクのビットが立っている位置までもってきて <code>0b00010001_00010001</code> を返します。これも以下のコードを書けば確認できます。</p>
-<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">arch</span>::<span class="n">x86_64</span>::<span class="n">_pdep_u64</span><span class="p">;</span><span class="w">
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">arch</span>::<span class="n">x86_64</span>::<span class="n">_pdep_u64</span><span class="p">;</span><span class="w">
 </span><span class="w">
 </span><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mb">0b00000000_00001111</span><span class="p">;</span><span class="w">
