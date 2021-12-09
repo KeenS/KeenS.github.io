@@ -269,13 +269,13 @@ Rustでいう所有権にあたる <code>iso</code> からはじまり <code>trn
 複数のスレッドから同時にアクセスすると結局何でもありになってしましそうですね。
 しかしVeronaのcownは「同時に」アクセスすることはできないようです。
 Exploreにあるコード片を眺めてみます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">// x is some isolated object graph
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">// x is some isolated object graph
 var c = cown.create(x)
 // c is a cown that mediates access to x.
 // We have lost direct access to x here</code></pre></div>
 <p>コメントにある通り、cownを作るとその変数への直接アクセスを失ってしまいます。
 アクセスするときは <code>when</code> ブロックを使ってアクセスを得てから実行します。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">when (var x = c)
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">when (var x = c)
 {
   // Access internals of cown(c) using name x in here
   Builtin.print(&#34;Hello\n&#34;)
@@ -332,7 +332,7 @@ RustやVeronaが参考にしているCycloneで導入されている概念です
 
 <p><a href="https://github.com/microsoft/verona/blob/master/docs/building.md">building</a>に書かれてます。
 CMakeとninjaを使います。</p>
-<pre tabindex="0"><code class="language-console" data-lang="console">$ git clone --recursive https://github.com/microsoft/verona
+<pre><code class="language-console" data-lang="console">$ git clone --recursive https://github.com/microsoft/verona
 $ mkdir build_ninja
 $ cd build_ninja
 $ cmake .. -GNinja -DCMAKE_BUILD_TYPE=Debug
@@ -348,7 +348,7 @@ $ ninja install</code></pre>
 以下ではエッセンスだけ眺めていきます。</p>
 
 <p>まずは <code>Philosopher</code> クラス。cownな <code>Fork</code> をimmutableに保持しています。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">class Philosopher
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">class Philosopher
 {
   // id used for printing the trace of what happened.
   id: U64 &amp; imm;
@@ -362,7 +362,7 @@ $ ninja install</code></pre>
 }</code></pre></div>
 <p>後で <code>Fork</code> を変更しているので恐らくここの <code>imm</code> は <code>cown</code> にのみ適用されて内側の <code>Fork</code> の管理はまた別なんだと思います。
 <code>Philosopher</code> のコンストラクタは以下。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">  /**
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">  /**
    * This static method creates a Philosopher
    *
    * It returns the Philosopher with the capability `iso`.  This is linear
@@ -387,7 +387,7 @@ $ ninja install</code></pre>
 isoは恐らくPony由来の名前でしょう。</p>
 
 <p>そして肝心の <code>request_eat</code>。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">  /**
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">  /**
    * This instance method perform the requests to acquire the forks for this 
    * Philosopher.
    * 
@@ -428,7 +428,7 @@ isoは恐らくPony由来の名前でしょう。</p>
 その後にまだお腹が空いてたらまた <code>self.request_eat</code> を呼んでもう1度スケジューラに自身を積みます。</p>
 
 <p>さて、問題はこれの実行部分。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">class Main
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">class Main
 {
   main()
   {
@@ -465,7 +465,7 @@ isoは恐らくPony由来の名前でしょう。</p>
 循環のある連結リストを作る例。</p>
 
 <p>デストラクタでプリントするノードを定義しています。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">class Node
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">class Node
 {
   id: U64;
   field: (Node &amp; mut) | (None &amp; imm);
@@ -482,7 +482,7 @@ isoは恐らくPony由来の名前でしょう。</p>
 
 <p>これらを使って閉路を作っていきます。
 まずはノードを作るところ。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">// Allocate a new node in its own region.
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">// Allocate a new node in its own region.
 var r1 = new Node;
 // Allocate two nodes in the same region as r1.
 var r2 = new Node in r1;
@@ -496,25 +496,25 @@ r3.id = 3;</code></pre></div>
 この記法で <code>r1</code> と同じリージョンにアロケートしています。</p>
 
 <p>同じリージョンにノードを確保できたら閉路を作ります。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">// Create a little graph that has a cycle
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">// Create a little graph that has a cycle
 r1.field = r2;
 r2.field = r3;
 r3.field = mut-view(r1);</code></pre></div>
 <p>最後の <code>r3</code> だけそのままの代入ではなく <code>mut-view</code> を噛ませていますね。
 流石に所有権があるので <code>iso</code> では渡せなくてviewで渡しているようです。
 実際、最後の <code>mut-view</code> を外すとエラーになります。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">$ ./dist/veronac --run ../testsuite/demo/run-pass/region101.verona
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">$ ./dist/veronac --run ../testsuite/demo/run-pass/region101.verona
 ../testsuite/demo/run-pass/region101.verona:42:3: error: Inference failed for method test1
   test1()
   ^~~~~~~
 1 error generated</code></pre></div>
 <p><code>mut-view</code> を外す前の世界線に戻って、 <code>r1</code> を別のノードで上書きしてみます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">r1 = new Node;
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">r1 = new Node;
 r1.id = 4;
 Builtin.print(&#34;Update\n&#34;);</code></pre></div>
 <p>こうすると <code>r1</code> が開放されるのはもちろんのこと、 <code>r2</code> 、 <code>r3</code> も開放されます。
 実際、この行のあとに <code>r2</code> を使おうとするとコンパイルエラーです。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">Builtin.print1(&#34;r2.id = {}\n&#34;, r2.id);</code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">$ ./dist/veronac --run ../testsuite/demo/run-pass/region101.verona
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">Builtin.print1(&#34;r2.id = {}\n&#34;, r2.id);</code></pre></div><div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">$ ./dist/veronac --run ../testsuite/demo/run-pass/region101.verona
 ../testsuite/demo/run-pass/region101.verona:79:36: error: Cannot use variable &#39;4&#39;
     Builtin.print1(&#34;r2.id = {}\n&#34;, r2.id);
                                    ^~
@@ -522,7 +522,7 @@ Builtin.print(&#34;Update\n&#34;);</code></pre></div>
     r1 = new Node;
     ^~~~~~~~~~~~~</code></pre></div>
 <p>これまたコンパイルが通る時の世界線に戻って実行してみると、確かに id 1のノードを開放したらすぐさまid 2、id 3も開放されて、関数の最後にid 4のオブジェクトが開放されているのが分かります。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">$ ./dist/veronac --run ../testsuite/demo/run-pass/region101.verona
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">$ ./dist/veronac --run ../testsuite/demo/run-pass/region101.verona
 Deallocating id 1
 Deallocating id 3
 Deallocating id 2
@@ -532,7 +532,7 @@ Deallocating id 4</code></pre></div>
 
 <p>型システムは構造的部分型で交差型と合併型があるようです。
 例えば以下のように返るのが <code>A</code> だか <code>B</code> だか分からないようなものもちゃんと（不動点をとって？） <code>A | B</code> と判定できます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">class A { f: B &amp; mut; }
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">class A { f: B &amp; mut; }
 class B { f: A &amp; mut; }
 
 class Main {
