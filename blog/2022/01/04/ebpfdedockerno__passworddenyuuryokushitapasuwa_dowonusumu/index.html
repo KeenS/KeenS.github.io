@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+    <head>
+        
+        
+        <script async src="https://www.googletagmanager.com/gtag/js?id=UA-43779888-1"></script>
+        <script>
+         window.dataLayer = window.dataLayer || [];
+         function gtag(){dataLayer.push(arguments);}
+         gtag('js', new Date());
+
+         gtag('config', 'UA-43779888-1');
+        </script>
+        
+
+        <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+
+        <meta name="twitter:site" content="@blackenedgold" />
+        <meta name="twitter:title" content="eBPFでDockerの--passwordで入力したパスワードを盗む | κeenのHappy Hacκing Blog"/>
+        <meta name="twitter:description" content="κeenです。以前の記事の続きで、 /proc を監視するのではなくeBPFで取得してみます。ついでにRustのコードをeBPFで動かせるライブラリのayaも使ってみます。" />
+        <meta property="og:title" content="eBPFでDockerの--passwordで入力したパスワードを盗む | κeenのHappy Hacκing Blog" />
+        <meta property="og:type" content="article" />
+        <meta property="og:url" content="https://KeenS.github.io/blog/2022/01/04/ebpfdedockerno__passworddenyuuryokushitapasuwa_dowonusumu/" />
+        <meta property="og:description" content="κeenです。以前の記事の続きで、 /proc を監視するのではなくeBPFで取得してみます。ついでにRustのコードをeBPFで動かせるライブラリのayaも使ってみます。" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta property="og:image" content="https://KeenS.github.io/images/ogp/post/eBPFdeDockerno__passworddenyuuryokushitapasuwa_dowonusumu.png" />
+        <meta name="twitter:image" content="https://KeenS.github.io/images/ogp/post/eBPFdeDockerno__passworddenyuuryokushitapasuwa_dowonusumu.png" />
+        
+        <meta property="og:article:published_time" content="2022-01-04 01:47:31 &#43;0900 JST" />
+        <meta property="og:article:modified_time" content="2022-01-04 01:47:31 &#43;0900 JST" />
+        
+        <meta property="og:article:author" content="κeen" />
+
+        <title>eBPFでDockerの--passwordで入力したパスワードを盗む | κeenのHappy Hacκing Blog</title>
+        <link rel="stylesheet" href='//fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css' />
+        <link rel="stylesheet" href="https://KeenS.github.io/libraries/normalize.3.0.1.css" />
+        <link rel="stylesheet" href="https://KeenS.github.io/css/liquorice.css" />
+        <link rel="apple-touch-icon" sizes="180x180" href="https://KeenS.github.io/apple-touch-icon.png">
+        <link rel="icon" type="image/png" href="https://KeenS.github.io/favicon-32x32.png" sizes="32x32">
+        <link rel="icon" type="image/png" href="https://KeenS.github.io/favicon-16x16.png" sizes="16x16">
+        <link rel="manifest" href="https://KeenS.github.io/manifest.json">
+        <link rel="mask-icon" href="https://KeenS.github.io/safari-pinned-tab.svg" color="#5bbad5">
+        <meta name="theme-color" content="#ffffff">
+        <link rel="apple-touch-icon-precomposed" href="https://KeenS.github.io/apple-touch-icon-144-precomposed.png" sizes="144x144" />
+        <link rel="stylesheet" href="https://KeenS.github.io/css/syntax-monokai.css" />
+<script type="text/x-mathjax-config">
+ MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
+</script>
+<script async src="//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS_CHTML"></script>
+</script>
+<meta http-equiv="X-UA-Compatible" CONTENT="IE=EmulateIE7" />
+<link rel="stylesheet" href="//unpkg.com/mermaid@7.0.4/dist/mermaid.forest.min.css">
+
+    </head>
+    <body class="li-body">
+
+<header class="li-page-header" id="page-header">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-brand li-left">
+                <a href="https://KeenS.github.io/">κeenのHappy Hacκing Blog</a> | Lispエイリアンの狂想曲</div>
+                <div class="li-menu li-right">
+                    <span class="li-menu-icon" onclick="javascript:toggle('menu');">&#9776;</span>
+                    <ul id="menu2" class="li-menu-items">
+                        
+                            <li><a href="https://KeenS.github.io/about/"> About </a></li>
+                        
+                            <li><a href="https://KeenS.github.io/post/"> Blog </a></li>
+                        
+                            <li><a href="https://KeenS.github.io/slide/"> Slide </a></li>
+                        
+                            <li><a href="https://KeenS.github.io/index.xml"> Atom </a></li>
+                        
+                            <li><a href="https://KeenS.github.io/search/"> Search </a></li>
+                        
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="sixteen columns">
+                <ul id="menu" class="li-menu-items li-menu-mobile">
+                    
+                        <li><a href="https://KeenS.github.io/about/"> About </a></li>
+                    
+                        <li><a href="https://KeenS.github.io/post/"> Blog </a></li>
+                    
+                        <li><a href="https://KeenS.github.io/slide/"> Slide </a></li>
+                    
+                        <li><a href="https://KeenS.github.io/index.xml"> Atom </a></li>
+                    
+                        <li><a href="https://KeenS.github.io/search/"> Search </a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+
+
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <article class="li-article">
+                    <header class="li-article-header">
+                        <h1 class="li-article-title">eBPFでDockerの--passwordで入力したパスワードを盗む</h1>
+                        <div class="li-article-meta">
+    <time class="li-article-date">2022-01-04</time>
+    <ul class="li-article-tag">
+    
+        <li>
+            <a href="https://KeenS.github.io/categories/docker">Docker</a>
+        </li>
+    
+        <li>
+            <a href="https://KeenS.github.io/categories/linux">Linux</a>
+        </li>
+    
+        <li>
+            <a href="https://KeenS.github.io/categories/ebpf">eBPF</a>
+        </li>
+    
+        <li>
+            <a href="https://KeenS.github.io/categories/rust">Rust</a>
+        </li>
+    
+</ul>
+
+</div>
+
+                    </header>
+                    <section>
+                        <p>κeenです。<a href="https://keens.github.io/blog/2021/12/20/rustdedockerno__passworddenyuuryokushitapasuwa_dowonusumu/">以前の記事</a>の続きで、 <code>/proc</code> を監視するのではなくeBPFで取得してみます。ついでにRustのコードをeBPFで動かせるライブラリのayaも使ってみます。</p>
+
+<p>以前の記事では <code>/proc</code> 以下の監視をビジーループで回すという力技で新しく作られたプロセスを補足していました。これだとCPU使用率が上がって美しくありませんし、何より原理的には見逃しもありえてしまいます。そこでカーネルの機能を使って全てのプロセスの作成を監視して低CPU使用率かつ捕捉率100%の実装を目指します。</p>
+
+<h2 id="ebpfとは">eBPFとは？</h2>
+
+<p>なんかLinuxカーネルでユーザの書いたコード動かせるやつです。私は説明できるほど詳しくないので適当にググって下さい。</p>
+
+<p>1つやっかいな点として、独自のバイナリを動かすのでカーネル内で動かすコードはコンパイラがeBPFに対応したものでないといけません。また、カーネル内で動かすコードをユーザランドから制御するプログラムも同時に書く必要があります。</p>
+
+<h2 id="ayaとは">Ayaとは？</h2>
+
+<p>RustでeBPFのコードが書けるライブラリです。
+LLVMがeBPFに対応してるので、頑張ってRustをeBPFにコンパイルする部分、eBPFのコード内で使えるライブラリ、eBPFのコードを走らせるユーザランドプログラムなどの面倒をみてくれます。</p>
+
+<p><a href="https://aya-rs.github.io/book/intro/index.html">公式チュートリアル</a>なんかもあります。ドキュメントの更新が追い付いてないようでちょくちょくそのままだと動かない所もありますが、落ち着いて最新のコードを読みにいくなどすれば完走できます。</p>
+
+<h2 id="ayaで-docker-password-を抜き出そう">Ayaで <code>docker --password</code> を抜き出そう</h2>
+
+<p>eBPFでどうやるかは前回のやつで調べてたときにみつけました。</p>
+
+<ul>
+<li><a href="https://unix.stackexchange.com/questions/260162/how-to-track-newly-created-processes-in-linux">process - How to track newly created processes in Linux? - Unix &amp; Linux Stack Exchange</a></li>
+</ul>
+
+<p>ここの回答を参考に、以下の <code>bpftrace</code> のプログラムを書けば取り出せることが分かっています。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">$ sudo bpftrace -e &#39;tracepoint:syscalls:sys_enter_exec* /str(*args-&gt;argv) == &#34;docker&#34;/{ printf(&#34;pid: %d, comm: %s, args: &#34;, pid, comm); join(args-&gt;argv); }&#39;
+Attaching 2 probes...
+pid: 884154, comm: zsh, args: docker login --password hoge</code></pre></div>
+<p>これをAyaを使ったRustのコードに移植することを目標にしましょう。</p>
+
+<p>Ayaのチュートリアルにある内容はある程度省略するとして進めましょう。
+<code>tracepoint</code> のテンプレートで作成し、 <code>syscalls</code> の <code>sys_enter_execve</code> を目標とするように入力します。
+するとユーザランド側のプログラムが以下のように <code>syscalls</code> の <code>sys_enter_execve</code> にアタッチされるようになります。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">program</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">TracePoint</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bpf</span><span class="p">.</span><span class="n">program_mut</span><span class="p">(</span><span class="s">&#34;docker_password_aya&#34;</span><span class="p">).</span><span class="n">unwrap</span><span class="p">().</span><span class="n">try_into</span><span class="p">()</span><span class="o">?</span><span class="p">;</span><span class="w">
+</span><span class="w">    </span><span class="n">program</span><span class="p">.</span><span class="n">load</span><span class="p">()</span><span class="o">?</span><span class="p">;</span><span class="w">
+</span><span class="w">    </span><span class="n">program</span><span class="p">.</span><span class="n">attach</span><span class="p">(</span><span class="s">&#34;syscalls&#34;</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;sys_enter_execve&#34;</span><span class="p">)</span><span class="o">?</span><span class="p">;</span></code></pre></div>
+<p>本当は <code>execve</code> の他に <code>execveat</code> も必要みたいですが、この際まあいいでしょう。</p>
+
+<p>eBPF側のプログラムを書き進めていきます。まず <code>-common</code> に以下を書きます。これに抜き出したパスワードを入れてやりとりします。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#[derive(Clone, Copy)]</span><span class="w">
+</span><span class="w"></span><span class="cp">#[repr(C)]</span><span class="w">
+</span><span class="w"></span><span class="k">pub</span><span class="w"> </span><span class="k">struct</span> <span class="nc">DockerLog</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="n">count</span>: <span class="kt">usize</span><span class="p">,</span><span class="w">
+</span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="n">data</span>: <span class="p">[</span><span class="kt">u8</span><span class="p">;</span><span class="w"> </span><span class="mi">32</span><span class="p">],</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="cp">#[cfg(feature = </span><span class="s">&#34;user&#34;</span><span class="cp">)]</span><span class="w">
+</span><span class="w"></span><span class="k">unsafe</span><span class="w"> </span><span class="k">impl</span><span class="w"> </span><span class="n">aya</span>::<span class="n">Pod</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">DockerLog</span><span class="w"> </span><span class="p">{}</span></code></pre></div>
+<p>見てのとおりデータが最大32バイトになってます。任意長のデータのやりとりをどうするか分からなかったのでこうしました。ユーザ側で確保したメモリのポインタを送ってeBPF側で書いてあげればいいんですかね？それとも普通に文字列へのポインタ渡せば読み出せる？</p>
+
+<p><code>-common</code> はこれだけで、 <code>-ebpf</code> の方でやっていきます。</p>
+
+<p>まず、 <code>ctx</code> から <code>argv</code> 情報を取り出したいので <code>ctx</code> のデータアラインメントを調べます。今回の例だと <code>/sys/kernel/debug/tracing/events/syscalls/sys_enter_execve/format</code> を見れば載っています。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell">$ sudo cat /sys/kernel/debug/tracing/events/syscalls/sys_enter_execve/format
+name: sys_enter_execve
+ID: <span class="m">711</span>
+format:
+ field:unsigned short common_type<span class="p">;</span>      offset:0<span class="p">;</span>       size:2<span class="p">;</span> signed:0<span class="p">;</span>
+ field:unsigned char common_flags<span class="p">;</span>      offset:2<span class="p">;</span>       size:1<span class="p">;</span> signed:0<span class="p">;</span>
+ field:unsigned char common_preempt_count<span class="p">;</span>      offset:3<span class="p">;</span>  size:1<span class="p">;</span>    signed:0<span class="p">;</span>
+ field:int common_pid<span class="p">;</span>  offset:4<span class="p">;</span>       size:4<span class="p">;</span> signed:1<span class="p">;</span>
+
+ field:int __syscall_nr<span class="p">;</span>        offset:8<span class="p">;</span>       size:4<span class="p">;</span> signed:1<span class="p">;</span>
+ field:const char * filename<span class="p">;</span>   offset:16<span class="p">;</span>      size:8<span class="p">;</span> signed:0<span class="p">;</span>
+ field:const char *const * argv<span class="p">;</span>        offset:24<span class="p">;</span>      size:8<span class="p">;</span> signed:0<span class="p">;</span>
+ field:const char *const * envp<span class="p">;</span>        offset:32<span class="p">;</span>      size:8<span class="p">;</span> signed:0<span class="p">;</span>
+
+print fmt: <span class="s2">&#34;filename: 0x%08lx, argv: 0x%08lx, envp: 0x%08lx&#34;</span>, <span class="o">((</span>unsigned long<span class="o">)(</span>REC-&gt;filename<span class="o">))</span>, <span class="o">((</span>unsigned long
+<span class="o">)(</span>REC-&gt;argv<span class="o">))</span>, <span class="o">((</span>unsigned long<span class="o">)(</span>REC-&gt;envp<span class="o">))</span></code></pre></div>
+<p><code>const char *const * argv</code> のオフセットが24です。この情報を元に作業していきましょう。</p>
+
+<p>まず <code>argv</code> を取り出して、 <code>*argv</code> が <code>&quot;docker\0&quot;</code> と一致しているかを確認します。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">aya_bpf</span>::<span class="n">helpers</span>::<span class="p">{</span><span class="n">bpf_probe_read_user</span><span class="p">,</span><span class="w"> </span><span class="n">bpf_probe_read_user_str</span><span class="p">},</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="k">unsafe</span><span class="w"> </span><span class="k">fn</span> <span class="nf">try_docker_password_aya</span><span class="p">(</span><span class="n">ctx</span>: <span class="kp">&amp;</span><span class="nc">TracePointContext</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">Result</span><span class="o">&lt;</span><span class="kt">u32</span><span class="p">,</span><span class="w"> </span><span class="kt">i64</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">target</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">b&#34;docker</span><span class="se">\0</span><span class="s">&#34;</span><span class="p">;</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">argv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ctx</span><span class="p">.</span><span class="n">read_at</span>::<span class="o">&lt;*</span><span class="k">const</span><span class="w"> </span><span class="o">*</span><span class="k">const</span><span class="w"> </span><span class="kt">u8</span><span class="o">&gt;</span><span class="p">(</span><span class="mi">24</span><span class="p">)</span><span class="o">?</span><span class="p">;</span><span class="w">
+</span><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="n">argv</span><span class="p">.</span><span class="n">is_null</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">Err</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">exe</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="k">u8</span><span class="p">;</span><span class="w"> </span><span class="mi">7</span><span class="p">];</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">exe_ptr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bpf_probe_read_user</span><span class="p">(</span><span class="n">argv</span><span class="p">)</span><span class="o">?</span><span class="p">;</span><span class="w">
+</span><span class="w">    </span><span class="n">bpf_probe_read_user_str</span><span class="p">(</span><span class="n">exe_ptr</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">exe</span><span class="p">)</span><span class="o">?</span><span class="p">;</span><span class="w">
+</span><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="o">&amp;</span><span class="n">exe</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">target</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="c1">// ...
+</span><span class="c1"></span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w">    </span><span class="nb">Ok</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="w">
+</span><span class="w"></span><span class="p">}</span></code></pre></div>
+<p>このときメモリの読み出しに <code>bpf_probe_read_</code> 系の関数を使わないといけないのに気付かずにハマりました。あとこのデータってカーネルじゃなくてユーザ側にあるんですね。そこでもハマりました。</p>
+
+<p><code>*argv</code> が <code>&quot;docker\0&quot;</code> だったら次に進みます。本当は <code>/usr/bin/docker</code> とかもケアした方がいいんでしょうが、細けえことはいいんだよ。</p>
+
+<p><code>if</code> の中身では <code>argv</code> を1つ1つ確認していって <code>--password</code> が見付かったら次の引数を <code>DockeLog</code> に入れて送り出すということをします。イテレータとかが使えずにちょっと煩雑ですがトリッキーなところはありません。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="o">&amp;</span><span class="n">exe</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">target</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="cp">#[derive(Eq, PartialEq)]</span><span class="w">
+</span><span class="w">        </span><span class="k">enum</span> <span class="nc">ReadState</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">            </span><span class="n">NotYet</span><span class="p">,</span><span class="w">
+</span><span class="w">            </span><span class="n">ReadNext</span><span class="p">,</span><span class="w">
+</span><span class="w">            </span><span class="n">Done</span><span class="p">,</span><span class="w">
+</span><span class="w">        </span><span class="p">}</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">target</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">b&#34;--password</span><span class="se">\0</span><span class="s">&#34;</span><span class="p">;</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">arg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="k">u8</span><span class="p">;</span><span class="w"> </span><span class="mi">32</span><span class="p">];</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">read_password</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ReadState</span>::<span class="n">NotYet</span><span class="p">;</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
+</span><span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="mi">100</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">            </span><span class="n">arg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="k">u8</span><span class="p">;</span><span class="w"> </span><span class="mi">32</span><span class="p">];</span><span class="w">
+</span><span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">arg_ptr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bpf_probe_read_user</span><span class="p">(</span><span class="n">argv</span><span class="p">.</span><span class="n">offset</span><span class="p">(</span><span class="n">i</span><span class="p">))</span><span class="o">?</span><span class="p">;</span><span class="w">
+</span><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="n">arg_ptr</span><span class="p">.</span><span class="n">is_null</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">                </span><span class="k">return</span><span class="w"> </span><span class="nb">Ok</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span><span class="w">
+</span><span class="w">            </span><span class="p">}</span><span class="w">
+</span><span class="w">            </span><span class="n">count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bpf_probe_read_user_str</span><span class="p">(</span><span class="n">arg_ptr</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">arg</span><span class="p">)</span><span class="o">?</span><span class="p">;</span><span class="w">
+</span><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="n">read_password</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">ReadState</span>::<span class="n">ReadNext</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">                </span><span class="n">read_password</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ReadState</span>::<span class="n">Done</span><span class="p">;</span><span class="w">
+</span><span class="w">                </span><span class="k">break</span><span class="p">;</span><span class="w">
+</span><span class="w">            </span><span class="p">}</span><span class="w">
+</span><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="o">&amp;</span><span class="n">arg</span><span class="p">[</span><span class="o">..</span><span class="n">count</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="o">&amp;</span><span class="n">target</span><span class="p">[</span><span class="o">..</span><span class="p">]</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">                </span><span class="n">read_password</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ReadState</span>::<span class="n">ReadNext</span><span class="p">;</span><span class="w">
+</span><span class="w">            </span><span class="p">}</span><span class="w">
+</span><span class="w">        </span><span class="p">}</span><span class="w">
+</span><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="n">read_password</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">ReadState</span>::<span class="n">Done</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">entry</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">DockerLog</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">count</span><span class="p">,</span><span class="w"> </span><span class="n">data</span>: <span class="nc">arg</span><span class="w"> </span><span class="p">};</span><span class="w">
+</span><span class="w">            </span><span class="n">EVENTS</span><span class="p">.</span><span class="n">output</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">entry</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span><span class="w">
+</span><span class="w">        </span><span class="p">}</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span></code></pre></div>
+<p>これでeBPF側は完成です。</p>
+
+<p>最後にユーザランド側で <code>DockerLog</code> を受け取って表示する部分です。 <code>loop { /* ... */ }</code> の中身だけ書くと以下のようになります。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="kd">let</span><span class="w"> </span><span class="n">events</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">buf</span><span class="p">.</span><span class="n">read_events</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">buffers</span><span class="p">).</span><span class="k">await</span><span class="p">.</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
+</span><span class="w"></span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="n">events</span><span class="p">.</span><span class="n">read</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">buf</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">buffers</span><span class="p">[</span><span class="n">i</span><span class="p">];</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">ptr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">buf</span><span class="p">.</span><span class="n">as_ptr</span><span class="p">()</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="o">*</span><span class="k">const</span><span class="w"> </span><span class="n">DockerLog</span><span class="p">;</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">unsafe</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">ptr</span><span class="p">.</span><span class="n">read_unaligned</span><span class="p">()</span><span class="w"> </span><span class="p">};</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">password</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="n">data</span><span class="p">.</span><span class="n">data</span><span class="p">[</span><span class="mi">0</span><span class="o">..</span><span class="n">data</span><span class="p">.</span><span class="n">count</span><span class="p">];</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">password</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span>::<span class="n">ffi</span>::<span class="n">CStr</span>::<span class="n">from_bytes_with_nul</span><span class="p">(</span><span class="o">&amp;</span><span class="n">password</span><span class="p">);</span><span class="w">
+</span><span class="w">    </span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;LOG: password: {:?}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">password</span><span class="p">);</span><span class="w">
+</span><span class="w"></span><span class="p">}</span></code></pre></div>
+<p>NUL終端されてるので <code>CStr</code> を使ってる点以外では特段変なところはありません。</p>
+
+<p>実行してみましょう。チュートリアルと違ってeBPFバイナリがプログラムに埋め込まれる設計なので <code>carg xtask build-ebpf</code> のあとに <code>cargo build</code> をする必要がある点以外は特筆することはありません。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell">$ cargo xtask build-ebpf
+$ cargo build
+$ sudo ./target/debug/docker-password-aya
+...
+LOG: password: Ok<span class="o">(</span><span class="s2">&#34;hoge&#34;</span><span class="o">)</span>
+
+
+---------別ターミナル-------
+$ docker login --password hoge</code></pre></div>
+<p>動きましたね。めでたしめでたし。</p>
+
+<h2 id="まとめ">まとめ</h2>
+
+<p>Ayaを使ってeBPFで新しく作られたプロセスを監視し、<code>--password</code> を抜き出すプログラムを書いてみました。まあ、実行に <code>sudo</code> が必要な点で前回よりも攻撃性は下がってますが、練習なのでね。文字列のやりとりをちゃんと調べきれてませんが、一旦はRustだけでeBPFを動かすことに成功したのでよしとしましょう。</p>
+
+<p>eBPFに触れて満足しました。ソースコードは以下に置いています。参考にどうぞ。</p>
+
+<p><a href="https://github.com/KeenS/docker-password-aya/tree/main">KeenS/docker-password-aya</a></p>
+
+<p>また、今回のエントリは以下の記事を参考にしました。ありがとうございます。</p>
+
+<p><a href="https://qiita.com/moriai/items/c96636d35ae39809b45e#%E3%82%B9%E3%82%B1%E3%83%AB%E3%83%88%E3%83%B3%E3%83%97%E3%83%AD%E3%82%B0%E3%83%A9%E3%83%A0">RustでeBPFを操れるAyaを触ってみた - Qiita</a></p>
+                    </section>
+                </article>
+            </div>
+        </div>
+
+        <div class="row li-author">
+    <div class="sixteen columns">
+        Written by <strong>κeen</strong>
+    </div>
+</div>
+
+
+        <div class="row li-pagination">
+            <div class="eight columns">
+                <div class="li-pagination-previous">
+                    
+                        &nbsp;
+                    
+                </div>
+            </div>
+            <div class="eight columns">
+                <div class="li-pagination-next">
+                    
+                        Older article<br />
+                        <a href="https://KeenS.github.io/blog/2022/01/03/yokuarubenchima_kuwoshirabetai/"> よくあるベンチマークを調べたい</a>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+<footer class="li-page-footer">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-page-footer-legal">
+                    &copy; 2022. All rights reserved. 
+                </div>
+                <div class="li-page-footer-theme">
+                    <span class=""><a href="https://github.com/eliasson/liquorice/">liquorice</a> is a theme for <a href="http://hugo.spf13.com">hugo</a></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<script type="text/javascript">
+ function toggle(id) {
+     var e = document.getElementById(id);
+     e.style.display == 'block' ? e.style.display = 'none' : e.style.display = 'block';
+ }
+</script>
+<script src="https://unpkg.com/mermaid@7.0.4/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({startOnLoad:true
+     });</script>
+
+    </body>
+</html>
+
