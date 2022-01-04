@@ -33,12 +33,13 @@ categiores: []
 
 ## SNS accounts
 
-- Twitter: [@blackenedgold](http://twitter.com/blackenedgold)
+- Twitter: [@blackenedgold](https://twitter.com/blackenedgold)
 - GitHub: [KeenS](https://github.com/KeenS)
 - GitLab: [blackenedgold](https://gitlab.com/blackenedgold)
-- COOKPAD: [κeen](http://cookpad.com/kitchen/3303629)
+- COOKPAD: [κeen](https://cookpad.com/kitchen/3303629)
 - Qiita: [blackenedgold](https://qiita.com/blackenedgold)
-- SlideShare: [blackenedgold](http://www.slideshare.net/blackenedgold)
+- SlideShare: [blackenedgold](https://www.slideshare.net/blackenedgold)
+- zenn.dev: [blackenedgold](https://zenn.dev/blackenedgold)
 
 ## Main Interests
 
