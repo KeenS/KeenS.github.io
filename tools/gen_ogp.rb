@@ -6,6 +6,7 @@ require 'yaml'
 require 'date'
 require 'fileutils'
 require_relative 'inkscape'
+require 'cgi/escape'
 
 def char_class_of(c)
   case c
@@ -93,7 +94,7 @@ def extract_metadata(file)
 
   data = YAML.load(yaml)
 
-  titles = p(tokenize(data["title"]))
+  titles = p(tokenize(data["title"]).map {|frag|CGI.escapeHTML(frag)})
   date = data["date"].to_date
   tags = data["categories"]
 
