@@ -18,11 +18,15 @@
 
         <meta name="twitter:site" content="@blackenedgold" />
         <meta name="twitter:title" content="Rustでポインタから`Box&lt;[T]&gt;`を作る | κeenのHappy Hacκing Blog"/>
-        <meta name="twitter:description" content="κeenです。表題のとおりのことをやりたかったのですが、ピンポイントのAPIが見当らなかったのでやり方を書き留めます。" />
+        <meta name="twitter:description" content="κeenです。表題のとおりのことをやりたかったのですが、ピンポイントのAPIが見当らなかったのでやり方を書き留めます。
+
+2022-02-22: 末尾に追記しました" />
         <meta property="og:title" content="Rustでポインタから`Box&lt;[T]&gt;`を作る | κeenのHappy Hacκing Blog" />
         <meta property="og:type" content="article" />
         <meta property="og:url" content="https://KeenS.github.io/blog/2022/02/21/rustdepointakara_box_t__wotsukuru/" />
-        <meta property="og:description" content="κeenです。表題のとおりのことをやりたかったのですが、ピンポイントのAPIが見当らなかったのでやり方を書き留めます。" />
+        <meta property="og:description" content="κeenです。表題のとおりのことをやりたかったのですが、ピンポイントのAPIが見当らなかったのでやり方を書き留めます。
+
+2022-02-22: 末尾に追記しました" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta property="og:image" content="https://KeenS.github.io/images/ogp/post/Rustdepointakara_Box_T__wotsukuru.png" />
         <meta name="twitter:image" content="https://KeenS.github.io/images/ogp/post/Rustdepointakara_Box_T__wotsukuru.png" />
@@ -130,6 +134,8 @@
                     <section>
                         <p>κeenです。表題のとおりのことをやりたかったのですが、ピンポイントのAPIが見当らなかったのでやり方を書き留めます。</p>
 
+<p>2022-02-22: 末尾に追記しました</p>
+
 <p>やりたいこととしてはCとのFFIをやっていて要素列へのポインタと要素数があるときに、それをRustの世界に持ち込みたいというもの。</p>
 
 <p>コードはこういう感じですね。</p>
@@ -176,6 +182,24 @@
 </span><span class="w">    </span><span class="c1">// do something
 </span><span class="c1"></span><span class="p">}</span></code></pre></div>
 <p>小ネタでした。</p>
+
+<h1 id="2022-02-22-追記">2022-02-22 追記</h1>
+
+<p>有識者からそもそも外部のポインタを <code>Box</code> にするのは危いのではという指摘を頂きました。</p>
+
+<p><blockquote class="twitter-tweet" data-conversation="none"><p lang="ja" dir="ltr">* non-null で &quot;fully alligned&quot; であること<br>* global allocator で deallocate できること<br><br>が必要っぽくて、前者についてはまあ i32 の場合は問題ないとして、やっぱり後者がマズそうなんだよな (<a href="https://t.co/vy33f356Mi">https://t.co/vy33f356Mi</a> の最後らへんに書かれているやつ)</p>&mdash; らりお・ザ・.*🈗然㊌㋞㋰㋷㋓ (@lo48576) <a href="https://twitter.com/lo48576/status/1495459648681361408?ref_src=twsrc%5Etfw">February 20, 2022</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script></p>
+
+<p>Cで確保したデータはRustの要求する配置になっていない可能性がある点、CでallocしてRustでfreeできるか怪しい点が指摘されています。</p>
+
+<p><strong>私の書いたサンプルコードと実行環境ではたまたま</strong> これらの問題をクリアしていました。</p>
+
+<p>Linuxは基本メモリ確保は成功してNULLを返すことはありませんし、ポインタも <code>i32</code> の要求するアラインメントに適っています（多分glibcだと大丈夫なはず）。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="fm">assert!</span><span class="p">(</span><span class="n">ptr</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="kt">usize</span><span class="w"> </span><span class="o">%</span><span class="w"> </span><span class="n">std</span>::<span class="n">alloc</span>::<span class="n">Layout</span>::<span class="n">new</span>::<span class="o">&lt;</span><span class="kt">i32</span><span class="o">&gt;</span><span class="p">().</span><span class="n">align</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span></code></pre></div>
+<p>アロケータに関してはLinuxでは現行のRustはlibcのアロケータを使いますし、サンプルコードが全てなので別のところで<a href="https://doc.rust-lang.org/std/alloc/index.html#the-global_allocator-attribute">カスタムアロケータ</a>に差し替えられたりもしていません。</p>
+
+<p>しかし但し書きが多いことからも分かるように、Windowsだと怪しかったり、古いコンパイラ（std）だとjemalloc使ってたり、ライブラリで書くと別のところでアロケータを差し替えてたりするので未定義動作になりえます。これらはコードの書き方ではなくコンパイルや実行の方法に依存して変わるので気をつけて書いても防げない問題です。</p>
+
+<p>という訳で外部からやってきたポインタを <code>Box&lt;[T]&gt;</code> に変換するのはやめておいた方が無難なようです。Cとの連携などで一度 <code>Box&lt;[T]&gt;</code> を <code>*mut T</code> なんかにしたものを改めて <code>Box&lt;[T]&gt;</code> に戻す手段として利用するに留めておいて下さい。</p>
                     </section>
                 </article>
             </div>
