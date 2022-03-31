@@ -1,6 +1,6 @@
 ---
 categories: [FizzBuzz, OpenCL, GPU]
-date: 2022-03-31T00:00:01+09:00
+date: 2022-04-01T00:00:01+09:00
 draft: true
 title: "GPUを用いたFizzBuzzの高速化の取り組みの解説とか"
 ---
