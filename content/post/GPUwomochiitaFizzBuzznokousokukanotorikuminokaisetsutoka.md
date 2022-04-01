@@ -12,7 +12,9 @@ title: "GPUを用いたFizzBuzzの高速化の取り組みの解説とか"
 
 # コードの速度とか
 
-さて、少し真面目にプログラムを解説しましょう。なんとなくFizzBuzzをGPUで実行しても速くならんだろ、というのは理解できると思います。GPUは演算器が多くて並列な計算が高速ですが、メモリをCPUとやりとりするのは遅いので、行列積のようなメモリのコピーよりも演算コストが大きく、かつそのデータ並列性も高いような処理が得意です。FizzBuzzを省みると入力はただの数値だけ、演算コストは大きくなく、分岐があり、データ並列性も工夫しないと生まれず、出力は大量のメモリ上のデータといった具合にGPUで実行するのはおよそ向いていないプログラムです。とはいえ多少は並列化の恩恵はあり、記事中で紹介したプログラムはナイーブなFizzBuzzよりは3倍くらい速いようです。
+さて、少し真面目にプログラムを解説しましょう。なんとなくFizzBuzzをGPUで実行しても速くならんだろ、というのは理解できると思います。GPUは演算器が多くて並列な計算が高速ですが、メモリをCPUとやりとりするのは遅いので、行列積のようなメモリのコピーよりも演算コストが大きく、かつそのデータ並列性も高いような処理が得意です。FizzBuzzを省みると入力はただの数値だけ、演算コストは大きくなく、分岐があり、データ並列性も工夫しないと生まれず、出力は大量のメモリ上のデータといった具合にGPUで実行するのはおよそ向いていないプログラムです。さらに言えば出力を `/dev/null` にしてごまかしてますが、標準出力やファイルに書き出すならIOの方が重くなるのでGPUでやろうがCPUでやろうが大差ないはずです。
+
+とはいえ記事中では出力は `/dev/null` ですし多少は並列化の恩恵はあり、記事中で紹介したプログラムはナイーブなFizzBuzzよりは3倍くらい速いようです。
 
 
 ```console
@@ -170,7 +172,6 @@ use rayon::iter::IntoParallelIterator;
 use rayon::prelude::*;
 use std::env;
 use std::io::{stdout, Result, Write};
-use std::time::Instant;
 
 fn fizzbuzz(start: u64, end: u64) -> Result<Vec<u8>> {
     let mut o = Vec::with_capacity(((end - start) * 8) as usize);
@@ -206,13 +207,11 @@ fn main() -> Result<()> {
         .into_par_iter()
         .map(|k| fizzbuzz(k * block_size, (k + 1) * block_size - 1))
         .collect::<Vec<_>>();
-    let start = Instant::now();
     let o = stdout();
     let mut o = o.lock();
     for buf in bufs {
         o.write_all(&(buf?))?;
     }
-    eprintln!("write: {}ms", start.elapsed().as_millis());
     Ok(())
 }
 
