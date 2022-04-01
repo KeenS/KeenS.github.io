@@ -4,7 +4,7 @@ date: 2022-04-01T00:00:01+09:00
 title: "GPUを用いたFizzBuzzの高速化の取り組みの解説とか"
 ---
 
-κeenです。今年のエイプリルフールのジョークの[GPUを用いたFizzBuzzの高速化の取り組み]()について解説します。
+κeenです。今年のエイプリルフールのジョークの[GPUを用いたFizzBuzzの高速化の取り組み](https://keens.github.io/blog/2022/04/01/gpuwomochiitafizzbuzznokousokukanotorikumi/)について解説します。
 
 <!--more-->
 
