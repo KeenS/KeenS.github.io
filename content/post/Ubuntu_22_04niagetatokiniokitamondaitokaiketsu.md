@@ -68,3 +68,13 @@ Ubuntu 22.04で多くのアプリケーションがGTK4に移行した関係で�
 ちゃんとissueとかは調べてませんがibusも動かなかったので同様だと思います。
 
 fcitx5を使うようにすると解決しました。
+
+## Joplinが起動しない
+### 問題
+アプリケーションからJoplinを指定して実行しても梨のつぶて
+
+### 解決
+
+AppImageの展開が変わったっぽい。以下のURLの手順に従うと動いた。
+
+https://github.com/AppImage/AppImageKit/wiki/FUSE
