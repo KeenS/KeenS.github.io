@@ -51,8 +51,8 @@ fn main() -> io::Result<()> {
 起動時にコネクションプールを作って動くアプリケーションを雰囲気で書くとこんな感じです
 
 ```rust
-use some_crate::ConnectionPool
-use std::io
+use some_crate::ConnectionPool;
+use std::io;
 
 struct App {
     pool: ConnectionPool,
