@@ -91,7 +91,7 @@ use std::env;
 const APP_HOME_ENV: &str = "APP_HOME";
 
 fn main() -> io::Result<()> {
-    let home = env::var(APP_HOME_ENV).unwrap_or_else(||"/var/app".into());
+    let home = env::var(APP_HOME_ENV).unwrap_or_else(|_|"/var/app".into());
     // do something
     Ok(())
 }
