@@ -45,6 +45,22 @@ cp -R ~/.mozilla ~/snap/firefox/common/.mozilla
 
 最初シンボリックリンクを貼ったのですが多重起動判定されてFirefoxが立ち上がりませんでした。まあ、気持は分からんでもない。
 
+## Firefoxでファイルをダウンロードできない
+### 問題
+
+Firefoxでファイルのダウンロード系の操作をしても無言で何も動作しませんでした。syslogを見たりCLIから起動して標準出力を見たりすると以下のようなメッセージが出ています。
+
+``` sh
+Can't open portal file chooser: GDBus.Error:org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.portal.Desktop was not provided by any .service files
+```
+
+### 解決
+
+あんまりちゃんと把握してないですが、 `xdg-desktop-portal` のパッケージがないとこうなるらしいです。パッケージをインストールして再起動すると解決しました。
+
+``` sh
+sudo apt install xdg-desktop-portal-gnome
+```
 
 ## Alacrittyでxremapが効かない
 ### 問題
@@ -71,10 +87,11 @@ fcitx5を使うようにすると解決しました。
 
 ## Joplinが起動しない
 ### 問題
-アプリケーションからJoplinを指定して実行しても梨のつぶて
+
+アプリケーションからJoplinを指定して実行しても何も起こらずに起動をやめてしまう。
 
 ### 解決
 
-AppImageの展開が変わったっぽい。以下のURLの手順に従うと動いた。
+Joplinに限らずですが、AppImage系アプリの問題のようです。AppImageの展開が変わったっぽいです。以下のURLの手順に従うと動きました。
 
 https://github.com/AppImage/AppImageKit/wiki/FUSE
