@@ -79,7 +79,7 @@ nice tar cvf $HOME/Dropbox/backup/home.tar.xz \
 この処理を一旦手で叩いてみて動くか確認しましょう。 `mkdir -p $HOME/Dropbox/backup` とかが事前に必要かもしれませんし、 `pixz` がちゃんと動くかとかも調べておきたいですね。
 
 よさそうならスクリプトにまとめてcronを設定してあげます。
-以下の内容を `backup-home.sh` に保存して実行権限をつけましょう。cronだといくか手元と環境が違うのでそこだけ注意しながら清書します。
+以下の内容を ~~`backup-home.sh`~~ `backup-home` に保存して実行権限をつけましょう。cronだといくか手元と環境が違うのでそこだけ注意しながら清書します。
 
 ```shell
 #!/bin/sh
@@ -140,7 +140,7 @@ LOG_FILE=/var/log/backup-home.log
 main "$@" 2>&1 > $LOG_FILE
 ```
 
-あとは `sudo mv backup-home.sh /etc/cron.weekly/` としてあげれば設定終わりです。
+あとは ~~`sudo mv backup-home.sh /etc/cron.weekly/`~~ sudo mv backup-home /etc/cron.weekly/ としてあげれば設定終わりです。
 ログだけ出しっぱなしだと心配なのでlogrotateを設定してあげましょう。以下の内容を `/etc/logrotate.d/backup-home` に保存します。
 
 ```text
@@ -165,3 +165,21 @@ $ du -h $HOME/Dropbox/backup/home.tar.xz
 
 シンプルなツールの組み合わせで実現できてよかったです。
 
+## 2022-05-26 追記
+
+当初シェルスクリプトのファイル名を `backup-home.sh` としていましたが、ファイル名に `.` を含んでいると正しく動かないケースがあるので修正しました。
+`/etc/cron.{daily,weekly,monthly}` の実行は `cron` (or `anacron`)に用意されているエントリで処理されます。
+私のシステムでの `crontab` を見ると以下のようなエンントリになっています。
+
+
+``` console
+47 6    * * 7   root    test -x /usr/sbin/anacron || ( cd / && run-parts --report /etc/cron.weekly )
+```
+
+色々ややこしいのですが、 `run-parts --report /etc/cron.weekly` の部分に注目しましょう。 [`run-parts`](https://manpages.ubuntu.com/manpages/trusty/man8/run-parts.8.html)というプログラムでディレクトリ内にあるスクリプトを全て実行しています。
+この `run-parts` のマニュアルには以下のように書かれています。
+
+> `--lsbsysinit`  オプションと  `--regex` オプションのどちらも指定しない場合、このファイル名全体が `ASCII` の大文字小文字と `ASCII` の数字、`ASCII` のアンダースコアと `ASCII` のマイナス・ハイフンでできていなければなりません。
+
+つまり、ファイル名に `.` を含んでいては実行されないのです。いやー、そんな仕様があるなんて知りませんでしたね。
+この記事書いてから2週間くらい経って動いてないことに気付いて、そのあとでちゃんと時間とって調べてようやく解決しました。
