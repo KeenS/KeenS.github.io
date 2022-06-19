@@ -207,7 +207,7 @@ nice tar cvf <span class="nv">$HOME</span>/Dropbox/backup/home.tar.xz <span clas
 <p>この処理を一旦手で叩いてみて動くか確認しましょう。 <code>mkdir -p $HOME/Dropbox/backup</code> とかが事前に必要かもしれませんし、 <code>pixz</code> がちゃんと動くかとかも調べておきたいですね。</p>
 
 <p>よさそうならスクリプトにまとめてcronを設定してあげます。
-以下の内容を <code>backup-home.sh</code> に保存して実行権限をつけましょう。cronだといくか手元と環境が違うのでそこだけ注意しながら清書します。</p>
+以下の内容を <del><code>backup-home.sh</code></del> <code>backup-home</code> に保存して実行権限をつけましょう。cronだといくか手元と環境が違うのでそこだけ注意しながら清書します。</p>
 <div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="cp">#!/bin/sh
 </span><span class="cp"></span><span class="c1"># templated by http://qiita.com/blackenedgold/items/c9e60e089974392878c8</span>
 usage<span class="o">()</span> <span class="o">{</span>
@@ -264,7 +264,7 @@ main<span class="o">()</span> <span class="o">{</span>
 <span class="nb">set</span> -e
 <span class="nv">LOG_FILE</span><span class="o">=</span>/var/log/backup-home.log
 main <span class="s2">&#34;</span><span class="nv">$@</span><span class="s2">&#34;</span> 2&gt;<span class="p">&amp;</span><span class="m">1</span> &gt; <span class="nv">$LOG_FILE</span></code></pre></div>
-<p>あとは <code>sudo mv backup-home.sh /etc/cron.weekly/</code> としてあげれば設定終わりです。
+<p>あとは <del><code>sudo mv backup-home.sh /etc/cron.weekly/</code></del> sudo mv backup-home /etc/cron.weekly/ としてあげれば設定終わりです。
 ログだけ出しっぱなしだと心配なのでlogrotateを設定してあげましょう。以下の内容を <code>/etc/logrotate.d/backup-home</code> に保存します。</p>
 <div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">/var/log/backup-home.log {
         weekly
@@ -281,6 +281,23 @@ main <span class="s2">&#34;</span><span class="nv">$@</span><span class="s2">&#3
 <span class="go">129G    /home/name/Dropbox/backup/home.tar.xz
 </span></code></pre></div>
 <p>シンプルなツールの組み合わせで実現できてよかったです。</p>
+
+<h2 id="2022-05-26-追記">2022-05-26 追記</h2>
+
+<p>当初シェルスクリプトのファイル名を <code>backup-home.sh</code> としていましたが、ファイル名に <code>.</code> を含んでいると正しく動かないケースがあるので修正しました。
+<code>/etc/cron.{daily,weekly,monthly}</code> の実行は <code>cron</code> (or <code>anacron</code>)に用意されているエントリで処理されます。
+私のシステムでの <code>crontab</code> を見ると以下のようなエンントリになっています。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="go">47 6    * * 7   root    test -x /usr/sbin/anacron || ( cd / &amp;&amp; run-parts --report /etc/cron.weekly )
+</span></code></pre></div>
+<p>色々ややこしいのですが、 <code>run-parts --report /etc/cron.weekly</code> の部分に注目しましょう。 <a href="https://manpages.ubuntu.com/manpages/trusty/man8/run-parts.8.html"><code>run-parts</code></a>というプログラムでディレクトリ内にあるスクリプトを全て実行しています。
+この <code>run-parts</code> のマニュアルには以下のように書かれています。</p>
+
+<blockquote>
+<p><code>--lsbsysinit</code>  オプションと  <code>--regex</code> オプションのどちらも指定しない場合、このファイル名全体が <code>ASCII</code> の大文字小文字と <code>ASCII</code> の数字、<code>ASCII</code> のアンダースコアと <code>ASCII</code> のマイナス・ハイフンでできていなければなりません。</p>
+</blockquote>
+
+<p>つまり、ファイル名に <code>.</code> を含んでいては実行されないのです。いやー、そんな仕様があるなんて知りませんでしたね。
+この記事書いてから2週間くらい経って動いてないことに気付いて、そのあとでちゃんと時間とって調べてようやく解決しました。</p>
                     </section>
                 </article>
             </div>

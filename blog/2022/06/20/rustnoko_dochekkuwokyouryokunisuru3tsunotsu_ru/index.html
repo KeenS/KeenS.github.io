@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+    <head>
+        
+        
+        <script async src="https://www.googletagmanager.com/gtag/js?id=UA-43779888-1"></script>
+        <script>
+         window.dataLayer = window.dataLayer || [];
+         function gtag(){dataLayer.push(arguments);}
+         gtag('js', new Date());
+
+         gtag('config', 'UA-43779888-1');
+        </script>
+        
+
+        <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+
+        <meta name="twitter:site" content="@blackenedgold" />
+        <meta name="twitter:title" content="Rustのコードチェックを強力にする3つのツール | κeenのHappy Hacκing Blog"/>
+        <meta name="twitter:description" content="κeenです。
+Rustaceanのみなさんは普段書いてるRustのコードを検証するのに cargo check や cargo test などのツールを使っているかと思いますが、それらを強力にするツールの miri 、 MIRAI 、 kani をそれぞれ紹介します。" />
+        <meta property="og:title" content="Rustのコードチェックを強力にする3つのツール | κeenのHappy Hacκing Blog" />
+        <meta property="og:type" content="article" />
+        <meta property="og:url" content="https://KeenS.github.io/blog/2022/06/20/rustnoko_dochekkuwokyouryokunisuru3tsunotsu_ru/" />
+        <meta property="og:description" content="κeenです。
+Rustaceanのみなさんは普段書いてるRustのコードを検証するのに cargo check や cargo test などのツールを使っているかと思いますが、それらを強力にするツールの miri 、 MIRAI 、 kani をそれぞれ紹介します。" />
+        
+        <meta name="twitter:card" content="summary" />
+        <meta property="og:article:published_time" content="2022-06-20 03:53:40 &#43;0900 JST" />
+        <meta property="og:article:modified_time" content="2022-06-20 03:53:40 &#43;0900 JST" />
+        
+        <meta property="og:article:author" content="κeen" />
+
+        <title>Rustのコードチェックを強力にする3つのツール | κeenのHappy Hacκing Blog</title>
+        <link rel="stylesheet" href='//fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css' />
+        <link rel="stylesheet" href="https://KeenS.github.io/libraries/normalize.3.0.1.css" />
+        <link rel="stylesheet" href="https://KeenS.github.io/css/liquorice.css" />
+        <link rel="apple-touch-icon" sizes="180x180" href="https://KeenS.github.io/apple-touch-icon.png">
+        <link rel="icon" type="image/png" href="https://KeenS.github.io/favicon-32x32.png" sizes="32x32">
+        <link rel="icon" type="image/png" href="https://KeenS.github.io/favicon-16x16.png" sizes="16x16">
+        <link rel="manifest" href="https://KeenS.github.io/manifest.json">
+        <link rel="mask-icon" href="https://KeenS.github.io/safari-pinned-tab.svg" color="#5bbad5">
+        <meta name="theme-color" content="#ffffff">
+        <link rel="apple-touch-icon-precomposed" href="https://KeenS.github.io/apple-touch-icon-144-precomposed.png" sizes="144x144" />
+        <link rel="stylesheet" href="https://KeenS.github.io/css/syntax-monokai.css" />
+<script type="text/x-mathjax-config">
+ MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
+</script>
+<script async src="//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS_CHTML"></script>
+</script>
+<meta http-equiv="X-UA-Compatible" CONTENT="IE=EmulateIE7" />
+<link rel="stylesheet" href="//unpkg.com/mermaid@7.0.4/dist/mermaid.forest.min.css">
+
+    </head>
+    <body class="li-body">
+
+<header class="li-page-header" id="page-header">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-brand li-left">
+                <a href="https://KeenS.github.io/">κeenのHappy Hacκing Blog</a> | Lispエイリアンの狂想曲</div>
+                <div class="li-menu li-right">
+                    <span class="li-menu-icon" onclick="javascript:toggle('menu');">&#9776;</span>
+                    <ul id="menu2" class="li-menu-items">
+                        
+                            <li><a href="https://KeenS.github.io/about/"> About </a></li>
+                        
+                            <li><a href="https://KeenS.github.io/post/"> Blog </a></li>
+                        
+                            <li><a href="https://KeenS.github.io/slide/"> Slide </a></li>
+                        
+                            <li><a href="https://KeenS.github.io/index.xml"> Atom </a></li>
+                        
+                            <li><a href="https://KeenS.github.io/search/"> Search </a></li>
+                        
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="sixteen columns">
+                <ul id="menu" class="li-menu-items li-menu-mobile">
+                    
+                        <li><a href="https://KeenS.github.io/about/"> About </a></li>
+                    
+                        <li><a href="https://KeenS.github.io/post/"> Blog </a></li>
+                    
+                        <li><a href="https://KeenS.github.io/slide/"> Slide </a></li>
+                    
+                        <li><a href="https://KeenS.github.io/index.xml"> Atom </a></li>
+                    
+                        <li><a href="https://KeenS.github.io/search/"> Search </a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+
+
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <article class="li-article">
+                    <header class="li-article-header">
+                        <h1 class="li-article-title">Rustのコードチェックを強力にする3つのツール</h1>
+                        <div class="li-article-meta">
+    <time class="li-article-date">2022-06-20</time>
+    <ul class="li-article-tag">
+    
+        <li>
+            <a href="https://KeenS.github.io/categories/rust">Rust</a>
+        </li>
+    
+        <li>
+            <a href="https://KeenS.github.io/categories/%e5%bd%a2%e5%bc%8f%e6%a4%9c%e8%a8%bc">形式検証</a>
+        </li>
+    
+        <li>
+            <a href="https://KeenS.github.io/categories/%e6%8a%bd%e8%b1%a1%e8%a7%a3%e9%87%88">抽象解釈</a>
+        </li>
+    
+</ul>
+
+</div>
+
+                    </header>
+                    <section>
+                        <p>κeenです。
+Rustaceanのみなさんは普段書いてるRustのコードを検証するのに <code>cargo check</code> や <code>cargo test</code> などのツールを使っているかと思いますが、それらを強力にするツールの <a href="https://github.com/rust-lang/miri"><code>miri</code></a> 、 <a href="https://github.com/facebookexperimental/MIRAI"><code>MIRAI</code></a> 、 <a href="https://github.com/model-checking/kani"><code>kani</code></a> をそれぞれ紹介します。</p>
+
+<p>Rustにはいくつかコードの正しさや行儀のよさを検査する方法がありますね。
+<code>cargo check</code> や <code>cargo test</code> 、 あるいはビルドしたバイナリを走らせて検証したり色々手を尽くしているでしょう。
+ですがこれらだけだとあらゆる種類のバグを拾いきれる訳ではないのもみなさん承知の通りだと思います。
+既存の方法だと手が回らない所があるので他のアプローチでコードを検証してくれるツールがあると嬉しいですよね。
+そういったツールを3つ紹介します。</p>
+
+<p>先に注意しておくと、これらのツールはまだ成熟しきってはおらず使いづらい点、使い物にならない点も多々あるでしょう。
+仕事で使うというよりは趣味プロジェクトで興味本位で導入してみるか、くらいになるんじゃないかと思います。</p>
+
+<h2 id="miri">miri</h2>
+
+<h3 id="概要">概要</h3>
+
+<p><a href="https://github.com/rust-lang/miri">miri</a>はRustのインタプリタです。<code>cargo run</code> や <code>cargo test</code> の代わりに <code>cargo miri run</code> や <code>cargo miri test</code> とするとRustのコードをインタプリタ実行してくれます。</p>
+
+<p>このmiriの特徴の1つに、いくつかの種類の未定義動作が起きてないか検証してくれる点があります。要は <code>unsafe</code> を正しく使えているかのチェックに使える訳です。普通は未定義動作を踏むと特にエラーは起きずにプログラム実行した結果が壊れるのでみつけるのが難しいです。そこにきて未定義動作が起きている場所を特定してくれる <code>miri</code> は重宝します。</p>
+
+<h3 id="使い方">使い方</h3>
+
+<p>miriを使って簡単なコードを検証してみましょう。</p>
+
+<p>インストールは詳しくはガイドに従って欲しいのですが、rustupで入ります。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="gp">$ </span>rustup +nightly-2022-06-14 component add miri
+</code></pre></div>
+<p>以下のコードを考えましょう。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">arr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="mi">3</span><span class="p">];</span><span class="w">
+</span><span class="w">    </span><span class="k">unsafe</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;got {}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">arr</span><span class="p">.</span><span class="n">get_unchecked</span><span class="p">(</span><span class="mi">3</span><span class="p">));</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span></code></pre></div>
+<p>このコードは長さが3しかない配列の(0-indexedで)3番目の要素にアクセスしようとしているので存在しない要素へのアクセスとなり、未定義動作になります。しかしコンパイルしても特にエラーにならずに実行した結果が壊れるだけになってしまいます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="gp">$ </span>cargo run
+<span class="go">   Compiling miri-test v0.1.0 (/home/shun/Rust/miri-test)
+</span><span class="go">    Finished dev [unoptimized + debuginfo] target(s) in 0.43s
+</span><span class="go">     Running `target/debug/miri-test`
+</span><span class="go">got 1278960184
+</span></code></pre></div>
+<p>しかし <code>miri</code> を使って実行するとちゃんとエラーになり、ソースコードに問題のある箇所を教えてくれます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="gp">$ </span>cargo +nightly-2022-06-14 miri run
+<span class="go">   Compiling miri-test v0.1.0 (/home/shun/Rust/miri-test)
+</span><span class="go">    Finished dev [unoptimized + debuginfo] target(s) in 0.02s
+</span><span class="go">     Running `/home/shun/.rustup/toolchains/nightly-2022-06-14-x86_64-unknown-linux-gnu/bin/cargo-miri target/miri/x86_64-unknown-linux-gnu/debug/miri-test`
+</span><span class="go">error: Undefined Behavior: dereferencing pointer failed: alloc1733 has size 12, so pointer to 4 bytes starting at offset 12 is out-of-bounds
+</span><span class="go">   --&gt; /home/shun/.rustup/toolchains/nightly-2022-06-14-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/mod.rs:405:18
+</span><span class="go">    |
+</span><span class="go">405 |         unsafe { &amp;*index.get_unchecked(self) }
+</span><span class="go">    |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^ dereferencing pointer failed: alloc1733 has size 12, so pointer to 4 bytes starting at offset 12 is out-of-bounds
+</span><span class="go">    |
+</span><span class="go">    = help: this indicates a bug in the program: it performed an invalid operation, and caused Undefined Behavior
+</span><span class="go">    = help: see https://doc.rust-lang.org/nightly/reference/behavior-considered-undefined.html for further information
+</span><span class="go"></span><span class="err">
+</span><span class="err"></span><span class="go">    = note: inside `core::slice::&lt;impl [i32]&gt;::get_unchecked::&lt;usize&gt;` at /home/shun/.rustup/toolchains/nightly-2022-06-14-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/mod.rs:405:18
+</span><span class="go">note: inside `main` at src/main.rs:4:28
+</span><span class="go">   --&gt; src/main.rs:4:28
+</span><span class="go">    |
+</span><span class="go">4   |         println!(&#34;got {}&#34;, arr.get_unchecked(3));
+</span><span class="go">    |                            ^^^^^^^^^^^^^^^^^^^^
+</span><span class="go"></span><span class="err">
+</span><span class="err"></span><span class="go">note: some details are omitted, run with `MIRIFLAGS=-Zmiri-backtrace=full` for a verbose backtrace
+</span><span class="go"></span><span class="err">
+</span><span class="err"></span><span class="go">error: aborting due to previous error
+</span></code></pre></div>
+<p>便利ですね。</p>
+
+<h3 id="注意点">注意点</h3>
+
+<p>インストールにnightlyを使ってることから察した方もいるかと思いますが、まだ実験的な存在です。色々至らぬ点はあるでしょう。
+また、設計上の制約もいくつかあります。インタプリタとして実行しているので実際に実行されなかった箇所での未定義動作は判別できません。エッジケースで未定義動作になる場合はちゃんとそこを通るような実行の仕方をしないといけない訳です。
+またプラットフォーム依存のコードは動きませんしFFIも今のところサポートしていません。一番unsafeを使いたいところなので歯痒いですね。</p>
+
+<p>これらを踏まえてバグが見付かればラッキーくらいの気持で使っていくといいんじゃないですかね。</p>
+
+<h2 id="mirai">MIRAI</h2>
+
+<h3 id="概要-1">概要</h3>
+
+<p><a href="https://github.com/facebookexperimental/MIRAI">MIRAI</a>はMIRの抽象解釈によってパニックが起きる箇所をみつけてくれるツールです。要は <code>cargo check</code> の意図しないパニックをみつけてくれるバージョンです。さらに言えば <code>assert!</code> を上手く使うとある種のコードの正しさも検査できます。</p>
+
+<p>抽象解釈というのはコードを近似的に解釈してある種の性質が成り立つかを検査する手法です。型が具体的な値を計算せずにある種の正しさを検査しているのに似ていますね。</p>
+
+<h3 id="使い方-1">使い方</h3>
+
+<p>インストールは公式のガイドを読んで下さい。自前でビルドすることになります。</p>
+
+<p>先程と同様に配列の3番目にアクセスしてみましょう。ただし、今回は <code>get</code> を使っているので <code>Option</code> が返ります。そこに対して <code>unwrap</code> を呼んでいます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">arr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="mi">3</span><span class="p">];</span><span class="w">
+</span><span class="w">    </span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">arr</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="mi">3</span><span class="p">).</span><span class="n">unwrap</span><span class="p">());</span><span class="w">
+</span><span class="w"></span><span class="p">}</span></code></pre></div>
+<p>これを <code>cargo mirai</code> にかけるとパニックするかもよ、と教えてくれます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="gp">$ </span>cargo  mirai
+<span class="go">    Checking miri-test v0.1.0 (/home/shun/Rust/miri-test)
+</span><span class="go">    Finished dev [unoptimized + debuginfo] target(s) in 0.32s
+</span><span class="go">    Checking miri-test v0.1.0 (/home/shun/Rust/miri-test)
+</span><span class="go">warning: called `Option::unwrap()` on a `None` value
+</span><span class="go"> --&gt; src/main.rs:3:20
+</span><span class="go">  |
+</span><span class="go">3 |     println!(&#34;{}&#34;, arr.get(3).unwrap());
+</span><span class="go">  |                    ^^^^^^^^^^^^^^^^^^^
+</span><span class="go"></span><span class="err">
+</span><span class="err"></span><span class="go">warning: `miri-test` (bin &#34;miri-test&#34;) generated 1 warning
+</span><span class="go">    Finished dev [unoptimized + debuginfo] target(s) in 0.16s
+</span></code></pre></div>
+<p>MIRAIは抽象解釈をする、つまりある程度Rustのコードを理解しているので2番目の要素へのアクセスだと警告が出ません。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">arr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="mi">3</span><span class="p">];</span><span class="w">
+</span><span class="w">    </span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">arr</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="mi">2</span><span class="p">).</span><span class="n">unwrap</span><span class="p">());</span><span class="w">
+</span><span class="w"></span><span class="p">}</span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="gp">$ </span>cargo  mirai
+<span class="go">    Checking miri-test v0.1.0 (/home/shun/Rust/miri-test)
+</span><span class="go">    Finished dev [unoptimized + debuginfo] target(s) in 0.33s
+</span><span class="go">    Checking miri-test v0.1.0 (/home/shun/Rust/miri-test)
+</span><span class="go">    Finished dev [unoptimized + debuginfo] target(s) in 0.16s
+</span></code></pre></div>
+<p>あるいは、以下のように明示的に <code>assert_eq!</code> を使えばテストのような使い方もできます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">flatten</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="p">(</span><span class="n">e</span>: <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">Option</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;&gt;</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">Option</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="k">match</span><span class="w"> </span><span class="n">e</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="nb">Some</span><span class="p">(</span><span class="nb">Some</span><span class="p">(</span><span class="n">e</span><span class="p">))</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="n">e</span><span class="p">),</span><span class="w">
+</span><span class="w">        </span><span class="n">_</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="nb">None</span><span class="p">,</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="nb">Some</span><span class="p">(</span><span class="mi">1</span><span class="p">));</span><span class="w">
+</span><span class="w">    </span><span class="fm">assert_eq!</span><span class="p">(</span><span class="n">flatten</span><span class="p">(</span><span class="n">v</span><span class="p">),</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="mi">1</span><span class="p">));</span><span class="w">
+</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="nb">None</span>::<span class="o">&lt;</span><span class="kt">bool</span><span class="o">&gt;</span><span class="p">);</span><span class="w">
+</span><span class="w">    </span><span class="fm">assert_eq!</span><span class="p">(</span><span class="n">flatten</span><span class="p">(</span><span class="n">v</span><span class="p">),</span><span class="w"> </span><span class="nb">None</span><span class="p">);</span><span class="w">
+</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">None</span>::<span class="o">&lt;</span><span class="nb">Option</span><span class="o">&lt;</span><span class="kt">f32</span><span class="o">&gt;&gt;</span><span class="p">;</span><span class="w">
+</span><span class="w">    </span><span class="fm">assert_eq!</span><span class="p">(</span><span class="n">flatten</span><span class="p">(</span><span class="n">v</span><span class="p">),</span><span class="w"> </span><span class="nb">None</span><span class="p">);</span><span class="w">
+</span><span class="w"></span><span class="p">}</span></code></pre></div>
+<p>これは関数を呼び出した後に <code>assert</code> をつけていますが関数内に <code>assert</code> を置けばコードの正しさの確認になりますし、読む人へのドキュメントにもなります。</p>
+
+<h3 id="注意点-1">注意点</h3>
+
+<p>MIRAIは必ずパニックをみつけてくれる訳でもMIRAIが警告したら必ずダメなコードとも限りません。例えば上記の <code>flatten</code> の確認は真ん中の <code>assert</code> で常に成り立つにも関わらず警告が出ます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="gp">$ </span>cargo mirai
+<span class="go">    Checking miri-test v0.1.0 (/home/shun/Rust/miri-test)
+</span><span class="go">    Finished dev [unoptimized + debuginfo] target(s) in 0.32s
+</span><span class="go">    Checking miri-test v0.1.0 (/home/shun/Rust/miri-test)
+</span><span class="go">warning: assertion failed
+</span><span class="go">  --&gt; src/main.rs:13:5
+</span><span class="go">   |
+</span><span class="go">13 |     assert_eq!(flatten(v), None);
+</span><span class="go">   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+</span><span class="go"></span><span class="err">
+</span><span class="err"></span><span class="go">warning: `miri-test` (bin &#34;miri-test&#34;) generated 1 warning
+</span><span class="go">    Finished dev [unoptimized + debuginfo] target(s) in 0.13s
+</span></code></pre></div>
+<p>因みに <code>Option(None::&lt;bool&gt;)</code> ではなく <code>Option(None::&lt;i32&gt;)</code> にすると検査が通ります。ちょっとナイーブなところがあるようです。</p>
+
+<p>また、コードを実行するかのように検査をするので <code>main</code> 関数かテスト関数を起点としないと検査できません。ライブラリを書くときにちょっと注意ですね。</p>
+
+<h2 id="kani">kani</h2>
+
+<p><a href="https://github.com/model-checking/kani">kani</a>はモデル検査によりパニックが起きないか(+色々)検査するツールです。Quickcheckなどのプロパティベーステストを御存じの方はそれを強力にやるツールだと思えばいいでしょう。まあ、MIRAIと同様にpanicが起きないことを検査するツールとしても使えます。</p>
+
+<p>ちょっとプロパティベーステストについて例を出します。例えば数値の絶対値のマイナスを返す関数 <code>nabs</code> を考えます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">nabs</span><span class="p">(</span><span class="n">i</span>: <span class="kt">i32</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">i32</span> <span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="o">-</span><span class="n">i</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="n">i</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span></code></pre></div>
+<p>この関数は必ず0以下の値を返すはずですね。こういう関数の性質のようなものを検査するがプロパティベーステストです。従来の方法だと <a href="https://crates.io/crates/proptest"><code>proptest</code></a> のようなライブラリを使っていくつか乱数で生成した値を使ってテストする方法が知られています。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">proptest</span>::<span class="n">prelude</span>::<span class="o">*</span><span class="p">;</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="n">proptest</span><span class="o">!</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="cp">#[test]</span><span class="w">
+</span><span class="w">    </span><span class="k">fn</span> <span class="nf">i64_nabs_is_never_positive</span><span class="p">(</span><span class="n">a</span>: <span class="kt">i64</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="fm">assert!</span><span class="p">(</span><span class="n">nabs</span><span class="p">(</span><span class="n">a</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span></code></pre></div>
+<p>これはある程度は上手くいくのですが、下手鉄砲方式なのでほとんど正しくて一部のエッジケースで正しくないようなものをみつけるのが難しいという欠点がありました。</p>
+
+<p>kaniは値を与えて結果を見るのではなく、プログラムを見て振る舞いを解析することで性質が成り立つかを検査するのでエッジケースにも上手く対処できます。</p>
+
+<h3 id="使い方-2">使い方</h3>
+
+<p><code>cargo install</code> でインストールしたあとにセットアップすると使えます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="go">cargo install --lock kani-verifier --version &lt;VERSION&gt;
+</span><span class="go">cargo-kani setup
+</span></code></pre></div>
+<p>プロパティテストでは「任意の値に対して~」のような書き方をするのですが、 <code>kani</code> では <code>kani::any()</code> を使って任意の値を作れます。先程の <code>nabs</code> の例でいくと、 以下のようなテストが書けます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#[cfg(kani)]</span><span class="w">
+</span><span class="w"></span><span class="cp">#[kani::proof]</span><span class="w">
+</span><span class="w"></span><span class="k">fn</span> <span class="nf">test_nabs</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kani</span>::<span class="n">any</span><span class="p">();</span><span class="w">
+</span><span class="w">    </span><span class="fm">assert!</span><span class="p">(</span><span class="n">nabs</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span><span class="w">
+</span><span class="w"></span><span class="p">}</span></code></pre></div>
+<p>以下のように <code>cargo kani --tests</code> でテストの検査をしてくれます。ほとんど <code>cargo test</code> を置き換えるような形の使い方ですね。
+ちょっと出力が長いですがちゃんと検査して正しいことを確認できます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="gp">$ </span>cargo kani --tests
+<span class="go">   Compiling miri-test v0.1.0 (/home/shun/Rust/miri-test)
+</span><span class="go">    Finished test [unoptimized + debuginfo] target(s) in 0.04s
+</span><span class="go">  Executable unittests src/lib.rs (target/x86_64-unknown-linux-gnu/debug/deps/miri_test-d3cc2857db208f27)
+</span><span class="go">  Executable unittests src/main.rs (target/x86_64-unknown-linux-gnu/debug/deps/miri_test-b3499c7eb629943c)
+</span><span class="go">Checking harness test_abs...
+</span><span class="go">CBMC 5.59.0 (cbmc-5.59.0)
+</span><span class="go">CBMC version 5.59.0 (cbmc-5.59.0) 64-bit x86_64 linux
+</span><span class="go">Reading GOTO program from file target/x86_64-unknown-linux-gnu/debug/deps/cbmc-for-test_abs.out
+</span><span class="go">Generating GOTO Program
+</span><span class="go">Adding CPROVER library (x86_64)
+</span><span class="go">Removal of function pointers and virtual functions
+</span><span class="go">Generic Property Instrumentation
+</span><span class="go">Running with 16 object bits, 48 offset bits (user-specified)
+</span><span class="go">Starting Bounded Model Checking
+</span><span class="go">Runtime Symex: 0.0110323s
+</span><span class="go">size of program expression: 959 steps
+</span><span class="go">slicing removed 546 assignments
+</span><span class="go">Generated 6 VCC(s), 4 remaining after simplification
+</span><span class="go">Runtime Postprocess Equation: 6.9162e-05s
+</span><span class="go">Passing problem to propositional reduction
+</span><span class="go">converting SSA
+</span><span class="go">Runtime Convert SSA: 0.000723774s
+</span><span class="go">Running propositional reduction
+</span><span class="go">Post-processing
+</span><span class="go">Runtime Post-process: 5.42e-06s
+</span><span class="go">Solving with MiniSAT 2.2.1 with simplifier
+</span><span class="go">297 variables, 780 clauses
+</span><span class="go">SAT checker: instance is SATISFIABLE
+</span><span class="go">Runtime Solver: 0.000465309s
+</span><span class="go">Runtime decision procedure: 0.00123455s
+</span><span class="go"></span><span class="err">
+</span><span class="err"></span><span class="go">RESULTS:
+</span><span class="go">Check 1: test_abs.assertion.1
+</span><span class="go">         - Status: SUCCESS
+</span><span class="go">         - Description: &#34;assertion failed: nabs(i) &lt;= 0&#34;
+</span><span class="go">         - Location: src/lib.rs:13:5 in function test_abs
+</span><span class="go"></span><span class="err">
+</span><span class="err"></span><span class="go">Check 2: &lt;T as kani::Arbitrary&gt;::any.unsupported_construct.1
+</span><span class="go">         - Status: SUCCESS
+</span><span class="go">         - Description: &#34;resume instruction&#34;
+</span><span class="go">         - Location: ~/.kani/kani-0.4.0/library/kani/src/arbitrary.rs:17:5 in function &lt;T as kani::Arbitrary&gt;::any
+</span><span class="go"></span><span class="err">
+</span><span class="err"></span><span class="go">Check 3: nabs.assertion.1
+</span><span class="go">         - Status: SUCCESS
+</span><span class="go">         - Description: &#34;attempt to negate with overflow&#34;
+</span><span class="go">         - Location: src/lib.rs:3:9 in function nabs
+</span><span class="go"></span><span class="err">
+</span><span class="err">
+</span><span class="err"></span><span class="go">SUMMARY:
+</span><span class="go"> ** 0 of 3 failed
+</span><span class="go"></span><span class="err">
+</span><span class="err"></span><span class="go">VERIFICATION:- SUCCESSFUL
+</span><span class="go"></span><span class="err">
+</span><span class="err">
+</span><span class="err"></span><span class="go">Verification Time: 0.033749647s
+</span><span class="go">Checking harness test_abs...
+</span><span class="go">CBMC 5.59.0 (cbmc-5.59.0)
+</span><span class="go">CBMC version 5.59.0 (cbmc-5.59.0) 64-bit x86_64 linux
+</span><span class="go">Reading GOTO program from file target/x86_64-unknown-linux-gnu/debug/deps/cbmc-for-test_abs.out
+</span><span class="go">Generating GOTO Program
+</span><span class="go">Adding CPROVER library (x86_64)
+</span><span class="go">Removal of function pointers and virtual functions
+</span><span class="go">Generic Property Instrumentation
+</span><span class="go">Running with 16 object bits, 48 offset bits (user-specified)
+</span><span class="go">Starting Bounded Model Checking
+</span><span class="go">Runtime Symex: 0.0109523s
+</span><span class="go">size of program expression: 959 steps
+</span><span class="go">slicing removed 546 assignments
+</span><span class="go">Generated 6 VCC(s), 4 remaining after simplification
+</span><span class="go">Runtime Postprocess Equation: 7.6222e-05s
+</span><span class="go">Passing problem to propositional reduction
+</span><span class="go">converting SSA
+</span><span class="go">Runtime Convert SSA: 0.000724784s
+</span><span class="go">Running propositional reduction
+</span><span class="go">Post-processing
+</span><span class="go">Runtime Post-process: 5.7e-06s
+</span><span class="go">Solving with MiniSAT 2.2.1 with simplifier
+</span><span class="go">297 variables, 780 clauses
+</span><span class="go">SAT checker: instance is SATISFIABLE
+</span><span class="go">Runtime Solver: 0.000470079s
+</span><span class="go">Runtime decision procedure: 0.00124127s
+</span><span class="go"></span><span class="err">
+</span><span class="err"></span><span class="go">RESULTS:
+</span><span class="go">Check 1: test_abs.assertion.1
+</span><span class="go">         - Status: SUCCESS
+</span><span class="go">         - Description: &#34;assertion failed: nabs(i) &lt;= 0&#34;
+</span><span class="go">         - Location: src/lib.rs:13:5 in function test_abs
+</span><span class="go"></span><span class="err">
+</span><span class="err"></span><span class="go">Check 2: &lt;T as kani::Arbitrary&gt;::any.unsupported_construct.1
+</span><span class="go">         - Status: SUCCESS
+</span><span class="go">         - Description: &#34;resume instruction&#34;
+</span><span class="go">         - Location: ~/.kani/kani-0.4.0/library/kani/src/arbitrary.rs:17:5 in function &lt;T as kani::Arbitrary&gt;::any
+</span><span class="go"></span><span class="err">
+</span><span class="err"></span><span class="go">Check 3: nabs.assertion.1
+</span><span class="go">         - Status: SUCCESS
+</span><span class="go">         - Description: &#34;attempt to negate with overflow&#34;
+</span><span class="go">         - Location: src/lib.rs:3:9 in function nabs
+</span><span class="go"></span><span class="err">
+</span><span class="err">
+</span><span class="err"></span><span class="go">SUMMARY:
+</span><span class="go"> ** 0 of 3 failed
+</span><span class="go"></span><span class="err">
+</span><span class="err"></span><span class="go">VERIFICATION:- SUCCESSFUL
+</span><span class="go"></span><span class="err">
+</span><span class="err">
+</span><span class="err"></span><span class="go">Verification Time: 0.03509131s
+</span><span class="go">Complete - 2 successfully verified harnesses, 0 failures, 2 total.
+</span></code></pre></div>
+<p><code>VERIFICATION:- SUCCESSFUL</code> で終わっているので検査に通っています。</p>
+
+<p>因みに勘のいい方は気付いたかもしれませんが、 <code>nabs</code> ではなくただの絶対値が非負なことを検査するテストだと検査に通りません。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#[cfg(kani)]</span><span class="w">
+</span><span class="w"></span><span class="cp">#[kani::proof]</span><span class="w">
+</span><span class="w"></span><span class="k">fn</span> <span class="nf">test_abs</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kani</span>::<span class="n">any</span>::<span class="o">&lt;</span><span class="kt">i32</span><span class="o">&gt;</span><span class="p">();</span><span class="w">
+</span><span class="w">    </span><span class="fm">assert!</span><span class="p">(</span><span class="n">i</span><span class="p">.</span><span class="n">abs</span><span class="p">()</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span><span class="w">
+</span><span class="w"></span><span class="p">}</span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="gp">$ </span>cargo kani --tests
+<span class="err">
+</span><span class="err"></span><span class="go">...
+</span><span class="go"></span><span class="err">
+</span><span class="err"></span><span class="go">RESULTS:
+</span><span class="go">Check 1: test_abs.assertion.1
+</span><span class="go">         - Status: FAILURE
+</span><span class="go">         - Description: &#34;assertion failed: i.abs() &gt;= 0&#34;
+</span><span class="go">         - Location: src/lib.rs:13:5 in function test_abs
+</span><span class="go"></span><span class="err">
+</span><span class="err"></span><span class="go">Check 2: core::num::&lt;impl i32&gt;::abs.assertion.1
+</span><span class="go">         - Status: FAILURE
+</span><span class="go">         - Description: &#34;attempt to negate with overflow&#34;
+</span><span class="go">         - Location: /rustc/7466d5492b2d28d2ba5114dbe71511a6502ac822/library/core/src/num/int_macros.rs:2423:17 in function core::num::&lt;impl i32&gt;::abs
+</span><span class="go"></span><span class="err">
+</span><span class="err"></span><span class="go">Check 3: &lt;T as kani::Arbitrary&gt;::any.unsupported_construct.1
+</span><span class="go">         - Status: SUCCESS
+</span><span class="go">         - Description: &#34;resume instruction&#34;
+</span><span class="go">         - Location: ~/.kani/kani-0.4.0/library/kani/src/arbitrary.rs:17:5 in function &lt;T as kani::Arbitrary&gt;::any
+</span><span class="go"></span><span class="err">
+</span><span class="err">
+</span><span class="err"></span><span class="go">SUMMARY:
+</span><span class="go"> ** 2 of 3 failed
+</span><span class="go">Failed Checks: assertion failed: i.abs() &gt;= 0
+</span><span class="go"> File: &#34;/home/shun/Rust/miri-test/src/lib.rs&#34;, line 13, in test_abs
+</span><span class="go">Failed Checks: attempt to negate with overflow
+</span><span class="go"> File: &#34;/rustc/7466d5492b2d28d2ba5114dbe71511a6502ac822/library/core/src/num/int_macros.rs&#34;, line 2423, in core::num::&lt;impl i32&gt;::abs
+</span><span class="go"></span><span class="err">
+</span><span class="err"></span><span class="go">VERIFICATION:- FAILED
+</span><span class="go"></span><span class="err">
+</span><span class="err">
+</span><span class="err"></span><span class="go">Summary:
+</span><span class="go">Verification failed for - test_abs
+</span><span class="go">Verification failed for - test_abs
+</span><span class="go">Complete - 0 successfully verified harnesses, 2 failures, 2 total.
+</span></code></pre></div>
+<p>これは<a href="https://ja.wikipedia.org/wiki/2の補数">2の補数</a>表現の限界で、 <code>i32::MIN</code> のマイナスを取っても対応する正の値が存在しないからです。
+既存のランダムな値を入れてみるテストはこういうエッジケースを見付けるのが苦手ですが、kaniはちゃんとみつけてくれます。
+これはこれで嬉しいのですが、既に分かってる限界については「<code>i32::MIN</code> 以外の入力では非負になる」のように入力に条件をつけて書けると嬉しいですよね。こういうときは <code>kani::assume</code> を使ってあげるとそこを考慮して検査してくれます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#[cfg(kani)]</span><span class="w">
+</span><span class="w"></span><span class="cp">#[kani::proof]</span><span class="w">
+</span><span class="w"></span><span class="k">fn</span> <span class="nf">test_abs</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kani</span>::<span class="n">any</span>::<span class="o">&lt;</span><span class="kt">i32</span><span class="o">&gt;</span><span class="p">();</span><span class="w">
+</span><span class="w">    </span><span class="n">kani</span>::<span class="n">assume</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kt">i32</span>::<span class="n">MIN</span><span class="p">);</span><span class="w">
+</span><span class="w">    </span><span class="fm">assert!</span><span class="p">(</span><span class="n">i</span><span class="p">.</span><span class="n">abs</span><span class="p">()</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span><span class="w">
+</span><span class="w"></span><span class="p">}</span></code></pre></div>
+<p>このコードなら検査に通ります。一般にテストは事前条件、操作、事後条件を使って記述しますが、事前条件に <code>kani::any</code> と <code>kani::assume</code> を使うイメージですね。</p>
+
+<p>他にも検査に通らなかった場合にどういう実行系列で失敗したのか表示する機能などもあるので詳しくはドキュメントを読んでみて下さい。</p>
+
+<h3 id="注意点-2">注意点</h3>
+
+<p><code>kani::any</code> であらゆる入力への検査をしている関係かは知りませんが、文字列のように無限の空間を持つ値の検査はできなようです。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="gp">$ </span>cargo kani --tests
+<span class="go">   Compiling miri-test v0.1.0 (/home/shun/Rust/miri-test)
+</span><span class="go">error[E0277]: the trait bound `&amp;str: kani::Invariant` is not satisfied
+</span><span class="go">  --&gt; src/lib.rs:4:13
+</span><span class="go">   |
+</span><span class="go">4  |     let s = kani::any::&lt;&amp;str&gt;();
+</span><span class="go">   |             ^^^^^^^^^^^^^^^^^ the trait `kani::Invariant` is not implemented for `&amp;str`
+</span><span class="go">   |
+</span><span class="go">   = help: the following other types implement trait `kani::Invariant`:
+</span><span class="go">             ()
+</span><span class="go">             [T; N]
+</span><span class="go">             bool
+</span><span class="go">             char
+</span><span class="go">             f32
+</span><span class="go">             f64
+</span><span class="go">             i128
+</span><span class="go">             i16
+</span><span class="go">           and 24 others
+</span><span class="go">   = note: required because of the requirements on the impl of `kani::Arbitrary` for `&amp;str`
+</span><span class="go">note: required by a bound in `kani::any`
+</span><span class="go">  --&gt; /home/shun/.kani/kani-0.4.0/library/kani/src/lib.rs:70:15
+</span><span class="go">   |
+</span><span class="go">70 | pub fn any&lt;T: Arbitrary&gt;() -&gt; T {
+</span><span class="go">   |               ^^^^^^^^^ required by this bound in `kani::any`
+</span><span class="go"></span><span class="err">
+</span><span class="err"></span><span class="go">For more information about this error, try `rustc --explain E0277`.
+</span><span class="go">Error: &#34;Failed to compile crate.&#34;
+</span><span class="go">Error: &#34;Failed to compile crate.&#34;
+</span><span class="go">error: could not compile `miri-test` due to previous error
+</span><span class="go">warning: build failed, waiting for other jobs to finish...
+</span><span class="go">error: could not compile `miri-test` due to previous error
+</span><span class="go">Error: cargo exited with status exit status: 101
+</span></code></pre></div>
+<p>モデル検査はあらゆる可能性を探索するので大きなコードだと時間がかかりすぎる可能性があります。また、あまり複雑なロジックはそもそも成り立つ性質を言いづらいことがあります。小さな関数からはじめることになるでしょう。</p>
+
+<p>因みに結果については信頼できるはずで、検査に通れば望んだ性質が必ず成り立つことが、検査に通らなければ少くとも1つ失敗する入力があることが言えるはずです。ただし検査がSUCCESSにもFAILUREにもならずに検査をあきらめてしまうこともあります。詳しくはモデル検査で調べてみて下さい。</p>
+
+<h2 id="まとめ">まとめ</h2>
+
+<p>Rustのコードを検査するツールをいくつか紹介しました。
+どれも問題へのアプローチは優れているのですが、ツールの出来栄えの面でやや不安が残るかなというのが個人的感想です。
+そういう意味では試してみる人が増えた方が改善がはかどるはずなので少し紹介してみました。
+みなさんも興味が湧いたら使ってみて下さい。</p>
+                    </section>
+                </article>
+            </div>
+        </div>
+
+        <div class="row li-author">
+    <div class="sixteen columns">
+        Written by <strong>κeen</strong>
+    </div>
+</div>
+
+
+        <div class="row li-pagination">
+            <div class="eight columns">
+                <div class="li-pagination-previous">
+                    
+                        &nbsp;
+                    
+                </div>
+            </div>
+            <div class="eight columns">
+                <div class="li-pagination-next">
+                    
+                        Older article<br />
+                        <a href="https://KeenS.github.io/slide/droptofuturetodropnofuture/"> DropとFutureとDropのfuture</a>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+<footer class="li-page-footer">
+    <div class="container">
+        <div class="row">
+            <div class="sixteen columns">
+                <div class="li-page-footer-legal">
+                    &copy; 2022. All rights reserved. 
+                </div>
+                <div class="li-page-footer-theme">
+                    <span class=""><a href="https://github.com/eliasson/liquorice/">liquorice</a> is a theme for <a href="http://hugo.spf13.com">hugo</a></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<script type="text/javascript">
+ function toggle(id) {
+     var e = document.getElementById(id);
+     e.style.display == 'block' ? e.style.display = 'none' : e.style.display = 'block';
+ }
+</script>
+<script src="https://unpkg.com/mermaid@7.0.4/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({startOnLoad:true
+     });</script>
+
+    </body>
+</html>
+
