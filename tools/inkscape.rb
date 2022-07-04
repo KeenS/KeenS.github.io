@@ -48,11 +48,13 @@ class Inkscape
 
   def execute(action)
     run_action(action)
+    @inkscape.gets
     discard_prompt
   end
 
   def query_line(action)
     run_action(action)
+    @inkscape.gets
     ret = @inkscape.gets.chomp
     discard_prompt
     ret
@@ -60,6 +62,7 @@ class Inkscape
 
   def query(action)
     run_action(action)
+    @inkscape.gets
     read_until_prompt
   end
 
