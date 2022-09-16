@@ -20,14 +20,12 @@
         <meta name="twitter:title" content="SMLでバッククォート記法を実現する | κeenのHappy Hacκing Blog"/>
         <meta name="twitter:description" content="このエントリはML Advent Calendar 2020の3日目の記事です。
 前はelpinalさんでStandardMLのwithtypeの挙動でした。
-
 κeenです。Haskelなどにある ` ~ ` の記法（のようなもの）をSMLで実現する話です。" />
         <meta property="og:title" content="SMLでバッククォート記法を実現する | κeenのHappy Hacκing Blog" />
         <meta property="og:type" content="article" />
         <meta property="og:url" content="https://KeenS.github.io/blog/2020/12/03/smldebakkukuo_tokihouwojitsugensuru/" />
         <meta property="og:description" content="このエントリはML Advent Calendar 2020の3日目の記事です。
 前はelpinalさんでStandardMLのwithtypeの挙動でした。
-
 κeenです。Haskelなどにある ` ~ ` の記法（のようなもの）をSMLで実現する話です。" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta property="og:image" content="https://KeenS.github.io/images/ogp/post/SMLdebakkukuo_tokihouwojitsugensuru.png" />
@@ -148,63 +146,55 @@
                     <section>
                         <p>このエントリは<a href="https://qiita.com/advent-calendar/2020/ml">ML Advent Calendar 2020</a>の3日目の記事です。
 前はelpinalさんで<a href="https://elpinal.gitlab.io/writings/withtype/">StandardMLのwithtypeの挙動</a>でした。</p>
-
 <p>κeenです。Haskelなどにある <code>`</code> ~ <code>`</code> の記法（のようなもの）をSMLで実現する話です。</p>
-
 <p>MLやHaskellには中置演算子を作る <code>infix</code> 系の構文があります。
 そしてHaskellにはそれとは別に <code>`</code> ~ <code>`</code> で普通の関数を中置演算子として使える機能があります。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-haskell" data-lang="haskell"><span class="nf">add</span> <span class="ow">::</span> <span class="kt">Integer</span> <span class="ow">-&gt;</span> <span class="kt">Integer</span> <span class="ow">-&gt;</span> <span class="kt">Integer</span>
-<span class="nf">add</span> <span class="n">x</span> <span class="n">y</span> <span class="ow">=</span> <span class="n">x</span> <span class="o">+</span> <span class="n">y</span>
-
-<span class="mi">1</span> <span class="p">`</span><span class="n">add</span><span class="p">`</span> <span class="mi">2</span></code></pre></div>
-<p>さらに演算子を部分適用するセクションという機能もあります。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-haskell" data-lang="haskell"><span class="nf">map</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span><span class="p">)</span> <span class="n">list</span>
-<span class="nf">map</span> <span class="p">(</span><span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="n">list</span></code></pre></div>
-<p>SMLでもこういう機能ほしいよね、という題材です。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-haskell" data-lang="haskell"><span class="line"><span class="cl"><span class="nf">add</span> <span class="ow">::</span> <span class="kt">Integer</span> <span class="ow">-&gt;</span> <span class="kt">Integer</span> <span class="ow">-&gt;</span> <span class="kt">Integer</span>
+</span></span><span class="line"><span class="cl"><span class="nf">add</span> <span class="n">x</span> <span class="n">y</span> <span class="ow">=</span> <span class="n">x</span> <span class="o">+</span> <span class="n">y</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="mi">1</span> <span class="p">`</span><span class="n">add</span><span class="p">`</span> <span class="mi">2</span>
+</span></span></code></pre></div><p>さらに演算子を部分適用するセクションという機能もあります。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-haskell" data-lang="haskell"><span class="line"><span class="cl"><span class="nf">map</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span><span class="p">)</span> <span class="n">list</span>
+</span></span><span class="line"><span class="cl"><span class="nf">map</span> <span class="p">(</span><span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="n">list</span>
+</span></span></code></pre></div><p>SMLでもこういう機能ほしいよね、という題材です。</p>
 <p>最初に答えを書いてしまうとこういう演算子を定義します。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">infix</span>  <span class="mi">3</span> <span class="n">&lt;\</span>     <span class="kr">fun</span> <span class="nf">x</span> <span class="n">&lt;\</span> <span class="n">f</span> <span class="n">=</span> <span class="kr">fn</span> <span class="n">y</span> <span class="n">=&gt;</span> <span class="n">f</span> <span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>     <span class="cm">(* Left section      *)</span>
-<span class="kr">infix</span>  <span class="mi">3</span> <span class="n">\&gt;</span>     <span class="kr">fun</span> <span class="nf">f</span> <span class="n">\&gt;</span> <span class="n">y</span> <span class="n">=</span> <span class="n">f</span> <span class="n">y</span>                  <span class="cm">(* Left application  *)</span>
-<span class="kr">infixr</span> <span class="mi">3</span> <span class="n">/&gt;</span>     <span class="kr">fun</span> <span class="nf">f</span> <span class="n">/&gt;</span> <span class="n">y</span> <span class="n">=</span> <span class="kr">fn</span> <span class="n">x</span> <span class="n">=&gt;</span> <span class="n">f</span> <span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>     <span class="cm">(* Right section     *)</span>
-<span class="kr">infixr</span> <span class="mi">3</span> <span class="n">&lt;/</span>     <span class="kr">fun</span> <span class="nf">x</span> <span class="n">&lt;/</span> <span class="n">f</span> <span class="n">=</span> <span class="n">f</span> <span class="n">x</span>                  <span class="cm">(* Right application *)</span></code></pre></div>
-<p>そうすれば以下のように使えます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">fun</span> <span class="nf">add</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span> <span class="n">=</span> <span class="n">x</span> <span class="n">+</span> <span class="n">y</span>
-<span class="mi">1</span> <span class="n">&lt;\add\&gt;</span> <span class="mi">2</span> <span class="n">&lt;\add\&gt;</span> <span class="mi">3</span></code></pre></div>
-<p>これは以下と同じ意味になります。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="n">add</span><span class="p">(</span><span class="n">add</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="mi">3</span><span class="p">)</span></code></pre></div>
-<p><code>&lt;\</code> と <code>\&gt;</code> の変わりに <code>&lt;/</code> と <code>/&gt;</code> を使うと右結合になります。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="mi">1</span> <span class="n">&lt;/add/&gt;</span> <span class="mi">2</span> <span class="n">&lt;/add/&gt;</span> <span class="mi">3</span>
-<span class="cm">(* = add(1, add(2, 3)) *)</span></code></pre></div>
-<p>どうしてこうなるのか詳しく見ていきましょう。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="kr">infix</span>  <span class="mi">3</span> <span class="n">&lt;\</span>     <span class="kr">fun</span> <span class="nf">x</span> <span class="n">&lt;\</span> <span class="n">f</span> <span class="n">=</span> <span class="kr">fn</span> <span class="n">y</span> <span class="n">=&gt;</span> <span class="n">f</span> <span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>     <span class="cm">(* Left section      *)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">infix</span>  <span class="mi">3</span> <span class="n">\&gt;</span>     <span class="kr">fun</span> <span class="nf">f</span> <span class="n">\&gt;</span> <span class="n">y</span> <span class="n">=</span> <span class="n">f</span> <span class="n">y</span>                  <span class="cm">(* Left application  *)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">infixr</span> <span class="mi">3</span> <span class="n">/&gt;</span>     <span class="kr">fun</span> <span class="nf">f</span> <span class="n">/&gt;</span> <span class="n">y</span> <span class="n">=</span> <span class="kr">fn</span> <span class="n">x</span> <span class="n">=&gt;</span> <span class="n">f</span> <span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>     <span class="cm">(* Right section     *)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">infixr</span> <span class="mi">3</span> <span class="n">&lt;/</span>     <span class="kr">fun</span> <span class="nf">x</span> <span class="n">&lt;/</span> <span class="n">f</span> <span class="n">=</span> <span class="n">f</span> <span class="n">x</span>                  <span class="cm">(* Right application *)</span>
+</span></span></code></pre></div><p>そうすれば以下のように使えます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="kr">fun</span> <span class="nf">add</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span> <span class="n">=</span> <span class="n">x</span> <span class="n">+</span> <span class="n">y</span>
+</span></span><span class="line"><span class="cl"><span class="mi">1</span> <span class="n">&lt;\add\&gt;</span> <span class="mi">2</span> <span class="n">&lt;\add\&gt;</span> <span class="mi">3</span>
+</span></span></code></pre></div><p>これは以下と同じ意味になります。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="n">add</span><span class="p">(</span><span class="n">add</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="mi">3</span><span class="p">)</span>
+</span></span></code></pre></div><p><code>&lt;\</code> と <code>\&gt;</code> の変わりに <code>&lt;/</code> と <code>/&gt;</code> を使うと右結合になります。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="mi">1</span> <span class="n">&lt;/add/&gt;</span> <span class="mi">2</span> <span class="n">&lt;/add/&gt;</span> <span class="mi">3</span>
+</span></span><span class="line"><span class="cl"><span class="cm">(* = add(1, add(2, 3)) *)</span>
+</span></span></code></pre></div><p>どうしてこうなるのか詳しく見ていきましょう。</p>
 <p>まずは <code>1 &lt;\add\&gt; 2</code> からはじめます。これは <code>&lt;\</code> と <code>\&gt;</code> が左結合の <code>infix 3</code> で定義されているので以下のように脱糖されます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">op</span><span class="n">\&gt;</span><span class="p">(</span><span class="kr">op</span><span class="n">&lt;\</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">add</span><span class="p">),</span> <span class="mi">2</span><span class="p">)</span></code></pre></div>
-<p>それではこれを内側から評価していきましょう。 <code>&lt;\</code> は以下のように定義されているのでした。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">fun</span> <span class="nf">x</span> <span class="n">&lt;\</span> <span class="n">f</span> <span class="n">=</span> <span class="kr">fn</span> <span class="n">y</span> <span class="n">=&gt;</span> <span class="n">f</span> <span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span></code></pre></div>
-<p>すると上の式はこうなります。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">op</span><span class="n">\&gt;</span><span class="p">(</span><span class="kr">fn</span> <span class="n">y</span> <span class="n">=&gt;</span> <span class="n">add</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">y</span><span class="p">),</span> <span class="mi">2</span><span class="p">)</span></code></pre></div>
-<p>次に <code>\&gt;</code> です。これは以下のように定義されているのでした。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">fun</span> <span class="nf">f</span> <span class="n">\&gt;</span> <span class="n">y</span> <span class="n">=</span> <span class="n">f</span> <span class="n">y</span></code></pre></div>
-<p>すると上の式はこうなります。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="p">(</span><span class="kr">fn</span> <span class="n">y</span> <span class="n">=&gt;</span> <span class="n">add</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">y</span><span class="p">))</span> <span class="mi">2</span></code></pre></div>
-<p>これを簡約するとこうなる訳です。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="n">add</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span></code></pre></div>
-<p>ちゃんと、関数適用に簡約されましたね。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="kr">op</span><span class="n">\&gt;</span><span class="p">(</span><span class="kr">op</span><span class="n">&lt;\</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">add</span><span class="p">),</span> <span class="mi">2</span><span class="p">)</span>
+</span></span></code></pre></div><p>それではこれを内側から評価していきましょう。 <code>&lt;\</code> は以下のように定義されているのでした。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="kr">fun</span> <span class="nf">x</span> <span class="n">&lt;\</span> <span class="n">f</span> <span class="n">=</span> <span class="kr">fn</span> <span class="n">y</span> <span class="n">=&gt;</span> <span class="n">f</span> <span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+</span></span></code></pre></div><p>すると上の式はこうなります。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="kr">op</span><span class="n">\&gt;</span><span class="p">(</span><span class="kr">fn</span> <span class="n">y</span> <span class="n">=&gt;</span> <span class="n">add</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">y</span><span class="p">),</span> <span class="mi">2</span><span class="p">)</span>
+</span></span></code></pre></div><p>次に <code>\&gt;</code> です。これは以下のように定義されているのでした。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="kr">fun</span> <span class="nf">f</span> <span class="n">\&gt;</span> <span class="n">y</span> <span class="n">=</span> <span class="n">f</span> <span class="n">y</span>
+</span></span></code></pre></div><p>すると上の式はこうなります。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="p">(</span><span class="kr">fn</span> <span class="n">y</span> <span class="n">=&gt;</span> <span class="n">add</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">y</span><span class="p">))</span> <span class="mi">2</span>
+</span></span></code></pre></div><p>これを簡約するとこうなる訳です。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="n">add</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+</span></span></code></pre></div><p>ちゃんと、関数適用に簡約されましたね。
 <code>&lt;/</code> と <code>/&gt;</code> も開と閉の役割が入れ替わるだけなので気になる人は各自で追ってみて下さい。</p>
-
 <p>さて、これを使うとセクションも実現できます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="nn">List.</span><span class="n">map</span> <span class="p">(</span><span class="mi">2</span><span class="n">&lt;\</span><span class="kr">op</span><span class="n">*</span><span class="p">)</span> <span class="n">list</span>
-<span class="nn">List.</span><span class="n">map</span> <span class="p">(</span><span class="kr">op</span><span class="n">-</span> <span class="n">/&gt;</span> <span class="mi">1</span><span class="p">)</span> <span class="n">list</span></code></pre></div>
-<p>すごい！</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="nn">List.</span><span class="n">map</span> <span class="p">(</span><span class="mi">2</span><span class="n">&lt;\</span><span class="kr">op</span><span class="n">*</span><span class="p">)</span> <span class="n">list</span>
+</span></span><span class="line"><span class="cl"><span class="nn">List.</span><span class="n">map</span> <span class="p">(</span><span class="kr">op</span><span class="n">-</span> <span class="n">/&gt;</span> <span class="mi">1</span><span class="p">)</span> <span class="n">list</span>
+</span></span></code></pre></div><p>すごい！</p>
 <p>因みに余った <code>\&gt;</code> と <code>&lt;/</code> も役割があります。
 <code>\&gt;</code> がHaskellでいう <code>$</code> 相当で、 <code>&lt;/</code> がF# でいう <code>|&gt;</code> 相当の演算子です。
 ただし優先順位がこちらは3なのに対して <code>$</code> と <code>|&gt;</code> は1ですが。</p>
-
-<p>ちなみにこの記事にま元ネタがあって、MLtonの中の人が書いた記事です：<br />
-<a href="http://www.mlton.org/InfixingOperators">InfixingOperators</a><br />
+<p>ちなみにこの記事にま元ネタがあって、MLtonの中の人が書いた記事です：<br>
+<a href="http://www.mlton.org/InfixingOperators">InfixingOperators</a><br>
 こちらではもう少し色々紹介されています。</p>
-
 <p>ML Advent Calendarの中で他の面白い記事も紹介していけたらなと思います。</p>
                     </section>
                 </article>

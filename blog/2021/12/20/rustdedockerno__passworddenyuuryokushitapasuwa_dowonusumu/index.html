@@ -19,13 +19,11 @@
         <meta name="twitter:site" content="@blackenedgold" />
         <meta name="twitter:title" content="RustでDockerの--passwordで入力したパスワードを盗む | κeenのHappy Hacκing Blog"/>
         <meta name="twitter:description" content="このエントリはRust Advent Calendarの9日目の記事です。
-
 空いてる日を埋める担当のκeenです。9日目が空いてたので遡って記事を投稿します。RustというよりLinuxの知識を使った記事ですが。Docker CLIでログインするときに --password オプションを使うとパスワードが盗まれる可能性があるよという警告が出たことありませんか？あれを実際にやってみたいと思います。" />
         <meta property="og:title" content="RustでDockerの--passwordで入力したパスワードを盗む | κeenのHappy Hacκing Blog" />
         <meta property="og:type" content="article" />
         <meta property="og:url" content="https://KeenS.github.io/blog/2021/12/20/rustdedockerno__passworddenyuuryokushitapasuwa_dowonusumu/" />
         <meta property="og:description" content="このエントリはRust Advent Calendarの9日目の記事です。
-
 空いてる日を埋める担当のκeenです。9日目が空いてたので遡って記事を投稿します。RustというよりLinuxの知識を使った記事ですが。Docker CLIでログインするときに --password オプションを使うとパスワードが盗まれる可能性があるよという警告が出たことありませんか？あれを実際にやってみたいと思います。" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta property="og:image" content="https://KeenS.github.io/images/ogp/post/RustdeDockerno__passworddenyuuryokushitapasuwa_dowonusumu.png" />
@@ -149,107 +147,97 @@
                     </header>
                     <section>
                         <p>このエントリは<a href="https://qiita.com/advent-calendar/2021/rust">Rust Advent Calendar</a>の9日目の記事です。</p>
-
 <p>空いてる日を埋める担当のκeenです。9日目が空いてたので遡って記事を投稿します。RustというよりLinuxの知識を使った記事ですが。Docker CLIでログインするときに <code>--password</code> オプションを使うとパスワードが盗まれる可能性があるよという警告が出たことありませんか？あれを実際にやってみたいと思います。</p>
-
 <p><code>docker login</code> に <code>--password</code> オプションを渡すと以下のようにCLIからパスワードを渡すと安全でないよという警告が出ます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">$ docker login --password MY_PASSWORD
-WARNING! Using --password via the CLI is insecure. Use --password-stdin.
-Login with your Docker ID to push and pull images from Docker Hub. If you don&#39;t have a Docker ID, head over to https://hub.docker.com to create one.
-Username:</code></pre></div>
-<p>口で言われるだけだとどのくらい安全でないか分からないので実際にコードを書いてパスワードを盗んでみましょう。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">$ docker login --password MY_PASSWORD
+</span></span><span class="line"><span class="cl">WARNING! Using --password via the CLI is insecure. Use --password-stdin.
+</span></span><span class="line"><span class="cl">Login with your Docker ID to push and pull images from Docker Hub. If you don&#39;t have a Docker ID, head over to https://hub.docker.com to create one.
+</span></span><span class="line"><span class="cl">Username:
+</span></span></code></pre></div><p>口で言われるだけだとどのくらい安全でないか分からないので実際にコードを書いてパスワードを盗んでみましょう。</p>
 <p>Linuxでは他のプロセスがどのように実行されているかを <code>/proc/PID</code> で確認できます。この機能を用います。</p>
-
 <p>例えば私が今使っているシェルのPIDは <code>265989</code> です。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">$ echo $$
-265989</code></pre></div>
-<p>そこで <code>/proc/265989/</code> を覗けば色々なものが見えるようになっています。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">$ ls /proc/265989/
-arch_status  clear_refs          cpuset   fdinfo    map_files  mountstats  oom_score      projid_map  setgroups     statm           timers
-attr         cmdline             cwd      gid_map   maps       net         oom_score_adj  root        smaps         status          timerslack_ns
-autogroup    comm                environ  io        mem        ns          pagemap        sched       smaps_rollup  syscall         uid_map
-auxv         coredump_filter     exe      limits    mountinfo  numa_maps   patch_state    schedstat   stack         task            wchan
-cgroup       cpu_resctrl_groups  fd       loginuid  mounts     oom_adj     personality    sessionid   stat          timens_offsets</code></pre></div>
-<p>この中に <code>cmdline</code> というファイルがあり、その中身にコマンドと引数が書かれています。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">$ cat /proc/265989/cmdline
-/usr/bin/zsh</code></pre></div>
-<p>同様に <code>docker login</code> プロセスのこれを見ればパスワードが書いてある訳です。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">$ echo $$
+</span></span><span class="line"><span class="cl">265989
+</span></span></code></pre></div><p>そこで <code>/proc/265989/</code> を覗けば色々なものが見えるようになっています。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">$ ls /proc/265989/
+</span></span><span class="line"><span class="cl">arch_status  clear_refs          cpuset   fdinfo    map_files  mountstats  oom_score      projid_map  setgroups     statm           timers
+</span></span><span class="line"><span class="cl">attr         cmdline             cwd      gid_map   maps       net         oom_score_adj  root        smaps         status          timerslack_ns
+</span></span><span class="line"><span class="cl">autogroup    comm                environ  io        mem        ns          pagemap        sched       smaps_rollup  syscall         uid_map
+</span></span><span class="line"><span class="cl">auxv         coredump_filter     exe      limits    mountinfo  numa_maps   patch_state    schedstat   stack         task            wchan
+</span></span><span class="line"><span class="cl">cgroup       cpu_resctrl_groups  fd       loginuid  mounts     oom_adj     personality    sessionid   stat          timens_offsets
+</span></span></code></pre></div><p>この中に <code>cmdline</code> というファイルがあり、その中身にコマンドと引数が書かれています。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">$ cat /proc/265989/cmdline
+</span></span><span class="line"><span class="cl">/usr/bin/zsh
+</span></span></code></pre></div><p>同様に <code>docker login</code> プロセスのこれを見ればパスワードが書いてある訳です。
 となると、あとはdockerコマンドがくるのを待ち受けてあげればよいですね。コードを書いてみましょう。</p>
-
 <p><code>/proc</code> 下にある数字名のディレクトリを全部開いて <code>cmdline</code> を読み、 <code>docker</code> と <code>--password</code> という文字列が含まれていたら標準出力に書き出すコードを書けばよさそうです。</p>
-
 <p><code>/proc</code> 以下は普通のファイルとして読めるので標準ライブラリだけで処理できてしまいます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">fs</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="k">for</span><span class="w"> </span><span class="n">entry</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="n">fs</span>::<span class="n">read_dir</span><span class="p">(</span><span class="s">&#34;/proc&#34;</span><span class="p">)</span><span class="o">?</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">e</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">entry</span><span class="o">?</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="c1">// ...
-</span><span class="c1"></span><span class="p">}</span></code></pre></div>
-<p>エントリがディレクトリでありかつ名前が全て数字のものだけを対象にします。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="kd">let</span><span class="w"> </span><span class="n">e</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">entry</span><span class="o">?</span><span class="p">;</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">is_dir</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">e</span><span class="p">.</span><span class="n">file_type</span><span class="p">()</span><span class="o">?</span><span class="p">.</span><span class="n">is_dir</span><span class="p">();</span><span class="w">
-</span><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">is_number_named</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">e</span><span class="w">
-</span><span class="w">    </span><span class="p">.</span><span class="n">file_name</span><span class="p">()</span><span class="w">
-</span><span class="w">    </span><span class="p">.</span><span class="n">to_str</span><span class="p">()</span><span class="w">
-</span><span class="w">    </span><span class="p">.</span><span class="n">unwrap</span><span class="p">()</span><span class="w">
-</span><span class="w">    </span><span class="p">.</span><span class="n">chars</span><span class="p">()</span><span class="w">
-</span><span class="w">    </span><span class="p">.</span><span class="n">all</span><span class="p">(</span><span class="o">|</span><span class="n">c</span><span class="o">|</span><span class="w"> </span><span class="s">&#34;1234567890&#34;</span><span class="p">.</span><span class="n">contains</span><span class="p">(</span><span class="n">c</span><span class="p">));</span><span class="w">
-</span><span class="w"></span><span class="k">if</span><span class="w"> </span><span class="n">is_dir</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">is_number_named</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">  </span><span class="c1">// ...
-</span><span class="c1"></span><span class="p">}</span></code></pre></div>
-<p>そしてそのディレクトリ下にある <code>cmdline</code> というファイルを読み出し、 <code>docker</code> と <code>password</code> が含まれているかを検査し、含まれていれば出力します。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="kd">let</span><span class="w"> </span><span class="n">cmdline</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fs</span>::<span class="n">read_to_string</span><span class="p">(</span><span class="n">e</span><span class="p">.</span><span class="n">path</span><span class="p">().</span><span class="n">join</span><span class="p">(</span><span class="s">&#34;cmdline&#34;</span><span class="p">))</span><span class="o">?</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="k">if</span><span class="w"> </span><span class="n">cmdline</span><span class="p">.</span><span class="n">contains</span><span class="p">(</span><span class="s">&#34;docker&#34;</span><span class="p">)</span><span class="w">
-</span><span class="w">    </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">cmdline</span><span class="p">.</span><span class="n">contains</span><span class="p">(</span><span class="s">&#34;--password&#34;</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;cmdline: {}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">cmdline</span><span class="p">);</span><span class="w">
-</span><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nb">Ok</span><span class="p">(());</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<p>というのをヒットするまで繰り返します。全体としてはこういうコードになります。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">fs</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">io</span><span class="p">;</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span>-&gt; <span class="nc">io</span>::<span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">loop</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="n">entry</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="n">fs</span>::<span class="n">read_dir</span><span class="p">(</span><span class="s">&#34;/proc&#34;</span><span class="p">)</span><span class="o">?</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">e</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">entry</span><span class="o">?</span><span class="p">;</span><span class="w">
-</span><span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">is_dir</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">e</span><span class="p">.</span><span class="n">file_type</span><span class="p">()</span><span class="o">?</span><span class="p">.</span><span class="n">is_dir</span><span class="p">();</span><span class="w">
-</span><span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">is_number_named</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">e</span><span class="w">
-</span><span class="w">                </span><span class="p">.</span><span class="n">file_name</span><span class="p">()</span><span class="w">
-</span><span class="w">                </span><span class="p">.</span><span class="n">to_str</span><span class="p">()</span><span class="w">
-</span><span class="w">                </span><span class="p">.</span><span class="n">unwrap</span><span class="p">()</span><span class="w">
-</span><span class="w">                </span><span class="p">.</span><span class="n">chars</span><span class="p">()</span><span class="w">
-</span><span class="w">                </span><span class="p">.</span><span class="n">all</span><span class="p">(</span><span class="o">|</span><span class="n">c</span><span class="o">|</span><span class="w"> </span><span class="s">&#34;1234567890&#34;</span><span class="p">.</span><span class="n">contains</span><span class="p">(</span><span class="n">c</span><span class="p">));</span><span class="w">
-</span><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="n">is_dir</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">is_number_named</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">                </span><span class="kd">let</span><span class="w"> </span><span class="n">cmdline</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fs</span>::<span class="n">read_to_string</span><span class="p">(</span><span class="n">e</span><span class="p">.</span><span class="n">path</span><span class="p">().</span><span class="n">join</span><span class="p">(</span><span class="s">&#34;cmdline&#34;</span><span class="p">))</span><span class="o">?</span><span class="p">;</span><span class="w">
-</span><span class="w">                </span><span class="k">if</span><span class="w"> </span><span class="n">cmdline</span><span class="p">.</span><span class="n">contains</span><span class="p">(</span><span class="s">&#34;docker&#34;</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">cmdline</span><span class="p">.</span><span class="n">contains</span><span class="p">(</span><span class="s">&#34;--password&#34;</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">                    </span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;cmdline: {}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">cmdline</span><span class="p">);</span><span class="w">
-</span><span class="w">                    </span><span class="k">return</span><span class="w"> </span><span class="nb">Ok</span><span class="p">(());</span><span class="w">
-</span><span class="w">                </span><span class="p">}</span><span class="w">
-</span><span class="w">            </span><span class="p">}</span><span class="w">
-</span><span class="w">        </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<p>これを走らせてみましょう。 <code>cargo run</code> している間に別ターミナルで <code>docker login --password hoge</code> を入力してみます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">$ cargo run
-    Finished dev [unoptimized + debuginfo] target(s) in 0.00s
-     Running `target/debug/docker-password`
-cmdline: dockerlogin--passwordhoge
-
-───────────別ターミナル─────────────────────────────────
-
-$ docker login --password hoge
-WARNING! Using --password via the CLI is insecure. Use --password-stdin.
-Login with your Docker ID to push and pull images from Docker Hub. If you don&#39;t have a Docker ID, head over to https://hub.docker.com to create one.
-Username: ^C</code></pre></div>
-<p>はい、コマンドラインが取得できましたね。引数がヌル文字区切りなので間がつまってるように見えますが、まあよいでしょう。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">fs</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">for</span><span class="w"> </span><span class="n">entry</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="n">fs</span>::<span class="n">read_dir</span><span class="p">(</span><span class="s">&#34;/proc&#34;</span><span class="p">)</span><span class="o">?</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">e</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">entry</span><span class="o">?</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// ...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>エントリがディレクトリでありかつ名前が全て数字のものだけを対象にします。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="kd">let</span><span class="w"> </span><span class="n">e</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">entry</span><span class="o">?</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">is_dir</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">e</span><span class="p">.</span><span class="n">file_type</span><span class="p">()</span><span class="o">?</span><span class="p">.</span><span class="n">is_dir</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">is_number_named</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">e</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">.</span><span class="n">file_name</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">.</span><span class="n">to_str</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">.</span><span class="n">unwrap</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">.</span><span class="n">chars</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">.</span><span class="n">all</span><span class="p">(</span><span class="o">|</span><span class="n">c</span><span class="o">|</span><span class="w"> </span><span class="s">&#34;1234567890&#34;</span><span class="p">.</span><span class="n">contains</span><span class="p">(</span><span class="n">c</span><span class="p">));</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">if</span><span class="w"> </span><span class="n">is_dir</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">is_number_named</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c1">// ...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>そしてそのディレクトリ下にある <code>cmdline</code> というファイルを読み出し、 <code>docker</code> と <code>password</code> が含まれているかを検査し、含まれていれば出力します。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="kd">let</span><span class="w"> </span><span class="n">cmdline</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fs</span>::<span class="n">read_to_string</span><span class="p">(</span><span class="n">e</span><span class="p">.</span><span class="n">path</span><span class="p">().</span><span class="n">join</span><span class="p">(</span><span class="s">&#34;cmdline&#34;</span><span class="p">))</span><span class="o">?</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">if</span><span class="w"> </span><span class="n">cmdline</span><span class="p">.</span><span class="n">contains</span><span class="p">(</span><span class="s">&#34;docker&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">cmdline</span><span class="p">.</span><span class="n">contains</span><span class="p">(</span><span class="s">&#34;--password&#34;</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;cmdline: {}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">cmdline</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nb">Ok</span><span class="p">(());</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>というのをヒットするまで繰り返します。全体としてはこういうコードになります。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">fs</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">io</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span>-&gt; <span class="nc">io</span>::<span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">loop</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="n">entry</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="n">fs</span>::<span class="n">read_dir</span><span class="p">(</span><span class="s">&#34;/proc&#34;</span><span class="p">)</span><span class="o">?</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">e</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">entry</span><span class="o">?</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">is_dir</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">e</span><span class="p">.</span><span class="n">file_type</span><span class="p">()</span><span class="o">?</span><span class="p">.</span><span class="n">is_dir</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">is_number_named</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">e</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="n">file_name</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="n">to_str</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="n">unwrap</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="n">chars</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="n">all</span><span class="p">(</span><span class="o">|</span><span class="n">c</span><span class="o">|</span><span class="w"> </span><span class="s">&#34;1234567890&#34;</span><span class="p">.</span><span class="n">contains</span><span class="p">(</span><span class="n">c</span><span class="p">));</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="n">is_dir</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">is_number_named</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="kd">let</span><span class="w"> </span><span class="n">cmdline</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fs</span>::<span class="n">read_to_string</span><span class="p">(</span><span class="n">e</span><span class="p">.</span><span class="n">path</span><span class="p">().</span><span class="n">join</span><span class="p">(</span><span class="s">&#34;cmdline&#34;</span><span class="p">))</span><span class="o">?</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="k">if</span><span class="w"> </span><span class="n">cmdline</span><span class="p">.</span><span class="n">contains</span><span class="p">(</span><span class="s">&#34;docker&#34;</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">cmdline</span><span class="p">.</span><span class="n">contains</span><span class="p">(</span><span class="s">&#34;--password&#34;</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                    </span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;cmdline: {}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">cmdline</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                    </span><span class="k">return</span><span class="w"> </span><span class="nb">Ok</span><span class="p">(());</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>これを走らせてみましょう。 <code>cargo run</code> している間に別ターミナルで <code>docker login --password hoge</code> を入力してみます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">$ cargo run
+</span></span><span class="line"><span class="cl">    Finished dev [unoptimized + debuginfo] target(s) in 0.00s
+</span></span><span class="line"><span class="cl">     Running `target/debug/docker-password`
+</span></span><span class="line"><span class="cl">cmdline: dockerlogin--passwordhoge
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">───────────別ターミナル─────────────────────────────────
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">$ docker login --password hoge
+</span></span><span class="line"><span class="cl">WARNING! Using --password via the CLI is insecure. Use --password-stdin.
+</span></span><span class="line"><span class="cl">Login with your Docker ID to push and pull images from Docker Hub. If you don&#39;t have a Docker ID, head over to https://hub.docker.com to create one.
+</span></span><span class="line"><span class="cl">Username: ^C
+</span></span></code></pre></div><p>はい、コマンドラインが取得できましたね。引数がヌル文字区切りなので間がつまってるように見えますが、まあよいでしょう。</p>
 <p>荒い部分はありますし、ヒットするまでループを回すという力技ですがパスワードを抜き出すことができました。同様にして <code>environ</code> から環境変数も抜き出せるので環境変数でパスワードを渡すようなプログラムも危険です。この記事を通して出されている警告の意味が分かるようになれば幸いです。</p>
-
 <h2 id="余談">余談</h2>
-
 <p>最初は <code>/proc</code> にinotifyをかけて新規プロセスを取得しようと思ってたんですが、新規プロセスができても <code>/proc</code> にCREATEイベントが発生しないんですね。仕方ないのでループで回すという力技にしました。</p>
-
 <p>後で調べたら新規プロセスを監視するのはeBPFなど何種類かのAPIによる実現方法があるようです。詳しい方がいたらやってみて下さい。</p>
                     </section>
                 </article>

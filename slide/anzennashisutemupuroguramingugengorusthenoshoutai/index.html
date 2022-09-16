@@ -118,11 +118,10 @@
     </header>
     <div class="reveal">
         <div class="slides">
-            <section data-markdown
+            <textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # 安全なシステムプログラミング言語Rustへの招待
 ----------------------
 [IIJ Labセミナー](https://iijlab-seminars.connpass.com/event/152079/)
@@ -546,21 +545,16 @@ thread 'main' panicked at 'index out of bounds: the len is 3 but the index is 3'
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace.
 ```
 </pre>
-
-
-===
-# 範囲外アクセス
-----------------
-
-* ただし固定長配列に定数でアクセスする場合はコンパイルエラーにしてくれる
-
-```rust
-let v = [1, 2, 3];
-// コンパイルエラー
-v[3]
-```
-
-<pre>
+<p>===</p>
+<h1 id="範囲外アクセス">範囲外アクセス</h1>
+<hr>
+<ul>
+<li>ただし固定長配列に定数でアクセスする場合はコンパイルエラーにしてくれる</li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="kd">let</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">];</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// コンパイルエラー
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">v</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="w">
+</span></span></span></code></pre></div><pre>
 
 ```console
 error: index out of bounds: the len is 3 but the index is 3
@@ -573,176 +567,165 @@ error: index out of bounds: the len is 3 but the index is 3
 ```
 
 </pre>
-
-===
-# 所有権
---------
-
-* 値にはライフタイムがある
-
-```rust
-
-{
-  let data = Data::new();
-  // `data` のライフタイムはこのスコープ
-} // ← ここで `data` がfreeされる
-// ここでは `data` にアクセスできない
-```
-
-===
-# 所有権
---------
-
-* 所有権は移動する
-
-```rust
-
-let data = Data::new();
-// ここで `data` の所有権が `tmp` に移る
-let tmp = data;
-// 以降 `data` にアクセスするとコンパイルエラー
-// tmpが死ぬと `data` はfreeされる
-```
-
-===
-# 所有権
---------
-
-* 関数に渡しても移動する
-
-```rust
-fn take_data(_: Data) {}
-
-
-let data = Data::new();
-
-take_data(data);
-
-// 以降 `data` にアクセスするとコンパイルエラー
-// take_data(data);
-```
-
-===
-# 所有権
---------
-
-* 関数に渡しても移動する
-* …えっ
-
-===
-# 借用
---------
-
-* データを一時的に「貸す」こともできる
-* `&` で参照を取ると貸すことになる
-
-```rust
-fn borrow_data(_: &Data) {}
-
-let data = Data::new();
-
-// 貸す
-borrow_data(&data);
-
-// 返してもらったらまた使える
-borrow_data(&data);
-```
-
-===
-# 借用
---------
-
-* `&` で参照を取ると貸すことになる
-* 参照はポインタの意味もあるけど普段はあんまりポインタとしては意識してない
-  + カジュアルに構造体の値渡しをする
-  + 「借用するかどうか」で使い分ける
-  + 所有するポインタ (`Box`) もあるけどたまにしか使わない
-
-===
-# 借用とライフタイム
--------------------
-
-* 借りたデータを元のデータより長く生かせない
-  + 要するにdangling pointer禁止
-* 長く生かそうとするとコンパイルエラー
-
-
-```rust
-// このコードはコンパイルエラー
-fn new_data() -> &Data {
-    let data = Data::new();
-    &data
-    // data はここで死ぬので関数から返せない
-}
-```
-
-===
-# 借用と変更
--------------------
-
-* 以下の関数の返り値は？
-
-```C
-int
-func(int *a, int *b)
-{
-  *a = 0;
-  *b = 1;
-  return *a;
-}
-```
-
-
-===
-# 借用と変更
--------------------
-
-* 以下の関数の返り値は？
-  + `&mut` は可変ら参照を表わす
-  + Cでいう普通の `&`
-
-```rust
-fn func(a: &mut i32, b: &mut i32) -> i32 {
-    *a = 0;
-    *b = 1;
-    *a
-}
-```
-
-===
-# 借用と変更
--------------------
-
-* Rustでは1つの変数の可変な参照を複数作れない
-  + 以下はコンパイルエラー
-  ```
-  let mut a = 1;
-  func(&mut a, &mut a)
-  ```
-  + Rustの `memcpy` は簡単になる
-* RustはPointer Aliasの制約が強い
-  + → 挙動が分かりやすい
-  + → コンパイラが最適化しやすい
-* 不変な借用があるときに可変な参照も作れない
-  + 要するにコンパイル時 Read-Write Lock
-
-===
-# 借用と変更
--------------------
-
-* 不変な借用があるときに可変な参照も作れない
-
-[run](https://play.rust-lang.org/?version=stable&mode=debug&edition=2015&gist=2d2d3e2fbb67247147ef1cbde75fcbbc)
-
-
-```rust
-let v = vec![1, 2, 3];
-for e in &v {
-    v.push(*e);
-}
-```
-
-<pre>
+<p>===</p>
+<h1 id="所有権">所有権</h1>
+<hr>
+<ul>
+<li>値にはライフタイムがある</li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="n">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Data</span>::<span class="n">new</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c1">// `data` のライフタイムはこのスコープ
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span><span class="w"> </span><span class="c1">// ← ここで `data` がfreeされる
+</span></span></span><span class="line"><span class="cl"><span class="c1">// ここでは `data` にアクセスできない
+</span></span></span></code></pre></div><p>===</p>
+<h1 id="所有権-1">所有権</h1>
+<hr>
+<ul>
+<li>所有権は移動する</li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Data</span>::<span class="n">new</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// ここで `data` の所有権が `tmp` に移る
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">let</span><span class="w"> </span><span class="n">tmp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">data</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 以降 `data` にアクセスするとコンパイルエラー
+</span></span></span><span class="line"><span class="cl"><span class="c1">// tmpが死ぬと `data` はfreeされる
+</span></span></span></code></pre></div><p>===</p>
+<h1 id="所有権-2">所有権</h1>
+<hr>
+<ul>
+<li>関数に渡しても移動する</li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">fn</span> <span class="nf">take_data</span><span class="p">(</span><span class="n">_</span>: <span class="nc">Data</span><span class="p">)</span><span class="w"> </span><span class="p">{}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Data</span>::<span class="n">new</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">take_data</span><span class="p">(</span><span class="n">data</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 以降 `data` にアクセスするとコンパイルエラー
+</span></span></span><span class="line"><span class="cl"><span class="c1">// take_data(data);
+</span></span></span></code></pre></div><p>===</p>
+<h1 id="所有権-3">所有権</h1>
+<hr>
+<ul>
+<li>関数に渡しても移動する</li>
+<li>…えっ</li>
+</ul>
+<p>===</p>
+<h1 id="借用">借用</h1>
+<hr>
+<ul>
+<li>データを一時的に「貸す」こともできる</li>
+<li><code>&amp;</code> で参照を取ると貸すことになる</li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">fn</span> <span class="nf">borrow_data</span><span class="p">(</span><span class="n">_</span>: <span class="kp">&amp;</span><span class="nc">Data</span><span class="p">)</span><span class="w"> </span><span class="p">{}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Data</span>::<span class="n">new</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 貸す
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">borrow_data</span><span class="p">(</span><span class="o">&amp;</span><span class="n">data</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 返してもらったらまた使える
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">borrow_data</span><span class="p">(</span><span class="o">&amp;</span><span class="n">data</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>===</p>
+<h1 id="借用-1">借用</h1>
+<hr>
+<ul>
+<li><code>&amp;</code> で参照を取ると貸すことになる</li>
+<li>参照はポインタの意味もあるけど普段はあんまりポインタとしては意識してない
+<ul>
+<li>カジュアルに構造体の値渡しをする</li>
+<li>「借用するかどうか」で使い分ける</li>
+<li>所有するポインタ (<code>Box</code>) もあるけどたまにしか使わない</li>
+</ul>
+</li>
+</ul>
+<p>===</p>
+<h1 id="借用とライフタイム">借用とライフタイム</h1>
+<hr>
+<ul>
+<li>借りたデータを元のデータより長く生かせない
+<ul>
+<li>要するにdangling pointer禁止</li>
+</ul>
+</li>
+<li>長く生かそうとするとコンパイルエラー</li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="c1">// このコードはコンパイルエラー
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">fn</span> <span class="nf">new_data</span><span class="p">()</span><span class="w"> </span>-&gt; <span class="kp">&amp;</span><span class="nc">Data</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Data</span>::<span class="n">new</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="o">&amp;</span><span class="n">data</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// data はここで死ぬので関数から返せない
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>===</p>
+<h1 id="借用と変更">借用と変更</h1>
+<hr>
+<ul>
+<li>以下の関数の返り値は？</li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-C" data-lang="C"><span class="line"><span class="cl"><span class="kt">int</span>
+</span></span><span class="line"><span class="cl"><span class="nf">func</span><span class="p">(</span><span class="kt">int</span> <span class="o">*</span><span class="n">a</span><span class="p">,</span> <span class="kt">int</span> <span class="o">*</span><span class="n">b</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="o">*</span><span class="n">a</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="o">*</span><span class="n">b</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="o">*</span><span class="n">a</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>===</p>
+<h1 id="借用と変更-1">借用と変更</h1>
+<hr>
+<ul>
+<li>以下の関数の返り値は？
+<ul>
+<li><code>&amp;mut</code> は可変ら参照を表わす</li>
+<li>Cでいう普通の <code>&amp;</code></li>
+</ul>
+</li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">fn</span> <span class="nf">func</span><span class="p">(</span><span class="n">a</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="kt">i32</span><span class="p">,</span><span class="w"> </span><span class="n">b</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="kt">i32</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">i32</span> <span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="o">*</span><span class="n">a</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="o">*</span><span class="n">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="o">*</span><span class="n">a</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>===</p>
+<h1 id="借用と変更-2">借用と変更</h1>
+<hr>
+<ul>
+<li>Rustでは1つの変数の可変な参照を複数作れない
+<ul>
+<li>以下はコンパイルエラー</li>
+</ul>
+<pre tabindex="0"><code>let mut a = 1;
+func(&amp;mut a, &amp;mut a)
+</code></pre><ul>
+<li>Rustの <code>memcpy</code> は簡単になる</li>
+</ul>
+</li>
+<li>RustはPointer Aliasの制約が強い
+<ul>
+<li>→ 挙動が分かりやすい</li>
+<li>→ コンパイラが最適化しやすい</li>
+</ul>
+</li>
+<li>不変な借用があるときに可変な参照も作れない
+<ul>
+<li>要するにコンパイル時 Read-Write Lock</li>
+</ul>
+</li>
+</ul>
+<p>===</p>
+<h1 id="借用と変更-3">借用と変更</h1>
+<hr>
+<ul>
+<li>不変な借用があるときに可変な参照も作れない</li>
+</ul>
+<p><a href="https://play.rust-lang.org/?version=stable&amp;mode=debug&amp;edition=2015&amp;gist=2d2d3e2fbb67247147ef1cbde75fcbbc">run</a></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="kd">let</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="fm">vec!</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">];</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">for</span><span class="w"> </span><span class="n">e</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="o">&amp;</span><span class="n">v</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">v</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="o">*</span><span class="n">e</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><pre>
 
 ```console
 error[E0596]: cannot borrow `v` as mutable, as it is not declared as mutable
@@ -756,223 +739,245 @@ error[E0596]: cannot borrow `v` as mutable, as it is not declared as mutable
 ```
 
 </pre>
-
-===
-# Nullableな値
----------------
-
-* 全てのポインタがNullableなのは酷いけどNullがないのも不便な気がする
-  + findして結果がなかったらNullを返したい
-* ポインタとは関係なくNullableであることを表わすデータ型を用意して解決
-  + `i32` とかもnullableにできる
-  + メソッドを生やせる
-* [Option](https://doc.rust-lang.org/std/option/enum.Option.html)
-* `Option<Pointer>` は最適化でただのポインタになる
-
-```rust
-pub enum Option<T> {
-  None,
-  Some(T),
-}
-```
-
-
-===
-# 所有権の例外
---------------
-
-* `i32` とか小さい型をいちいち貸し借りしたくない
-  - 湯水のごとくじゃぶじゃぶ使いたい
-* そういう型は無制限に使える仕組みがある
-* [`Copy`](https://doc.rust-lang.org/std/marker/trait.Copy.html)トレイトを実装した型は勝手にコピーしてくれる
-  + よくRustで所有権を試そうとしてる人がはまりがち
-
-```rust
-fn take_i32(_: i32) {}
-let a = 1;
-take_i32(a);
-// 何度でも呼べる
-take_i32(a);
-take_i32(a);
-```
-
-
-===
-# 所有権とか
----------------------------
-
-* 正直スライドだけでは伝えきれない
-* 理解しようとすると[公式ドキュメント](https://doc.rust-jp.rs/book/second-edition/ch04-00-understanding-ownership.html)を読むのがよい
-  + あとは手を動かさないと分からない。
-* 雑にまとめると
-  + データには所有者がいる
-  + ポインタは実体があると保証できる範囲でしか作れない
-    - NULL poinerやdangling pointerは存在しない
-  + Writeは排他
-
-===
-# 所有権とか
----------------------------
-
-* 結構アプリケーションの設計に関わってくる
-  + 雑な設計だとすぐに破綻する
-  + それゆえ難しいといわれがち
-* 所有者を意識すると綺麗になりがち
-  + 長寿のデータ型に持たせる
-    - `App` とか `Config` とか
-  + データ構造は所有者になりがち
-    - `HashMap` とか
-  + 処理のフローを考えると余計なコピーを省ける
-    - HTTPの場合は `Request` の生存期間で十分だったり
-
-===
-# 所有権小話1
--------------
-
-* `HashMap` はデータを所有するので `get` / `get_mut` だとデータを借りることしかできない
-  + 取り出したいのが不変の参照か可変の参照かでメソッドが分かれてるのが普通
-* データを取り出したいときは `remove` を使う
-
-[run](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=c633e1e2a6935a12238795f68c22b156)
-
-
-```rust
-use std::collections::HashMap;
-let mut map = vec![
-    (1, "one".to_string()),
-    (2, "two".into()),
-    (3, "three".into()),
-]
-.into_iter()
-.collect::<HashMap<_, _>>();
-
-match map.remove(&3) {
-    None => println!("no data"),
-    Some(data) => println!("got data: {}", data),
-}
-```
-
-
-===
-# 所有権小話2
--------------
-
-* Rustにリソースを開放するAPIはない
-  + `File` の `open` はあるけど `close` はない
-  + `Lock` の `lock` はあるけど `free` はない
-* RAIIで管理されるのでデータの `free` のときに一緒に開放される
-
-[run](https://is.gd/KKm9Vb)
-
-```run
-use std::io::{self, Write};
+<p>===</p>
+<h1 id="nullableな値">Nullableな値</h1>
+<hr>
+<ul>
+<li>全てのポインタがNullableなのは酷いけどNullがないのも不便な気がする
+<ul>
+<li>findして結果がなかったらNullを返したい</li>
+</ul>
+</li>
+<li>ポインタとは関係なくNullableであることを表わすデータ型を用意して解決
+<ul>
+<li><code>i32</code> とかもnullableにできる</li>
+<li>メソッドを生やせる</li>
+</ul>
+</li>
+<li><a href="https://doc.rust-lang.org/std/option/enum.Option.html">Option</a></li>
+<li><code>Option&lt;Pointer&gt;</code> は最適化でただのポインタになる</li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">pub</span><span class="w"> </span><span class="k">enum</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nb">None</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nb">Some</span><span class="p">(</span><span class="n">T</span><span class="p">),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>===</p>
+<h1 id="所有権の例外">所有権の例外</h1>
+<hr>
+<ul>
+<li><code>i32</code> とか小さい型をいちいち貸し借りしたくない
+<ul>
+<li>湯水のごとくじゃぶじゃぶ使いたい</li>
+</ul>
+</li>
+<li>そういう型は無制限に使える仕組みがある</li>
+<li><a href="https://doc.rust-lang.org/std/marker/trait.Copy.html"><code>Copy</code></a>トレイトを実装した型は勝手にコピーしてくれる
+<ul>
+<li>よくRustで所有権を試そうとしてる人がはまりがち</li>
+</ul>
+</li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">fn</span> <span class="nf">take_i32</span><span class="p">(</span><span class="n">_</span>: <span class="kt">i32</span><span class="p">)</span><span class="w"> </span><span class="p">{}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">take_i32</span><span class="p">(</span><span class="n">a</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 何度でも呼べる
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">take_i32</span><span class="p">(</span><span class="n">a</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">take_i32</span><span class="p">(</span><span class="n">a</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>===</p>
+<h1 id="所有権とか">所有権とか</h1>
+<hr>
+<ul>
+<li>正直スライドだけでは伝えきれない</li>
+<li>理解しようとすると<a href="https://doc.rust-jp.rs/book/second-edition/ch04-00-understanding-ownership.html">公式ドキュメント</a>を読むのがよい
+<ul>
+<li>あとは手を動かさないと分からない。</li>
+</ul>
+</li>
+<li>雑にまとめると
+<ul>
+<li>データには所有者がいる</li>
+<li>ポインタは実体があると保証できる範囲でしか作れない
+<ul>
+<li>NULL poinerやdangling pointerは存在しない</li>
+</ul>
+</li>
+<li>Writeは排他</li>
+</ul>
+</li>
+</ul>
+<p>===</p>
+<h1 id="所有権とか-1">所有権とか</h1>
+<hr>
+<ul>
+<li>結構アプリケーションの設計に関わってくる
+<ul>
+<li>雑な設計だとすぐに破綻する</li>
+<li>それゆえ難しいといわれがち</li>
+</ul>
+</li>
+<li>所有者を意識すると綺麗になりがち
+<ul>
+<li>長寿のデータ型に持たせる
+<ul>
+<li><code>App</code> とか <code>Config</code> とか</li>
+</ul>
+</li>
+<li>データ構造は所有者になりがち
+<ul>
+<li><code>HashMap</code> とか</li>
+</ul>
+</li>
+<li>処理のフローを考えると余計なコピーを省ける
+<ul>
+<li>HTTPの場合は <code>Request</code> の生存期間で十分だったり</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p>===</p>
+<h1 id="所有権小話1">所有権小話1</h1>
+<hr>
+<ul>
+<li><code>HashMap</code> はデータを所有するので <code>get</code> / <code>get_mut</code> だとデータを借りることしかできない
+<ul>
+<li>取り出したいのが不変の参照か可変の参照かでメソッドが分かれてるのが普通</li>
+</ul>
+</li>
+<li>データを取り出したいときは <code>remove</code> を使う</li>
+</ul>
+<p><a href="https://play.rust-lang.org/?version=stable&amp;mode=debug&amp;edition=2018&amp;gist=c633e1e2a6935a12238795f68c22b156">run</a></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">collections</span>::<span class="n">HashMap</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">map</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="fm">vec!</span><span class="p">[</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;one&#34;</span><span class="p">.</span><span class="n">to_string</span><span class="p">()),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;two&#34;</span><span class="p">.</span><span class="n">into</span><span class="p">()),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">(</span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;three&#34;</span><span class="p">.</span><span class="n">into</span><span class="p">()),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">]</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">.</span><span class="n">into_iter</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">.</span><span class="n">collect</span>::<span class="o">&lt;</span><span class="n">HashMap</span><span class="o">&lt;</span><span class="n">_</span><span class="p">,</span><span class="w"> </span><span class="n">_</span><span class="o">&gt;&gt;</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">match</span><span class="w"> </span><span class="n">map</span><span class="p">.</span><span class="n">remove</span><span class="p">(</span><span class="o">&amp;</span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nb">None</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;no data&#34;</span><span class="p">),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nb">Some</span><span class="p">(</span><span class="n">data</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;got data: {}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">data</span><span class="p">),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>===</p>
+<h1 id="所有権小話2">所有権小話2</h1>
+<hr>
+<ul>
+<li>Rustにリソースを開放するAPIはない
+<ul>
+<li><code>File</code> の <code>open</code> はあるけど <code>close</code> はない</li>
+<li><code>Lock</code> の <code>lock</code> はあるけど <code>free</code> はない</li>
+</ul>
+</li>
+<li>RAIIで管理されるのでデータの <code>free</code> のときに一緒に開放される</li>
+</ul>
+<p><a href="https://is.gd/KKm9Vb">run</a></p>
+<pre tabindex="0"><code class="language-run" data-lang="run">use std::io::{self, Write};
 use std::fs::File;
 
-fn write_string(filename: &str, content: &str) -> io::Result<()> {
+fn write_string(filename: &amp;str, content: &amp;str) -&gt; io::Result&lt;()&gt; {
     // Fileをwriteモードでopen
     let mut file = File::create(filename)?;
-    file.write_all(&content.as_bytes())?;
+    file.write_all(&amp;content.as_bytes())?;
     Ok(())
     // fileがスコープを抜けるときに自動でcloseされる
 }
-```
-
-
-===
-# Rustの進歩
-------------
-
-* Rustは問題がある「かもしれない」コードを弾く
-  + 不思議な力で安全になる訳ではなくて、養成ギプス的にユーザに安全なコードを書かせる
-* 安全にはなるが窮屈
-  + 極端な話、全てのコードを弾けば実行時エラーは出ない
-* Rustの進歩でコンパイルが通る範囲もちょっとづつ広がっている
-
-===
-# Rustの進歩
-------------
-
-* 昔は以下のコードがコンパイルできなかった
-  - 昔 = 1年前
-* 最近は制御フローまで見て問題なければコンパイルを通す
-
-[run](https://is.gd/ALWpec)
-
-
-```rust
-use std::collections::HashMap;
-fn insert_or_update(map: &mut HashMap<i32, i32>, key: i32, value: i32)  {
-    // get_mutで可変の参照
-    match map.get_mut(&key) {
-        Some(v) => *v = value,
-        None => {
-          // その参照が生きている間に更新
-          map.insert(key, value);
-        },
-    }
-}
-```
-
-
-===
-# 所有権をopt out
-----------------
-
-* 所有権は便利だけどそれだと書けないデータ構造が発生する
-  + グラフとか
-* そういう場合に実行時に所有権/ミュータビリティ検査をするAPIがある
-  + [`Rc`](https://doc.rust-lang.org/std/rc/struct.Rc.html) (参照カウント) … 複数人でデータを共有できる [doc](https://doc.rust-jp.rs/book/second-edition/ch15-04-rc.html)
-  + [`RefCell`](https://doc.rust-lang.org/std/cell/struct.RefCell.html) … 実行時に借用検査をする [doc](https://doc.rust-jp.rs/book/second-edition/ch15-05-interior-mutability.html)
-
-===
-# 所有権をopt out
-----------------
-
-* Rustだけど「何でもあり」にできてしまう例
-
-[run](https://play.rust-lang.org/?version=stable&mode=debug&edition=2015&gist=f7b7e132be264a3de565669565c4e454)
-
-```rust
-use std::rc::Rc;
-use std::cell::RefCell;
-
-let data = Rc::new(RefCell::new(1));
-let data2 = data.clone();
-
-// data2を変更。 data2はイミュータブルだが
-// `RefCell` なので変更できる
-*data2.borrow_mut() = 2;
-
-// `Rc` なのでdata2の変更がdataにも反映される
-assert_eq!(*data.borrow(), 2);
-```
-
-
-===
-# 並列
--------
-
-* Rustはスレッドセーフでないプログラムをマルチスレッドで使うとエラーにする
-* 例えば `Rc` はスレッドアンセーフ(裏でcountの変更があるため)
-
-[run](https://play.rust-lang.org/?version=stable&mode=debug&edition=2015&gist=9198d0f301cc24e503992ed9b127ef59)
-
-```rust
-use std::rc::Rc;
-use std::thread;
-use std::cell::RefCell;
-
-let data = Rc::new(RefCell::new(1));
-let data2 = data.clone();
-let handle = thread::spawn(move || {
-    *data2.borrow_mut() = 2;
-});
-handle.join().unwrap();
-
-assert_eq!(*data.borrow(), 2);
-```
-
-<pre>
+</code></pre><p>===</p>
+<h1 id="rustの進歩">Rustの進歩</h1>
+<hr>
+<ul>
+<li>Rustは問題がある「かもしれない」コードを弾く
+<ul>
+<li>不思議な力で安全になる訳ではなくて、養成ギプス的にユーザに安全なコードを書かせる</li>
+</ul>
+</li>
+<li>安全にはなるが窮屈
+<ul>
+<li>極端な話、全てのコードを弾けば実行時エラーは出ない</li>
+</ul>
+</li>
+<li>Rustの進歩でコンパイルが通る範囲もちょっとづつ広がっている</li>
+</ul>
+<p>===</p>
+<h1 id="rustの進歩-1">Rustの進歩</h1>
+<hr>
+<ul>
+<li>昔は以下のコードがコンパイルできなかった
+<ul>
+<li>昔 = 1年前</li>
+</ul>
+</li>
+<li>最近は制御フローまで見て問題なければコンパイルを通す</li>
+</ul>
+<p><a href="https://is.gd/ALWpec">run</a></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">collections</span>::<span class="n">HashMap</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">fn</span> <span class="nf">insert_or_update</span><span class="p">(</span><span class="n">map</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">HashMap</span><span class="o">&lt;</span><span class="kt">i32</span><span class="p">,</span><span class="w"> </span><span class="kt">i32</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="n">key</span>: <span class="kt">i32</span><span class="p">,</span><span class="w"> </span><span class="n">value</span>: <span class="kt">i32</span><span class="p">)</span><span class="w">  </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// get_mutで可変の参照
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">    </span><span class="k">match</span><span class="w"> </span><span class="n">map</span><span class="p">.</span><span class="n">get_mut</span><span class="p">(</span><span class="o">&amp;</span><span class="n">key</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="nb">Some</span><span class="p">(</span><span class="n">v</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="o">*</span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">value</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="nb">None</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">          </span><span class="c1">// その参照が生きている間に更新
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">          </span><span class="n">map</span><span class="p">.</span><span class="n">insert</span><span class="p">(</span><span class="n">key</span><span class="p">,</span><span class="w"> </span><span class="n">value</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">},</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>===</p>
+<h1 id="所有権をopt-out">所有権をopt out</h1>
+<hr>
+<ul>
+<li>所有権は便利だけどそれだと書けないデータ構造が発生する
+<ul>
+<li>グラフとか</li>
+</ul>
+</li>
+<li>そういう場合に実行時に所有権/ミュータビリティ検査をするAPIがある
+<ul>
+<li><a href="https://doc.rust-lang.org/std/rc/struct.Rc.html"><code>Rc</code></a> (参照カウント) … 複数人でデータを共有できる <a href="https://doc.rust-jp.rs/book/second-edition/ch15-04-rc.html">doc</a></li>
+<li><a href="https://doc.rust-lang.org/std/cell/struct.RefCell.html"><code>RefCell</code></a> … 実行時に借用検査をする <a href="https://doc.rust-jp.rs/book/second-edition/ch15-05-interior-mutability.html">doc</a></li>
+</ul>
+</li>
+</ul>
+<p>===</p>
+<h1 id="所有権をopt-out-1">所有権をopt out</h1>
+<hr>
+<ul>
+<li>Rustだけど「何でもあり」にできてしまう例</li>
+</ul>
+<p><a href="https://play.rust-lang.org/?version=stable&amp;mode=debug&amp;edition=2015&amp;gist=f7b7e132be264a3de565669565c4e454">run</a></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">rc</span>::<span class="n">Rc</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">cell</span>::<span class="n">RefCell</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Rc</span>::<span class="n">new</span><span class="p">(</span><span class="n">RefCell</span>::<span class="n">new</span><span class="p">(</span><span class="mi">1</span><span class="p">));</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">data2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">data</span><span class="p">.</span><span class="n">clone</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// data2を変更。 data2はイミュータブルだが
+</span></span></span><span class="line"><span class="cl"><span class="c1">// `RefCell` なので変更できる
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="o">*</span><span class="n">data2</span><span class="p">.</span><span class="n">borrow_mut</span><span class="p">()</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// `Rc` なのでdata2の変更がdataにも反映される
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="fm">assert_eq!</span><span class="p">(</span><span class="o">*</span><span class="n">data</span><span class="p">.</span><span class="n">borrow</span><span class="p">(),</span><span class="w"> </span><span class="mi">2</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>===</p>
+<h1 id="並列">並列</h1>
+<hr>
+<ul>
+<li>Rustはスレッドセーフでないプログラムをマルチスレッドで使うとエラーにする</li>
+<li>例えば <code>Rc</code> はスレッドアンセーフ(裏でcountの変更があるため)</li>
+</ul>
+<p><a href="https://play.rust-lang.org/?version=stable&amp;mode=debug&amp;edition=2015&amp;gist=9198d0f301cc24e503992ed9b127ef59">run</a></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">rc</span>::<span class="n">Rc</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">thread</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">cell</span>::<span class="n">RefCell</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Rc</span>::<span class="n">new</span><span class="p">(</span><span class="n">RefCell</span>::<span class="n">new</span><span class="p">(</span><span class="mi">1</span><span class="p">));</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">data2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">data</span><span class="p">.</span><span class="n">clone</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">handle</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">thread</span>::<span class="n">spawn</span><span class="p">(</span><span class="k">move</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="o">*</span><span class="n">data2</span><span class="p">.</span><span class="n">borrow_mut</span><span class="p">()</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">});</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">handle</span><span class="p">.</span><span class="n">join</span><span class="p">().</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="fm">assert_eq!</span><span class="p">(</span><span class="o">*</span><span class="n">data</span><span class="p">.</span><span class="n">borrow</span><span class="p">(),</span><span class="w"> </span><span class="mi">2</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><pre>
 
 ```console
    --&gt; src/main.rs:9:14
@@ -986,114 +991,118 @@ assert_eq!(*data.borrow(), 2);
 ```
 
 </pre>
-
-
-===
-# 並列
--------
-
-* スレッドセーフなAPIにしたり `Mutex` を使ったりするとコンパイルが通る
-  + `Arc` = Atomic Reference Count
-  + `Mutex` = mutual exclution、要はロック
-
-[run](https://play.rust-lang.org/?version=stable&mode=debug&edition=2015&gist=13757c7015d10f5954a4978baa8d17e5)
-
-```rust
-use std::sync::{Arc, Mutex};
-use std::thread;
-
-let data = Arc::new(Mutex::new(1));
-let data2 = data.clone();
-let handle = thread::spawn(move || {
-    *data2.lock().unwrap() = 2;
-});
-handle.join().unwrap();
-
-assert_eq!(*data.lock().unwrap(), 2);
-```
-
-
-===
-# 並列の安全性の舞台裏
-----------------------
-
-* トレイトで制御している
-* `thread::spawn` に渡せるのは `Send` トレイトを実装した型のみ。
-* `Rc` や `RefCell` は `Send` トレイトを実装していない
-* → `Rc` や `RefCell` を渡そうとするとコンパイルエラーになる
-* ドキュメントを読まなくてもスレッドセーフか分かるの素敵
-
-===
-# 安全性を捨てるとき
--------------------
-
-* Rustを使ってても安全性を捨てないといけないケースがある
-  + Cと連携するとき
-    + Rustから見たらCはデフォルトで危険
-  + データ構造を実装するとき
-    + ハッシュテーブルみたいに未初期化かもしれないメモリを扱うとき
-* そういうときのエスケープハッチがある
-  + その名も `unsafe`
-* `unsafe` な部分とsafeな部分を区別する仕組みがある
-
-===
-# 安全性を捨ててみる
--------------------
-
-* `unsafe` で囲むとやりたい放題できる
-
-[run](https://play.rust-lang.org/?version=stable&mode=debug&edition=2015&gist=6a04ca87dc616a2dfece0aae00e9e981)
-
-
-```rust
-use std::ffi::c_void;
-use std::ptr::null_mut;
-
-extern "C" {
-  // FFIの関数のプロトタイプ宣言
-  // 参照とは別のマジのポインタ型
-  fn free(p: *mut c_void);
-}
-
-fn main() {
-  // unsafeで囲むとやりたい放題
-  unsafe {
-    // ヌルポが作れる！！
-    let p: *mut i32 = null_mut::<i32>();
-    // ヌルポに書き込める！！
-    *p = 1;
-    // freeできる！！
-    free(p.cast());
-    // use after freeできる！！
-    println!("{}", *p);
-  }
-}
-```
-
-
-===
-# `unsafe` の仕組み
--------------------
-
-* Rustはいくつかの操作や関数を `unsafe` とみなす
-  + 関数は自分で `unsafe` とマークできる
-* `unsafe` な操作は `unsafe` の内側でしかできないようになっている
-  + `unsafe` の境界の安全性はユーザが保証する
-
-[run](https://play.rust-lang.org/?version=stable&mode=debug&edition=2015&gist=3e1c98392da16fea45ed23e0d945ff72)
-
-```rust
-use std::ptr::null_mut;
-
-fn main() {
-    // ヌルポインタを作るだけならsafe
-    let p: *mut i32 = null_mut::<i32>();
-    // ポインタに触るのはunsafe
-    *p = 1;
-}
-```
-
-<pre>
+<p>===</p>
+<h1 id="並列-1">並列</h1>
+<hr>
+<ul>
+<li>スレッドセーフなAPIにしたり <code>Mutex</code> を使ったりするとコンパイルが通る
+<ul>
+<li><code>Arc</code> = Atomic Reference Count</li>
+<li><code>Mutex</code> = mutual exclution、要はロック</li>
+</ul>
+</li>
+</ul>
+<p><a href="https://play.rust-lang.org/?version=stable&amp;mode=debug&amp;edition=2015&amp;gist=13757c7015d10f5954a4978baa8d17e5">run</a></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">sync</span>::<span class="p">{</span><span class="n">Arc</span><span class="p">,</span><span class="w"> </span><span class="n">Mutex</span><span class="p">};</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">thread</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Arc</span>::<span class="n">new</span><span class="p">(</span><span class="n">Mutex</span>::<span class="n">new</span><span class="p">(</span><span class="mi">1</span><span class="p">));</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">data2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">data</span><span class="p">.</span><span class="n">clone</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">handle</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">thread</span>::<span class="n">spawn</span><span class="p">(</span><span class="k">move</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="o">*</span><span class="n">data2</span><span class="p">.</span><span class="n">lock</span><span class="p">().</span><span class="n">unwrap</span><span class="p">()</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">});</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">handle</span><span class="p">.</span><span class="n">join</span><span class="p">().</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="fm">assert_eq!</span><span class="p">(</span><span class="o">*</span><span class="n">data</span><span class="p">.</span><span class="n">lock</span><span class="p">().</span><span class="n">unwrap</span><span class="p">(),</span><span class="w"> </span><span class="mi">2</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>===</p>
+<h1 id="並列の安全性の舞台裏">並列の安全性の舞台裏</h1>
+<hr>
+<ul>
+<li>トレイトで制御している</li>
+<li><code>thread::spawn</code> に渡せるのは <code>Send</code> トレイトを実装した型のみ。</li>
+<li><code>Rc</code> や <code>RefCell</code> は <code>Send</code> トレイトを実装していない</li>
+<li>→ <code>Rc</code> や <code>RefCell</code> を渡そうとするとコンパイルエラーになる</li>
+<li>ドキュメントを読まなくてもスレッドセーフか分かるの素敵</li>
+</ul>
+<p>===</p>
+<h1 id="安全性を捨てるとき">安全性を捨てるとき</h1>
+<hr>
+<ul>
+<li>Rustを使ってても安全性を捨てないといけないケースがある
+<ul>
+<li>Cと連携するとき
+<ul>
+<li>Rustから見たらCはデフォルトで危険</li>
+</ul>
+</li>
+<li>データ構造を実装するとき
+<ul>
+<li>ハッシュテーブルみたいに未初期化かもしれないメモリを扱うとき</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>そういうときのエスケープハッチがある
+<ul>
+<li>その名も <code>unsafe</code></li>
+</ul>
+</li>
+<li><code>unsafe</code> な部分とsafeな部分を区別する仕組みがある</li>
+</ul>
+<p>===</p>
+<h1 id="安全性を捨ててみる">安全性を捨ててみる</h1>
+<hr>
+<ul>
+<li><code>unsafe</code> で囲むとやりたい放題できる</li>
+</ul>
+<p><a href="https://play.rust-lang.org/?version=stable&amp;mode=debug&amp;edition=2015&amp;gist=6a04ca87dc616a2dfece0aae00e9e981">run</a></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">ffi</span>::<span class="n">c_void</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">ptr</span>::<span class="n">null_mut</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">extern</span><span class="w"> </span><span class="s">&#34;C&#34;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c1">// FFIの関数のプロトタイプ宣言
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">  </span><span class="c1">// 参照とは別のマジのポインタ型
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">  </span><span class="k">fn</span> <span class="nf">free</span><span class="p">(</span><span class="n">p</span>: <span class="o">*</span><span class="k">mut</span><span class="w"> </span><span class="n">c_void</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c1">// unsafeで囲むとやりたい放題
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">  </span><span class="k">unsafe</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// ヌルポが作れる！！
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">p</span>: <span class="o">*</span><span class="k">mut</span><span class="w"> </span><span class="kt">i32</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">null_mut</span>::<span class="o">&lt;</span><span class="kt">i32</span><span class="o">&gt;</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// ヌルポに書き込める！！
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">    </span><span class="o">*</span><span class="n">p</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// freeできる！！
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">    </span><span class="n">free</span><span class="p">(</span><span class="n">p</span><span class="p">.</span><span class="n">cast</span><span class="p">());</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// use after freeできる！！
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">    </span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="o">*</span><span class="n">p</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>===</p>
+<h1 id="unsafe-の仕組み"><code>unsafe</code> の仕組み</h1>
+<hr>
+<ul>
+<li>Rustはいくつかの操作や関数を <code>unsafe</code> とみなす
+<ul>
+<li>関数は自分で <code>unsafe</code> とマークできる</li>
+</ul>
+</li>
+<li><code>unsafe</code> な操作は <code>unsafe</code> の内側でしかできないようになっている
+<ul>
+<li><code>unsafe</code> の境界の安全性はユーザが保証する</li>
+</ul>
+</li>
+</ul>
+<p><a href="https://play.rust-lang.org/?version=stable&amp;mode=debug&amp;edition=2015&amp;gist=3e1c98392da16fea45ed23e0d945ff72">run</a></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">ptr</span>::<span class="n">null_mut</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// ヌルポインタを作るだけならsafe
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">p</span>: <span class="o">*</span><span class="k">mut</span><span class="w"> </span><span class="kt">i32</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">null_mut</span>::<span class="o">&lt;</span><span class="kt">i32</span><span class="o">&gt;</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// ポインタに触るのはunsafe
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">    </span><span class="o">*</span><span class="n">p</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><pre>
 
 
 ```console
@@ -1108,59 +1117,82 @@ error[E0133]: dereference of raw pointer is unsafe and requires unsafe function 
 ```
 
 </pre>
-
-
-===
-# `unsafe` の使いどころ
-----------------------
-
-* 基本は使わない。
-* どう頑張っても `unsafe` を使わないと実装できないものは仕方なく使う
-  + データ構造の実装に多い
-  + 標準ライブラリの [`Vec`](https://doc.rust-lang.org/beta/src/alloc/raw_vec.rs.html#315-359) とか
-* めちゃくちゃ速度が重要で、 `unsafe` を使うとすごく高速化できる場合にはトレードオフを考えて使う
-  + スライスの境界外アクセスを無視して行なう [`get_unchecked`](https://doc.rust-lang.org/beta/std/primitive.slice.html#method.get_unchecked)とか
-* C FFIのラッパを書くときはまあ、仕方ない
-  + でも最小限に
-
-===
-# 活発なコミュニティ
--------------------
-
-* 「技術的投資」というならその資産のグロースも考えよう
-* stack overflowの[最も愛されている言語](https://insights.stackoverflow.com/survey/2019#most-loved-dreaded-and-wanted)
-  + 2016年から4年連続1位
-* [Microsoft](https://msrc-blog.microsoft.com/2019/11/07/using-rust-in-windows/)も導入に乗り気
-* パッケージのセントラルレポジトリ([crates.io](https://crates.io))がある
-  + 30,000+ クレート
-  + 参考: rubygemsは150,000+ gems
-
-===
-# コミュニティ中心
--------------------
-
-* コミュニティベースの開発
-  + 「Mozillaの言語」ではない。
-  + Mozilaが初期から支援しているだけ。今は[AWS](https://www.atmarkit.co.jp/ait/articles/1910/17/news088.html)とかもサポート。
-* 開発はチームによる。チームの会議もDiscordなどで公開
-  + やさしい終身の独裁者的な人はいない
-* コミュニティから意見を吸い上げる→開発チームがロードマップを出すのサイクル
-  + [サーベイ](https://blog.rust-lang.org/2018/11/27/Rust-survey-2018.html) とか [#rust2020](https://blog.rust-lang.org/2019/10/29/A-call-for-blogs-2020.html)
-  + 機能追加の提案も [GitHub](https://github.com/rust-lang/rfcs) から誰でもできる
-
-===
-# まとめ
---------
-
-* Rustは安全なシステムプログラミング言語だよ
-  + 安全とはUBが起きないことだよ
-* 普通にプログラミング言語としても便利だよ
-* コミュニティに勢いがあるよ
-* お試しとしても新天地としても良い言語なんじゃないでしょうか
-
-
-</script>
-</section>
+<p>===</p>
+<h1 id="unsafe-の使いどころ"><code>unsafe</code> の使いどころ</h1>
+<hr>
+<ul>
+<li>基本は使わない。</li>
+<li>どう頑張っても <code>unsafe</code> を使わないと実装できないものは仕方なく使う
+<ul>
+<li>データ構造の実装に多い</li>
+<li>標準ライブラリの <a href="https://doc.rust-lang.org/beta/src/alloc/raw_vec.rs.html#315-359"><code>Vec</code></a> とか</li>
+</ul>
+</li>
+<li>めちゃくちゃ速度が重要で、 <code>unsafe</code> を使うとすごく高速化できる場合にはトレードオフを考えて使う
+<ul>
+<li>スライスの境界外アクセスを無視して行なう <a href="https://doc.rust-lang.org/beta/std/primitive.slice.html#method.get_unchecked"><code>get_unchecked</code></a>とか</li>
+</ul>
+</li>
+<li>C FFIのラッパを書くときはまあ、仕方ない
+<ul>
+<li>でも最小限に</li>
+</ul>
+</li>
+</ul>
+<p>===</p>
+<h1 id="活発なコミュニティ">活発なコミュニティ</h1>
+<hr>
+<ul>
+<li>「技術的投資」というならその資産のグロースも考えよう</li>
+<li>stack overflowの<a href="https://insights.stackoverflow.com/survey/2019#most-loved-dreaded-and-wanted">最も愛されている言語</a>
+<ul>
+<li>2016年から4年連続1位</li>
+</ul>
+</li>
+<li><a href="https://msrc-blog.microsoft.com/2019/11/07/using-rust-in-windows/">Microsoft</a>も導入に乗り気</li>
+<li>パッケージのセントラルレポジトリ(<a href="https://crates.io">crates.io</a>)がある
+<ul>
+<li>30,000+ クレート</li>
+<li>参考: rubygemsは150,000+ gems</li>
+</ul>
+</li>
+</ul>
+<p>===</p>
+<h1 id="コミュニティ中心">コミュニティ中心</h1>
+<hr>
+<ul>
+<li>コミュニティベースの開発
+<ul>
+<li>「Mozillaの言語」ではない。</li>
+<li>Mozilaが初期から支援しているだけ。今は<a href="https://www.atmarkit.co.jp/ait/articles/1910/17/news088.html">AWS</a>とかもサポート。</li>
+</ul>
+</li>
+<li>開発はチームによる。チームの会議もDiscordなどで公開
+<ul>
+<li>やさしい終身の独裁者的な人はいない</li>
+</ul>
+</li>
+<li>コミュニティから意見を吸い上げる→開発チームがロードマップを出すのサイクル
+<ul>
+<li><a href="https://blog.rust-lang.org/2018/11/27/Rust-survey-2018.html">サーベイ</a> とか <a href="https://blog.rust-lang.org/2019/10/29/A-call-for-blogs-2020.html">#rust2020</a></li>
+<li>機能追加の提案も <a href="https://github.com/rust-lang/rfcs">GitHub</a> から誰でもできる</li>
+</ul>
+</li>
+</ul>
+<p>===</p>
+<h1 id="まとめ">まとめ</h1>
+<hr>
+<ul>
+<li>Rustは安全なシステムプログラミング言語だよ
+<ul>
+<li>安全とはUBが起きないことだよ</li>
+</ul>
+</li>
+<li>普通にプログラミング言語としても便利だよ</li>
+<li>コミュニティに勢いがあるよ</li>
+<li>お試しとしても新天地としても良い言語なんじゃないでしょうか</li>
+</ul>
+</textarea>
 
         </div>
     </div>

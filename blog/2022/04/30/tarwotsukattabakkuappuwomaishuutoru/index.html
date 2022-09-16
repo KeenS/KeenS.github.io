@@ -125,177 +125,154 @@
                     </header>
                     <section>
                         <p>κeenです。最近バックアップを見直したのですが、その一環でtarでフルバックアップを毎週取るようにしたのでその報告です。</p>
-
 <h2 id="背景">背景</h2>
-
 <p>今までUbuntuに標準でついてきたdeja-dupを使っていたのですが、リモートストレージにバックアップを取れない、リストアが遅い、使用するストレージ容量の上限を設定できない、などの理由で乗り換えを検討しました。
 調査の結果、1つのツールで条件を満たすのは難しそうなので用途別にバックアップを使い分けることにしました。ここではその用途の1つ、「家が燃えるなどしてPCのデータが一切ダメになった場合に備えた完全なバックアップ」を取るための方法です。</p>
-
 <p>検討したときのスクラップはこちらにあります。</p>
-
 <p><a href="https://zenn.dev/blackenedgold/scraps/40c2acb437b355">バックアップを考えたい</a></p>
-
 <h2 id="やりたいこと">やりたいこと</h2>
-
 <p>データが一切ダメになって、復元するときも全てのデータを丸ごと復元するケースを想定しているので割り切った要求になります</p>
-
 <ul>
 <li>毎回フルバックアップを取る
-
 <ul>
 <li>インクリメンタルだと復元とかデータのローテション管理とかが面倒かなって</li>
-</ul></li>
+</ul>
+</li>
 <li>できるだけ整ってない環境から復元できる</li>
 <li>バックアップをできるだけ1つのファイルにまとめられる
-
 <ul>
 <li>インターネット経由でダウンロードするときに速い</li>
-</ul></li>
+</ul>
+</li>
 <li>バックアップを圧縮できる
-
 <ul>
 <li>ストレージ料金を安く済ませたい</li>
-</ul></li>
+</ul>
+</li>
 <li>長期保存/ダウンロードが安いクラウドストレージに保存できる</li>
 </ul>
-
 <p>ツールはbtrfsのバックアップツールとかrcloneだとかdeja-dupのバックエンドになってるduplicityも検討しましたが、私の環境では素直にtar.xzを作るのが一番かなと結論づけました。
 多少GNU tarに依存する部分はあるものの、どうせLinux使ってるならGNU tarは使ってるでしょうし汎用性も申し分なさそうです。
 同じような理由で昔tarballベースのバックアップツールを作っていたりしますが、今回はインクリメンタルバックアップをしないので出番はありませんでした。</p>
-
 <p><a href="https://keens.github.io/blog/2015/05/06/tarballbe_sunokeiryoubakkuapputsu_rutsukutta/">tarballベースの軽量バックアップツール&rsquo;Sheltar&rsquo;を作った | κeenのHappy Hacκing Blog</a></p>
-
 <p>ストレージも多少検討したのですが、ディレクトリに放り込むだけという手軽さと、既に有料プランを契約していて数百GB分の容量を持て余してるDropboxを使うのが一番だろうという結論になりました。</p>
-
 <p>他のクラウドストレージのコスト感については以下のブログが参考になります。</p>
-
 <p><a href="https://ikata.co/archives/393">NAS のクラウドバックアップのコスト (Amazon S3 vs Backblaze B2) – ikata.co::blog</a></p>
-
 <h2 id="やること">やること</h2>
-
 <p>フルバックアップなので基本は <code>tar</code> を使って <code>$HOME</code> をアーカイブするだけですが、古いバックアップをどこまで保存するかとか、静止点取れるのかとか色々あります。</p>
-
 <ul>
 <li>古いバックアップは1つ前まで保存。</li>
 <li>btrfsを使っているので静止点はスナップショットから取る</li>
 </ul>
-
 <p>をやります。おおむね以下のような処理をします。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="c1"># 1つ前のアーカイブを.oldにリネーム。2つ前のアーカイブを上書く。</span>
-mv <span class="nv">$HOME</span>/Dropbox/backup/home.tar.xz <span class="nv">$HOME</span>/Dropbox/backup/home.old.tar.xz
-<span class="c1"># (毎時撮っている)btrfsスナップショットの最新版を取得。これは私のPC固有の処理。</span>
-<span class="nv">latest_snapshot</span><span class="o">=</span><span class="s2">&#34;</span><span class="k">$(</span>ls -rt /pool/backups/ <span class="p">|</span> grep @home <span class="p">|</span> head -n1<span class="k">)</span><span class="s2">&#34;</span>
-<span class="c1"># バックアップを取る</span>
-<span class="c1"># cvf                      -- おなじみのtarを作るオプション</span>
-<span class="c1"># --sparse                 -- 中身がほとんど0だがメタデータ上サイズだけ大きいファイルを適切に処理する</span>
-<span class="c1"># --use-compress-prog=pixz -- xz圧縮に並列圧縮ツールを使う(要apt install)</span>
-<span class="c1"># -p --xattrs              -- 権限や属性などを保存</span>
-<span class="c1"># --exclude=HOGE           -- HOGEをアーカイブに入れない</span>
-<span class="c1">#                          -- 保存先のDropboxを入れると悲惨なことになるし、.cacheは保存しなくても構わない。</span>
-<span class="c1"># -C DIR                   -- ファイル名をDIRからの相対パスとして解釈する</span>
-<span class="c1">#                          -- ここではbtrfsのスナップショットをベースにした相対パスにしてるので</span>
-<span class="c1">#                          -- 復元したときに普通のhomeのように見える</span>
-<span class="c1"># 並列圧縮すると重いのでnice値を上げておく</span>
-nice tar cvf <span class="nv">$HOME</span>/Dropbox/backup/home.tar.xz <span class="se">\
-</span><span class="se"></span>    --sparse <span class="se">\
-</span><span class="se"></span>    --use-compress-prog<span class="o">=</span>pixz  <span class="se">\
-</span><span class="se"></span>    -p --xattrs <span class="se">\
-</span><span class="se"></span>    --exclude<span class="o">=</span>Dropbox <span class="se">\
-</span><span class="se"></span>    --exclude<span class="o">=</span>.cache <span class="se">\
-</span><span class="se"></span>    -C <span class="s2">&#34;/pool/backups/</span><span class="nv">$latest_snapshot</span><span class="s2">/</span><span class="nv">$USER</span><span class="s2">/&#34;</span> <span class="se">\
-</span><span class="se"></span>    .</code></pre></div>
-<p>この処理を一旦手で叩いてみて動くか確認しましょう。 <code>mkdir -p $HOME/Dropbox/backup</code> とかが事前に必要かもしれませんし、 <code>pixz</code> がちゃんと動くかとかも調べておきたいですね。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl"><span class="c1"># 1つ前のアーカイブを.oldにリネーム。2つ前のアーカイブを上書く。</span>
+</span></span><span class="line"><span class="cl">mv <span class="nv">$HOME</span>/Dropbox/backup/home.tar.xz <span class="nv">$HOME</span>/Dropbox/backup/home.old.tar.xz
+</span></span><span class="line"><span class="cl"><span class="c1"># (毎時撮っている)btrfsスナップショットの最新版を取得。これは私のPC固有の処理。</span>
+</span></span><span class="line"><span class="cl"><span class="nv">latest_snapshot</span><span class="o">=</span><span class="s2">&#34;</span><span class="k">$(</span>ls -rt /pool/backups/ <span class="p">|</span> grep @home <span class="p">|</span> head -n1<span class="k">)</span><span class="s2">&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># バックアップを取る</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># cvf                      -- おなじみのtarを作るオプション</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># --sparse                 -- 中身がほとんど0だがメタデータ上サイズだけ大きいファイルを適切に処理する</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># --use-compress-prog=pixz -- xz圧縮に並列圧縮ツールを使う(要apt install)</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># -p --xattrs              -- 権限や属性などを保存</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># --exclude=HOGE           -- HOGEをアーカイブに入れない</span>
+</span></span><span class="line"><span class="cl"><span class="c1">#                          -- 保存先のDropboxを入れると悲惨なことになるし、.cacheは保存しなくても構わない。</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># -C DIR                   -- ファイル名をDIRからの相対パスとして解釈する</span>
+</span></span><span class="line"><span class="cl"><span class="c1">#                          -- ここではbtrfsのスナップショットをベースにした相対パスにしてるので</span>
+</span></span><span class="line"><span class="cl"><span class="c1">#                          -- 復元したときに普通のhomeのように見える</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># 並列圧縮すると重いのでnice値を上げておく</span>
+</span></span><span class="line"><span class="cl">nice tar cvf <span class="nv">$HOME</span>/Dropbox/backup/home.tar.xz <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>    --sparse <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>    --use-compress-prog<span class="o">=</span>pixz  <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>    -p --xattrs <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>    --exclude<span class="o">=</span>Dropbox <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>    --exclude<span class="o">=</span>.cache <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>    -C <span class="s2">&#34;/pool/backups/</span><span class="nv">$latest_snapshot</span><span class="s2">/</span><span class="nv">$USER</span><span class="s2">/&#34;</span> <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>    .
+</span></span></code></pre></div><p>この処理を一旦手で叩いてみて動くか確認しましょう。 <code>mkdir -p $HOME/Dropbox/backup</code> とかが事前に必要かもしれませんし、 <code>pixz</code> がちゃんと動くかとかも調べておきたいですね。</p>
 <p>よさそうならスクリプトにまとめてcronを設定してあげます。
 以下の内容を <del><code>backup-home.sh</code></del> <code>backup-home</code> に保存して実行権限をつけましょう。cronだといくか手元と環境が違うのでそこだけ注意しながら清書します。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="cp">#!/bin/sh
-</span><span class="cp"></span><span class="c1"># templated by http://qiita.com/blackenedgold/items/c9e60e089974392878c8</span>
-usage<span class="o">()</span> <span class="o">{</span>
-    cat <span class="s">&lt;&lt;HELP
-</span><span class="s">NAME:
-</span><span class="s">   $0 -- backup home
-</span><span class="s">
-</span><span class="s">SYNOPSIS:
-</span><span class="s">  $0 [-h|--help]
-</span><span class="s">  $0 [--verbose]
-</span><span class="s">
-</span><span class="s">DESCRIPTION:
-</span><span class="s">   Backup home from the latest snapshot. It logs to $LOG_FILE
-</span><span class="s">
-</span><span class="s">  -h  --help      Print this help.
-</span><span class="s">      --verbose   Enables verbose mode.
-</span><span class="s">HELP</span>
-<span class="o">}</span>
-
-main<span class="o">()</span> <span class="o">{</span>
-    <span class="nv">SCRIPT_DIR</span><span class="o">=</span><span class="s2">&#34;</span><span class="k">$(</span><span class="nb">cd</span> <span class="k">$(</span>dirname <span class="s2">&#34;</span><span class="nv">$0</span><span class="s2">&#34;</span><span class="k">)</span><span class="p">;</span> <span class="nb">pwd</span><span class="k">)</span><span class="s2">&#34;</span>
-
-    <span class="k">while</span> <span class="o">[</span> <span class="nv">$#</span> -gt <span class="m">0</span> <span class="o">]</span><span class="p">;</span> <span class="k">do</span>
-        <span class="k">case</span> <span class="s2">&#34;</span><span class="nv">$1</span><span class="s2">&#34;</span> in
-            --help<span class="o">)</span> usage<span class="p">;</span> <span class="nb">exit</span> 0<span class="p">;;</span>
-            --verbose<span class="o">)</span> <span class="nb">set</span> -x<span class="p">;</span> shift<span class="p">;;</span>
-            --<span class="o">)</span> shift<span class="p">;</span> break<span class="p">;;</span>
-            -*<span class="o">)</span>
-                <span class="nv">OPTIND</span><span class="o">=</span><span class="m">1</span>
-                <span class="k">while</span> <span class="nb">getopts</span> h OPT <span class="s2">&#34;</span><span class="nv">$1</span><span class="s2">&#34;</span><span class="p">;</span> <span class="k">do</span>
-                    <span class="k">case</span> <span class="s2">&#34;</span><span class="nv">$OPT</span><span class="s2">&#34;</span> in
-                        h<span class="o">)</span> usage<span class="p">;</span> <span class="nb">exit</span> 0<span class="p">;;</span>
-                    <span class="k">esac</span>
-                <span class="k">done</span>
-                <span class="nb">shift</span>
-                <span class="p">;;</span>
-            *<span class="o">)</span> break<span class="p">;;</span>
-        <span class="k">esac</span>
-    <span class="k">done</span>
-
-    /usr/bin/mv /home/name/Dropbox/backup/home.tar.xz /home/name/Dropbox/backup/home.old.tar.xz
-    /usr/bin/chown name:name /home/name/Dropbox/backup/home.old.tar.xz
-    <span class="nv">latest_snapshot</span><span class="o">=</span><span class="s2">&#34;</span><span class="k">$(</span>/usr/bin/ls -rt /pool/backups/ <span class="p">|</span> /usr/bin/grep @home <span class="p">|</span> /usr/bin/head -n1<span class="k">)</span><span class="s2">&#34;</span>
-    /usr/bin/nice /usr/bin/tar cvf /home/name/Dropbox/backup/home.tar.xz <span class="se">\
-</span><span class="se"></span>        --sparse <span class="se">\
-</span><span class="se"></span>        --use-compress-prog<span class="o">=</span>/usr/bin/pixz  <span class="se">\
-</span><span class="se"></span>        -p --xattrs <span class="se">\
-</span><span class="se"></span>        --exclude<span class="o">=</span>Dropbox <span class="se">\
-</span><span class="se"></span>        --exclude<span class="o">=</span>.cache <span class="se">\
-</span><span class="se"></span>        -C <span class="s2">&#34;/pool/backups/</span><span class="nv">$latest_snapshot</span><span class="s2">/name/&#34;</span> <span class="se">\
-</span><span class="se"></span>        .
-    /usr/bin/chown name:name /home/name/Dropbox/backup/home.tar.xz
-<span class="o">}</span>
-<span class="nb">set</span> -e
-<span class="nv">LOG_FILE</span><span class="o">=</span>/var/log/backup-home.log
-main <span class="s2">&#34;</span><span class="nv">$@</span><span class="s2">&#34;</span> 2&gt;<span class="p">&amp;</span><span class="m">1</span> &gt; <span class="nv">$LOG_FILE</span></code></pre></div>
-<p>あとは <del><code>sudo mv backup-home.sh /etc/cron.weekly/</code></del> sudo mv backup-home /etc/cron.weekly/ としてあげれば設定終わりです。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl"><span class="cp">#!/bin/sh
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span><span class="c1"># templated by http://qiita.com/blackenedgold/items/c9e60e089974392878c8</span>
+</span></span><span class="line"><span class="cl">usage<span class="o">()</span> <span class="o">{</span>
+</span></span><span class="line"><span class="cl">    cat <span class="s">&lt;&lt;HELP
+</span></span></span><span class="line"><span class="cl"><span class="s">NAME:
+</span></span></span><span class="line"><span class="cl"><span class="s">   $0 -- backup home
+</span></span></span><span class="line"><span class="cl"><span class="s">
+</span></span></span><span class="line"><span class="cl"><span class="s">SYNOPSIS:
+</span></span></span><span class="line"><span class="cl"><span class="s">  $0 [-h|--help]
+</span></span></span><span class="line"><span class="cl"><span class="s">  $0 [--verbose]
+</span></span></span><span class="line"><span class="cl"><span class="s">
+</span></span></span><span class="line"><span class="cl"><span class="s">DESCRIPTION:
+</span></span></span><span class="line"><span class="cl"><span class="s">   Backup home from the latest snapshot. It logs to $LOG_FILE
+</span></span></span><span class="line"><span class="cl"><span class="s">
+</span></span></span><span class="line"><span class="cl"><span class="s">  -h  --help      Print this help.
+</span></span></span><span class="line"><span class="cl"><span class="s">      --verbose   Enables verbose mode.
+</span></span></span><span class="line"><span class="cl"><span class="s">HELP</span>
+</span></span><span class="line"><span class="cl"><span class="o">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">main<span class="o">()</span> <span class="o">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nv">SCRIPT_DIR</span><span class="o">=</span><span class="s2">&#34;</span><span class="k">$(</span><span class="nb">cd</span> <span class="k">$(</span>dirname <span class="s2">&#34;</span><span class="nv">$0</span><span class="s2">&#34;</span><span class="k">)</span><span class="p">;</span> <span class="nb">pwd</span><span class="k">)</span><span class="s2">&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">while</span> <span class="o">[</span> <span class="nv">$#</span> -gt <span class="m">0</span> <span class="o">]</span><span class="p">;</span> <span class="k">do</span>
+</span></span><span class="line"><span class="cl">        <span class="k">case</span> <span class="s2">&#34;</span><span class="nv">$1</span><span class="s2">&#34;</span> in
+</span></span><span class="line"><span class="cl">            --help<span class="o">)</span> usage<span class="p">;</span> <span class="nb">exit</span> 0<span class="p">;;</span>
+</span></span><span class="line"><span class="cl">            --verbose<span class="o">)</span> <span class="nb">set</span> -x<span class="p">;</span> shift<span class="p">;;</span>
+</span></span><span class="line"><span class="cl">            --<span class="o">)</span> shift<span class="p">;</span> break<span class="p">;;</span>
+</span></span><span class="line"><span class="cl">            -*<span class="o">)</span>
+</span></span><span class="line"><span class="cl">                <span class="nv">OPTIND</span><span class="o">=</span><span class="m">1</span>
+</span></span><span class="line"><span class="cl">                <span class="k">while</span> <span class="nb">getopts</span> h OPT <span class="s2">&#34;</span><span class="nv">$1</span><span class="s2">&#34;</span><span class="p">;</span> <span class="k">do</span>
+</span></span><span class="line"><span class="cl">                    <span class="k">case</span> <span class="s2">&#34;</span><span class="nv">$OPT</span><span class="s2">&#34;</span> in
+</span></span><span class="line"><span class="cl">                        h<span class="o">)</span> usage<span class="p">;</span> <span class="nb">exit</span> 0<span class="p">;;</span>
+</span></span><span class="line"><span class="cl">                    <span class="k">esac</span>
+</span></span><span class="line"><span class="cl">                <span class="k">done</span>
+</span></span><span class="line"><span class="cl">                <span class="nb">shift</span>
+</span></span><span class="line"><span class="cl">                <span class="p">;;</span>
+</span></span><span class="line"><span class="cl">            *<span class="o">)</span> break<span class="p">;;</span>
+</span></span><span class="line"><span class="cl">        <span class="k">esac</span>
+</span></span><span class="line"><span class="cl">    <span class="k">done</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    /usr/bin/mv /home/name/Dropbox/backup/home.tar.xz /home/name/Dropbox/backup/home.old.tar.xz
+</span></span><span class="line"><span class="cl">    /usr/bin/chown name:name /home/name/Dropbox/backup/home.old.tar.xz
+</span></span><span class="line"><span class="cl">    <span class="nv">latest_snapshot</span><span class="o">=</span><span class="s2">&#34;</span><span class="k">$(</span>/usr/bin/ls -rt /pool/backups/ <span class="p">|</span> /usr/bin/grep @home <span class="p">|</span> /usr/bin/head -n1<span class="k">)</span><span class="s2">&#34;</span>
+</span></span><span class="line"><span class="cl">    /usr/bin/nice /usr/bin/tar cvf /home/name/Dropbox/backup/home.tar.xz <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>        --sparse <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>        --use-compress-prog<span class="o">=</span>/usr/bin/pixz  <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>        -p --xattrs <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>        --exclude<span class="o">=</span>Dropbox <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>        --exclude<span class="o">=</span>.cache <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>        -C <span class="s2">&#34;/pool/backups/</span><span class="nv">$latest_snapshot</span><span class="s2">/name/&#34;</span> <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>        .
+</span></span><span class="line"><span class="cl">    /usr/bin/chown name:name /home/name/Dropbox/backup/home.tar.xz
+</span></span><span class="line"><span class="cl"><span class="o">}</span>
+</span></span><span class="line"><span class="cl"><span class="nb">set</span> -e
+</span></span><span class="line"><span class="cl"><span class="nv">LOG_FILE</span><span class="o">=</span>/var/log/backup-home.log
+</span></span><span class="line"><span class="cl">main <span class="s2">&#34;</span><span class="nv">$@</span><span class="s2">&#34;</span> 2&gt;<span class="p">&amp;</span><span class="m">1</span> &gt; <span class="nv">$LOG_FILE</span>
+</span></span></code></pre></div><p>あとは <del><code>sudo mv backup-home.sh /etc/cron.weekly/</code></del> sudo mv backup-home /etc/cron.weekly/ としてあげれば設定終わりです。
 ログだけ出しっぱなしだと心配なのでlogrotateを設定してあげましょう。以下の内容を <code>/etc/logrotate.d/backup-home</code> に保存します。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">/var/log/backup-home.log {
-        weekly
-        missingok
-        rotate 7
-        compress
-        notifempty
-        copytruncate
-}</code></pre></div>
-<p>因みに xzの圧縮率はかなり高く、元のデータの40%ほどになりました。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="gp">$ </span>du -h --exclude<span class="o">=</span>Dropbox --exclude<span class="o">=</span>.cache  -s <span class="nv">$HOME</span>
-<span class="go">317G    /home/name
-</span><span class="go"></span><span class="gp">$ </span>du -h <span class="nv">$HOME</span>/Dropbox/backup/home.tar.xz
-<span class="go">129G    /home/name/Dropbox/backup/home.tar.xz
-</span></code></pre></div>
-<p>シンプルなツールの組み合わせで実現できてよかったです。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">/var/log/backup-home.log {
+</span></span><span class="line"><span class="cl">        weekly
+</span></span><span class="line"><span class="cl">        missingok
+</span></span><span class="line"><span class="cl">        rotate 7
+</span></span><span class="line"><span class="cl">        compress
+</span></span><span class="line"><span class="cl">        notifempty
+</span></span><span class="line"><span class="cl">        copytruncate
+</span></span><span class="line"><span class="cl">}
+</span></span></code></pre></div><p>因みに xzの圧縮率はかなり高く、元のデータの40%ほどになりました。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="line"><span class="cl"><span class="gp">$</span> du -h --exclude<span class="o">=</span>Dropbox --exclude<span class="o">=</span>.cache  -s <span class="nv">$HOME</span>
+</span></span><span class="line"><span class="cl"><span class="go">317G    /home/name
+</span></span></span><span class="line"><span class="cl"><span class="go"></span><span class="gp">$</span> du -h <span class="nv">$HOME</span>/Dropbox/backup/home.tar.xz
+</span></span><span class="line"><span class="cl"><span class="go">129G    /home/name/Dropbox/backup/home.tar.xz
+</span></span></span></code></pre></div><p>シンプルなツールの組み合わせで実現できてよかったです。</p>
 <h2 id="2022-05-26-追記">2022-05-26 追記</h2>
-
 <p>当初シェルスクリプトのファイル名を <code>backup-home.sh</code> としていましたが、ファイル名に <code>.</code> を含んでいると正しく動かないケースがあるので修正しました。
 <code>/etc/cron.{daily,weekly,monthly}</code> の実行は <code>cron</code> (or <code>anacron</code>)に用意されているエントリで処理されます。
 私のシステムでの <code>crontab</code> を見ると以下のようなエンントリになっています。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="go">47 6    * * 7   root    test -x /usr/sbin/anacron || ( cd / &amp;&amp; run-parts --report /etc/cron.weekly )
-</span></code></pre></div>
-<p>色々ややこしいのですが、 <code>run-parts --report /etc/cron.weekly</code> の部分に注目しましょう。 <a href="https://manpages.ubuntu.com/manpages/trusty/man8/run-parts.8.html"><code>run-parts</code></a>というプログラムでディレクトリ内にあるスクリプトを全て実行しています。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="line"><span class="cl"><span class="go">47 6    * * 7   root    test -x /usr/sbin/anacron || ( cd / &amp;&amp; run-parts --report /etc/cron.weekly )
+</span></span></span></code></pre></div><p>色々ややこしいのですが、 <code>run-parts --report /etc/cron.weekly</code> の部分に注目しましょう。 <a href="https://manpages.ubuntu.com/manpages/trusty/man8/run-parts.8.html"><code>run-parts</code></a>というプログラムでディレクトリ内にあるスクリプトを全て実行しています。
 この <code>run-parts</code> のマニュアルには以下のように書かれています。</p>
-
 <blockquote>
 <p><code>--lsbsysinit</code>  オプションと  <code>--regex</code> オプションのどちらも指定しない場合、このファイル名全体が <code>ASCII</code> の大文字小文字と <code>ASCII</code> の数字、<code>ASCII</code> のアンダースコアと <code>ASCII</code> のマイナス・ハイフンでできていなければなりません。</p>
 </blockquote>
-
 <p>つまり、ファイル名に <code>.</code> を含んでいては実行されないのです。いやー、そんな仕様があるなんて知りませんでしたね。
 この記事書いてから2週間くらい経って動いてないことに気付いて、そのあとでちゃんと時間とって調べてようやく解決しました。</p>
                     </section>

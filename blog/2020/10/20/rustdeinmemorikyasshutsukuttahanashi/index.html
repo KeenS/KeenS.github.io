@@ -125,120 +125,98 @@
                     </header>
                     <section>
                         <p>κeenです。先日発表した<a href="https://keens.github.io/slide/rustdetsukuruinmemorikyasshu/">Rustで作るインメモリキャッシュ</a>が全然話し足りなかったので色々補足します。</p>
-
 <p>実は今回の話題はソフトウェアというよりはハードウェアの仕組みに由来するものなのですが、ソフトウェアにも応用できるだろうということで試してみた結果です。</p>
-
 <p>ハードウェアでもソフトウェアでもアクセスするデータは時間局所性、つまり短期間にアクセスするデータには偏りがあるというのが仮定としてあります。
 よくある例が<a href="https://ja.wikipedia.org/wiki/%E5%86%AA%E4%B9%97%E5%89%87">冪乗則</a>、あるいは80:20の法則とよばれるもので、アクセス数上位20%のものが全体の80%のアクセスを占めたりします。
 データ全部はメモリに乗らないけど20%くらいだったら載るようなケースではその20%を上手く選んでメモリに載せられる仕組みがあればパフォーマンスがあがるはずです。
 ということでそのような仕組み、キャッシュがほしいよねというのがモチベーションです。</p>
-
 <h1 id="キャッシュの話">キャッシュの話</h1>
-
 <p>まずはキャッシュの一般論から。
 Wikipediaなんかも参考にして下さい。
 <a href="https://ja.wikipedia.org/wiki/%E3%82%AD%E3%83%A3%E3%83%83%E3%82%B7%E3%83%A5%E3%83%A1%E3%83%A2%E3%83%AA">キャッシュメモリ - Wikipedia</a></p>
-
 <p>キャッシュとは容量制限のあるハッシュマップのようなものです。
 ハッシュマップとの違いは、アイテムを新たに挿入するときに十分なスペースが足りなければ容量を増やすのではなく既存のアイテムを削除する点です。</p>
-
 <p>このときにどのアイテムを削除するかがパフォーマンスに直結する工夫点です。</p>
-
 <h2 id="場所">場所</h2>
-
 <p>削除と密接に絡む、「どのデータをどこに挿入するか」の話から。</p>
-
 <p>ハッシュマップのようなものなので、まずはキーのハッシュ値を計算して挿入したい場所をみつけます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">hash(k) = 1
-
-    insert(k, v)
-      v
-+---+---+---+--
-|   |   |   | ...
-+---+---+---+--</code></pre></div>
-<p>このときそこが空いていれば何も問題なく挿入できます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">hash(k) = 1
-
-    insert(k, v)
-      v
-+---+---+---+--
-|   |???|   | ...
-+---+---+---+--</code></pre></div>
-<p>一杯だった場合にとれる方法がいくつかあります。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">hash(k) = 1
-
-    insert(k, v)
-      v
-+---+---+---+--
-|   |///|   | ...
-+---+---+---+--</code></pre></div>
-<p>ひとつはその場にあるデータをそのまま追い出して、置き換えてしまう方式。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">hash(k) = 1
-
-    insert(k, v)
-      v
-+---+---+---+--
-|   |???|   | ...
-+---+---+---+--
-      ↓
-     ///</code></pre></div>
-<p>これは <strong>ダイレクトマップ</strong> 方式とよばれます。愚直で速そうですね。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">hash(k) = 1
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    insert(k, v)
+</span></span><span class="line"><span class="cl">      v
+</span></span><span class="line"><span class="cl">+---+---+---+--
+</span></span><span class="line"><span class="cl">|   |   |   | ...
+</span></span><span class="line"><span class="cl">+---+---+---+--
+</span></span></code></pre></div><p>このときそこが空いていれば何も問題なく挿入できます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">hash(k) = 1
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    insert(k, v)
+</span></span><span class="line"><span class="cl">      v
+</span></span><span class="line"><span class="cl">+---+---+---+--
+</span></span><span class="line"><span class="cl">|   |???|   | ...
+</span></span><span class="line"><span class="cl">+---+---+---+--
+</span></span></code></pre></div><p>一杯だった場合にとれる方法がいくつかあります。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">hash(k) = 1
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    insert(k, v)
+</span></span><span class="line"><span class="cl">      v
+</span></span><span class="line"><span class="cl">+---+---+---+--
+</span></span><span class="line"><span class="cl">|   |///|   | ...
+</span></span><span class="line"><span class="cl">+---+---+---+--
+</span></span></code></pre></div><p>ひとつはその場にあるデータをそのまま追い出して、置き換えてしまう方式。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">hash(k) = 1
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    insert(k, v)
+</span></span><span class="line"><span class="cl">      v
+</span></span><span class="line"><span class="cl">+---+---+---+--
+</span></span><span class="line"><span class="cl">|   |???|   | ...
+</span></span><span class="line"><span class="cl">+---+---+---+--
+</span></span><span class="line"><span class="cl">      ↓
+</span></span><span class="line"><span class="cl">     ///
+</span></span></code></pre></div><p>これは <strong>ダイレクトマップ</strong> 方式とよばれます。愚直で速そうですね。
 しかし他に領域が空いていてもそれを使わないので空間効率は悪そうです。</p>
-
 <p>もう1つは本来の場所を起点にして空いているところを探していく方式。
 ずっとみつからなければ配列を一周します。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">hash(k) = 1
-
-    insert(k, v)
-      ........v
-+---+---+---+---+--
-|   |///|///|???|...
-+---+---+---+---+--</code></pre></div>
-<p>これは <strong>フルアソシアティブ</strong> 方式と呼ばれます。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">hash(k) = 1
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    insert(k, v)
+</span></span><span class="line"><span class="cl">      ........v
+</span></span><span class="line"><span class="cl">+---+---+---+---+--
+</span></span><span class="line"><span class="cl">|   |///|///|???|...
+</span></span><span class="line"><span class="cl">+---+---+---+---+--
+</span></span></code></pre></div><p>これは <strong>フルアソシアティブ</strong> 方式と呼ばれます。
 ダイレクトマップ方式の真逆で空間効率は最高ですが、最悪のケースで配列を全て舐めるので速度は悪いです。</p>
-
 <p>ダイレクトマップとフルアソシアティブの折衷案として、衝突したら数個だけ近辺をみてまわるというのがあります。
 例えば3つだけ近辺をみてまわるとしましょう。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">hash(k) = 1
-
-    insert(k, v)
-  +........+|
-  v   .....+|
-+---+---+---+---+--
-|???|///|///|???|...
-+---+---+---+---+--</code></pre></div>
-<p>配列を3つごとのブロックに区切って、その中で一周するように探索します。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">hash(k) = 1
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    insert(k, v)
+</span></span><span class="line"><span class="cl">  +........+|
+</span></span><span class="line"><span class="cl">  v   .....+|
+</span></span><span class="line"><span class="cl">+---+---+---+---+--
+</span></span><span class="line"><span class="cl">|???|///|///|???|...
+</span></span><span class="line"><span class="cl">+---+---+---+---+--
+</span></span></code></pre></div><p>配列を3つごとのブロックに区切って、その中で一周するように探索します。
 その中に空きがあればそこを、なければ何かしらのデータを追い出します。</p>
-
 <p>これは <strong>セットアソシアティブ</strong> 方式と呼ばれます。
 1セットにn要素ある方式を n-ウェイセットアソシアティブ方式と呼びます。
 上の例は3-ウェイセットアソシアティブ方式ですね。</p>
-
 <p>n = 1の場合はダイレクトマップ方式になりますし、n = 配列の長さの場合はフルアソシアティブ方式になります。
 そういう意味で両者の折衷案となっています。</p>
-
 <p>両者の折衷案ということで、ほどほどの空間効率とほどほどの速度が期待できます。
 もちろん、nが小さければ特徴がダイレクトマップ方式に寄りますし、nが大きければフルアソシアティブ方式に近い特徴になります。</p>
-
 <h2 id="削除">削除</h2>
-
 <p>ダイレクトマップ方式はそのまま削除するデータまで指定するのでフルアソシアティブ方式とセットアソシアティブ方式が対象です。</p>
-
 <p>「将来再度使われるのが最も遅いデータ」を削除できると効率的にメモリを使えるのですが、未来予知はできないので絵に描いた餅。
 次善の策として「将来一番使われなそうな」データを削除するのが目標になります。</p>
-
 <p>輪番削除などの方法もあるのですが、あまり効率はよくないようです。
 似たような気がするランダム削除は実はそこまで悪くないらしいです。
 実装も簡単そうですしいざとなったらこれで実装するのもよさそうです。</p>
-
 <p>ある程度効率がいいとされているのがLeast Recently Used（LRU）、最後に使ったのが最も古いデータを削除する方法です。
 時間局所性の仮定下では最近使われていないデータは将来も使われる可能性が低いので合理的な気がします。</p>
-
 <p>LRUの基本的な動きを説明しておきます。</p>
-
 <p>まず <code>1</code> というデータがきたらリストの先頭に置きます。</p>
-
-<p><svg width="160" height="120" xmlns:xlink="http://www.w3.org/1999/xlink">
+<svg width="160" height="120" xmlns:xlink="http://www.w3.org/1999/xlink">
     <use xlink:href="#base-box" />
     <use xlink:href="#new-1" />
 </svg>
@@ -250,11 +228,9 @@ Wikipediaなんかも参考にして下さい。
 <svg width="160" height="120" xmlns:xlink="http://www.w3.org/1999/xlink">
     <use xlink:href="#base-box" />
     <use xlink:href="#item-1" />
-</svg></p>
-
+</svg>
 <p>次に <code>2</code> というデータがきたら <code>1</code> のデータを1つ下にずらして2のデータを置きます。</p>
-
-<p><svg width="160" height="120" xmlns:xlink="http://www.w3.org/1999/xlink">
+<svg width="160" height="120" xmlns:xlink="http://www.w3.org/1999/xlink">
     <use xlink:href="#base-box" />
     <use xlink:href="#item-1" />
     <use xlink:href="#new-2" />
@@ -268,11 +244,9 @@ Wikipediaなんかも参考にして下さい。
 <svg width="160" height="120" xmlns:xlink="http://www.w3.org/1999/xlink">
     <use xlink:href="#base-box" />
     <use xlink:href="#item-2-1" />
-</svg></p>
-
+</svg>
 <p><code>3</code> がきたら同様に <code>1</code> 、 <code>2</code> をずらして3を置きます。</p>
-
-<p><svg width="160" height="120" xmlns:xlink="http://www.w3.org/1999/xlink">
+<svg width="160" height="120" xmlns:xlink="http://www.w3.org/1999/xlink">
     <use xlink:href="#base-box" />
     <use xlink:href="#item-2-1" />
     <use xlink:href="#new-3" />
@@ -288,12 +262,10 @@ Wikipediaなんかも参考にして下さい。
 <svg width="160" height="120" xmlns:xlink="http://www.w3.org/1999/xlink">
     <use xlink:href="#base-box" />
     <use xlink:href="#item-3-2-1" />
-</svg></p>
-
+</svg>
 <p>次にデータが一杯の状態で <code>4</code> がきたら <code>1</code> 、 <code>2</code> 、 <code>3</code> をずらしてデータを置きます。
 このとき溢れた <code>1</code> は削除されます。</p>
-
-<p><svg width="160" height="120" xmlns:xlink="http://www.w3.org/1999/xlink">
+<svg width="160" height="120" xmlns:xlink="http://www.w3.org/1999/xlink">
     <use xlink:href="#base-box" />
     <use xlink:href="#item-3-2-1" />
     <use xlink:href="#new-4" />
@@ -320,11 +292,9 @@ Wikipediaなんかも参考にして下さい。
 <svg width="160" height="120" xmlns:xlink="http://www.w3.org/1999/xlink">
     <use xlink:href="#base-box" />
     <use xlink:href="#item-4-3-2" />
-</svg></p>
-
+</svg>
 <p>最後に、既に保持されている <code>2</code> というデータがきたらそれより後にきたデータを1つずらし、 <code>2</code> を先頭にもってきます。</p>
-
-<p><svg width="160" height="120" xmlns:xlink="http://www.w3.org/1999/xlink">
+<svg width="160" height="120" xmlns:xlink="http://www.w3.org/1999/xlink">
     <use xlink:href="#base-box" />
     <use xlink:href="#item-4-3-2" />
     <use xlink:href="#new-2" />
@@ -340,385 +310,348 @@ Wikipediaなんかも参考にして下さい。
 <svg width="160" height="120" xmlns:xlink="http://www.w3.org/1999/xlink">
     <use xlink:href="#base-box" />
     <use xlink:href="#item-2-4-3" />
-</svg></p>
-
+</svg>
 <p>というのがキャッシュの一般論でした。これを踏まえて、実装についてみていきましょう。</p>
-
 <h1 id="今回の実装の話">今回の実装の話</h1>
-
 <p>今回は16-ウェイセットアソシアティブ方式を実装しました。
 コードは以下にあります。</p>
-
 <p><a href="https://gitlab.com/blackenedgold/chechire">κeen / chechire · GitLab</a></p>
-
 <p>これについて色々話題があるので拾っていきます。</p>
-
 <h2 id="lruの実装">LRUの実装</h2>
-
 <p>LRUの説明でリストのようなものがでてきたことからも分かるように、LRUはリスト（又はベクタ）があれば実装できます。
 教科書的には順番の入れ替えが得意なリストの出番ですが、残念ながら最近のCPUではベクトルの処理は速くリストのようなポインタ処理は遅いです。
 Rustの<a href="https://doc.rust-lang.org/std/collections/struct.LinkedList.html">LinkedListのドキュメント</a>にもこう書かれています。</p>
-
 <blockquote>
 <p>NOTE: It is almost always better to use Vec or VecDeque because array-based containers are generally faster, more memory efficient, and make better use of CPU cache.</p>
-
+</blockquote>
+<blockquote>
 <p>訳 注: 一般に配列ベースのコンテナの方が速く、メモリ効率的でかつCPUキャッシュをより利用できるので、ほぼ常に <code>Vec</code> や <code>VecDeque</code> を使った方がよいです。</p>
 </blockquote>
-
 <p>今回必要な操作は先頭にデータを追加する処理、リストの途中にあるデータを先頭にもってくる処理と、一番古いデータを捨てる処理です。
 <code>Vec</code> は末尾にデータを挿入する処理が得意なので末尾に新しいデータを挿入し、古いデータを捨てるときだけ先頭から取り出すようにすればそこまで効率は悪くないはずです。</p>
-
 <p>というのがわかりやすい実装です。</p>
-
 <p>実はLRUは少数であればbit演算でも管理できることが知られています。
 主にセットアソシアティブ方式を想定したアルゴリズムですね。</p>
-
 <p>上の例ではキャッシュのキーを直接管理してましたが、こちらはそのキーが置かれる場所、バケットのインデックスで管理します。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">  0   1   2
-+---+---+---+
-|   |   |   |
-+---+---+---+</code></pre></div>
-<p>「0番目のバケットが使われた」「2番目のバケットの内容は古いから捨ててもよい」のように管理すれば数値を扱うことになるのでbit演算ができます。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">  0   1   2
+</span></span><span class="line"><span class="cl">+---+---+---+
+</span></span><span class="line"><span class="cl">|   |   |   |
+</span></span><span class="line"><span class="cl">+---+---+---+
+</span></span></code></pre></div><p>「0番目のバケットが使われた」「2番目のバケットの内容は古いから捨ててもよい」のように管理すれば数値を扱うことになるのでbit演算ができます。</p>
 <p>さて、肝心のアルゴリズムですが、まずはN x Nのビットテーブルを用意します。今回は3x3ですね。
 ひとまず0で埋めておきましょうか。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">   0 1 2
-
-0  0 0 0
-1  0 0 0
-2  0 0 0</code></pre></div>
-<p>N番目が使われたとき、 N列目を全て0にして、N行目を全て1にします。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">   0 1 2
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">0  0 0 0
+</span></span><span class="line"><span class="cl">1  0 0 0
+</span></span><span class="line"><span class="cl">2  0 0 0
+</span></span></code></pre></div><p>N番目が使われたとき、 N列目を全て0にして、N行目を全て1にします。</p>
 <p>例えば0、2、1、2の順で使われたとしましょう。</p>
-
 <p>まず0が使われたので0列目を全て0にします。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"> 0列目
-   v
-   0 1 2
-
-0  0 0 0
-1  0 0 0
-2  0 0 0</code></pre></div>
-<p>そして0行目を全て1にします。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">   0 1 2
-
-0  1 1 1 &lt; 0列目
-1  0 0 0
-2  0 0 0</code></pre></div>
-<p>次に2が使われたので2列目を全て0にします。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">      2列目
-       v
-   0 1 2
-
-0  1 1 0
-1  0 0 0
-2  0 0 0</code></pre></div>
-<p>そして2行目を全て1にします。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">   0 1 2
-
-0  1 1 0
-1  0 0 0
-2  1 1 1 &lt; 0列目</code></pre></div>
-<p>次に1が使われたので1列目を全て0にします。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">    1列目
-     v
-
-   0 1 2
-
-0  1 0 0
-1  0 0 0
-2  1 0 1</code></pre></div>
-<p>そして1行目を全て1にします。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">   0 1 2
-
-0  1 0 0
-1  1 1 1 &lt; 1行目
-2  1 0 1</code></pre></div>
-<p>最後に再度2が使われたので2列目を全て0にします。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">    2列目
-       v
-   0 1 2
-
-0  1 0 0
-1  1 1 0
-2  1 0 0</code></pre></div>
-<p>そして2行目を全て1にします。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">   0 1 2
-
-0  1 0 0
-1  1 1 0
-2  1 1 1 &lt; 2行目</code></pre></div>
-<p>こうやって管理したbitを行単位で1つの数値と思うと、その数値の大小が最後に使われた順序になっています。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl"> 0列目
+</span></span><span class="line"><span class="cl">   v
+</span></span><span class="line"><span class="cl">   0 1 2
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">0  0 0 0
+</span></span><span class="line"><span class="cl">1  0 0 0
+</span></span><span class="line"><span class="cl">2  0 0 0
+</span></span></code></pre></div><p>そして0行目を全て1にします。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">   0 1 2
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">0  1 1 1 &lt; 0列目
+</span></span><span class="line"><span class="cl">1  0 0 0
+</span></span><span class="line"><span class="cl">2  0 0 0
+</span></span></code></pre></div><p>次に2が使われたので2列目を全て0にします。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">      2列目
+</span></span><span class="line"><span class="cl">       v
+</span></span><span class="line"><span class="cl">   0 1 2
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">0  1 1 0
+</span></span><span class="line"><span class="cl">1  0 0 0
+</span></span><span class="line"><span class="cl">2  0 0 0
+</span></span></code></pre></div><p>そして2行目を全て1にします。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">   0 1 2
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">0  1 1 0
+</span></span><span class="line"><span class="cl">1  0 0 0
+</span></span><span class="line"><span class="cl">2  1 1 1 &lt; 0列目
+</span></span></code></pre></div><p>次に1が使われたので1列目を全て0にします。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">    1列目
+</span></span><span class="line"><span class="cl">     v
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">   0 1 2
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">0  1 0 0
+</span></span><span class="line"><span class="cl">1  0 0 0
+</span></span><span class="line"><span class="cl">2  1 0 1
+</span></span></code></pre></div><p>そして1行目を全て1にします。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">   0 1 2
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">0  1 0 0
+</span></span><span class="line"><span class="cl">1  1 1 1 &lt; 1行目
+</span></span><span class="line"><span class="cl">2  1 0 1
+</span></span></code></pre></div><p>最後に再度2が使われたので2列目を全て0にします。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">    2列目
+</span></span><span class="line"><span class="cl">       v
+</span></span><span class="line"><span class="cl">   0 1 2
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">0  1 0 0
+</span></span><span class="line"><span class="cl">1  1 1 0
+</span></span><span class="line"><span class="cl">2  1 0 0
+</span></span></code></pre></div><p>そして2行目を全て1にします。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">   0 1 2
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">0  1 0 0
+</span></span><span class="line"><span class="cl">1  1 1 0
+</span></span><span class="line"><span class="cl">2  1 1 1 &lt; 2行目
+</span></span></code></pre></div><p>こうやって管理したbitを行単位で1つの数値と思うと、その数値の大小が最後に使われた順序になっています。
 上の例だと</p>
 <pre tabindex="0"><code>0: 100 = 4
 1: 110 = 6
-2: 111 = 7</code></pre>
-<p>なので 0 &lt; 1 &lt; 2 と、最後に使われた順序と等しいです。</p>
-
+2: 111 = 7
+</code></pre><p>なので 0 &lt; 1 &lt; 2 と、最後に使われた順序と等しいです。</p>
 <p>数値の大小が最後に使われた順ということは、数値が最小のものがLRUとなります。
 あとはLRUを削除するときにそこの行を全て0にしてあげれば完成です。</p>
-
 <p>今回16-wayを選んだのはRust的に <code>u16</code> を16個の配列であれば効率的に実装できるかなと思ったからです。</p>
-
 <p>私が実装したのも、ほぼ上記のままです。行を数値として比較したいので1行を <code>u16</code> で表現することにして、それを16行分まとめたものを <code>[u16;16]</code> として表現しています</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">struct</span> <span class="nc">LeastRecentlyUsed</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="n">bit_table</span>: <span class="p">[</span><span class="kt">u16</span><span class="p">;</span><span class="w"> </span><span class="mi">16</span><span class="p">],</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="n">LeastRecentlyUsed</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">SIZE</span>: <span class="kt">usize</span> <span class="o">=</span><span class="w"> </span><span class="mi">16</span><span class="p">;</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">refer</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">index</span>: <span class="kt">usize</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="fm">debug_assert!</span><span class="p">(</span><span class="n">index</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="bp">Self</span>::<span class="n">SIZE</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">mask</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">!</span><span class="p">(</span><span class="mi">1</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">index</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">bit_table</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">            </span><span class="o">*</span><span class="n">b</span><span class="w"> </span><span class="o">&amp;=</span><span class="w"> </span><span class="n">mask</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="p">}</span><span class="w">
-</span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">bit_table</span><span class="p">[</span><span class="n">index</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">!</span><span class="mi">0</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">delete</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">index</span>: <span class="kt">usize</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="fm">debug_assert!</span><span class="p">(</span><span class="n">index</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="bp">Self</span>::<span class="n">SIZE</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">bit_table</span><span class="p">[</span><span class="n">index</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">least</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">usize</span> <span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">min</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kt">u16</span>::<span class="n">MAX</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">min_index</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">b</span><span class="p">)</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">bit_table</span><span class="p">.</span><span class="n">iter</span><span class="p">().</span><span class="n">enumerate</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">            </span><span class="c1">// ignoring b == 0 because hashbrown assumes there is at least 1 blank bucket
-</span><span class="c1"></span><span class="w">            </span><span class="c1">// thus there is at least 1 unavailable bucket.
-</span><span class="c1"></span><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">min</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">                </span><span class="n">min</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">b</span><span class="p">;</span><span class="w">
-</span><span class="w">                </span><span class="n">min_index</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i</span><span class="p">;</span><span class="w">
-</span><span class="w">            </span><span class="p">}</span><span class="w">
-</span><span class="w">        </span><span class="p">}</span><span class="w">
-</span><span class="w">        </span><span class="n">min_index</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<h2 id="テーブル側">テーブル側</h2>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">pub</span><span class="w"> </span><span class="k">struct</span> <span class="nc">LeastRecentlyUsed</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">bit_table</span>: <span class="p">[</span><span class="kt">u16</span><span class="p">;</span><span class="w"> </span><span class="mi">16</span><span class="p">],</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="n">LeastRecentlyUsed</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">SIZE</span>: <span class="kt">usize</span> <span class="o">=</span><span class="w"> </span><span class="mi">16</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">refer</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">index</span>: <span class="kt">usize</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="fm">debug_assert!</span><span class="p">(</span><span class="n">index</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="bp">Self</span>::<span class="n">SIZE</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">mask</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">!</span><span class="p">(</span><span class="mi">1</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">index</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">bit_table</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="o">*</span><span class="n">b</span><span class="w"> </span><span class="o">&amp;=</span><span class="w"> </span><span class="n">mask</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">bit_table</span><span class="p">[</span><span class="n">index</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">!</span><span class="mi">0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">delete</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">index</span>: <span class="kt">usize</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="fm">debug_assert!</span><span class="p">(</span><span class="n">index</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="bp">Self</span>::<span class="n">SIZE</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">bit_table</span><span class="p">[</span><span class="n">index</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">least</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">usize</span> <span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">min</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kt">u16</span>::<span class="n">MAX</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">min_index</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">b</span><span class="p">)</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">bit_table</span><span class="p">.</span><span class="n">iter</span><span class="p">().</span><span class="n">enumerate</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="c1">// ignoring b == 0 because hashbrown assumes there is at least 1 blank bucket
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">            </span><span class="c1">// thus there is at least 1 unavailable bucket.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">min</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">min</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">b</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">min_index</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">min_index</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><h2 id="テーブル側">テーブル側</h2>
 <p>LRUでテーブルの内部実装にある配列の各インデックスにアクセスできるという仮定を置きました。
 しかし標準ライブラリの <code>HashMap</code> ではそういう機能はありません。</p>
-
 <p>ところで標準ライブラリの <code>HashMap</code> と同じものがcrates.ioに公開されています。
 <a href="https://crates.io/crates/hashbrown">hashbrown</a>といいます。
 というか元々は標準ライブラリ互換の速いハッシュマップとして公開されていたものが標準ライブラリ側が取り込んだ形になります。
 普通の言語だとそもそもユーザレベルでハッシュマップを効率的に実装できなかったり、できたとしても自動で標準ライブラリに依存してしまうので標準ライブラリに取り込めなかったりするのですが <code>no_std</code> などの仕組みが整ったRustではこういうことができてしまう訳です。</p>
-
 <p>ちょっと話が逸れましたね。
 このhashbrowですが実験的機能として<a href="https://docs.rs/hashbrown/0.9.1/hashbrown/raw/index.html"><code>raw</code></a>というモジュールを公開しています。
 これはハッシュマップの実装に使われているデータ構造の内部実装を公開するAPIで、先程言及した内部で使ってる配列へのインデックスアクセスも含みます。
 あるいは <code>insert_no_grow</code> のように領域が足りなくてもメモリを拡張しない（領域が足りなかったら未定義動作）APIなどのキャッシュの実装にはおあつらえ向きなAPIがあります。
 これらをありがたく使わせてもらうことにします。</p>
-
 <p>一方で、ハッシュマップを前提にした実装なので困った点などもいくつかあるのですが、それは後ろの方で紹介したいと思います。</p>
-
 <h2 id="全体の実装">全体の実装</h2>
-
 <p>キャッシュポリシーとテーブが出揃ったので全体の話をします。
 hashbrownの <code>raw</code> を使っている関係上、また設計を真似る意味でも低レベルな <code>RawCache</code> とその上に作られた <code>CacheTable</code> の2つを作っていくことにします。
 <code>RawCache</code> のAPIをhashbrownの <code>RawTable</code> に似せれば <code>CacheTable</code> 部分はほぼコピペで実装できるだろうという魂胆です。</p>
-
 <p>今回の実装は16-ウェイアソシアティブなキャッシュなので、小さなキャッシュテーブルを複数束ねた形になります。これはRustのコードを見た方が話が早いですかね。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">struct</span> <span class="nc">Block</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">pub</span><span class="p">(</span><span class="k">crate</span><span class="p">)</span><span class="w"> </span><span class="n">table</span>: <span class="nc">RawTable</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="p">,</span><span class="w">
-</span><span class="w">    </span><span class="n">policy</span>: <span class="nc">RefCell</span><span class="o">&lt;</span><span class="n">LRU</span><span class="o">&gt;</span><span class="p">,</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">pub</span><span class="w"> </span><span class="k">struct</span> <span class="nc">RawCache</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="n">blocks</span>: <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Block</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;&gt;</span><span class="p">,</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<p>これを使って、気になる <code>insert</code> は以下のように実装されています。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">insert</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">hash</span>: <span class="kt">u64</span><span class="p">,</span><span class="w"> </span><span class="n">value</span>: <span class="nc">T</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Bucket</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">block_index</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">block_index</span><span class="p">(</span><span class="n">hash</span><span class="p">);</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">cache_hash</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">block_hash</span><span class="p">(</span><span class="n">hash</span><span class="p">);</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">block</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">block_mut</span><span class="p">(</span><span class="n">hash</span><span class="p">);</span><span class="w">
-</span><span class="w">    </span><span class="k">unsafe</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="c1">// もしテーブルが満杯だったら
-</span><span class="c1"></span><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">block</span><span class="p">.</span><span class="n">table</span><span class="p">.</span><span class="n">capacity</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">block</span><span class="p">.</span><span class="n">table</span><span class="p">.</span><span class="n">len</span><span class="p">())</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">            </span><span class="c1">// Least Recently Usedなデータを取得して
-</span><span class="c1"></span><span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">least</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">block</span><span class="p">.</span><span class="n">policy</span><span class="p">.</span><span class="n">borrow</span><span class="p">().</span><span class="n">least</span><span class="p">();</span><span class="w">
-</span><span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">least_bucket</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">block</span><span class="p">.</span><span class="n">table</span><span class="p">.</span><span class="n">bucket</span><span class="p">(</span><span class="n">least</span><span class="p">);</span><span class="w">
-</span><span class="w">            </span><span class="c1">// それを消して
-</span><span class="c1"></span><span class="w">            </span><span class="n">block</span><span class="p">.</span><span class="n">table</span><span class="p">.</span><span class="n">erase</span><span class="p">(</span><span class="n">least_bucket</span><span class="p">);</span><span class="w">
-</span><span class="w">            </span><span class="c1">// LRUの方からも消す
-</span><span class="c1"></span><span class="w">            </span><span class="n">block</span><span class="p">.</span><span class="n">policy</span><span class="p">.</span><span class="n">borrow_mut</span><span class="p">().</span><span class="n">delete</span><span class="p">(</span><span class="n">least</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="p">}</span><span class="w">
-</span><span class="w">        </span><span class="fm">debug_assert!</span><span class="p">(</span><span class="mi">0</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">block</span><span class="p">.</span><span class="n">table</span><span class="p">.</span><span class="n">capacity</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">block</span><span class="p">.</span><span class="n">table</span><span class="p">.</span><span class="n">len</span><span class="p">());</span><span class="w">
-</span><span class="w">        </span><span class="c1">// 必ず空きがあるはずなので `insert_no_grow`
-</span><span class="c1"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">bucket</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">block</span><span class="p">.</span><span class="n">table</span><span class="p">.</span><span class="n">insert_no_grow</span><span class="p">(</span><span class="n">cache_hash</span><span class="p">,</span><span class="w"> </span><span class="n">value</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="c1">// LRU を更新する
-</span><span class="c1"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">bucket_index</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">block</span><span class="p">.</span><span class="n">table</span><span class="p">.</span><span class="n">bucket_index</span><span class="p">(</span><span class="o">&amp;</span><span class="n">bucket</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="n">block</span><span class="p">.</span><span class="n">policy</span><span class="p">.</span><span class="n">borrow_mut</span><span class="p">().</span><span class="n">refer</span><span class="p">(</span><span class="n">bucket_index</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="n">Bucket</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">            </span><span class="n">bucket</span><span class="p">,</span><span class="w">
-</span><span class="w">            </span><span class="n">block</span>: <span class="nc">block_index</span><span class="p">,</span><span class="w">
-</span><span class="w">        </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<p>ほぼ理論通りの実装です。 <code>find</code> などの参照系の実装でもLRUを更新する処理が入っています。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">pub</span><span class="w"> </span><span class="k">struct</span> <span class="nc">Block</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">pub</span><span class="p">(</span><span class="k">crate</span><span class="p">)</span><span class="w"> </span><span class="n">table</span>: <span class="nc">RawTable</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">policy</span>: <span class="nc">RefCell</span><span class="o">&lt;</span><span class="n">LRU</span><span class="o">&gt;</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">pub</span><span class="w"> </span><span class="k">struct</span> <span class="nc">RawCache</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">blocks</span>: <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Block</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;&gt;</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>これを使って、気になる <code>insert</code> は以下のように実装されています。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">insert</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">hash</span>: <span class="kt">u64</span><span class="p">,</span><span class="w"> </span><span class="n">value</span>: <span class="nc">T</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Bucket</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">block_index</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">block_index</span><span class="p">(</span><span class="n">hash</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">cache_hash</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">block_hash</span><span class="p">(</span><span class="n">hash</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">block</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">block_mut</span><span class="p">(</span><span class="n">hash</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">unsafe</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="c1">// もしテーブルが満杯だったら
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">block</span><span class="p">.</span><span class="n">table</span><span class="p">.</span><span class="n">capacity</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">block</span><span class="p">.</span><span class="n">table</span><span class="p">.</span><span class="n">len</span><span class="p">())</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="c1">// Least Recently Usedなデータを取得して
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">least</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">block</span><span class="p">.</span><span class="n">policy</span><span class="p">.</span><span class="n">borrow</span><span class="p">().</span><span class="n">least</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">least_bucket</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">block</span><span class="p">.</span><span class="n">table</span><span class="p">.</span><span class="n">bucket</span><span class="p">(</span><span class="n">least</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="c1">// それを消して
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">            </span><span class="n">block</span><span class="p">.</span><span class="n">table</span><span class="p">.</span><span class="n">erase</span><span class="p">(</span><span class="n">least_bucket</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="c1">// LRUの方からも消す
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">            </span><span class="n">block</span><span class="p">.</span><span class="n">policy</span><span class="p">.</span><span class="n">borrow_mut</span><span class="p">().</span><span class="n">delete</span><span class="p">(</span><span class="n">least</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="fm">debug_assert!</span><span class="p">(</span><span class="mi">0</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">block</span><span class="p">.</span><span class="n">table</span><span class="p">.</span><span class="n">capacity</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">block</span><span class="p">.</span><span class="n">table</span><span class="p">.</span><span class="n">len</span><span class="p">());</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="c1">// 必ず空きがあるはずなので `insert_no_grow`
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">bucket</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">block</span><span class="p">.</span><span class="n">table</span><span class="p">.</span><span class="n">insert_no_grow</span><span class="p">(</span><span class="n">cache_hash</span><span class="p">,</span><span class="w"> </span><span class="n">value</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="c1">// LRU を更新する
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">bucket_index</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">block</span><span class="p">.</span><span class="n">table</span><span class="p">.</span><span class="n">bucket_index</span><span class="p">(</span><span class="o">&amp;</span><span class="n">bucket</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">block</span><span class="p">.</span><span class="n">policy</span><span class="p">.</span><span class="n">borrow_mut</span><span class="p">().</span><span class="n">refer</span><span class="p">(</span><span class="n">bucket_index</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">Bucket</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">bucket</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">block</span>: <span class="nc">block_index</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>ほぼ理論通りの実装です。 <code>find</code> などの参照系の実装でもLRUを更新する処理が入っています。</p>
 <p>さて、ここでブロックとハッシュの話をしましょう。
 <code>Block</code> の <code>Vec</code> があって、さらに <code>Block</code> の中のハッシュテーブルの中に配列（のようなもの）があるので2段階のインデックスアクセスが必要になります。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">RawCache
-    +-------+--
-    | Block | ...
-    +-------+--
-       |
-       |
-      / \
-Block
-    +--------+--
-    | Bucket | ...
-    +--------+--</code></pre></div>
-<p>ブロックを選択する方を <code>block_index</code> 、ブロック内でデータにアクセスする方は普通のハッシュテーブルに任せてハッシュ値をそのまま使うのでて <code>block_hash</code> （あるいは cache hash）と呼んでいます（もっと良い名前が欲しい）。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">RawCache
+</span></span><span class="line"><span class="cl">    +-------+--
+</span></span><span class="line"><span class="cl">    | Block | ...
+</span></span><span class="line"><span class="cl">    +-------+--
+</span></span><span class="line"><span class="cl">       |
+</span></span><span class="line"><span class="cl">       |
+</span></span><span class="line"><span class="cl">      / \
+</span></span><span class="line"><span class="cl">Block
+</span></span><span class="line"><span class="cl">    +--------+--
+</span></span><span class="line"><span class="cl">    | Bucket | ...
+</span></span><span class="line"><span class="cl">    +--------+--
+</span></span></code></pre></div><p>ブロックを選択する方を <code>block_index</code> 、ブロック内でデータにアクセスする方は普通のハッシュテーブルに任せてハッシュ値をそのまま使うのでて <code>block_hash</code> （あるいは cache hash）と呼んでいます（もっと良い名前が欲しい）。
 <code>insert</code> の先頭部分で計算しているのがそれです。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">insert</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">hash</span>: <span class="kt">u64</span><span class="p">,</span><span class="w"> </span><span class="n">value</span>: <span class="nc">T</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Bucket</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">block_index</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">block_index</span><span class="p">(</span><span class="n">hash</span><span class="p">);</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">cache_hash</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">block_hash</span><span class="p">(</span><span class="n">hash</span><span class="p">);</span><span class="w">
-</span><span class="w">    </span><span class="c1">// ...
-</span><span class="c1"></span><span class="p">}</span></code></pre></div>
-<p>これらの計算には普通のハッシュテーブルのようにハッシュ値を使うのですが、注意が必要です。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">insert</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">hash</span>: <span class="kt">u64</span><span class="p">,</span><span class="w"> </span><span class="n">value</span>: <span class="nc">T</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Bucket</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">block_index</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">block_index</span><span class="p">(</span><span class="n">hash</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">cache_hash</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">block_hash</span><span class="p">(</span><span class="n">hash</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// ...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>これらの計算には普通のハッシュテーブルのようにハッシュ値を使うのですが、注意が必要です。
 安直に思いつくのは <code>block_index</code> にハッシュ値を <code>Vec</code> の長さで割った余り、 <code>block_hash</code> にハッシュ値そのままというものです。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">block_index</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">hash</span>: <span class="kt">u64</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">usize</span> <span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">num_blocks</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">blocks</span><span class="p">.</span><span class="n">len</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="p">(</span><span class="n">hash</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="kt">usize</span><span class="p">)</span><span class="w"> </span><span class="o">%</span><span class="w"> </span><span class="n">num_blocks</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">fn</span> <span class="nf">block_hash</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">hash</span>: <span class="kt">u64</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">u64</span> <span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="n">hash</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<p>しかしこれだとよくないです。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">fn</span> <span class="nf">block_index</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">hash</span>: <span class="kt">u64</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">usize</span> <span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">num_blocks</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">blocks</span><span class="p">.</span><span class="n">len</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">(</span><span class="n">hash</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="kt">usize</span><span class="p">)</span><span class="w"> </span><span class="o">%</span><span class="w"> </span><span class="n">num_blocks</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">fn</span> <span class="nf">block_hash</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">hash</span>: <span class="kt">u64</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">u64</span> <span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">hash</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>しかしこれだとよくないです。
 <code>hash % num_blocks</code> でブロックを振り分けているということは、1ブロック内でハッシュ値の下位bitが揃ってしまいます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">RawCache
-    +-------+--
-    | Block | ...
-    +-------+--
-       | hash % num_block = 0 を振り分け
-       |
-      / \
-Block
-    +--------+--------+--
-    | Bucket | Bucket |
-    +--------+--------+--
-      0100     1100
-         ^        ^
-    下2bitが全部00で揃ってしまう</code></pre></div>
-<p>ハッシュテーブルはハッシュ値がきれいにバラけたときに効率的なので、これだとパフォーマンスが下がってしまいます。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">RawCache
+</span></span><span class="line"><span class="cl">    +-------+--
+</span></span><span class="line"><span class="cl">    | Block | ...
+</span></span><span class="line"><span class="cl">    +-------+--
+</span></span><span class="line"><span class="cl">       | hash % num_block = 0 を振り分け
+</span></span><span class="line"><span class="cl">       |
+</span></span><span class="line"><span class="cl">      / \
+</span></span><span class="line"><span class="cl">Block
+</span></span><span class="line"><span class="cl">    +--------+--------+--
+</span></span><span class="line"><span class="cl">    | Bucket | Bucket |
+</span></span><span class="line"><span class="cl">    +--------+--------+--
+</span></span><span class="line"><span class="cl">      0100     1100
+</span></span><span class="line"><span class="cl">         ^        ^
+</span></span><span class="line"><span class="cl">    下2bitが全部00で揃ってしまう
+</span></span></code></pre></div><p>ハッシュテーブルはハッシュ値がきれいにバラけたときに効率的なので、これだとパフォーマンスが下がってしまいます。</p>
 <p>もう1つ、hashbrown特有の罠もあります。
 下位bitを使い回すのがダメなら下のbitを捨ててしまえという発想もありえます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">block_index</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">hash</span>: <span class="kt">u64</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">usize</span> <span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">num_blocks</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">blocks</span><span class="p">.</span><span class="n">len</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="p">(</span><span class="n">hash</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="kt">usize</span><span class="p">)</span><span class="w"> </span><span class="o">%</span><span class="w"> </span><span class="n">num_blocks</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">fn</span> <span class="nf">block_hash</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">hash</span>: <span class="kt">u64</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">u64</span> <span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">num_blocks</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">blocks</span><span class="p">.</span><span class="n">len</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="c1">// block_indexの計算に使ったbitを捨てる
-</span><span class="c1"></span><span class="w">    </span><span class="n">hash</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="p">(</span><span class="n">num_blocks</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="kt">u64</span><span class="p">)</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<p>あるいは下位bitが駄目なら上位bitで計算すればいいじゃないかという案もあるでしょう。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">fn</span> <span class="nf">block_index</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">hash</span>: <span class="kt">u64</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">usize</span> <span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">num_blocks</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">blocks</span><span class="p">.</span><span class="n">len</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">(</span><span class="n">hash</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="kt">usize</span><span class="p">)</span><span class="w"> </span><span class="o">%</span><span class="w"> </span><span class="n">num_blocks</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">fn</span> <span class="nf">block_hash</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">hash</span>: <span class="kt">u64</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">u64</span> <span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">num_blocks</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">blocks</span><span class="p">.</span><span class="n">len</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// block_indexの計算に使ったbitを捨てる
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">    </span><span class="n">hash</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="p">(</span><span class="n">num_blocks</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="kt">u64</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>あるいは下位bitが駄目なら上位bitで計算すればいいじゃないかという案もあるでしょう。
 しかし、hashbrownは簡単に（false positiveありで）キーが一致するかを確認するために上位7bitをテーブル内に保持しています。
 下位bitを捨てて上位bitに0を埋めたり、上位bitでブロックを振り分けたりするとまたハッシュ値が衝突します。</p>
-
 <p>つまり、上位7bitと下位数bit（今回は16-wayなので4bit）は予約済みで動かせないと考えてよいです。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">  上位7bit                   下位4bit
- ________________             _______
-/                \           /       \
-+--+--+--+--+--+--+--....-+--+--+--+--+
-63 62 61 60 59 58 57      4  3  2  1  0</code></pre></div>
-<p>ということで <code>block_index</code> の方で工夫するとして、効率のいい実装は以下です。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">block_index</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">hash</span>: <span class="kt">u64</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">usize</span> <span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">num_blocks</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">blocks</span><span class="p">.</span><span class="n">len</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="c1">// ハッシュで使う分のbitを除けて計算
-</span><span class="c1"></span><span class="w">    </span><span class="p">((</span><span class="n">hash</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="kt">usize</span><span class="p">)</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">LRU</span>::<span class="n">SIZE</span><span class="p">)</span><span class="w"> </span><span class="o">%</span><span class="w"> </span><span class="n">num_blocks</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">fn</span> <span class="nf">block_hash</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">hash</span>: <span class="kt">u64</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">u64</span> <span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="c1">// ハッシュ値そのまま
-</span><span class="c1"></span><span class="w">    </span><span class="n">hash</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<h2 id="ベンチマーク">ベンチマーク</h2>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">  上位7bit                   下位4bit
+</span></span><span class="line"><span class="cl"> ________________             _______
+</span></span><span class="line"><span class="cl">/                \           /       \
+</span></span><span class="line"><span class="cl">+--+--+--+--+--+--+--....-+--+--+--+--+
+</span></span><span class="line"><span class="cl">63 62 61 60 59 58 57      4  3  2  1  0
+</span></span></code></pre></div><p>ということで <code>block_index</code> の方で工夫するとして、効率のいい実装は以下です。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">fn</span> <span class="nf">block_index</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">hash</span>: <span class="kt">u64</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">usize</span> <span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">num_blocks</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">blocks</span><span class="p">.</span><span class="n">len</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// ハッシュで使う分のbitを除けて計算
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">    </span><span class="p">((</span><span class="n">hash</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="kt">usize</span><span class="p">)</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">LRU</span>::<span class="n">SIZE</span><span class="p">)</span><span class="w"> </span><span class="o">%</span><span class="w"> </span><span class="n">num_blocks</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">fn</span> <span class="nf">block_hash</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">hash</span>: <span class="kt">u64</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">u64</span> <span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// ハッシュ値そのまま
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">    </span><span class="n">hash</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><h2 id="ベンチマーク">ベンチマーク</h2>
 <p>効率とかの話をしたのでベンチマークをとりましょう。</p>
-
 <p>アクセス頻度にばらつきのあるベンチマークをとることになります。
 そういう偏りのある乱数を得るのに、<a href="https://crates.io/crates/rand_distr">rand_distr</a>クレートにある<a href="https://rust-random.github.io/rand/rand_distr/weighted/struct.WeightedIndex.html">WeightedIndex</a>がまさしくな機能を提供しています。
 例えば <code>WeightedIndex::new([6, 3, 1])</code> とすれば <code>0</code> が60%、<code>1</code> が30%、 <code>2</code> が10%の確率ででてくる分布になります。</p>
-
 <p>これを使ってベンチマークのデータ生成の方をこう実装します。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">impl</span><span class="w"> </span><span class="n">WorkLoad</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">next</span><span class="o">&lt;</span><span class="n">R</span>: <span class="nc">Rng</span><span class="o">&gt;</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">rng</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">R</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">usize</span> <span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">weights</span><span class="p">.</span><span class="n">sample</span><span class="p">(</span><span class="n">rng</span><span class="p">)</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<p>それぞれの重みは適当に計算しています。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">impl</span><span class="w"> </span><span class="n">WorkLoad</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">fn</span> <span class="nf">next</span><span class="o">&lt;</span><span class="n">R</span>: <span class="nc">Rng</span><span class="o">&gt;</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">rng</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">R</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">usize</span> <span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">weights</span><span class="p">.</span><span class="n">sample</span><span class="p">(</span><span class="n">rng</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>それぞれの重みは適当に計算しています。
 本当はべき乗則に従った実装をしたつもりだったのですが、よく調べずに書いたので間違ってました（ $x^n$ を計算しないといけないところを、 $a^x$ を計算してました）。
 はずかしいので実装は載せません。まあ、ベンチマークには最終的なキャッシュヒット率の方が大事なので問題ないでしょう。</p>
-
 <p>ベンチマーク対象は以下のようになっています。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">struct</span> <span class="nc">Subject</span><span class="o">&lt;</span><span class="n">C</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="n">cache</span>: <span class="nc">C</span><span class="p">,</span><span class="w">
-</span><span class="w">    </span><span class="n">hits</span>: <span class="kt">u64</span><span class="p">,</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">impl</span><span class="o">&lt;</span><span class="n">C</span><span class="o">&gt;</span><span class="w"> </span><span class="n">Subject</span><span class="o">&lt;</span><span class="n">C</span><span class="o">&gt;</span><span class="w">
-</span><span class="w"></span><span class="k">where</span><span class="w">
-</span><span class="w">    </span><span class="n">C</span>: <span class="nc">Cache</span><span class="p">,</span><span class="w">
-</span><span class="w"></span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">new</span><span class="p">(</span><span class="n">cache</span>: <span class="nc">C</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="bp">Self</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cache</span><span class="p">,</span><span class="w"> </span><span class="n">hits</span>: <span class="mi">0</span><span class="w"> </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">test</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">data</span>: <span class="kt">usize</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="k">match</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">cache</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="o">&amp;</span><span class="n">data</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">            </span><span class="nb">Some</span><span class="p">(</span><span class="o">&amp;</span><span class="n">data</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">                </span><span class="bp">self</span><span class="p">.</span><span class="n">hits</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w">                </span><span class="n">data</span><span class="w">
-</span><span class="w">            </span><span class="p">}</span><span class="w">
-</span><span class="w">            </span><span class="nb">None</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">                </span><span class="n">thread</span>::<span class="n">sleep</span><span class="p">(</span><span class="n">Duration</span>::<span class="n">from_micros</span><span class="p">(</span><span class="mi">500</span><span class="p">));</span><span class="w">
-</span><span class="w">                </span><span class="bp">self</span><span class="p">.</span><span class="n">cache</span><span class="p">.</span><span class="n">insert</span><span class="p">(</span><span class="n">data</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span><span class="w">
-</span><span class="w">                </span><span class="mi">0</span><span class="w">
-</span><span class="w">            </span><span class="p">}</span><span class="w">
-</span><span class="w">        </span><span class="p">};</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<p>キャッシュがヒットしなかったら500μsスリープする実装です。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">Subject</span><span class="o">&lt;</span><span class="n">C</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">cache</span>: <span class="nc">C</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">hits</span>: <span class="kt">u64</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">impl</span><span class="o">&lt;</span><span class="n">C</span><span class="o">&gt;</span><span class="w"> </span><span class="n">Subject</span><span class="o">&lt;</span><span class="n">C</span><span class="o">&gt;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">where</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">C</span>: <span class="nc">Cache</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">fn</span> <span class="nf">new</span><span class="p">(</span><span class="n">cache</span>: <span class="nc">C</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="bp">Self</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cache</span><span class="p">,</span><span class="w"> </span><span class="n">hits</span>: <span class="mi">0</span><span class="w"> </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">fn</span> <span class="nf">test</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">data</span>: <span class="kt">usize</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">match</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">cache</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="o">&amp;</span><span class="n">data</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="nb">Some</span><span class="p">(</span><span class="o">&amp;</span><span class="n">data</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="bp">self</span><span class="p">.</span><span class="n">hits</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">data</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="nb">None</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">thread</span>::<span class="n">sleep</span><span class="p">(</span><span class="n">Duration</span>::<span class="n">from_micros</span><span class="p">(</span><span class="mi">500</span><span class="p">));</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="bp">self</span><span class="p">.</span><span class="n">cache</span><span class="p">.</span><span class="n">insert</span><span class="p">(</span><span class="n">data</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="mi">0</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">};</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>キャッシュがヒットしなかったら500μsスリープする実装です。
 500μsというのは速めのDBアクセスがこのくらいかなという感覚値です。
 また、キャッシュヒット率計算のために <code>hits</code> を保持しています。</p>
-
 <p>そしてベンチマーク本体はおおむね以下の形です。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">run_bench</span><span class="o">&lt;</span><span class="n">C</span>: <span class="nc">Cache</span><span class="o">&gt;</span><span class="p">(</span><span class="n">name</span>: <span class="kp">&amp;</span><span class="kt">str</span><span class="p">,</span><span class="w"> </span><span class="n">s</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">Subject</span><span class="o">&lt;</span><span class="n">C</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1_000_000</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">w</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">WorkLoad</span>::<span class="n">new</span><span class="p">(</span><span class="mi">100_000_000_000</span><span class="p">).</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">rng</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">thread_rng</span><span class="p">();</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="c1">// ...
-</span><span class="c1"></span><span class="w">
-</span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="n">count</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="n">s</span><span class="p">.</span><span class="n">test</span><span class="p">(</span><span class="n">w</span><span class="p">.</span><span class="n">next</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">rng</span><span class="p">))</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="c1">// ...
-</span><span class="c1"></span><span class="p">}</span></code></pre></div>
-<p>このベンチマークコードで以下の3つをベンチマークしてみました。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">fn</span> <span class="nf">run_bench</span><span class="o">&lt;</span><span class="n">C</span>: <span class="nc">Cache</span><span class="o">&gt;</span><span class="p">(</span><span class="n">name</span>: <span class="kp">&amp;</span><span class="kt">str</span><span class="p">,</span><span class="w"> </span><span class="n">s</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">Subject</span><span class="o">&lt;</span><span class="n">C</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1_000_000</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">w</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">WorkLoad</span>::<span class="n">new</span><span class="p">(</span><span class="mi">100_000_000_000</span><span class="p">).</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">rng</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">thread_rng</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// ...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="n">count</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">s</span><span class="p">.</span><span class="n">test</span><span class="p">(</span><span class="n">w</span><span class="p">.</span><span class="n">next</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">rng</span><span class="p">))</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// ...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>このベンチマークコードで以下の3つをベンチマークしてみました。</p>
 <ul>
 <li>chechire: 今回実装したコード</li>
 <li>easy cache (vec): LRUにstdの <code>Vec</code>、テーブルにstdの <code>HashTable</code></li>
 <li>easy cache (deque): LRUに <code>VecDeque</code>、テーブルにstdの <code>HashTable</code></li>
 </ul>
-
 <p>LRUをベクタで実装する際に先頭と末尾両方の操作があるので念のため <code>Vec</code> と <code>VecDeque</code> 両方を試してみました。
 本当は <code>LinkedList</code> も比較したかったのですが <a href="https://doc.rust-lang.org/std/collections/struct.LinkedList.html#method.remove"><code>remove</code> がnightlyのみ</a> なのであきらめました。コレクションで削除ってかなり基本的な気がするんですが、それが安定化していないあたり <code>LinkedList</code> の需要の少なさが伺えますね。</p>
-
 <p>さてさて、余談は置いておいてベンチマークをしましょう。
 chechireは16-ウェイセットアソシアティブでeasy cacheはフルアソシアティブなのでキャッシュヒット率ではchechireが劣りますが、基礎パフォーマンスは高いはずです。</p>
-
 <p>ベンチマークした結果が以下です。</p>
-
 <style type="text/css">
 .graph{
   background:#aaa;
@@ -730,840 +663,790 @@ td {
   white-space: nowrap;
 }
 </style>
-
 <table>
 <thead>
 <tr>
-<th align="left">subject</th>
+<th style="text-align:left">subject</th>
 <th>hit rate</th>
 <th>time</th>
 </tr>
 </thead>
-
 <tbody>
 <tr>
-<td align="left">chechire</td>
+<td style="text-align:left">chechire</td>
 <td>98.9537%</td>
 <td><div class="graph" style="width:calc( 5958px * 0.05 );">5958ms</div></td>
 </tr>
-
 <tr>
-<td align="left">easy cache (vec)</td>
+<td style="text-align:left">easy cache (vec)</td>
 <td>99.1176%</td>
 <td><div class="graph" style="width:calc( 6266px * 0.05 );">6266ms</div></td>
 </tr>
-
 <tr>
-<td align="left">easy cache (deque)</td>
+<td style="text-align:left">easy cache (deque)</td>
 <td>99.1117%</td>
 <td><div class="graph" style="width:calc( 6469px * 0.05 );">6469ms</div></td>
 </tr>
 </tbody>
 </table>
-
 <p>キャッシュのヒット率は劣るものの、全体的な速度ではchechireが上回ってます。
 乱数要素があるのですが、くりかえし回数（ <code>count</code> ）が十分大きいので何度か計測してみてもおおむねこのような結果になりました。</p>
-
 <p>という訳で速い実装ができました。
 めでたしめでたし…としたいところなのですが、これはまやかしです。
 LTするときに綺麗な落ちがほしかったのでこういう結果を載せました。
 ちょっと事情を詳しく説明しましょう。</p>
-
 <p>キャッシュのパフォーマンスはほぼキャッシュヒット率で決まります。
 もうちょっと正確にいうと、(1 - キャシュヒット率)をキャッシュミス率とすると</p>
-
 <p>$a$ をキャッシュミス率 、 $X$ をキャッシュミスしたときにかかる時間 、 $Y$ をキャッシュヒットしたときにかかる時間 とすると、平均パフォーマンスは</p>
-
 <p>\[
 aX + (1 - a)Y
 \]</p>
-
-<p>となります。ここでほとんどの場合では $X &gt;&gt; Y$ なので、キャシュの性能はほぼ以下となります。</p>
-
+<p>となります。ここでほとんどの場合では $X &raquo; Y$ なので、キャシュの性能はほぼ以下となります。</p>
 <p>\[
 aX
 \]</p>
-
 <p>$X$ はコントロールできないのでキャッシュミス率がほぼそのままキャッシュのパフォーマンスを左右するのです。</p>
-
 <p>この原則に従わないのは $a$ が極端に小さいか、 $X$ と $Y$ の差がそこまで大きくないかの場合になります。</p>
-
 <p>上記のベンチマークでchechireが速いように見えたのはまさにそれです。
 キャッシュミス率が1%前後と小さいですし、 $Y$ が $X$ より十分小さくなかったからです。
 実際、スリープの時間を500μsから1msにすると結果が逆転します。</p>
-
 <table>
 <thead>
 <tr>
-<th align="left">subject</th>
+<th style="text-align:left">subject</th>
 <th>hit rate</th>
 <th>time</th>
 </tr>
 </thead>
-
 <tbody>
 <tr>
-<td align="left">chechire</td>
+<td style="text-align:left">chechire</td>
 <td>98.9549%</td>
 <td><div class="graph" style="width:calc( 11159px * 0.025 );">11159ms</div></td>
 </tr>
-
 <tr>
-<td align="left">easy cache (vec)</td>
+<td style="text-align:left">easy cache (vec)</td>
 <td>99.1131%</td>
 <td><div class="graph" style="width:calc( 10767px * 0.025 );">10767ms</div></td>
 </tr>
-
 <tr>
-<td align="left">easy cache (deque)</td>
+<td style="text-align:left">easy cache (deque)</td>
 <td>99.1094%</td>
 <td><div class="graph" style="width:calc( 11040px * 0.025 );">11040ms</div></td>
 </tr>
 </tbody>
 </table>
-
 <p>みなさん数値に騙されないようにしましょうね。</p>
-
 <h1 id="こぼれ話とか">こぼれ話とか</h1>
-
 <p>話の流れをスムーズにするために省いた話題を拾っていきます。</p>
-
 <h2 id="プランaが失敗した話">プランAが失敗した話</h2>
-
 <p>今回のキャッシュは、なんとなくアイディアだけあってLTに申し込んで、その後に実装をはじめました。
 そのとき思い浮かんでいた実装がプランA、それが失敗したときの代替案のプランBとCがありました。
 A、B、Cの順で実装難易度が高いです。
 そしてベンチマークのところででてきたchechireがプランB、easy cacheがプランCです。</p>
-
 <p>ではAはというと、 <code>RawTable</code> をカスタマイズする案でした。
 カスタマイズするのはいくつかの理由があります。</p>
-
 <h3 id="データ構造的効率">データ構造的効率</h3>
-
 <p>1つはデータ構造的効率です。</p>
-
 <p><code>RawCache</code> は同じサイズの <code>RawTable</code> を複数個 <code>Vec</code> に格納しています。
 <code>RawTable</code> 内にポインタが1つ、 <code>Vec</code> 内にポインタが1つでデータにアクセスするのに都合2つのポインタを経由します。これが無駄なので1つにまとめられないかと考えていました。
 メモリアロケーション的にも1回でドカンとメモリを確保した方が効率がいいはずです。
 また、それぞれのハッシュマップはサイズ情報を持ちますが、今回は16で固定なのでその情報も無駄ですので、これを省こうという意図もありました。</p>
-
 <h3 id="アルゴリズム的効率">アルゴリズム的効率</h3>
-
 <p>もう1つはアルゴリズム的効率です。</p>
-
 <p>ハッシュマップは場合によっては巨大にもなる要素数に対応しています。
 ハッシュマップの空き部分が少なくなると極端に効率が悪くなるので、hashbrowでは持っているデータ領域の85%が埋まるとデータ領域を拡張するようにできています。
 バケットを走査するときに「空きバケットがみつかるまで続ける」などの処理をしているので適度に空き領域がないといけません。そして最低でも1つは空きがないと無限ループしてしまいます。</p>
-
 <p>一方でキャッシュの実装では16個と決めてたので巨大なデータは想定しなくていいですし、空きバケットなく完全に埋めてしまっても問題ありません。</p>
-
 <p>こういった部分で妥協したくなかったのですが、ちょっと難しかったです。
 <code>RawTable</code> と <code>Vec</code> のポインタを統合するということは2つのデータ構造を同時に実装するということでもあります。さらにはポインタを減らすために <code>RawTable</code> に保持しているフィールドもどこかのメモリ領域に埋め込んだりなど、メモリレイアウトの工夫も必要でした。これは考えるのも実装するのもかなり大変でした。</p>
-
 <p>また、 <code>RawTable</code> にはイテレータなど関連するデータ型が多かったのも障壁の一つでした。
 実装を変えるときにどこをいじったらどのデータ型に影響があるのかがわかりづらかったので途中で思考を放棄してあきらめてしまいました。</p>
-
 <h2 id="probeseq-が面白い"><code>ProbeSeq</code> が面白い</h2>
-
 <p>上述のようにhashbrownのコードを読んでいたのですが、その中で使われている <code>ProbeSeq</code> が面白かったので紹介します。</p>
-
 <p><code>ProbeSeq</code> はあるバケットに着地したあと、そこに要素があったら他のバケットを探しにいくときに使うイテレータです。次の候補となるインデックスを返してくれます。</p>
-
 <p>愚直にやるならすぐ隣をみにいけばよさそうです。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">  1   2   3   4   5
-  v   v   v   v   v
-+---+---+---+---+---+
-|   |   |   |   |   |
-+---+---+---+---+---+
-  0   1   2   3   4</code></pre></div>
-<p>しかしこれだと一度要素が埋まってるカタマリが産まれると、周辺のアクセス効率がひどく悪くなります。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">  1   2   3   4   5
+</span></span><span class="line"><span class="cl">  v   v   v   v   v
+</span></span><span class="line"><span class="cl">+---+---+---+---+---+
+</span></span><span class="line"><span class="cl">|   |   |   |   |   |
+</span></span><span class="line"><span class="cl">+---+---+---+---+---+
+</span></span><span class="line"><span class="cl">  0   1   2   3   4
+</span></span></code></pre></div><p>しかしこれだと一度要素が埋まってるカタマリが産まれると、周辺のアクセス効率がひどく悪くなります。
 例えば下の例だと0、1、2、3のどれからスタートしても隣が埋まってるので右に辿りつづけて、全て4に落ち着きます。そしてそこにデータを挿入するとさらにカタマリが大きくなってしまします。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">      1   2   3   4   5
-      v   v   v   v   v
-          1   2   3   4   5
-          v   v   v   v   v
-  1   2   3   4   5
-  v   v   v   v   v
-+---+---+---+---+---+
-|///|///|///|///|???|
-+---+---+---+---+---+
-  0   1   2   3   4</code></pre></div>
-<p>これは隣に限らず、規則的なアクセスだと大抵起こってしまう問題です。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">      1   2   3   4   5
+</span></span><span class="line"><span class="cl">      v   v   v   v   v
+</span></span><span class="line"><span class="cl">          1   2   3   4   5
+</span></span><span class="line"><span class="cl">          v   v   v   v   v
+</span></span><span class="line"><span class="cl">  1   2   3   4   5
+</span></span><span class="line"><span class="cl">  v   v   v   v   v
+</span></span><span class="line"><span class="cl">+---+---+---+---+---+
+</span></span><span class="line"><span class="cl">|///|///|///|///|???|
+</span></span><span class="line"><span class="cl">+---+---+---+---+---+
+</span></span><span class="line"><span class="cl">  0   1   2   3   4
+</span></span></code></pre></div><p>これは隣に限らず、規則的なアクセスだと大抵起こってしまう問題です。
 だからといえって不規則にアクセスしていたらどれにアクセスしてどれにアクセスしてないかが分からなくなります。
 そこで「不規則っぽくアクセスする規則」があるとうれしいです。
 特に全ての要素を丁度1度づつ訪問できると最高です。</p>
-
 <p>hashbrownの <code>ProbSeq</code> はそれを実現しています。しかもめちゃくちゃ簡単なアルゴリズムで。</p>
-
-<p>使っているのは<a href="https://ja.wikipedia.org/wiki/三角数">三角数</a>です。
+<p>使っているのは<a href="https://ja.wikipedia.org/wiki/%E4%B8%89%E8%A7%92%E6%95%B0">三角数</a>です。
 これは一辺がnの正三角形に含まれる○の数で、具体的には1、3、6、10、15…となっています。n番目の三角数を $T_n$ で表わします。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">1  3    6     10
-O  O    O      O
-  O O  O O    O O
-      O O O  O O O
-            O O O O</code></pre></div>
-<p>hashbrowのデータを保持する配列（のようなもの）は2のべき乗なのですが、最初の $2^n$ 個の三角数をそれぞれ $2^n$ で割ったあまりの集合がちょうど $\{0, 1, \cdots, 2^n - 1\}$ となっているそうです。これなら全ての要素をちょうど一回ずつ訪問できますね。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">1  3    6     10
+</span></span><span class="line"><span class="cl">O  O    O      O
+</span></span><span class="line"><span class="cl">  O O  O O    O O
+</span></span><span class="line"><span class="cl">      O O O  O O O
+</span></span><span class="line"><span class="cl">            O O O O
+</span></span></code></pre></div><p>hashbrowのデータを保持する配列（のようなもの）は2のべき乗なのですが、最初の $2^n$ 個の三角数をそれぞれ $2^n$ で割ったあまりの集合がちょうど $\{0, 1, \cdots, 2^n - 1\}$ となっているそうです。これなら全ての要素をちょうど一回ずつ訪問できますね。</p>
 <p>実装上は $T_n - T_\{n - 1\} = n$ を利用して、1つ隣、そこから2つ隣、そこから3つ隣…と1つずつアクセス幅を増やしていけばよいです。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">  1   2       3           4
-  v   v       v           v
-+---+---+---+---+---+---+---+--
-|   |   |   |   |   |   |   | ...
-+---+---+---+---+---+---+---+--
-  0   1   2   3   4   5   6</code></pre></div>
-<p>実はこれ、Art of Compute Programming, Volume 3の6.4章に載っているらしいです。持ってないので知りませんでした。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">  1   2       3           4
+</span></span><span class="line"><span class="cl">  v   v       v           v
+</span></span><span class="line"><span class="cl">+---+---+---+---+---+---+---+--
+</span></span><span class="line"><span class="cl">|   |   |   |   |   |   |   | ...
+</span></span><span class="line"><span class="cl">+---+---+---+---+---+---+---+--
+</span></span><span class="line"><span class="cl">  0   1   2   3   4   5   6
+</span></span></code></pre></div><p>実はこれ、Art of Compute Programming, Volume 3の6.4章に載っているらしいです。持ってないので知りませんでした。</p>
 <p>また、2の羃と三角数のあまりについての証明はこちらの記事にあります。</p>
-
 <p><a href="https://fgiesen.wordpress.com/2015/02/22/triangular-numbers-mod-2n/">Triangular numbers mod 2^n | The ryg blog</a></p>
-
 <p>ところで、三角数は無限にあるのでこのイテレータは終わりません。
 実装をみても常に <code>Some(result)</code> を返しています。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">struct</span> <span class="nc">ProbeSeq</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="n">bucket_mask</span>: <span class="kt">usize</span><span class="p">,</span><span class="w">
-</span><span class="w">    </span><span class="n">pos</span>: <span class="kt">usize</span><span class="p">,</span><span class="w">
-</span><span class="w">    </span><span class="n">stride</span>: <span class="kt">usize</span><span class="p">,</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="nb">Iterator</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">ProbeSeq</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">type</span> <span class="nc">Item</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kt">usize</span><span class="p">;</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="cp">#[inline]</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">next</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">Option</span><span class="o">&lt;</span><span class="kt">usize</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="c1">// We should have found an empty bucket by now and ended the probe.
-</span><span class="c1"></span><span class="w">        </span><span class="fm">debug_assert!</span><span class="p">(</span><span class="w">
-</span><span class="w">            </span><span class="bp">self</span><span class="p">.</span><span class="n">stride</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">bucket_mask</span><span class="p">,</span><span class="w">
-</span><span class="w">            </span><span class="s">&#34;Went past end of probe sequence&#34;</span><span class="w">
-</span><span class="w">        </span><span class="p">);</span><span class="w">
-</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">pos</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="c1">// SIMD幅単位でアクセスしてるので
-</span><span class="c1"></span><span class="w">        </span><span class="c1">// self.stride += 1
-</span><span class="c1"></span><span class="w">        </span><span class="c1">// でない
-</span><span class="c1"></span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">stride</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">Group</span>::<span class="n">WIDTH</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">pos</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">stride</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">pos</span><span class="w"> </span><span class="o">&amp;=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">bucket_mask</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="nb">Some</span><span class="p">(</span><span class="n">result</span><span class="p">)</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<p>これが上の方で説明した、バケットを走査するときに「空きバケットがみつかるまで続ける」などの処理をしているの部分です。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">ProbeSeq</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">bucket_mask</span>: <span class="kt">usize</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">pos</span>: <span class="kt">usize</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">stride</span>: <span class="kt">usize</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="nb">Iterator</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">ProbeSeq</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">type</span> <span class="nc">Item</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kt">usize</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="cp">#[inline]</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">fn</span> <span class="nf">next</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">Option</span><span class="o">&lt;</span><span class="kt">usize</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="c1">// We should have found an empty bucket by now and ended the probe.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">        </span><span class="fm">debug_assert!</span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="bp">self</span><span class="p">.</span><span class="n">stride</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">bucket_mask</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="s">&#34;Went past end of probe sequence&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">pos</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="c1">// SIMD幅単位でアクセスしてるので
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">        </span><span class="c1">// self.stride += 1
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">        </span><span class="c1">// でない
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">stride</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">Group</span>::<span class="n">WIDTH</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">pos</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">stride</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">pos</span><span class="w"> </span><span class="o">&amp;=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">bucket_mask</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="nb">Some</span><span class="p">(</span><span class="n">result</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>これが上の方で説明した、バケットを走査するときに「空きバケットがみつかるまで続ける」などの処理をしているの部分です。
 イテレータ側ではずっとインデックスを返し続けていて、それを使う側で空きバケットがあったら終了という処理をいれています。</p>
-
 <p>外部に公開してないデータ構造だから許される攻め具合ですね。</p>
-
 <h2 id="criterionが使えなかった話">Criterionが使えなかった話</h2>
-
 <p>ベンチマークに素朴な繰り返しと素朴な <code>Instant::now</code> を使いました。
 しかしベンチマークライブラリに<a href="https://crates.io/crates/criterion"><code>criterion</code></a>があります。
 こちらの方がこなれてますし、誤差とかもうまく処理してくれます。
 最初はこれを使ったのですが、正しくベンチマークがとれなかったのでやめました。</p>
-
 <p>使えなかったのは外れ値処理の問題です。
 集団から大きくはずれた値を計算に入れると平均などの統計値が大きく狂ってしまいます。
 なので統計的処理をするにあたって外れ値を除外する処理は重要です。
 実際、<a href="https://bheisler.github.io/criterion.rs/book/analysis.html#outlier-classification">criterionも外れ値処理をします</a>。</p>
-
 <p>しかし残念ながらこの外れ値処理が問題でcriterionがベンチマークに使えませんでした。
 今回のキャッシュのパフォーマンス測定では、大多数のキャッシュヒットと少数のキャッシュミスからなります。
 さらにキャッシュヒットはとても速く、キャッシュミスは極端に遅いです。
 その結果をみてcriterionはキャッシュミスした場合の計測値を外れ値とみなして除外してしまってたのです。
 criterionのAPIやCLIを見ても外れ値処理をスキップする機能はなさそうだったのでcriterionをあきらめました。</p>
-
 <p>キャッシュのパフォーマンス測定で本質的に外れ値のようなものがでてしまって、統計的ベンチマークが役に立たないのは面白いなと思いました。</p>
-
 <p><svg
-   xmlns:svg="http://www.w3.org/2000/svg"
-   xmlns="http://www.w3.org/2000/svg"
-   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
-   version="1.1"
-   style="display:none"
-   id="lru"
-   inkscape:version="0.92.5 (2060ec1f9f, 2020-04-08)">
-  <defs id="defs2">
-    <marker
-       inkscape:stockid="Arrow1Send"
-       orient="auto"
-       refY="0.0"
-       refX="0.0"
-       id="marker3501"
-       style="overflow:visible;"
-       inkscape:isstock="true">
-      <path
-         id="path3499"
-         d="M 0.0,0.0 L 5.0,-5.0 L -12.5,0.0 L 5.0,5.0 L 0.0,0.0 z "
-         style="fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1;fill:#000000;fill-opacity:1"
-         transform="scale(0.2) rotate(180) translate(6,0)" />
-    </marker>
-    <marker
-       inkscape:isstock="true"
-       style="overflow:visible;"
-       id="marker3185"
-       refX="0.0"
-       refY="0.0"
-       orient="auto"
-       inkscape:stockid="Arrow1Send"
-       inkscape:collect="always">
-      <path
-         transform="scale(0.2) rotate(180) translate(6,0)"
-         style="fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1;fill:#000000;fill-opacity:1"
-         d="M 0.0,0.0 L 5.0,-5.0 L -12.5,0.0 L 5.0,5.0 L 0.0,0.0 z "
-         id="path3183" />
-    </marker>
-    <marker
-       inkscape:isstock="true"
-       style="overflow:visible;"
-       id="marker1967"
-       refX="0.0"
-       refY="0.0"
-       orient="auto"
-       inkscape:stockid="Arrow1Send">
-      <path
-         transform="scale(0.2) rotate(180) translate(6,0)"
-         style="fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1;fill:#000000;fill-opacity:1"
-         d="M 0.0,0.0 L 5.0,-5.0 L -12.5,0.0 L 5.0,5.0 L 0.0,0.0 z "
-         id="path1965" />
-    </marker>
-    <marker
-       inkscape:stockid="Arrow1Send"
-       orient="auto"
-       refY="0.0"
-       refX="0.0"
-       id="Arrow1Send"
-       style="overflow:visible;"
-       inkscape:isstock="true"
-       inkscape:collect="always">
-      <path
-         id="path918"
-         d="M 0.0,0.0 L 5.0,-5.0 L -12.5,0.0 L 5.0,5.0 L 0.0,0.0 z "
-         style="fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1;fill:#000000;fill-opacity:1"
-         transform="scale(0.2) rotate(180) translate(6,0)" />
-    </marker>
-    <marker
-       inkscape:isstock="true"
-       style="overflow:visible;"
-       id="marker1337"
-       refX="0.0"
-       refY="0.0"
-       orient="auto"
-       inkscape:stockid="Arrow1Mend">
-      <path
-         transform="scale(0.4) rotate(180) translate(10,0)"
-         style="fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1;fill:#000000;fill-opacity:1"
-         d="M 0.0,0.0 L 5.0,-5.0 L -12.5,0.0 L 5.0,5.0 L 0.0,0.0 z "
-         id="path1335" />
-    </marker>
-    <marker
-       inkscape:isstock="true"
-       style="overflow:visible;"
-       id="marker1269"
-       refX="0.0"
-       refY="0.0"
-       orient="auto"
-       inkscape:stockid="Arrow1Mend">
-      <path
-         transform="scale(0.4) rotate(180) translate(10,0)"
-         style="fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1;fill:#000000;fill-opacity:1"
-         d="M 0.0,0.0 L 5.0,-5.0 L -12.5,0.0 L 5.0,5.0 L 0.0,0.0 z "
-         id="path1267" />
-    </marker>
-    <marker
-       inkscape:stockid="Arrow1Mend"
-       orient="auto"
-       refY="0.0"
-       refX="0.0"
-       id="Arrow1Mend"
-       style="overflow:visible;"
-       inkscape:isstock="true"
-       inkscape:collect="always">
-      <path
-         id="path912"
-         d="M 0.0,0.0 L 5.0,-5.0 L -12.5,0.0 L 5.0,5.0 L 0.0,0.0 z "
-         style="fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1;fill:#000000;fill-opacity:1"
-         transform="scale(0.4) rotate(180) translate(10,0)" />
-    </marker>
-    <marker
-       inkscape:stockid="Arrow1Lend"
-       orient="auto"
-       refY="0.0"
-       refX="0.0"
-       id="Arrow1Lend"
-       style="overflow:visible;"
-       inkscape:isstock="true">
-      <path
-         id="path906"
-         d="M 0.0,0.0 L 5.0,-5.0 L -12.5,0.0 L 5.0,5.0 L 0.0,0.0 z "
-         style="fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1;fill:#000000;fill-opacity:1"
-         transform="scale(0.8) rotate(180) translate(12.5,0)" />
-    </marker>
-    <marker
-       inkscape:stockid="Arrow1Lstart"
-       orient="auto"
-       refY="0.0"
-       refX="0.0"
-       id="Arrow1Lstart"
-       style="overflow:visible"
-       inkscape:isstock="true">
-      <path
-         id="path903"
-         d="M 0.0,0.0 L 5.0,-5.0 L -12.5,0.0 L 5.0,5.0 L 0.0,0.0 z "
-         style="fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1;fill:#000000;fill-opacity:1"
-         transform="scale(0.8) translate(12.5,0)" />
-    </marker>
-    <marker
-       inkscape:isstock="true"
-       style="overflow:visible"
-       id="marker1967-2"
-       refX="0"
-       refY="0"
-       orient="auto"
-       inkscape:stockid="Arrow1Send">
-      <path
-         inkscape:connector-curvature="0"
-         transform="matrix(-0.2,0,0,-0.2,-1.2,0)"
-         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1.00000003pt;stroke-opacity:1"
-         d="M 0,0 5,-5 -12.5,0 5,5 Z"
-         id="path1965-7" />
-    </marker>
-    <symbol
-       inkscape:label="base-box"
-       inkscape:groupmode="layer"
-       id="base-box"
-       style="display:inline">
-      <g id="g3621">
-        <rect
-           y="17.709580000000017"
-           x="46.238255"
-           height="22.753609"
-           width="22.753609"
-           id="rect10"
-           style="opacity:1;fill:none;fill-opacity:1;stroke:#1a1a1a;stroke-width:1.32291663;stroke-linecap:round;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1" />
-        <rect
-           y="40.4632"
-           x="46.238255"
-           height="22.753609"
-           width="22.753609"
-           id="rect10-3"
-           style="opacity:1;fill:none;fill-opacity:1;stroke:#1a1a1a;stroke-width:1.32291663;stroke-linecap:round;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1" />
-        <rect
-           y="63.216800000000006"
-           x="46.238255"
-           height="22.753609"
-           width="22.753609"
-           id="rect10-6"
-           style="opacity:1;fill:none;fill-opacity:1;stroke:#1a1a1a;stroke-width:1.32291663;stroke-linecap:round;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1" />
-      </g>
-    </symbol>
-    <symbol
-       inkscape:groupmode="layer"
-       id="arrow-top"
-       inkscape:label="arrow-top"
-       style="display:inline">
-      <path
-         style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.32291663;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Arrow1Mend)"
-         d="m 128.20608,25.01997 c 0,0 -10.23865,-10.579456 -25.22088,-10.782835 C 88.002972,14.033757 71.916025,26.664809 71.916025,26.664809"
-         id="path96"
-         inkscape:connector-curvature="0"
-         sodipodi:nodetypes="czc" />
-    </symbol>
-    <symbol
-       inkscape:label="new-1"
-       id="new-1"
-       inkscape:groupmode="layer"
-       style="display:inline">
-      <text
-         xml:space="preserve"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-         x="133.08879"
-         y="32.506424"
-         id="text149"><tspan
-           sodipodi:role="line"
-           x="133.08879"
-           y="32.506424"
-           id="tspan147"
-           style="stroke-width:0.26458332px"><tspan
-             x="133.08879"
-             y="32.506424"
-             id="tspan145"
-             style="stroke-width:0.26458332px">1</tspan></tspan></text>
-    </symbol>
-    <symbol
-       style="display:inline"
-       inkscape:groupmode="layer"
-       id="new-2"
-       inkscape:label="new-2">
-      <text
-         xml:space="preserve"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-         x="133.18018"
-         y="32.597801"
-         id="text155"><tspan
-           sodipodi:role="line"
-           x="133.18018"
-           y="32.597801"
-           id="tspan153"
-           style="stroke-width:0.26458332px"><tspan
-             x="133.18018"
-             y="32.597801"
-             id="tspan151"
-             style="stroke-width:0.26458332px">2</tspan></tspan></text>
-    </symbol>
-    <symbol
-       inkscape:label="item-1"
-       id="item-1"
-       inkscape:groupmode="layer"
-       style="display:inline">
-      <text
-         xml:space="preserve"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-         x="57.56303"
-         y="32.68935"
-         id="text161"><tspan
-           sodipodi:role="line"
-           x="57.56303"
-           y="32.68935"
-           id="tspan159"
-           style="stroke-width:0.26458332px"><tspan
-             x="57.56303"
-             y="32.68935"
-             id="tspan157"
-             style="stroke-width:0.26458332px">1</tspan></tspan></text>
-    </symbol>
-    <symbol
-       inkscape:groupmode="layer"
-       id="arrow-1-2"
-       inkscape:label="arrow-1-2"
-       style="display:inline">
-      <path
-         style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.32291663;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Arrow1Send)"
-         d="m 46.055496,28.401028 c 0,0 -11.587836,2.282937 -11.605254,11.879395 -0.01742,9.596458 9.869036,10.508692 9.869036,10.508692"
-         id="path1327"
-         inkscape:connector-curvature="0"
-         sodipodi:nodetypes="czc" />
-    </symbol>
-    <symbol
-       inkscape:label="new-3"
-       id="new-3"
-       inkscape:groupmode="layer"
-       style="display:inline">
-      <text
-         xml:space="preserve"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-         x="133.63707"
-         y="32.323662"
-         id="text167"><tspan
-           sodipodi:role="line"
-           x="133.63707"
-           y="32.323662"
-           id="tspan165"
-           style="stroke-width:0.26458332px"><tspan
-             x="133.63707"
-             y="32.323662"
-             id="tspan163"
-             style="stroke-width:0.26458332px">3</tspan></tspan></text>
-    </symbol>
-    <symbol
-       style="display:inline"
-       inkscape:groupmode="layer"
-       id="item-2-1"
-       inkscape:label="item-2-1">
-      <text
-         xml:space="preserve"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-         x="57.654408"
-         y="32.780727"
-         id="text173"><tspan
-           sodipodi:role="line"
-           x="57.654408"
-           y="32.780727"
-           id="tspan171"
-           style="stroke-width:0.26458332px"><tspan
-             x="57.654408"
-             y="32.780727"
-             id="tspan169"
-             style="stroke-width:0.26458332px">2</tspan></tspan></text>
-      <text
-         xml:space="preserve"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;display:inline;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-         x="57.554268"
-         y="56.455193"
-         id="text179"><tspan
-           sodipodi:role="line"
-           x="57.554268"
-           y="56.455193"
-           id="tspan177"
-           style="stroke-width:0.26458332px"><tspan
-             x="57.554268"
-             y="56.455193"
-             id="tspan175"
-             style="stroke-width:0.26458332px">1</tspan></tspan></text>
-    </symbol>
-    <symbol
-       style="display:inline"
-       inkscape:label="arrow-2-3"
-       id="arrow-2-3"
-       inkscape:groupmode="layer">
-      <path
-         sodipodi:nodetypes="czc"
-         inkscape:connector-curvature="0"
-         id="path1961"
-         d="m 46.055496,28.401028 c 0,0 -11.587836,2.282937 -11.605254,11.879395 -0.01742,9.596458 9.869036,10.508692 9.869036,10.508692"
-         style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.32291663;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker1967)" />
-      <path
-         sodipodi:nodetypes="czc"
-         inkscape:connector-curvature="0"
-         id="path1961-0"
-         d="m 45.964117,54.992593 c 0,0 -11.587837,2.282937 -11.605255,11.879394 -0.01742,9.596458 9.869037,10.508693 9.869037,10.508693"
-         style="display:inline;fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.32291663;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker1967-2)" />
-    </symbol>
-    <symbol
-       style="display:inline"
-       inkscape:groupmode="layer"
-       id="new-4"
-       inkscape:label="new-4">
-      <text
-         xml:space="preserve"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-         x="132.6319"
-         y="32.415043"
-         id="text185"><tspan
-           sodipodi:role="line"
-           x="132.6319"
-           y="32.415043"
-           id="tspan183"
-           style="stroke-width:0.26458332px"><tspan
-             x="132.6319"
-             y="32.415043"
-             id="tspan181"
-             style="stroke-width:0.26458332px">4</tspan></tspan></text>
-    </symbol>
-    <symbol
-       inkscape:label="item-3-2-1"
-       id="item-3-2-1"
-       inkscape:groupmode="layer"
-       style="display:inline">
-      <text
-         xml:space="preserve"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-         x="57.471649"
-         y="33.054871"
-         id="text191"><tspan
-           sodipodi:role="line"
-           x="57.471649"
-           y="33.054871"
-           id="tspan189"
-           style="stroke-width:0.26458332px"><tspan
-             x="57.471649"
-             y="33.054871"
-             id="tspan187"
-             style="stroke-width:0.26458332px">3</tspan></tspan></text>
-      <text
-         xml:space="preserve"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;display:inline;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-         x="57.37151"
-         y="56.729336"
-         id="text197"><tspan
-           sodipodi:role="line"
-           x="57.37151"
-           y="56.729336"
-           id="tspan195"
-           style="stroke-width:0.26458332px"><tspan
-             x="57.37151"
-             y="56.729336"
-             id="tspan193"
-             style="stroke-width:0.26458332px">2</tspan></tspan></text>
-      <text
-         xml:space="preserve"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;display:inline;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-         x="57.462891"
-         y="79.848465"
-         id="text203"><tspan
-           sodipodi:role="line"
-           x="57.462891"
-           y="79.848465"
-           id="tspan201"
-           style="stroke-width:0.26458332px"><tspan
-             x="57.462891"
-             y="79.848465"
-             id="tspan199"
-             style="stroke-width:0.26458332px">1</tspan></tspan></text>
-    </symbol>
-    <symbol
-       inkscape:groupmode="layer"
-       id="arrow-3-out"
-       inkscape:label="arrow-3-out"
-       style="display:inline">
-      <path
-         style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.05833328;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker3185)"
-         d="M 57.112471,85.69626 V 99.129113"
-         id="path3175"
-         inkscape:connector-curvature="0" />
-    </symbol>
-    <symbol
-       style="display:inline"
-       inkscape:groupmode="layer"
-       id="item--3-2-1out"
-       inkscape:label="item--3-2-1out">
-    <text
-       xml:space="preserve"
-       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;display:inline;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       x="57.554268"
-       y="56.089676"
-       id="text209"><tspan
-         sodipodi:role="line"
-         x="57.554268"
-         y="56.089676"
-         id="tspan207"
-         style="stroke-width:0.26458332px"><tspan
-           x="57.554268"
-           y="56.089676"
-           id="tspan205"
-           style="stroke-width:0.26458332px">3</tspan></tspan></text>
-    <text
-       xml:space="preserve"
-       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;display:inline;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       x="57.645649"
-       y="79.208801"
-       id="text215"><tspan
-         sodipodi:role="line"
-         x="57.645649"
-         y="79.208801"
-         id="tspan213"
-         style="stroke-width:0.26458332px"><tspan
-           x="57.645649"
-           y="79.208801"
-           id="tspan211"
-           style="stroke-width:0.26458332px">2</tspan></tspan></text>
-    <text
-       xml:space="preserve"
-       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;display:inline;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       x="57.581059"
-       y="111.54848"
-       id="text221"><tspan
-         sodipodi:role="line"
-         x="57.581059"
-         y="111.54848"
-         id="tspan219"
-         style="stroke-width:0.26458332px"><tspan
-           x="57.581059"
-           y="111.54848"
-           id="tspan217"
-           style="stroke-width:0.26458332px">1</tspan></tspan></text>
-    </symbol>
-    <symbol
-       style="display:inline"
-       inkscape:groupmode="layer"
-       id="item-4-3-2"
-       inkscape:label="item-4-3-2">
-      <text
-         xml:space="preserve"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-         x="57.106129"
-         y="32.597969"
-         id="text227"><tspan
-           sodipodi:role="line"
-           x="57.106129"
-           y="32.597969"
-           id="tspan225"
-           style="stroke-width:0.26458332px"><tspan
-             x="57.106129"
-             y="32.597969"
-             id="tspan223"
-             style="stroke-width:0.26458332px">4</tspan></tspan></text>
-      <text
-         xml:space="preserve"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;display:inline;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-         x="57.005989"
-         y="56.272434"
-         id="text233"><tspan
-           sodipodi:role="line"
-           x="57.005989"
-           y="56.272434"
-           id="tspan231"
-           style="stroke-width:0.26458332px"><tspan
-             x="57.005989"
-             y="56.272434"
-             id="tspan229"
-             style="stroke-width:0.26458332px">3</tspan></tspan></text>
-      <text
-         xml:space="preserve"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;display:inline;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-         x="57.09737"
-         y="79.391563"
-         id="text239"><tspan
-           sodipodi:role="line"
-           x="57.09737"
-           y="79.391563"
-           id="tspan237"
-           style="stroke-width:0.26458332px"><tspan
-             x="57.09737"
-             y="79.391563"
-             id="tspan235"
-             style="stroke-width:0.26458332px">2</tspan></tspan></text>
-    </symbol>
-    <symbol
-       inkscape:label="item-2-4-3"
-       id="item-2-4-3"
-       inkscape:groupmode="layer"
-       style="display:inline">
-      <text
-         xml:space="preserve"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-         x="57.014748"
-         y="32.597969"
-         id="text245"><tspan
-           sodipodi:role="line"
-           x="57.014748"
-           y="32.597969"
-           id="tspan243"
-           style="stroke-width:0.26458332px"><tspan
-             x="57.014748"
-             y="32.597969"
-             id="tspan241"
-             style="stroke-width:0.26458332px">2</tspan></tspan></text>
-      <text
-         xml:space="preserve"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;display:inline;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-         x="56.914608"
-         y="56.272434"
-         id="text251"><tspan
-           sodipodi:role="line"
-           x="56.914608"
-           y="56.272434"
-           id="tspan249"
-           style="stroke-width:0.26458332px"><tspan
-             x="56.914608"
-             y="56.272434"
-             id="tspan247"
-             style="stroke-width:0.26458332px">4</tspan></tspan></text>
-      <text
-         xml:space="preserve"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;display:inline;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-         x="57.005989"
-         y="79.391563"
-         id="text257"><tspan
-           sodipodi:role="line"
-           x="57.005989"
-           y="79.391563"
-           id="tspan255"
-           style="stroke-width:0.26458332px"><tspan
-             x="57.005989"
-             y="79.391563"
-             id="tspan253"
-             style="stroke-width:0.26458332px">3</tspan></tspan></text>
-    </symbol>
-    <symbol
-       inkscape:groupmode="layer"
-       id="arrow-3-1"
-       inkscape:label="arrow-3-1"
-       style="display:inline">
-      <path
-         style="display:inline;fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.05833328;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker3501)"
-         d="m 69.814287,75.735843 c 0,0 16.357008,-8.589715 16.265628,-24.398447 C 85.988536,35.528663 69.631526,28.401028 69.631526,28.401028"
-         id="path3475"
-         inkscape:connector-curvature="0"
-         sodipodi:nodetypes="czc" />
-    </symbol>
-  </defs>
+xmlns:svg="http://www.w3.org/2000/svg"
+xmlns="http://www.w3.org/2000/svg"
+xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+version="1.1"
+style="display:none"
+id="lru"
+inkscape:version="0.92.5 (2060ec1f9f, 2020-04-08)">
+<defs id="defs2">
+<marker
+inkscape:stockid="Arrow1Send"
+orient="auto"
+refY="0.0"
+refX="0.0"
+id="marker3501"
+style="overflow:visible;"
+inkscape:isstock="true">
+<path
+id="path3499"
+d="M 0.0,0.0 L 5.0,-5.0 L -12.5,0.0 L 5.0,5.0 L 0.0,0.0 z "
+style="fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1;fill:#000000;fill-opacity:1"
+transform="scale(0.2) rotate(180) translate(6,0)" />
+</marker>
+<marker
+inkscape:isstock="true"
+style="overflow:visible;"
+id="marker3185"
+refX="0.0"
+refY="0.0"
+orient="auto"
+inkscape:stockid="Arrow1Send"
+inkscape:collect="always">
+<path
+transform="scale(0.2) rotate(180) translate(6,0)"
+style="fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1;fill:#000000;fill-opacity:1"
+d="M 0.0,0.0 L 5.0,-5.0 L -12.5,0.0 L 5.0,5.0 L 0.0,0.0 z "
+id="path3183" />
+</marker>
+<marker
+inkscape:isstock="true"
+style="overflow:visible;"
+id="marker1967"
+refX="0.0"
+refY="0.0"
+orient="auto"
+inkscape:stockid="Arrow1Send">
+<path
+transform="scale(0.2) rotate(180) translate(6,0)"
+style="fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1;fill:#000000;fill-opacity:1"
+d="M 0.0,0.0 L 5.0,-5.0 L -12.5,0.0 L 5.0,5.0 L 0.0,0.0 z "
+id="path1965" />
+</marker>
+<marker
+inkscape:stockid="Arrow1Send"
+orient="auto"
+refY="0.0"
+refX="0.0"
+id="Arrow1Send"
+style="overflow:visible;"
+inkscape:isstock="true"
+inkscape:collect="always">
+<path
+id="path918"
+d="M 0.0,0.0 L 5.0,-5.0 L -12.5,0.0 L 5.0,5.0 L 0.0,0.0 z "
+style="fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1;fill:#000000;fill-opacity:1"
+transform="scale(0.2) rotate(180) translate(6,0)" />
+</marker>
+<marker
+inkscape:isstock="true"
+style="overflow:visible;"
+id="marker1337"
+refX="0.0"
+refY="0.0"
+orient="auto"
+inkscape:stockid="Arrow1Mend">
+<path
+transform="scale(0.4) rotate(180) translate(10,0)"
+style="fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1;fill:#000000;fill-opacity:1"
+d="M 0.0,0.0 L 5.0,-5.0 L -12.5,0.0 L 5.0,5.0 L 0.0,0.0 z "
+id="path1335" />
+</marker>
+<marker
+inkscape:isstock="true"
+style="overflow:visible;"
+id="marker1269"
+refX="0.0"
+refY="0.0"
+orient="auto"
+inkscape:stockid="Arrow1Mend">
+<path
+transform="scale(0.4) rotate(180) translate(10,0)"
+style="fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1;fill:#000000;fill-opacity:1"
+d="M 0.0,0.0 L 5.0,-5.0 L -12.5,0.0 L 5.0,5.0 L 0.0,0.0 z "
+id="path1267" />
+</marker>
+<marker
+inkscape:stockid="Arrow1Mend"
+orient="auto"
+refY="0.0"
+refX="0.0"
+id="Arrow1Mend"
+style="overflow:visible;"
+inkscape:isstock="true"
+inkscape:collect="always">
+<path
+id="path912"
+d="M 0.0,0.0 L 5.0,-5.0 L -12.5,0.0 L 5.0,5.0 L 0.0,0.0 z "
+style="fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1;fill:#000000;fill-opacity:1"
+transform="scale(0.4) rotate(180) translate(10,0)" />
+</marker>
+<marker
+inkscape:stockid="Arrow1Lend"
+orient="auto"
+refY="0.0"
+refX="0.0"
+id="Arrow1Lend"
+style="overflow:visible;"
+inkscape:isstock="true">
+<path
+id="path906"
+d="M 0.0,0.0 L 5.0,-5.0 L -12.5,0.0 L 5.0,5.0 L 0.0,0.0 z "
+style="fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1;fill:#000000;fill-opacity:1"
+transform="scale(0.8) rotate(180) translate(12.5,0)" />
+</marker>
+<marker
+inkscape:stockid="Arrow1Lstart"
+orient="auto"
+refY="0.0"
+refX="0.0"
+id="Arrow1Lstart"
+style="overflow:visible"
+inkscape:isstock="true">
+<path
+id="path903"
+d="M 0.0,0.0 L 5.0,-5.0 L -12.5,0.0 L 5.0,5.0 L 0.0,0.0 z "
+style="fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1;fill:#000000;fill-opacity:1"
+transform="scale(0.8) translate(12.5,0)" />
+</marker>
+<marker
+inkscape:isstock="true"
+style="overflow:visible"
+id="marker1967-2"
+refX="0"
+refY="0"
+orient="auto"
+inkscape:stockid="Arrow1Send">
+<path
+inkscape:connector-curvature="0"
+transform="matrix(-0.2,0,0,-0.2,-1.2,0)"
+style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1.00000003pt;stroke-opacity:1"
+d="M 0,0 5,-5 -12.5,0 5,5 Z"
+id="path1965-7" />
+</marker>
+<symbol
+inkscape:label="base-box"
+inkscape:groupmode="layer"
+id="base-box"
+style="display:inline">
+<g id="g3621">
+<rect
+y="17.709580000000017"
+x="46.238255"
+height="22.753609"
+width="22.753609"
+id="rect10"
+style="opacity:1;fill:none;fill-opacity:1;stroke:#1a1a1a;stroke-width:1.32291663;stroke-linecap:round;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1" />
+<rect
+y="40.4632"
+x="46.238255"
+height="22.753609"
+width="22.753609"
+id="rect10-3"
+style="opacity:1;fill:none;fill-opacity:1;stroke:#1a1a1a;stroke-width:1.32291663;stroke-linecap:round;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1" />
+<rect
+y="63.216800000000006"
+x="46.238255"
+height="22.753609"
+width="22.753609"
+id="rect10-6"
+style="opacity:1;fill:none;fill-opacity:1;stroke:#1a1a1a;stroke-width:1.32291663;stroke-linecap:round;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1" />
+</g>
+</symbol>
+<symbol
+inkscape:groupmode="layer"
+id="arrow-top"
+inkscape:label="arrow-top"
+style="display:inline">
+<path
+style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.32291663;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Arrow1Mend)"
+d="m 128.20608,25.01997 c 0,0 -10.23865,-10.579456 -25.22088,-10.782835 C 88.002972,14.033757 71.916025,26.664809 71.916025,26.664809"
+id="path96"
+inkscape:connector-curvature="0"
+sodipodi:nodetypes="czc" />
+</symbol>
+<symbol
+inkscape:label="new-1"
+id="new-1"
+inkscape:groupmode="layer"
+style="display:inline">
+<text
+xml:space="preserve"
+style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+x="133.08879"
+y="32.506424"
+id="text149"><tspan
+sodipodi:role="line"
+x="133.08879"
+y="32.506424"
+id="tspan147"
+style="stroke-width:0.26458332px"><tspan
+x="133.08879"
+y="32.506424"
+id="tspan145"
+style="stroke-width:0.26458332px">1</tspan></tspan></text>
+</symbol>
+<symbol
+style="display:inline"
+inkscape:groupmode="layer"
+id="new-2"
+inkscape:label="new-2">
+<text
+xml:space="preserve"
+style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+x="133.18018"
+y="32.597801"
+id="text155"><tspan
+sodipodi:role="line"
+x="133.18018"
+y="32.597801"
+id="tspan153"
+style="stroke-width:0.26458332px"><tspan
+x="133.18018"
+y="32.597801"
+id="tspan151"
+style="stroke-width:0.26458332px">2</tspan></tspan></text>
+</symbol>
+<symbol
+inkscape:label="item-1"
+id="item-1"
+inkscape:groupmode="layer"
+style="display:inline">
+<text
+xml:space="preserve"
+style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+x="57.56303"
+y="32.68935"
+id="text161"><tspan
+sodipodi:role="line"
+x="57.56303"
+y="32.68935"
+id="tspan159"
+style="stroke-width:0.26458332px"><tspan
+x="57.56303"
+y="32.68935"
+id="tspan157"
+style="stroke-width:0.26458332px">1</tspan></tspan></text>
+</symbol>
+<symbol
+inkscape:groupmode="layer"
+id="arrow-1-2"
+inkscape:label="arrow-1-2"
+style="display:inline">
+<path
+style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.32291663;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Arrow1Send)"
+d="m 46.055496,28.401028 c 0,0 -11.587836,2.282937 -11.605254,11.879395 -0.01742,9.596458 9.869036,10.508692 9.869036,10.508692"
+id="path1327"
+inkscape:connector-curvature="0"
+sodipodi:nodetypes="czc" />
+</symbol>
+<symbol
+inkscape:label="new-3"
+id="new-3"
+inkscape:groupmode="layer"
+style="display:inline">
+<text
+xml:space="preserve"
+style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+x="133.63707"
+y="32.323662"
+id="text167"><tspan
+sodipodi:role="line"
+x="133.63707"
+y="32.323662"
+id="tspan165"
+style="stroke-width:0.26458332px"><tspan
+x="133.63707"
+y="32.323662"
+id="tspan163"
+style="stroke-width:0.26458332px">3</tspan></tspan></text>
+</symbol>
+<symbol
+style="display:inline"
+inkscape:groupmode="layer"
+id="item-2-1"
+inkscape:label="item-2-1">
+<text
+xml:space="preserve"
+style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+x="57.654408"
+y="32.780727"
+id="text173"><tspan
+sodipodi:role="line"
+x="57.654408"
+y="32.780727"
+id="tspan171"
+style="stroke-width:0.26458332px"><tspan
+x="57.654408"
+y="32.780727"
+id="tspan169"
+style="stroke-width:0.26458332px">2</tspan></tspan></text>
+<text
+xml:space="preserve"
+style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;display:inline;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+x="57.554268"
+y="56.455193"
+id="text179"><tspan
+sodipodi:role="line"
+x="57.554268"
+y="56.455193"
+id="tspan177"
+style="stroke-width:0.26458332px"><tspan
+x="57.554268"
+y="56.455193"
+id="tspan175"
+style="stroke-width:0.26458332px">1</tspan></tspan></text>
+</symbol>
+<symbol
+style="display:inline"
+inkscape:label="arrow-2-3"
+id="arrow-2-3"
+inkscape:groupmode="layer">
+<path
+sodipodi:nodetypes="czc"
+inkscape:connector-curvature="0"
+id="path1961"
+d="m 46.055496,28.401028 c 0,0 -11.587836,2.282937 -11.605254,11.879395 -0.01742,9.596458 9.869036,10.508692 9.869036,10.508692"
+style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.32291663;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker1967)" />
+<path
+sodipodi:nodetypes="czc"
+inkscape:connector-curvature="0"
+id="path1961-0"
+d="m 45.964117,54.992593 c 0,0 -11.587837,2.282937 -11.605255,11.879394 -0.01742,9.596458 9.869037,10.508693 9.869037,10.508693"
+style="display:inline;fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.32291663;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker1967-2)" />
+</symbol>
+<symbol
+style="display:inline"
+inkscape:groupmode="layer"
+id="new-4"
+inkscape:label="new-4">
+<text
+xml:space="preserve"
+style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+x="132.6319"
+y="32.415043"
+id="text185"><tspan
+sodipodi:role="line"
+x="132.6319"
+y="32.415043"
+id="tspan183"
+style="stroke-width:0.26458332px"><tspan
+x="132.6319"
+y="32.415043"
+id="tspan181"
+style="stroke-width:0.26458332px">4</tspan></tspan></text>
+</symbol>
+<symbol
+inkscape:label="item-3-2-1"
+id="item-3-2-1"
+inkscape:groupmode="layer"
+style="display:inline">
+<text
+xml:space="preserve"
+style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+x="57.471649"
+y="33.054871"
+id="text191"><tspan
+sodipodi:role="line"
+x="57.471649"
+y="33.054871"
+id="tspan189"
+style="stroke-width:0.26458332px"><tspan
+x="57.471649"
+y="33.054871"
+id="tspan187"
+style="stroke-width:0.26458332px">3</tspan></tspan></text>
+<text
+xml:space="preserve"
+style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;display:inline;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+x="57.37151"
+y="56.729336"
+id="text197"><tspan
+sodipodi:role="line"
+x="57.37151"
+y="56.729336"
+id="tspan195"
+style="stroke-width:0.26458332px"><tspan
+x="57.37151"
+y="56.729336"
+id="tspan193"
+style="stroke-width:0.26458332px">2</tspan></tspan></text>
+<text
+xml:space="preserve"
+style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;display:inline;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+x="57.462891"
+y="79.848465"
+id="text203"><tspan
+sodipodi:role="line"
+x="57.462891"
+y="79.848465"
+id="tspan201"
+style="stroke-width:0.26458332px"><tspan
+x="57.462891"
+y="79.848465"
+id="tspan199"
+style="stroke-width:0.26458332px">1</tspan></tspan></text>
+</symbol>
+<symbol
+inkscape:groupmode="layer"
+id="arrow-3-out"
+inkscape:label="arrow-3-out"
+style="display:inline">
+<path
+style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.05833328;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker3185)"
+d="M 57.112471,85.69626 V 99.129113"
+id="path3175"
+inkscape:connector-curvature="0" />
+</symbol>
+<symbol
+style="display:inline"
+inkscape:groupmode="layer"
+id="item--3-2-1out"
+inkscape:label="item--3-2-1out">
+<text
+xml:space="preserve"
+style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;display:inline;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+x="57.554268"
+y="56.089676"
+id="text209"><tspan
+sodipodi:role="line"
+x="57.554268"
+y="56.089676"
+id="tspan207"
+style="stroke-width:0.26458332px"><tspan
+x="57.554268"
+y="56.089676"
+id="tspan205"
+style="stroke-width:0.26458332px">3</tspan></tspan></text>
+<text
+xml:space="preserve"
+style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;display:inline;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+x="57.645649"
+y="79.208801"
+id="text215"><tspan
+sodipodi:role="line"
+x="57.645649"
+y="79.208801"
+id="tspan213"
+style="stroke-width:0.26458332px"><tspan
+x="57.645649"
+y="79.208801"
+id="tspan211"
+style="stroke-width:0.26458332px">2</tspan></tspan></text>
+<text
+xml:space="preserve"
+style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;display:inline;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+x="57.581059"
+y="111.54848"
+id="text221"><tspan
+sodipodi:role="line"
+x="57.581059"
+y="111.54848"
+id="tspan219"
+style="stroke-width:0.26458332px"><tspan
+x="57.581059"
+y="111.54848"
+id="tspan217"
+style="stroke-width:0.26458332px">1</tspan></tspan></text>
+</symbol>
+<symbol
+style="display:inline"
+inkscape:groupmode="layer"
+id="item-4-3-2"
+inkscape:label="item-4-3-2">
+<text
+xml:space="preserve"
+style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+x="57.106129"
+y="32.597969"
+id="text227"><tspan
+sodipodi:role="line"
+x="57.106129"
+y="32.597969"
+id="tspan225"
+style="stroke-width:0.26458332px"><tspan
+x="57.106129"
+y="32.597969"
+id="tspan223"
+style="stroke-width:0.26458332px">4</tspan></tspan></text>
+<text
+xml:space="preserve"
+style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;display:inline;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+x="57.005989"
+y="56.272434"
+id="text233"><tspan
+sodipodi:role="line"
+x="57.005989"
+y="56.272434"
+id="tspan231"
+style="stroke-width:0.26458332px"><tspan
+x="57.005989"
+y="56.272434"
+id="tspan229"
+style="stroke-width:0.26458332px">3</tspan></tspan></text>
+<text
+xml:space="preserve"
+style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;display:inline;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+x="57.09737"
+y="79.391563"
+id="text239"><tspan
+sodipodi:role="line"
+x="57.09737"
+y="79.391563"
+id="tspan237"
+style="stroke-width:0.26458332px"><tspan
+x="57.09737"
+y="79.391563"
+id="tspan235"
+style="stroke-width:0.26458332px">2</tspan></tspan></text>
+</symbol>
+<symbol
+inkscape:label="item-2-4-3"
+id="item-2-4-3"
+inkscape:groupmode="layer"
+style="display:inline">
+<text
+xml:space="preserve"
+style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+x="57.014748"
+y="32.597969"
+id="text245"><tspan
+sodipodi:role="line"
+x="57.014748"
+y="32.597969"
+id="tspan243"
+style="stroke-width:0.26458332px"><tspan
+x="57.014748"
+y="32.597969"
+id="tspan241"
+style="stroke-width:0.26458332px">2</tspan></tspan></text>
+<text
+xml:space="preserve"
+style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;display:inline;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+x="56.914608"
+y="56.272434"
+id="text251"><tspan
+sodipodi:role="line"
+x="56.914608"
+y="56.272434"
+id="tspan249"
+style="stroke-width:0.26458332px"><tspan
+x="56.914608"
+y="56.272434"
+id="tspan247"
+style="stroke-width:0.26458332px">4</tspan></tspan></text>
+<text
+xml:space="preserve"
+style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.69999981px;line-height:134.00000334%;font-family:'源ノ角ゴシック JP';-inkscape-font-specification:'源ノ角ゴシック JP';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;display:inline;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+x="57.005989"
+y="79.391563"
+id="text257"><tspan
+sodipodi:role="line"
+x="57.005989"
+y="79.391563"
+id="tspan255"
+style="stroke-width:0.26458332px"><tspan
+x="57.005989"
+y="79.391563"
+id="tspan253"
+style="stroke-width:0.26458332px">3</tspan></tspan></text>
+</symbol>
+<symbol
+inkscape:groupmode="layer"
+id="arrow-3-1"
+inkscape:label="arrow-3-1"
+style="display:inline">
+<path
+style="display:inline;fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.05833328;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker3501)"
+d="m 69.814287,75.735843 c 0,0 16.357008,-8.589715 16.265628,-24.398447 C 85.988536,35.528663 69.631526,28.401028 69.631526,28.401028"
+id="path3475"
+inkscape:connector-curvature="0"
+sodipodi:nodetypes="czc" />
+</symbol>
+</defs>
 </svg></p>
                     </section>
                 </article>

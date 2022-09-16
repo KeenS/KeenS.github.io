@@ -133,15 +133,10 @@
                     </header>
                     <section>
                         <p>κeenです。最近Yubikeyを買ったので色々試しています。今回はそのうちのPGP回です。</p>
-
 <h1 id="yubikeyについて">Yubikeyについて</h1>
-
 <p><a href="https://securitykey.yubion.com">Yubikey</a>は米瑞企業のYubico社が販売している認証デバイスです。FIDOやらWebAuthnやらの文脈で耳にした方も多いんじゃないしょうか。Yubikeyは日本ではソフト技研社が販売代理店をしています。</p>
-
 <p>Yubikeyはラインナップがいくつかありますが私が買ったのはYubikey 5 NFCです。</p>
-
 <p>Yubikeyでできることは色々あります。</p>
-
 <ul>
 <li>FIDO U2F</li>
 <li>FIDO/WebAuthn</li>
@@ -152,128 +147,86 @@
 <li>OpenPGP</li>
 <li>静的パスワード</li>
 </ul>
-
 <p>参考：<a href="https://qiita.com/onokatio/items/15108b9c199ccf378f91">Yubikey 5をArchLinuxで使う - Qiita</a></p>
-
 <p>このうち今回はOpenPGPサポートの機能を使います。</p>
-
 <h1 id="openpgpについて">OpenPGPについて</h1>
-
 <p>OpenPGPはデータの完全性を提供するためのプロトコルです。<a href="https://tools.ietf.org/html/rfc4880">RFC4880</a>で標準化されています。主な用途は電子署名や暗号化などでしょうか。その他頑張ればSSHの認証にも使えるようです。私は以下の用途に使っています。</p>
-
 <ul>
-<li><a href="https://git-scm.com/book/ja/v2/Git-のさまざまなツール-作業内容への署名">Gitのコミットの署名</a></li>
+<li><a href="https://git-scm.com/book/ja/v2/Git-%E3%81%AE%E3%81%95%E3%81%BE%E3%81%96%E3%81%BE%E3%81%AA%E3%83%84%E3%83%BC%E3%83%AB-%E4%BD%9C%E6%A5%AD%E5%86%85%E5%AE%B9%E3%81%B8%E3%81%AE%E7%BD%B2%E5%90%8D">Gitのコミットの署名</a></li>
 <li>メールの署名
-
 <ul>
 <li>CF <a href="https://forest.watch.impress.co.jp/docs/news/1211933.html">「Thunderbird」がメール暗号化・デジタル署名「OpenPGP」を標準サポートへ - 窓の杜</a></li>
-</ul></li>
+</ul>
+</li>
 <li><a href="https://keybase.io">keybase</a>での紐付け</li>
 </ul>
-
 <p>Gitのコミットの署名について補足しておきましょう。Gitに設定するユーザ名やメールアドレスは自己申告なので簡単に詐称可能です。さらにGitLabやGitHubはそのメールアドレスでコミットをアカウントに紐付けるので偽装コミットが簡単に作れます。署名をしておけばそういう偽装を防げます。GitLabやGitHubもOpenPGPの公開鍵を登録しておけばコミットが本人により署名されたものかを確認してくれる機能がついています。</p>
-
 <p>OpenPGPの用途は他にも私が公開している鍵を使って他の人が私に暗号化したファイルを送ったり（現実的には暗号化メールかな）できるのですが、まだ暗号化ファイルを受け取った経験はありません。</p>
-
 <p>OpenPGPを使うときのツールはLinuxなら<a href="https://gnupg.org">Gnu Privacy Guard</a>（GPG）を使うことになるでしょう。この記事でもGPGを前提として紹介していきます。</p>
-
 <h1 id="yubikeyとopenpgpについて">YubikeyとOpenPGPについて</h1>
-
 <p>OpenPGPでは公開鍵暗号を使うので公開鍵と秘密鍵があります。公開鍵はインターネットに公開し、秘密鍵を自分しか知らないように大切に保管します。SSHと雰囲気が似てますね。ですがOpenPGPの鍵は所有者本人に結びつくのでSSHの秘密鍵以上に扱いに注意が必要です。OpenPGPの鍵はそれが本人と結び付いていることを周りに信用してもらってはじめて意味を持ちます。そのためには利用実績の積み重ねと本人による適切な秘密鍵の管理が不可欠です。そして秘密鍵は電脳空間で本人そのものになるので秘密鍵が流出すると自身の人格が乗っ取られることに等しいです。そういった点で流出したら接続先マシンから公開鍵を削除して鍵ペアを作り直せばいいSSH鍵とは扱いが異なります。</p>
-
 <p>なのでOpenPGPの秘密鍵を安全に保管したいというモチベーションがあり、そのための機能を実際に提供するのがYubikeyのOpenPGPサポートです。Yubikeyのデバイス内にOpenPGPの鍵を焼き込み、二度と外に出さない運用が可能です。ということでYubikeyにOpenPGPの鍵を焼き込みましょう。</p>
-
 <h1 id="openpgpの機能と鍵">OpenPGPの機能と鍵</h1>
-
 <p>鍵を焼く前にOpenPGPにどんな鍵があり、どう使うのか押えましょう。OpenPGPを使うときにはいくつかの種類の公開暗号鍵対を使い分けます。</p>
-
 <h2 id="鍵の機能">鍵の機能</h2>
-
 <p>OpenPGPでは鍵に機能を割り当てることができます。仕様上は細かくいくつか分かれているようですが、現実には以下の三つが使われます。</p>
-
 <ul>
 <li>認証</li>
 <li>署名</li>
 <li>暗号化</li>
 </ul>
-
 <h2 id="鍵の失効と有効期限">鍵の失効と有効期限</h2>
-
 <p>もし万が一秘密鍵が流出したときのために鍵を失効することができます。そのときは秘密鍵で失効証明書というのを発行し、それを配ることで周りの人に以前公開した公開鍵を失効させることを宣言できます。</p>
-
 <p>また、鍵には有効期限が設定できます。もし万が一秘密鍵を紛失した場合には失効証明書が発行できないので既に発行した公開鍵をどうすることもできなくなります。そういうときに有効期限があれば勝手に失効してくれるので知らずに意味のない鍵を使われる可能性が減ります。有効期限はあとから延長することもできるので、1年くらいに設定して毎年延長する運用するスタイルもあるようです。</p>
-
 <h2 id="主鍵と副鍵">主鍵と副鍵</h2>
-
-<p>私も最初混乱したのですが、OpenPGPには主鍵と副鍵があるようです。副鍵は主鍵からいくらでも作ることができます。副鍵は主鍵に紐付いていて、主鍵とは独立して鍵の有効期限を設定したり失効したりできます。主鍵も副鍵も公開暗号鍵対です。なので厳密には主鍵&rdquo;対&rdquo;、副鍵&rdquo;対&rdquo;ですし、主鍵の公開鍵、主鍵の秘密鍵、副鍵1の公開鍵、副鍵1の秘密鍵、副鍵2の…と色々な鍵が登場します。</p>
-
+<p>私も最初混乱したのですが、OpenPGPには主鍵と副鍵があるようです。副鍵は主鍵からいくらでも作ることができます。副鍵は主鍵に紐付いていて、主鍵とは独立して鍵の有効期限を設定したり失効したりできます。主鍵も副鍵も公開暗号鍵対です。なので厳密には主鍵&quot;対&quot;、副鍵&quot;対&quot;ですし、主鍵の公開鍵、主鍵の秘密鍵、副鍵1の公開鍵、副鍵1の秘密鍵、副鍵2の…と色々な鍵が登場します。</p>
 <h2 id="鍵の実際の運用">鍵の実際の運用</h2>
-
 <p>よくある運用としては主鍵に認証と署名の機能を持たせて有効期限を無期限にし、副鍵に暗号化の機能を持たせて有効期限を設定することが多いようです。
 認証と署名は本人に紐付くため一生に一つあれば十分なので有効期限は無期限で問題ありません。</p>
-
 <p>主鍵の失効証明書を事前に発行して保管しておきます。
 もし鍵が流出したときは気付いた時点で失効証明書をみんなに配れば被害は最小限で済みます。
 秘密鍵が流出しても、流出前に行った署名が無効になったり偽造されるようになったりましませんからね。</p>
-
 <p>一方、暗号化は<a href="https://ja.wikipedia.org/wiki/Forward_secrecy">前方秘匿性</a>の観点から流出した時点で被害が最大になります。
 すなわち、秘密鍵を手にした人は過去に自分向けに暗号化されたデータ全てを復号できるようになってしまいます。
 そこで鍵の有効期限は1年程度にして毎年鍵を交換することで被害を小さくできます。
 副鍵は主鍵に紐付いていて、鍵の信用は主鍵が担保してくれるので副鍵はある程度頻繁に替えても問題ないという寸法です。</p>
-
 <p>色々書きましたが以下の2つ（4つ）の鍵があること押えて下さい</p>
-
 <ul>
 <li>署名と認証に使う主鍵（の秘密鍵と公開鍵）</li>
 <li>暗号化に使う副鍵（の秘密鍵と公開鍵）</li>
 </ul>
-
 <h3 id="運用と保管">運用と保管</h3>
-
 <p>鍵は盗まれてはならないし失くしてもならないけど普段気軽に使えるようにしないといけません。
 この辺の匙加減は個々人に任されるころではあります。
 例えばローカルマシン内は安全としてそのまま保存してしまう場合もあります（そのままとはいってもパスワードで保護されていますが）。
 あるいはインターネットに繋ったマシンは全て危険として主鍵の秘密鍵を紙、あるいはUSBメモリなどに書いて家の中で大切に保管し、ローカルマシンには副鍵のみ置く場合もあります。そういう場合は一度もインターネットに繋がったことのないマシン（Live CDとか）の上でOpenPGP鍵を生成するようです。</p>
-
 <p>今回の我々にはYubikeyがあるので考えることが少なくて済みます。
 インターネットに繋っているマシンは安全でないとして、普段使いにはYubikeyに保存した主鍵と副鍵（の秘密鍵）を、バックアップとしてUSBメモリに主鍵と副鍵の秘密鍵のコピーを保存します。
 これでインターネットから秘密鍵がアクセスされることはなく安全に使えるようになります。
 まあ、作業は普段使ってるインターネットにバリバリで繋がってるマシンでやるので徹底はしてませんけどね。気になる方は上手いことやって下さい。
 秘密鍵を保存したUSBメモリはインターネットでの自身の人格に相当するので門外不出に安全に管理し、火事で焼け出されるときも通帳や印鑑よりも優先して持ち出します。</p>
-
 <h1 id="鍵の生成からyubikeyへの焼き込みまで">鍵の生成からYubikeyへの焼き込みまで</h1>
-
 <p>ちょっと前置きが長かったのでやることをおさらいしておきましょう。</p>
-
 <ul>
 <li>(事前準備)</li>
 <li>署名・認証の主鍵と暗号化の副鍵を生成する
-
 <ul>
 <li>このとき副鍵の有効期限を1年にする</li>
-</ul></li>
+</ul>
+</li>
 <li>主鍵、副鍵のバックアップをUSBメモリに置く</li>
 <li>主鍵、副鍵をYubikeyに焼き込む</li>
 </ul>
-
 <p>これらの作業をやっていきます。Yubicoの公式ドキュメントも併読しながら進んで下さい。</p>
-
 <p><a href="https://support.yubico.com/hc/en-us/articles/360013790259-Using-Your-YubiKey-with-OpenPGP">Using Your YubiKey with OpenPGP – Yubico</a></p>
-
 <h2 id="事前準備">事前準備</h2>
-
 <p>YubikeyをOpenPGP鍵のストアとして使うためにscdaemonをインストールしておきます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell">$ sudo apt install scdaemon</code></pre></div>
-<p>どうやらOpenPGP鍵を安全に保管できるデバイスはスマートカードと呼称されるらしいです。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ sudo apt install scdaemon
+</span></span></code></pre></div><p>どうやらOpenPGP鍵を安全に保管できるデバイスはスマートカードと呼称されるらしいです。</p>
 <h2 id="鍵の生成">鍵の生成</h2>
-
 <p>OpenPGP鍵は <code>gpg</code> コマンドで作成できます。このとき生成する鍵のアルゴリズムはYubikeyに保存できるものを選ばないといけません。Yubikey 5ならRSA 4096 をサポートしている他、楕円曲線暗号も使えます。</p>
-
 <p>See also: <a href="https://support.yubico.com/hc/en-us/articles/360016649139-YubiKey-5-2-3-Enhancements-to-OpenPGP-3-4-Support">YubiKey 5.2.3 Enhancements to OpenPGP 3.4 Support – Yubico</a></p>
-
 <p>ここではセキュリティビット数が256bit相当（RSA 4096より多い）ある <code>nistp521</code> を使うことにします。以下のようにダイアログを進めていきます。</p>
-
 <ol>
 <li><code>gpg --expert --full-gen-key</code> で鍵の生成を開始</li>
 <li><code>9</code> で鍵の種類に楕円曲線暗号（ECC）を選択</li>
@@ -285,431 +238,384 @@
 <li>マウスやキーボードを動作させてエントロピーを生成</li>
 <li>鍵のパスワードを設定</li>
 </ol>
-
 <p>鍵のパスワードは長いものを設定しておきましょう。コンソールではこうなります。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">$ gpg --expert --full-gen-key
-gpg (GnuPG) 2.2.20; Copyright (C) 2020 Free Software Foundation, Inc.
-This is free software: you are free to change and redistribute it.
-There is NO WARRANTY, to the extent permitted by law.
-
-ご希望の鍵の種類を選択してください:
-   (1) RSA と RSA (デフォルト)
-   (2) DSA と Elgamal
-   (3) DSA (署名のみ)
-   (4) RSA (署名のみ)
-   (7) DSA (機能をあなた自身で設定)
-   (8) RSA (機能をあなた自身で設定)
-   (9) ECC と ECC
-  (10) ECC (署名のみ)
-  (11) ECC (機能をあなた自身で設定)
-  (13) 既存の鍵
-  (14) カードに存在する鍵
-あなたの選択は? 9
-ご希望の楕円曲線を選択してください:
-   (1) Curve 25519
-   (3) NIST P-256
-   (4) NIST P-384
-   (5) NIST P-521
-   (6) Brainpool P-256
-   (7) Brainpool P-384
-   (8) Brainpool P-512
-   (9) secp256k1
-あなたの選択は? 5
-鍵の有効期限を指定してください。
-         0 = 鍵は無期限
-      &lt;n&gt;  = 鍵は n 日間で期限切れ
-      &lt;n&gt;w = 鍵は n 週間で期限切れ
-      &lt;n&gt;m = 鍵は n か月間で期限切れ
-      &lt;n&gt;y = 鍵は n 年間で期限切れ
-鍵の有効期間は? (0) 0
-鍵は無期限です
-これで正しいですか? (y/N) y
-
-GnuPGはあなたの鍵を識別するためにユーザIDを構成する必要があります。
-
-本名: 田中太郎
-電子メール・アドレス: taro@tanaka.town
-コメント:
-あなたは文字集合&#39;utf-8&#39;を使っています。
-次のユーザIDを選択しました:
-    &#34;田中太郎 &lt;taro@tanaka.town&gt;&#34;
-
-名前(N)、コメント(C)、電子メール(E)の変更、またはOK(O)か終了(Q)?
-たくさんのランダム・バイトの生成が必要です。キーボードを打つ、マウスを動か
-す、ディスクにアクセスするなどの他の操作を素数生成の間に行うことで、乱数生
-成器に十分なエントロピーを供給する機会を与えることができます。
-たくさんのランダム・バイトの生成が必要です。キーボードを打つ、マウスを動か
-す、ディスクにアクセスするなどの他の操作を素数生成の間に行うことで、乱数生
-成器に十分なエントロピーを供給する機会を与えることができます。
-gpg: 鍵83AD9B71D78B7AA7を究極的に信用するよう記録しました
-gpg: 失効証明書を &#39;/home/shun/.gnupg/openpgp-revocs.d/094ACC65CE981E96AA063B0483AD9B71D78B7AA7.rev&#39; に保管しました。
-公開鍵と秘密鍵を作成し、署名しました。
-
-pub   nistp521 2021-03-23 [SC]
-      094ACC65CE981E96AA063B0483AD9B71D78B7AA7
-uid                      田中太郎 &lt;taro@tanaka.town&gt;
-sub   nistp521 2021-03-23 [E]</code></pre></div>
-<p>これで署名・認証の主鍵と暗号化の副鍵が生成されました。しかし有効期限は両方とも無期限です。副鍵を編集して有効期限を1年にします。今生成された鍵の指紋が <code>094ACC65CE981E96AA063B0483AD9B71D78B7AA7</code> なのでこれを指定して編集します。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">$ gpg --expert --full-gen-key
+</span></span><span class="line"><span class="cl">gpg (GnuPG) 2.2.20; Copyright (C) 2020 Free Software Foundation, Inc.
+</span></span><span class="line"><span class="cl">This is free software: you are free to change and redistribute it.
+</span></span><span class="line"><span class="cl">There is NO WARRANTY, to the extent permitted by law.
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">ご希望の鍵の種類を選択してください:
+</span></span><span class="line"><span class="cl">   (1) RSA と RSA (デフォルト)
+</span></span><span class="line"><span class="cl">   (2) DSA と Elgamal
+</span></span><span class="line"><span class="cl">   (3) DSA (署名のみ)
+</span></span><span class="line"><span class="cl">   (4) RSA (署名のみ)
+</span></span><span class="line"><span class="cl">   (7) DSA (機能をあなた自身で設定)
+</span></span><span class="line"><span class="cl">   (8) RSA (機能をあなた自身で設定)
+</span></span><span class="line"><span class="cl">   (9) ECC と ECC
+</span></span><span class="line"><span class="cl">  (10) ECC (署名のみ)
+</span></span><span class="line"><span class="cl">  (11) ECC (機能をあなた自身で設定)
+</span></span><span class="line"><span class="cl">  (13) 既存の鍵
+</span></span><span class="line"><span class="cl">  (14) カードに存在する鍵
+</span></span><span class="line"><span class="cl">あなたの選択は? 9
+</span></span><span class="line"><span class="cl">ご希望の楕円曲線を選択してください:
+</span></span><span class="line"><span class="cl">   (1) Curve 25519
+</span></span><span class="line"><span class="cl">   (3) NIST P-256
+</span></span><span class="line"><span class="cl">   (4) NIST P-384
+</span></span><span class="line"><span class="cl">   (5) NIST P-521
+</span></span><span class="line"><span class="cl">   (6) Brainpool P-256
+</span></span><span class="line"><span class="cl">   (7) Brainpool P-384
+</span></span><span class="line"><span class="cl">   (8) Brainpool P-512
+</span></span><span class="line"><span class="cl">   (9) secp256k1
+</span></span><span class="line"><span class="cl">あなたの選択は? 5
+</span></span><span class="line"><span class="cl">鍵の有効期限を指定してください。
+</span></span><span class="line"><span class="cl">         0 = 鍵は無期限
+</span></span><span class="line"><span class="cl">      &lt;n&gt;  = 鍵は n 日間で期限切れ
+</span></span><span class="line"><span class="cl">      &lt;n&gt;w = 鍵は n 週間で期限切れ
+</span></span><span class="line"><span class="cl">      &lt;n&gt;m = 鍵は n か月間で期限切れ
+</span></span><span class="line"><span class="cl">      &lt;n&gt;y = 鍵は n 年間で期限切れ
+</span></span><span class="line"><span class="cl">鍵の有効期間は? (0) 0
+</span></span><span class="line"><span class="cl">鍵は無期限です
+</span></span><span class="line"><span class="cl">これで正しいですか? (y/N) y
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">GnuPGはあなたの鍵を識別するためにユーザIDを構成する必要があります。
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">本名: 田中太郎
+</span></span><span class="line"><span class="cl">電子メール・アドレス: taro@tanaka.town
+</span></span><span class="line"><span class="cl">コメント:
+</span></span><span class="line"><span class="cl">あなたは文字集合&#39;utf-8&#39;を使っています。
+</span></span><span class="line"><span class="cl">次のユーザIDを選択しました:
+</span></span><span class="line"><span class="cl">    &#34;田中太郎 &lt;taro@tanaka.town&gt;&#34;
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">名前(N)、コメント(C)、電子メール(E)の変更、またはOK(O)か終了(Q)?
+</span></span><span class="line"><span class="cl">たくさんのランダム・バイトの生成が必要です。キーボードを打つ、マウスを動か
+</span></span><span class="line"><span class="cl">す、ディスクにアクセスするなどの他の操作を素数生成の間に行うことで、乱数生
+</span></span><span class="line"><span class="cl">成器に十分なエントロピーを供給する機会を与えることができます。
+</span></span><span class="line"><span class="cl">たくさんのランダム・バイトの生成が必要です。キーボードを打つ、マウスを動か
+</span></span><span class="line"><span class="cl">す、ディスクにアクセスするなどの他の操作を素数生成の間に行うことで、乱数生
+</span></span><span class="line"><span class="cl">成器に十分なエントロピーを供給する機会を与えることができます。
+</span></span><span class="line"><span class="cl">gpg: 鍵83AD9B71D78B7AA7を究極的に信用するよう記録しました
+</span></span><span class="line"><span class="cl">gpg: 失効証明書を &#39;/home/shun/.gnupg/openpgp-revocs.d/094ACC65CE981E96AA063B0483AD9B71D78B7AA7.rev&#39; に保管しました。
+</span></span><span class="line"><span class="cl">公開鍵と秘密鍵を作成し、署名しました。
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">pub   nistp521 2021-03-23 [SC]
+</span></span><span class="line"><span class="cl">      094ACC65CE981E96AA063B0483AD9B71D78B7AA7
+</span></span><span class="line"><span class="cl">uid                      田中太郎 &lt;taro@tanaka.town&gt;
+</span></span><span class="line"><span class="cl">sub   nistp521 2021-03-23 [E]
+</span></span></code></pre></div><p>これで署名・認証の主鍵と暗号化の副鍵が生成されました。しかし有効期限は両方とも無期限です。副鍵を編集して有効期限を1年にします。今生成された鍵の指紋が <code>094ACC65CE981E96AA063B0483AD9B71D78B7AA7</code> なのでこれを指定して編集します。</p>
 <ol>
 <li><code>gpg --edit-key 094ACC65CE981E96AA063B0483AD9B71D78B7AA7</code> で鍵の編集を開始</li>
 <li><code>key 1</code> で暗号化用の副鍵を選択</li>
-<li><code>expire</code> で有効期限の編集を開始
-
+<li><code>expire</code> で有効期限の編集を開始</li>
+</ol>
 <ul>
 <li><code>1y</code> で1年を指定、<code>y</code> で了承</li>
-</ul></li>
+</ul>
+<ol start="4">
 <li><code>save</code> で編集を保存</li>
 </ol>
-
 <p>コンソールではこうなります。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">$ gpg --edit-key 094ACC65CE981E96AA063B0483AD9B71D78B7AA7
-gpg (GnuPG) 2.2.20; Copyright (C) 2020 Free Software Foundation, Inc.
-This is free software: you are free to change and redistribute it.
-There is NO WARRANTY, to the extent permitted by law.
-
-秘密鍵が利用できます。
-
-sec  nistp521/83AD9B71D78B7AA7
-     作成: 2021-03-23  有効期限: 無期限       利用法: SC
-     信用: 究極        有効性: 究極
-ssb  nistp521/21D1788C632258F9
-     作成: 2021-03-23  有効期限: 無期限       利用法: E
-[  究極  ] (1). 田中太郎 &lt;taro@tanaka.town&gt;
-
-gpg&gt; key 1
-
-sec  nistp521/83AD9B71D78B7AA7
-     作成: 2021-03-23  有効期限: 無期限       利用法: SC
-     信用: 究極        有効性: 究極
-ssb* nistp521/21D1788C632258F9
-     作成: 2021-03-23  有効期限: 無期限       利用法: E
-[  究極  ] (1). 田中太郎 &lt;taro@tanaka.town&gt;
-
-gpg&gt; expire
-副鍵の有効期限を変更します。
-鍵の有効期限を指定してください。
-         0 = 鍵は無期限
-      &lt;n&gt;  = 鍵は n 日間で期限切れ
-      &lt;n&gt;w = 鍵は n 週間で期限切れ
-      &lt;n&gt;m = 鍵は n か月間で期限切れ
-      &lt;n&gt;y = 鍵は n 年間で期限切れ
-鍵の有効期間は? (0) 1y
-鍵は2022年03月23日 09時46分25秒 JSTで期限切れとなります
-これで正しいですか? (y/N) y
-
-sec  nistp521/83AD9B71D78B7AA7
-     作成: 2021-03-23  有効期限: 無期限       利用法: SC
-     信用: 究極        有効性: 究極
-ssb* nistp521/21D1788C632258F9
-     作成: 2021-03-23  有効期限: 2022-03-23  利用法: E
-[  究極  ] (1). 田中太郎 &lt;taro@tanaka.town&gt;
-
-gpg&gt; save</code></pre></div>
-<p>有効期限の編集くらいならGUIクライアントからでもできます。そっちが好みの方はseahorseとかで編集してみて下さい。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">$ gpg --edit-key 094ACC65CE981E96AA063B0483AD9B71D78B7AA7
+</span></span><span class="line"><span class="cl">gpg (GnuPG) 2.2.20; Copyright (C) 2020 Free Software Foundation, Inc.
+</span></span><span class="line"><span class="cl">This is free software: you are free to change and redistribute it.
+</span></span><span class="line"><span class="cl">There is NO WARRANTY, to the extent permitted by law.
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">秘密鍵が利用できます。
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">sec  nistp521/83AD9B71D78B7AA7
+</span></span><span class="line"><span class="cl">     作成: 2021-03-23  有効期限: 無期限       利用法: SC
+</span></span><span class="line"><span class="cl">     信用: 究極        有効性: 究極
+</span></span><span class="line"><span class="cl">ssb  nistp521/21D1788C632258F9
+</span></span><span class="line"><span class="cl">     作成: 2021-03-23  有効期限: 無期限       利用法: E
+</span></span><span class="line"><span class="cl">[  究極  ] (1). 田中太郎 &lt;taro@tanaka.town&gt;
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">gpg&gt; key 1
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">sec  nistp521/83AD9B71D78B7AA7
+</span></span><span class="line"><span class="cl">     作成: 2021-03-23  有効期限: 無期限       利用法: SC
+</span></span><span class="line"><span class="cl">     信用: 究極        有効性: 究極
+</span></span><span class="line"><span class="cl">ssb* nistp521/21D1788C632258F9
+</span></span><span class="line"><span class="cl">     作成: 2021-03-23  有効期限: 無期限       利用法: E
+</span></span><span class="line"><span class="cl">[  究極  ] (1). 田中太郎 &lt;taro@tanaka.town&gt;
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">gpg&gt; expire
+</span></span><span class="line"><span class="cl">副鍵の有効期限を変更します。
+</span></span><span class="line"><span class="cl">鍵の有効期限を指定してください。
+</span></span><span class="line"><span class="cl">         0 = 鍵は無期限
+</span></span><span class="line"><span class="cl">      &lt;n&gt;  = 鍵は n 日間で期限切れ
+</span></span><span class="line"><span class="cl">      &lt;n&gt;w = 鍵は n 週間で期限切れ
+</span></span><span class="line"><span class="cl">      &lt;n&gt;m = 鍵は n か月間で期限切れ
+</span></span><span class="line"><span class="cl">      &lt;n&gt;y = 鍵は n 年間で期限切れ
+</span></span><span class="line"><span class="cl">鍵の有効期間は? (0) 1y
+</span></span><span class="line"><span class="cl">鍵は2022年03月23日 09時46分25秒 JSTで期限切れとなります
+</span></span><span class="line"><span class="cl">これで正しいですか? (y/N) y
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">sec  nistp521/83AD9B71D78B7AA7
+</span></span><span class="line"><span class="cl">     作成: 2021-03-23  有効期限: 無期限       利用法: SC
+</span></span><span class="line"><span class="cl">     信用: 究極        有効性: 究極
+</span></span><span class="line"><span class="cl">ssb* nistp521/21D1788C632258F9
+</span></span><span class="line"><span class="cl">     作成: 2021-03-23  有効期限: 2022-03-23  利用法: E
+</span></span><span class="line"><span class="cl">[  究極  ] (1). 田中太郎 &lt;taro@tanaka.town&gt;
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">gpg&gt; save
+</span></span></code></pre></div><p>有効期限の編集くらいならGUIクライアントからでもできます。そっちが好みの方はseahorseとかで編集してみて下さい。</p>
 <p>また、ユーザ情報は複数登録できます。プライベートと仕事などで複数のメールアドレスを使い分けたいケースなどで有用ですね。ユーザ情報を追加で登録する場合は  <code>gpg --edit-key &lt;key id&gt;</code> から <code>adduid</code> を選択して下さい。あるいはGUIからやるならseahorseでポチポチと追加できます。</p>
-
 <p>これで鍵の生成は完了です。</p>
-
 <h2 id="鍵のバックアップをとる">鍵のバックアップをとる</h2>
-
 <p>OpenPGP鍵をYubikeyに焼くと二度とYubikeyの外に取り出せなくなります。あらかじめバックアップをとっておきましょう。この作業は一時的に鍵が書き出されるので細心の注意を払いながら進めます。</p>
-
 <p>まず念のためにtmpfsを用意します。見た目上ファイルを消してもディスクにはデータが残っていることがあります。特に私の使っているbtrfsだとCopy on Writeなので <code>shred</code> コマンドなどで消しても実際にはディスクに残ります。すると安全な場所に保管しているはずの秘密鍵が実は安全でない場所に残り続けていたという事態になりかねません。そういった問題を避けるためにtmpfs上で作業してデータをディスク上に残さないようにします。</p>
-
 <p>tmpfsをマウントします。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell">$ mkdir workspace
-$ sudo mount -t tmpfs tmpfs workspace
-$ <span class="nb">cd</span> workspace</code></pre></div>
-<p>tmpfs上で秘密鍵をエクスポートします。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell">$ gpg --armor --export-secret-keys 094ACC65CE981E96AA063B0483AD9B71D78B7AA7 &gt; secret_key.gpg</code></pre></div>
-<p>一旦この鍵をインポートできるか確認しておきます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell">$ gpg --import secret_key.gpg
-gpg: 鍵83AD9B71D78B7AA7:<span class="s2">&#34;田中太郎 &lt;taro@tanaka.town&gt;&#34;</span>変更なし
-gpg: 鍵83AD9B71D78B7AA7: 秘密鍵をインポートしました
-gpg: 処理数の合計: <span class="m">1</span>
-gpg:              変更なし: <span class="m">1</span>
-gpg:       秘密鍵の読み込み: <span class="m">1</span>
-gpg:  無変更の秘密鍵: <span class="m">1</span></code></pre></div>
-<p>よさそうなら手持ちのUSBメモリに保存しておいて下さい。鍵はパスワードで保護されているのでこのまま保管して大丈夫でしょう。USBメモリの不良セクタとかが怖ければ同じファイルをUSB内の2箇所に保存しておけばリスクヘッジできるんじゃないですかね。これは他人が触れない場所に大切に保管します。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ mkdir workspace
+</span></span><span class="line"><span class="cl">$ sudo mount -t tmpfs tmpfs workspace
+</span></span><span class="line"><span class="cl">$ <span class="nb">cd</span> workspace
+</span></span></code></pre></div><p>tmpfs上で秘密鍵をエクスポートします。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ gpg --armor --export-secret-keys 094ACC65CE981E96AA063B0483AD9B71D78B7AA7 &gt; secret_key.gpg
+</span></span></code></pre></div><p>一旦この鍵をインポートできるか確認しておきます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ gpg --import secret_key.gpg
+</span></span><span class="line"><span class="cl">gpg: 鍵83AD9B71D78B7AA7:<span class="s2">&#34;田中太郎 &lt;taro@tanaka.town&gt;&#34;</span>変更なし
+</span></span><span class="line"><span class="cl">gpg: 鍵83AD9B71D78B7AA7: 秘密鍵をインポートしました
+</span></span><span class="line"><span class="cl">gpg: 処理数の合計: <span class="m">1</span>
+</span></span><span class="line"><span class="cl">gpg:              変更なし: <span class="m">1</span>
+</span></span><span class="line"><span class="cl">gpg:       秘密鍵の読み込み: <span class="m">1</span>
+</span></span><span class="line"><span class="cl">gpg:  無変更の秘密鍵: <span class="m">1</span>
+</span></span></code></pre></div><p>よさそうなら手持ちのUSBメモリに保存しておいて下さい。鍵はパスワードで保護されているのでこのまま保管して大丈夫でしょう。USBメモリの不良セクタとかが怖ければ同じファイルをUSB内の2箇所に保存しておけばリスクヘッジできるんじゃないですかね。これは他人が触れない場所に大切に保管します。</p>
 <p>終わったら後片づけをします。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell">$ shred secret_key.gpg
-$ <span class="nb">cd</span> ../
-$ sudo umount workspace</code></pre></div>
-<p>これで鍵のバックアップは完了です</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ shred secret_key.gpg
+</span></span><span class="line"><span class="cl">$ <span class="nb">cd</span> ../
+</span></span><span class="line"><span class="cl">$ sudo umount workspace
+</span></span></code></pre></div><p>これで鍵のバックアップは完了です</p>
 <h2 id="秘密鍵をyubikeyに焼く">秘密鍵をYubikeyに焼く</h2>
-
 <p>それでは秘密鍵をYubikeyに焼きます。
 と、その前にYubikeyのPINを変更しておきましょう。PINがデフォルトのままだと危ないですからね。
 PINはデフォルトで123456、管理者PINはデフォルトで12345678だそうです。
 これを変更します。
 この操作も <code>gpg</code> でできるようです。
 YubikeyをPCに挿して以下の操作を行います。</p>
-
 <ol>
 <li><code>gpg --edit-card</code> でYubikeyの編集を開始</li>
-<li><code>passwd</code> でPINの変更
-
+<li><code>passwd</code> でPINの変更</li>
+</ol>
 <ul>
 <li>現在のPIN（123456）、新しいPIN、新しいPINの確認を入力</li>
-</ul></li>
+</ul>
+<ol start="3">
 <li><code>admin</code> で管理者用の編集モードに入る</li>
 <li><code>passwd</code> でPINの変更。管理者用なので複数のメニューが出る。</li>
-<li><code>3</code> で管理者用のPINを変更
-
+<li><code>3</code> で管理者用のPINを変更</li>
+</ol>
 <ul>
 <li>現在の管理者PIN（12345678）、新しい管理者PIN、新しい管理者PINの確認を入力</li>
-</ul></li>
+</ul>
+<ol start="6">
 <li><code>Q</code> でパスワードの変更完了</li>
 <li><code>quit</code> でYubikeyの編集完了</li>
 </ol>
-
 <p>コンソールだとこうなります。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell">$ gpg --edit-card
-gpg/card&gt; passwd
-gpg: OpenPGPカードno. D2760001240103040006120841120000を検出
-PIN changed.
-
-gpg/card&gt; admin
-管理者コマンドが許可されています
-
-gpg/card&gt; passwd
-gpg: OpenPGPカードno. D2760001240103040006120841120000を検出
-
-<span class="m">1</span> - change PIN
-<span class="m">2</span> - unblock PIN
-<span class="m">3</span> - change Admin PIN
-<span class="m">4</span> - <span class="nb">set</span> the Reset Code
-Q - quit
-
-あなたの選択は? <span class="m">3</span>
-PIN changed.
-
-<span class="m">1</span> - change PIN
-<span class="m">2</span> - unblock PIN
-<span class="m">3</span> - change Admin PIN
-<span class="m">4</span> - <span class="nb">set</span> the Reset Code
-Q - quit
-
-あなたの選択は? Q
-
-gpg/card&gt; quit</code></pre></div>
-<p>その他Reset PINもあるので必要に応じて設定しましょう。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ gpg --edit-card
+</span></span><span class="line"><span class="cl">gpg/card&gt; passwd
+</span></span><span class="line"><span class="cl">gpg: OpenPGPカードno. D2760001240103040006120841120000を検出
+</span></span><span class="line"><span class="cl">PIN changed.
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">gpg/card&gt; admin
+</span></span><span class="line"><span class="cl">管理者コマンドが許可されています
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">gpg/card&gt; passwd
+</span></span><span class="line"><span class="cl">gpg: OpenPGPカードno. D2760001240103040006120841120000を検出
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="m">1</span> - change PIN
+</span></span><span class="line"><span class="cl"><span class="m">2</span> - unblock PIN
+</span></span><span class="line"><span class="cl"><span class="m">3</span> - change Admin PIN
+</span></span><span class="line"><span class="cl"><span class="m">4</span> - <span class="nb">set</span> the Reset Code
+</span></span><span class="line"><span class="cl">Q - quit
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">あなたの選択は? <span class="m">3</span>
+</span></span><span class="line"><span class="cl">PIN changed.
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="m">1</span> - change PIN
+</span></span><span class="line"><span class="cl"><span class="m">2</span> - unblock PIN
+</span></span><span class="line"><span class="cl"><span class="m">3</span> - change Admin PIN
+</span></span><span class="line"><span class="cl"><span class="m">4</span> - <span class="nb">set</span> the Reset Code
+</span></span><span class="line"><span class="cl">Q - quit
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">あなたの選択は? Q
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">gpg/card&gt; quit
+</span></span></code></pre></div><p>その他Reset PINもあるので必要に応じて設定しましょう。</p>
 <p>それでは準備の万端が整ったので本当に秘密鍵をYubikeyに焼きます。Yubikeyには署名、認証、暗号化それぞれにスロットがあるようなので個別に焼きます。
 YubikeyをPCに挿したまま以下の操作を行います。</p>
-
 <ol>
 <li><code>gpg --edit-key</code> で鍵の編集を開始</li>
-<li><code>keytocard</code> で主鍵をYubikeyに移動させる
-
+<li><code>keytocard</code> で主鍵をYubikeyに移動させる</li>
+</ol>
 <ul>
 <li><code>1</code> を選んで署名鍵を選択</li>
 <li>（たしか）管理者PINが求められる</li>
-</ul></li>
-<li><code>keytocard</code> で主鍵をYubikeyに移動させる
-
+</ul>
+<ol start="3">
+<li><code>keytocard</code> で主鍵をYubikeyに移動させる</li>
+</ol>
 <ul>
 <li><code>3</code> を選んで認証鍵を選択</li>
 <li>（たしか）管理者PINが求められる</li>
-</ul></li>
+</ul>
+<ol start="4">
 <li><code>key 1</code> で暗号化用の副鍵を選択</li>
-<li><code>keytocard</code> で副鍵をYubikeyに移動させる
-
+<li><code>keytocard</code> で副鍵をYubikeyに移動させる</li>
+</ol>
 <ul>
 <li><code>2</code> を選んで認証鍵を選択</li>
 <li>（たしか）管理者PINが求められる</li>
-</ul></li>
-<li><code>quit</code> で終了
-
+</ul>
+<ol start="6">
+<li><code>quit</code> で終了</li>
+</ol>
 <ul>
 <li><code>y</code> 了承</li>
-</ul></li>
-</ol>
-
+</ul>
 <p>コンソールだとこうなります。昔焼いたときのログなので上記とは鍵の指紋やアルゴリズムが異なりますがやることは変わらないので別にいでしょう。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell">$ gpg --edit-key 01FEF2424389F000BE9A7DA529B9340D65C60646
-gpg <span class="o">(</span>GnuPG<span class="o">)</span> 2.2.20<span class="p">;</span> Copyright <span class="o">(</span>C<span class="o">)</span> <span class="m">2020</span> Free Software Foundation, Inc.
-This is free software: you are free to change and redistribute it.
-There is NO WARRANTY, to the extent permitted by law.
-
-秘密鍵が利用できます。
-
-sec  rsa4096/29B9340D65C60646
-     作成: 2021-02-28  有効期限: 無期限       利用法: SC
-     信用: 究極        有効性: 究極
-ssb  rsa4096/A7F529BF0FCD8B54
-     作成: 2021-02-28  有効期限: 無期限       利用法: E
-<span class="o">[</span>  究極  <span class="o">]</span> <span class="o">(</span>1<span class="o">)</span>. Peter George Phill &lt;pgp@example.com&gt;
-
-gpg&gt; keytocard
-この主鍵を本当に移動しますか? <span class="o">(</span>y/N<span class="o">)</span> y
-鍵を保管する場所を選択してください:
-   <span class="o">(</span>1<span class="o">)</span> 署名鍵
-   <span class="o">(</span>3<span class="o">)</span> 認証鍵
-あなたの選択は? <span class="m">1</span>
-
-sec  rsa4096/29B9340D65C60646
-     作成: 2021-02-28  有効期限: 無期限       利用法: SC
-     信用: 究極        有効性: 究極
-ssb  rsa4096/A7F529BF0FCD8B54
-     作成: 2021-02-28  有効期限: 無期限       利用法: E
-<span class="o">[</span>  究極  <span class="o">]</span> <span class="o">(</span>1<span class="o">)</span>. Peter George Phill &lt;pgp@example.com&gt;
-
-gpg&gt; keytocard
-この主鍵を本当に移動しますか? <span class="o">(</span>y/N<span class="o">)</span> y
-鍵を保管する場所を選択してください:
-   <span class="o">(</span>1<span class="o">)</span> 署名鍵
-   <span class="o">(</span>3<span class="o">)</span> 認証鍵
-あなたの選択は? <span class="m">3</span>
-
-sec  rsa4096/29B9340D65C60646
-     作成: 2021-02-28  有効期限: 無期限       利用法: SC
-     信用: 究極        有効性: 究極
-ssb  rsa4096/A7F529BF0FCD8B54
-     作成: 2021-02-28  有効期限: 無期限       利用法: E
-<span class="o">[</span>  究極  <span class="o">]</span> <span class="o">(</span>1<span class="o">)</span>. Peter George Phill &lt;pgp@example.com&gt;
-
-gpg&gt; key <span class="m">1</span>
-
-sec  rsa4096/29B9340D65C60646
-     作成: 2021-02-28  有効期限: 無期限       利用法: SC
-     信用: 究極        有効性: 究極
-ssb* rsa4096/A7F529BF0FCD8B54
-     作成: 2021-02-28  有効期限: 無期限       利用法: E
-<span class="o">[</span>  究極  <span class="o">]</span> <span class="o">(</span>1<span class="o">)</span>. Peter George Phill &lt;pgp@example.com&gt;
-
-gpg&gt; keytocard
-鍵を保管する場所を選択してください:
-   <span class="o">(</span>2<span class="o">)</span> 暗号化鍵
-あなたの選択は? <span class="m">2</span>
-
-sec  rsa4096/29B9340D65C60646
-     作成: 2021-02-28  有効期限: 無期限       利用法: SC
-     信用: 究極        有効性: 究極
-ssb* rsa4096/A7F529BF0FCD8B54
-     作成: 2021-02-28  有効期限: 無期限       利用法: E
-<span class="o">[</span>  究極  <span class="o">]</span> <span class="o">(</span>1<span class="o">)</span>. Peter George Phill &lt;pgp@example.com&gt;
-
-gpg&gt; quit
-変更を保存しますか? <span class="o">(</span>y/N<span class="o">)</span> y</code></pre></div>
-<p>ちゃんと焼けているか確認しましょう。適当なファイルに署名をしてみます。Yubikeyが挿さっているときに署名できること、Yubikeyが挿さっていないときに署名ができないことを確認します。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell">$ <span class="nb">echo</span> <span class="nb">test</span> &gt; test.txt
-$ gpg --sign test.txt
-$ rm test.txt.gpg</code></pre></div>
-<p>これでYubikeyが挿さっているときにPINが求められ、Yubikeyが挿さっていないときにカードがないよってエラーが出たら成功です。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ gpg --edit-key 01FEF2424389F000BE9A7DA529B9340D65C60646
+</span></span><span class="line"><span class="cl">gpg <span class="o">(</span>GnuPG<span class="o">)</span> 2.2.20<span class="p">;</span> Copyright <span class="o">(</span>C<span class="o">)</span> <span class="m">2020</span> Free Software Foundation, Inc.
+</span></span><span class="line"><span class="cl">This is free software: you are free to change and redistribute it.
+</span></span><span class="line"><span class="cl">There is NO WARRANTY, to the extent permitted by law.
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">秘密鍵が利用できます。
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">sec  rsa4096/29B9340D65C60646
+</span></span><span class="line"><span class="cl">     作成: 2021-02-28  有効期限: 無期限       利用法: SC
+</span></span><span class="line"><span class="cl">     信用: 究極        有効性: 究極
+</span></span><span class="line"><span class="cl">ssb  rsa4096/A7F529BF0FCD8B54
+</span></span><span class="line"><span class="cl">     作成: 2021-02-28  有効期限: 無期限       利用法: E
+</span></span><span class="line"><span class="cl"><span class="o">[</span>  究極  <span class="o">]</span> <span class="o">(</span>1<span class="o">)</span>. Peter George Phill &lt;pgp@example.com&gt;
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">gpg&gt; keytocard
+</span></span><span class="line"><span class="cl">この主鍵を本当に移動しますか? <span class="o">(</span>y/N<span class="o">)</span> y
+</span></span><span class="line"><span class="cl">鍵を保管する場所を選択してください:
+</span></span><span class="line"><span class="cl">   <span class="o">(</span>1<span class="o">)</span> 署名鍵
+</span></span><span class="line"><span class="cl">   <span class="o">(</span>3<span class="o">)</span> 認証鍵
+</span></span><span class="line"><span class="cl">あなたの選択は? <span class="m">1</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">sec  rsa4096/29B9340D65C60646
+</span></span><span class="line"><span class="cl">     作成: 2021-02-28  有効期限: 無期限       利用法: SC
+</span></span><span class="line"><span class="cl">     信用: 究極        有効性: 究極
+</span></span><span class="line"><span class="cl">ssb  rsa4096/A7F529BF0FCD8B54
+</span></span><span class="line"><span class="cl">     作成: 2021-02-28  有効期限: 無期限       利用法: E
+</span></span><span class="line"><span class="cl"><span class="o">[</span>  究極  <span class="o">]</span> <span class="o">(</span>1<span class="o">)</span>. Peter George Phill &lt;pgp@example.com&gt;
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">gpg&gt; keytocard
+</span></span><span class="line"><span class="cl">この主鍵を本当に移動しますか? <span class="o">(</span>y/N<span class="o">)</span> y
+</span></span><span class="line"><span class="cl">鍵を保管する場所を選択してください:
+</span></span><span class="line"><span class="cl">   <span class="o">(</span>1<span class="o">)</span> 署名鍵
+</span></span><span class="line"><span class="cl">   <span class="o">(</span>3<span class="o">)</span> 認証鍵
+</span></span><span class="line"><span class="cl">あなたの選択は? <span class="m">3</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">sec  rsa4096/29B9340D65C60646
+</span></span><span class="line"><span class="cl">     作成: 2021-02-28  有効期限: 無期限       利用法: SC
+</span></span><span class="line"><span class="cl">     信用: 究極        有効性: 究極
+</span></span><span class="line"><span class="cl">ssb  rsa4096/A7F529BF0FCD8B54
+</span></span><span class="line"><span class="cl">     作成: 2021-02-28  有効期限: 無期限       利用法: E
+</span></span><span class="line"><span class="cl"><span class="o">[</span>  究極  <span class="o">]</span> <span class="o">(</span>1<span class="o">)</span>. Peter George Phill &lt;pgp@example.com&gt;
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">gpg&gt; key <span class="m">1</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">sec  rsa4096/29B9340D65C60646
+</span></span><span class="line"><span class="cl">     作成: 2021-02-28  有効期限: 無期限       利用法: SC
+</span></span><span class="line"><span class="cl">     信用: 究極        有効性: 究極
+</span></span><span class="line"><span class="cl">ssb* rsa4096/A7F529BF0FCD8B54
+</span></span><span class="line"><span class="cl">     作成: 2021-02-28  有効期限: 無期限       利用法: E
+</span></span><span class="line"><span class="cl"><span class="o">[</span>  究極  <span class="o">]</span> <span class="o">(</span>1<span class="o">)</span>. Peter George Phill &lt;pgp@example.com&gt;
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">gpg&gt; keytocard
+</span></span><span class="line"><span class="cl">鍵を保管する場所を選択してください:
+</span></span><span class="line"><span class="cl">   <span class="o">(</span>2<span class="o">)</span> 暗号化鍵
+</span></span><span class="line"><span class="cl">あなたの選択は? <span class="m">2</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">sec  rsa4096/29B9340D65C60646
+</span></span><span class="line"><span class="cl">     作成: 2021-02-28  有効期限: 無期限       利用法: SC
+</span></span><span class="line"><span class="cl">     信用: 究極        有効性: 究極
+</span></span><span class="line"><span class="cl">ssb* rsa4096/A7F529BF0FCD8B54
+</span></span><span class="line"><span class="cl">     作成: 2021-02-28  有効期限: 無期限       利用法: E
+</span></span><span class="line"><span class="cl"><span class="o">[</span>  究極  <span class="o">]</span> <span class="o">(</span>1<span class="o">)</span>. Peter George Phill &lt;pgp@example.com&gt;
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">gpg&gt; quit
+</span></span><span class="line"><span class="cl">変更を保存しますか? <span class="o">(</span>y/N<span class="o">)</span> y
+</span></span></code></pre></div><p>ちゃんと焼けているか確認しましょう。適当なファイルに署名をしてみます。Yubikeyが挿さっているときに署名できること、Yubikeyが挿さっていないときに署名ができないことを確認します。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ <span class="nb">echo</span> <span class="nb">test</span> &gt; test.txt
+</span></span><span class="line"><span class="cl">$ gpg --sign test.txt
+</span></span><span class="line"><span class="cl">$ rm test.txt.gpg
+</span></span></code></pre></div><p>これでYubikeyが挿さっているときにPINが求められ、Yubikeyが挿さっていないときにカードがないよってエラーが出たら成功です。</p>
 <h1 id="運用">運用</h1>
-
 <p>私はOpenPGPを多少は使っていますが扱いに失敗すると財産や生命が危険に晒されるような用途には使っていません。遊びというか、失敗しても笑えるくらいの用途でのみ使っています。内容については一切の責任を負わないので参考にする際は自己責任でお願いします。
 私のブログより信頼できる情報としてGPGのハンドブックを挙げておきます。</p>
-
 <p><a href="https://gnupg.org/gph/en/manual.html">The GNU Privacy Handbook</a></p>
-
 <h2 id="鍵サーバ">鍵サーバ</h2>
-
 <p>OpenPGPには鍵サーバというのがあって、みんなが公開鍵を登録できるらしいです。が、私は特に登録してないです。興味のある方はGPGが運営している鍵サーバを覗いてみて下さい。</p>
-
 <p><a href="http://keys.gnupg.net/">OpenPGP Keyserver</a></p>
-
 <h2 id="keybase">Keybase</h2>
-
 <p>コマンドで鍵を登録できます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell">$ keybase pgp update --all</code></pre></div>
-<h2 id="thunderbird">Thunderbird</h2>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ keybase pgp update --all
+</span></span></code></pre></div><h2 id="thunderbird">Thunderbird</h2>
 <p>Thunderbird 78からPGPによる署名に対応しました。メールアカウントの [設定] → [エンドツーエンド暗号化]のOpenPGPの項目からGnuPG経由で外部の鍵を取り込んで、署名に取り込んだ鍵を指定します。</p>
-
 <p>署名する鍵に登録したメールアドレスの中にメールアカウントのメールアドレスが入ってないといけないことに注意して下さい。</p>
-
 <h2 id="git">GIT</h2>
-
 <p>私はgitのコミットに署名しているので以下の設定を <code>~/.gitconfig</code> に書いています。<code>signingkey</code> に渡す値は自分の鍵のIDか指紋を指定して下さい。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">[user]
-    # ...
-    signingkey = 2F3944FD72D3F1BD590C7309F88CE432DCC5FCBC
-[credential]
-    helper = seahorse
-[commit]
-    gpgsign = true</code></pre></div>
-<p>これを設定しておくとPCにログインして最初の <code>git commit</code> のときにPINが求められます。以後は入力しなくてもコミットできます。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">[user]
+</span></span><span class="line"><span class="cl">    # ...
+</span></span><span class="line"><span class="cl">    signingkey = 2F3944FD72D3F1BD590C7309F88CE432DCC5FCBC
+</span></span><span class="line"><span class="cl">[credential]
+</span></span><span class="line"><span class="cl">    helper = seahorse
+</span></span><span class="line"><span class="cl">[commit]
+</span></span><span class="line"><span class="cl">    gpgsign = true
+</span></span></code></pre></div><p>これを設定しておくとPCにログインして最初の <code>git commit</code> のときにPINが求められます。以後は入力しなくてもコミットできます。</p>
 <p>GitLabやGitHubには公開鍵を登録できるので手動で登録します。まず <code>gpg</code> コマンドで公開鍵を出力します。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell">$ gpg --armor --export 2F3944FD72D3F1BD590C7309F88CE432DCC5FCBC &gt; public_key.gpg</code></pre></div>
-<p>この <code>public_key.gpg</code> の中身をそれぞれのサービスに登録します。先述の鍵サーバからとってきてくれたら嬉しかったんですがそういう機能はないので手でコピペです。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ gpg --armor --export 2F3944FD72D3F1BD590C7309F88CE432DCC5FCBC &gt; public_key.gpg
+</span></span></code></pre></div><p>この <code>public_key.gpg</code> の中身をそれぞれのサービスに登録します。先述の鍵サーバからとってきてくれたら嬉しかったんですがそういう機能はないので手でコピペです。</p>
 <ul>
 <li>GitLab: <a href="https://gitlab.com/-/profile/gpg_keys">preferencesのGPGキー</a>に鍵を貼って登録</li>
 <li>GitHub: <a href="https://github.com/settings/keys">settingsのSSH and GPG Keys</a>からNew GPG Keyで登録</li>
 </ul>
-
 <h2 id="yubikeyの扱い">Yubikeyの扱い</h2>
-
 <p>Yubikeyを普段どう使っているかについて紹介します。</p>
-
 <p>まずYubikeyはどのくらい取り扱い注意が必要か考えます。
 ソフトウェア的には秘密鍵を取り出せないので、離席して一瞬同僚が触れる環境に置いたり、うっかり落して後ろの人に「落としましたよ」って声をかけられるくらいなら大丈夫じゃないですかね。
 しかし秘密鍵が何らかの形でICに焼き込まれてるはずなので悪い人の手に渡って被膜を剥がれてなんか特殊な機械で読み取られたらマズいんじゃないかなと思ってます。
 つまり、「他人に触られてもいいけど失くすのはダメ」のルールで取り扱います。
 実際の運用としては家の鍵と同じくらいの扱いかなと思ったのでキーホルダーで家の鍵とまとめて使っています。</p>
-
 <p>そもそもYubikeyはOpenPGP秘密鍵の絶対的に安全な保管場所なのか何なのかですが、私は「比較的安全かつ便利に使える方法でOpenPGP秘密鍵を持ち運ぶツール」として使っています。
 Yubikeyを家の中でしか使わないという人なら安全な保管場所としても使えるんじゃないですかね。</p>
-
 <p>次に使い方です。私のデスクトップPCの筐体が微妙に遠くにあって抜き差しがちょっと手間なので机の上にUSBを延長してそこに挿しています。具体的にはこれを使っています。</p>
-
 <p><a href="https://www.yodobashi.com/product/100000001004019325/">ヨドバシ.com - Digio デジオ UH-C3143BK [USB3.1 Type-C 3ポートハブ 120cm ブラック] 通販【全品無料配達】</a></p>
-
 <p>USB Type-Aの延長はType-CからType-Aでないとできないようだったのでそういうケーブルを探しました。1つだけUSB Type-CのポートがあるPCでよかった。</p>
-
 <h2 id="yubikeyを失くしたら">Yubikeyを失くしたら</h2>
-
 <p>もし鍵が家の中で失くなった、海に落とした、あるいはYubikeyが壊れて使えなくなったならYubikeyを買い直してバックアップの秘密鍵を再度Yubikeyに焼けばよいです。</p>
-
 <p>誰かの手に渡ったら先述のとおり悪い人に鍵を読み出されてしまうかもしれません。
 そうでなくてもたまたまPINを当てられて勝手に使われる可能性もあります。
 安全のため失効させましょう。</p>
-
 <p>もしOpenPGP鍵を生成したPCをそのまま使っているなら <code>~/.gnupg/openpgp-revocs.d/</code> 以下に失効証明書が残っているはずです。それを <code>gpg --import</code> します。
 残っていないならバックアップの秘密鍵から <code>gpg --gen-revoke</code> で失効証明書を発行してから <code>gpg --import</code> します。
 どちらかのアクションを行うとOpenPGP鍵が失効状態になるはずなので公開鍵を公開したときと同じフローで失効状態の公開鍵を公開すればよいようです。</p>
-
 <p>そのあとでYubikeyは買い直して再度セットアップをしましょう。</p>
-
 <h1 id="まとめ">まとめ</h1>
-
 <p>YubikeyとOpenPGPについて紹介しました。そしてYubikeyにOpenPGP鍵を登録して運用するようにしたときのログを公開しました。</p>
-
 <p>諸々のリアルタイムな作業や調べもののログは下記のscrapに残してあるので必要な方は参考にして下さい。</p>
-
 <p><a href="https://zenn.dev/blackenedgold/scraps/1c44b845a6aa68">yubikeyを買ったので色々セットアップのメモ</a></p>
-
-<h1 id="おまけ-鍵の移行">おまけ（鍵の移行）</h1>
-
+<h1 id="おまけ鍵の移行">おまけ（鍵の移行）</h1>
 <p>今回私は新しい鍵を生成したのですが、Yubikeyを買う前から使っていたOpenPGP鍵も持っていました。しかしこれは一時期安全でない方法で保管していたので念のため退役させることにしました。
 こういう、古い鍵も新しい鍵も揃っている場合に鍵の移行をする際にはtransition statementというのを発行することがあるようです。</p>
-
 <p><a href="https://www.void.gr/kargig/blog/2013/12/02/creating-a-new-gpg-key-with-subkeys/">Creating a new GPG key with subkeys | Into.the.Void.</a></p>
-
 <p>私も発行してみました。</p>
-
 <p><a href="https://keybase.pub/blackenedgold/transition-2021-03-23/">κeenのtransition statement一式</a></p>
-
 <p>ここには本体である <code>transition_statement.txt</code> と新旧鍵での署名 <code>sig1.txt</code> 、 <code>sig2.txt</code> があります。このtransition statementを私が書いたものであると確認するには以下のコマンドを使います（新旧鍵両方を持っている人向け）。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell">$ gpg --verify sig1.txt transition_statement.txt
-gpg: 2021年03月23日 12時10分31秒 JSTに施された署名
-gpg:                RSA鍵866D76462E1140F5C6744CE90DB75EDC93CA52CBを使用
-gpg: <span class="s2">&#34;κeen &lt;3han5chou7@gmail.com&gt;&#34;</span>からの正しい署名 <span class="o">[</span>究極<span class="o">]</span>
-$ gpg --verify sig2.txt transition_statement.txt
-gpg: 2021年03月23日 12時10分51秒 JSTに施された署名
-gpg:                ECDSA鍵2F3944FD72D3F1BD590C7309F88CE432DCC5FCBCを使用
-gpg: <span class="s2">&#34;Shimura Rin &lt;3han5chou7@gmail.com&gt;&#34;</span>からの正しい署名 <span class="o">[</span>究極<span class="o">]</span></code></pre></div>
-<p>因みに署名は以下のコマンドで作成しました。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell">$ gpg --armor -b -u 866D76462E1140F5C6744CE90DB75EDC93CA52CB -o sig1.txt transition_statement.txt
-$ gpg --armor -b -u 2F3944FD72D3F1BD590C7309F88CE432DCC5FCBC -o sig2.txt transition_statement.txt</code></pre></div>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ gpg --verify sig1.txt transition_statement.txt
+</span></span><span class="line"><span class="cl">gpg: 2021年03月23日 12時10分31秒 JSTに施された署名
+</span></span><span class="line"><span class="cl">gpg:                RSA鍵866D76462E1140F5C6744CE90DB75EDC93CA52CBを使用
+</span></span><span class="line"><span class="cl">gpg: <span class="s2">&#34;κeen &lt;3han5chou7@gmail.com&gt;&#34;</span>からの正しい署名 <span class="o">[</span>究極<span class="o">]</span>
+</span></span><span class="line"><span class="cl">$ gpg --verify sig2.txt transition_statement.txt
+</span></span><span class="line"><span class="cl">gpg: 2021年03月23日 12時10分51秒 JSTに施された署名
+</span></span><span class="line"><span class="cl">gpg:                ECDSA鍵2F3944FD72D3F1BD590C7309F88CE432DCC5FCBCを使用
+</span></span><span class="line"><span class="cl">gpg: <span class="s2">&#34;Shimura Rin &lt;3han5chou7@gmail.com&gt;&#34;</span>からの正しい署名 <span class="o">[</span>究極<span class="o">]</span>
+</span></span></code></pre></div><p>因みに署名は以下のコマンドで作成しました。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ gpg --armor -b -u 866D76462E1140F5C6744CE90DB75EDC93CA52CB -o sig1.txt transition_statement.txt
+</span></span><span class="line"><span class="cl">$ gpg --armor -b -u 2F3944FD72D3F1BD590C7309F88CE432DCC5FCBC -o sig2.txt transition_statement.txt
+</span></span></code></pre></div>
                     </section>
                 </article>
             </div>

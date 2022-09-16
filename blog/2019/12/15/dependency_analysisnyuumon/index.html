@@ -19,13 +19,11 @@
         <meta name="twitter:site" content="@blackenedgold" />
         <meta name="twitter:title" content="Dependency Analysis入門 | κeenのHappy Hacκing Blog"/>
         <meta name="twitter:description" content="このエントリは言語実装 Advent Calendar 2019 - Qiita 16日目の記事です。1日ばかりフライングですが先に記事が完成してしまったので投稿します。
-
 κeenです。最近最適化コンパイラの本の読書会をやっているのですが、そこで学んだことの一部をアウトプットします。" />
         <meta property="og:title" content="Dependency Analysis入門 | κeenのHappy Hacκing Blog" />
         <meta property="og:type" content="article" />
         <meta property="og:url" content="https://KeenS.github.io/blog/2019/12/15/dependency_analysisnyuumon/" />
         <meta property="og:description" content="このエントリは言語実装 Advent Calendar 2019 - Qiita 16日目の記事です。1日ばかりフライングですが先に記事が完成してしまったので投稿します。
-
 κeenです。最近最適化コンパイラの本の読書会をやっているのですが、そこで学んだことの一部をアウトプットします。" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta property="og:image" content="https://KeenS.github.io/images/ogp/post/Dependency_Analysisnyuumon.png" />
@@ -141,645 +139,527 @@
                     </header>
                     <section>
                         <p>このエントリは<a href="https://qiita.com/advent-calendar/2019/lang_dev">言語実装 Advent Calendar 2019 - Qiita</a> 16日目の記事です。1日ばかりフライングですが先に記事が完成してしまったので投稿します。</p>
-
 <p>κeenです。最近最適化コンパイラの本の読書会を<a href="https://compiler-dev.connpass.com/">やっている</a>のですが、そこで学んだことの一部をアウトプットします。</p>
-
 <h1 id="dependencyとは">Dependencyとは</h1>
-
 <p>ここで扱うDependencyとは何なのか、Dependencyが分かると何が嬉しいのかを見ていきます。</p>
-
 <p>例えば以下のプログラムを考えましょう。</p>
-
 <p><span><figure></p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="n">v</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="p">);</span></code></pre></div>
-<p><figcaption>最初のプログラム</figcaption>
-</figure></span></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">v</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><figcaption>最初のプログラム</figcaption>
+</figure></span>
 <p>変数 <code>v</code> を1に束縛したあと <code>v</code> に1を足し込み、それを表示しています。結果は2が表示されますね。</p>
-
 <p><span><figure></p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">2</code></pre></div>
-<p><figcaption>最初のプログラムの実行結果</figcaption>
-</figure></span></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">2
+</span></span></code></pre></div><figcaption>最初のプログラムの実行結果</figcaption>
+</figure></span>
 <p>もしこのプログラムの2行目と3行目を入れ替えて以下のようにしたとしましょう。</p>
-
 <p><span><figure></p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="p">);</span><span class="w">
-</span><span class="w"></span><span class="n">v</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span></code></pre></div>
-<p><figcaption>最初のプログラム書き換えたもの</figcaption>
-</figure></span></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">v</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span></code></pre></div><figcaption>最初のプログラム書き換えたもの</figcaption>
+</figure></span>
 <p>これだと <code>v</code> に1足し込む前に <code>v</code> の値を表示しているので1が表示されますね。</p>
-
 <p><span><figure></p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">1</code></pre></div>
-<p><figcaption>最初のプログラム書き換えたものの実行結果</figcaption>
-</figure></span></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">1
+</span></span></code></pre></div><figcaption>最初のプログラム書き換えたものの実行結果</figcaption>
+</figure></span>
 <p>結果が変わってしまいました。一般に、プログラムを書き換えると結果が変わってしまうことがあります。</p>
-
 <p>もう1つ、例を見てみましょう。以下のプログラムを考えます。変数が1つ増えました。</p>
-
 <p><span><figure></p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">w</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="n">v</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="n">w</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">w</span><span class="p">);</span></code></pre></div>
-<p><figcaption>2つめのプログラム</figcaption>
-</figure></span></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">w</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">v</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">w</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">w</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><figcaption>2つめのプログラム</figcaption>
+</figure></span>
 <p>実行すると4が表示されますね。</p>
-
 <p><span><figure></p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">4</code></pre></div>
-<p><figcaption>2つめのプログラムの実行結果</figcaption>
-</figure></span></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">4
+</span></span></code></pre></div><figcaption>2つめのプログラムの実行結果</figcaption>
+</figure></span>
 <p>このプログラムも先程と同様に3行目と4行目を入れ替えて1を足し込む順番を変えたらどうなるでしょう。</p>
-
 <p><span><figure></p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">w</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="n">w</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="n">v</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">w</span><span class="p">);</span></code></pre></div>
-<p><figcaption>2つめのプログラムを書き換えたもの</figcaption>
-</figure></span></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">w</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">w</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">v</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">w</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><figcaption>2つめのプログラムを書き換えたもの</figcaption>
+</figure></span>
 <p>この場合は結果は変わらず4が表示されます。</p>
-
 <p><span><figure></p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">4</code></pre></div>
-<p><figcaption>2つめのプログラムを書き換えたものの実行結果</figcaption>
-</figure></span></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">4
+</span></span></code></pre></div><figcaption>2つめのプログラムを書き換えたものの実行結果</figcaption>
+</figure></span>
 <p>プログラムの順番を変更したにもかかわらず、結果が変わっていません。
 最初の例とこの例違い、もちろん感覚では分かるかと思いますが、ちゃんと理路整然と説明できますか？
 もうちょっと言うとプログラムの順番の変更で結果が変わるかと変わらないかを判定するプログラムを書けますか？</p>
-
 <p>この違いを説明するために使う語彙が「Dependency」、それをプログラムで調べて書き換えられるかを検査するのが「Dependency Analysis」です。</p>
-
 <p>さて、Dependencyが分かると何が嬉しいのかを見ていきましょう。
 先程までの例だと少し単純すぎるのでもうちょっと実用的な例を出します。
 以下のシンプルなプログラムを考えます。</p>
-
 <p><span><figure></p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">f</span><span class="p">(</span><span class="n">v</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="p">[</span><span class="kt">f32</span><span class="p">])</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="p">(</span><span class="n">v</span><span class="p">.</span><span class="n">len</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<p><figcaption>シンプルなループ</figcaption>
-</figure></span></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">fn</span> <span class="nf">f</span><span class="p">(</span><span class="n">v</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="p">[</span><span class="kt">f32</span><span class="p">])</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="p">(</span><span class="n">v</span><span class="p">.</span><span class="n">len</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><figcaption>シンプルなループ</figcaption>
+</figure></span>
 <p>次の要素に今の要素 + 1.0をしているだけのかわいいループです。</p>
-
 <p>この関数を実行するときは全て1.0で埋まった128要素の配列（要するに<code>[1.0; 128]</code>）を渡してあげることにします。</p>
-
 <p>実行せずにいきなり書き換えてしまいますが、このプログラムはloop unrollして以下のように書き換えられますね。</p>
-
 <p><span><figure></p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">const</span><span class="w"> </span><span class="n">SIZE</span>: <span class="kt">usize</span> <span class="o">=</span><span class="w"> </span><span class="mi">8</span><span class="p">;</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">fn</span> <span class="nf">f</span><span class="p">(</span><span class="n">v</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="p">[</span><span class="kt">f32</span><span class="p">])</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">limit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">.</span><span class="n">len</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="p">(</span><span class="mi">0</span><span class="o">..</span><span class="p">(</span><span class="n">limit</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">SIZE</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">))).</span><span class="n">step_by</span><span class="p">(</span><span class="n">SIZE</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">3</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">4</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">3</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">5</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">4</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">6</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">5</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">7</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">6</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">8</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">7</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="p">(</span><span class="n">limit</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">SIZE</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">SIZE</span><span class="p">)</span><span class="o">..</span><span class="n">limit</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<p><figcaption>unrollしたループ</figcaption>
-</figure></span></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">const</span><span class="w"> </span><span class="n">SIZE</span>: <span class="kt">usize</span> <span class="o">=</span><span class="w"> </span><span class="mi">8</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">fn</span> <span class="nf">f</span><span class="p">(</span><span class="n">v</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="p">[</span><span class="kt">f32</span><span class="p">])</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">limit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">.</span><span class="n">len</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="p">(</span><span class="mi">0</span><span class="o">..</span><span class="p">(</span><span class="n">limit</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">SIZE</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">))).</span><span class="n">step_by</span><span class="p">(</span><span class="n">SIZE</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">3</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">4</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">3</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">5</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">4</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">6</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">5</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">7</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">6</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">8</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">7</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="p">(</span><span class="n">limit</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">SIZE</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">SIZE</span><span class="p">)</span><span class="o">..</span><span class="n">limit</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><figcaption>unrollしたループ</figcaption>
+</figure></span>
 <p>ここまではプログラムの結果は変わらず1.0づつ増える数列になります。</p>
-
 <p><span><figure></p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">  1,   2,   3,   4,   5,   6,   7,   8
-  9,  10,  11,  12,  13,  14,  15,  16
- 17,  18,  19,  20,  21,  22,  23,  24
- 25,  26,  27,  28,  29,  30,  31,  32
- 33,  34,  35,  36,  37,  38,  39,  40
- 41,  42,  43,  44,  45,  46,  47,  48
- 49,  50,  51,  52,  53,  54,  55,  56
- 57,  58,  59,  60,  61,  62,  63,  64
- 65,  66,  67,  68,  69,  70,  71,  72
- 73,  74,  75,  76,  77,  78,  79,  80
- 81,  82,  83,  84,  85,  86,  87,  88
- 89,  90,  91,  92,  93,  94,  95,  96
- 97,  98,  99, 100, 101, 102, 103, 104
-105, 106, 107, 108, 109, 110, 111, 112
-113, 114, 115, 116, 117, 118, 119, 120
-121, 122, 123, 124, 125, 126, 127, 128</code></pre></div>
-<p><figcaption>シンプルなループ/unrollしたループの実行結果</figcaption>
-</figure></span></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">  1,   2,   3,   4,   5,   6,   7,   8
+</span></span><span class="line"><span class="cl">  9,  10,  11,  12,  13,  14,  15,  16
+</span></span><span class="line"><span class="cl"> 17,  18,  19,  20,  21,  22,  23,  24
+</span></span><span class="line"><span class="cl"> 25,  26,  27,  28,  29,  30,  31,  32
+</span></span><span class="line"><span class="cl"> 33,  34,  35,  36,  37,  38,  39,  40
+</span></span><span class="line"><span class="cl"> 41,  42,  43,  44,  45,  46,  47,  48
+</span></span><span class="line"><span class="cl"> 49,  50,  51,  52,  53,  54,  55,  56
+</span></span><span class="line"><span class="cl"> 57,  58,  59,  60,  61,  62,  63,  64
+</span></span><span class="line"><span class="cl"> 65,  66,  67,  68,  69,  70,  71,  72
+</span></span><span class="line"><span class="cl"> 73,  74,  75,  76,  77,  78,  79,  80
+</span></span><span class="line"><span class="cl"> 81,  82,  83,  84,  85,  86,  87,  88
+</span></span><span class="line"><span class="cl"> 89,  90,  91,  92,  93,  94,  95,  96
+</span></span><span class="line"><span class="cl"> 97,  98,  99, 100, 101, 102, 103, 104
+</span></span><span class="line"><span class="cl">105, 106, 107, 108, 109, 110, 111, 112
+</span></span><span class="line"><span class="cl">113, 114, 115, 116, 117, 118, 119, 120
+</span></span><span class="line"><span class="cl">121, 122, 123, 124, 125, 126, 127, 128
+</span></span></code></pre></div><figcaption>シンプルなループ/unrollしたループの実行結果</figcaption>
+</figure></span>
 <p>これをSIMD化してみましょう。ループ内の8回の足し算を一度に同時に行なってしまう訳です。</p>
-
 <p><span><figure></p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">f</span><span class="p">(</span><span class="n">v</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="p">[</span><span class="kt">f32</span><span class="p">])</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="c1">// アラインメントの扱いが面倒 &amp; + 1してるのでどのみちアライメントが崩れるのでloadu/storeuを使う
-</span><span class="c1"></span><span class="w">    </span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">arch</span>::<span class="n">x86_64</span>::<span class="p">{</span><span class="n">_mm256_add_ps</span><span class="p">,</span><span class="w"> </span><span class="n">_mm256_loadu_ps</span><span class="p">,</span><span class="w"> </span><span class="n">_mm256_set1_ps</span><span class="p">,</span><span class="w"> </span><span class="n">_mm256_storeu_ps</span><span class="p">};</span><span class="w">
-</span><span class="w">    </span><span class="k">unsafe</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">limit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">.</span><span class="n">len</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ones</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">_mm256_set1_ps</span><span class="p">(</span><span class="mf">1.0</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ptr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">.</span><span class="n">as_mut_ptr</span><span class="p">();</span><span class="w">
-</span><span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="p">(</span><span class="mi">0</span><span class="o">..</span><span class="p">(</span><span class="n">limit</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">SIZE</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">))).</span><span class="n">step_by</span><span class="p">(</span><span class="n">SIZE</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">_mm256_loadu_ps</span><span class="p">(</span><span class="n">ptr</span><span class="p">.</span><span class="n">offset</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="kt">isize</span><span class="p">));</span><span class="w">
-</span><span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">ret</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">_mm256_add_ps</span><span class="p">(</span><span class="n">data</span><span class="p">,</span><span class="w"> </span><span class="n">ones</span><span class="p">);</span><span class="w">
-</span><span class="w">            </span><span class="n">_mm256_storeu_ps</span><span class="p">(</span><span class="n">ptr</span><span class="p">.</span><span class="n">offset</span><span class="p">((</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="kt">isize</span><span class="p">),</span><span class="w"> </span><span class="n">ret</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="p">}</span><span class="w">
-</span><span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="p">((</span><span class="n">limit</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">SIZE</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">SIZE</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">SIZE</span><span class="p">)</span><span class="o">..</span><span class="n">limit</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">            </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<p><figcaption>SIMD化したループ</figcaption>
-</figure></span></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">fn</span> <span class="nf">f</span><span class="p">(</span><span class="n">v</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="p">[</span><span class="kt">f32</span><span class="p">])</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// アラインメントの扱いが面倒 &amp; + 1してるのでどのみちアライメントが崩れるのでloadu/storeuを使う
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">    </span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">arch</span>::<span class="n">x86_64</span>::<span class="p">{</span><span class="n">_mm256_add_ps</span><span class="p">,</span><span class="w"> </span><span class="n">_mm256_loadu_ps</span><span class="p">,</span><span class="w"> </span><span class="n">_mm256_set1_ps</span><span class="p">,</span><span class="w"> </span><span class="n">_mm256_storeu_ps</span><span class="p">};</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">unsafe</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">limit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">.</span><span class="n">len</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ones</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">_mm256_set1_ps</span><span class="p">(</span><span class="mf">1.0</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ptr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">.</span><span class="n">as_mut_ptr</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="p">(</span><span class="mi">0</span><span class="o">..</span><span class="p">(</span><span class="n">limit</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">SIZE</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">))).</span><span class="n">step_by</span><span class="p">(</span><span class="n">SIZE</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">_mm256_loadu_ps</span><span class="p">(</span><span class="n">ptr</span><span class="p">.</span><span class="n">offset</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="kt">isize</span><span class="p">));</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">ret</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">_mm256_add_ps</span><span class="p">(</span><span class="n">data</span><span class="p">,</span><span class="w"> </span><span class="n">ones</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">_mm256_storeu_ps</span><span class="p">(</span><span class="n">ptr</span><span class="p">.</span><span class="n">offset</span><span class="p">((</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="kt">isize</span><span class="p">),</span><span class="w"> </span><span class="n">ret</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="p">((</span><span class="n">limit</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">SIZE</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">SIZE</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">SIZE</span><span class="p">)</span><span class="o">..</span><span class="n">limit</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><figcaption>SIMD化したループ</figcaption>
+</figure></span>
 <p>ちょっと厳ついプログラムになってしまいました。</p>
-
 <p>これを実行してみると、結果が変わってしまっていることが分かます。</p>
-
 <p><span><figure></p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">  1,   2,   2,   2,   2,   2,   2,   2
-  2,   3,   2,   2,   2,   2,   2,   2
-  2,   3,   2,   2,   2,   2,   2,   2
-  2,   3,   2,   2,   2,   2,   2,   2
-  2,   3,   2,   2,   2,   2,   2,   2
-  2,   3,   2,   2,   2,   2,   2,   2
-  2,   3,   2,   2,   2,   2,   2,   2
-  2,   3,   2,   2,   2,   2,   2,   2
-  2,   3,   2,   2,   2,   2,   2,   2
-  2,   3,   2,   2,   2,   2,   2,   2
-  2,   3,   2,   2,   2,   2,   2,   2
-  2,   3,   2,   2,   2,   2,   2,   2
-  2,   3,   2,   2,   2,   2,   2,   2
-  2,   3,   2,   2,   2,   2,   2,   2
-  2,   3,   2,   2,   2,   2,   2,   2
-  2,   3,   4,   5,   6,   7,   8,   9</code></pre></div>
-<p><figcaption>SIMD化したループの実行結果</figcaption>
-</figure></span></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">  1,   2,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   3,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   3,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   3,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   3,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   3,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   3,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   3,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   3,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   3,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   3,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   3,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   3,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   3,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   3,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   3,   4,   5,   6,   7,   8,   9
+</span></span></code></pre></div><figcaption>SIMD化したループの実行結果</figcaption>
+</figure></span>
 <p>このプログラムはSIMD化できないんですね。
 じゃあSIMD化が常に悪かというと、そうでもありません。
 今度は書き込む場所を <code>v[i + 1]</code> から <code>v[i - 1]</code> にしてみましょう。</p>
-
 <p><span><figure></p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">f</span><span class="p">(</span><span class="n">v</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="p">[</span><span class="kt">f32</span><span class="p">])</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">1</span><span class="o">..</span><span class="n">v</span><span class="p">.</span><span class="n">len</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<p><figcaption>書き込み場所を <code>v[i - 1]</code> にしたループ</figcaption>
-</figure></span></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">fn</span> <span class="nf">f</span><span class="p">(</span><span class="n">v</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="p">[</span><span class="kt">f32</span><span class="p">])</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">1</span><span class="o">..</span><span class="n">v</span><span class="p">.</span><span class="n">len</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><figcaption>書き込み場所を `v[i - 1]` にしたループ</figcaption>
+</figure></span>
 <p>これは結果はこうなります。</p>
-
 <p><span><figure></p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">  2,   2,   2,   2,   2,   2,   2,   2
-  2,   2,   2,   2,   2,   2,   2,   2
-  2,   2,   2,   2,   2,   2,   2,   2
-  2,   2,   2,   2,   2,   2,   2,   2
-  2,   2,   2,   2,   2,   2,   2,   2
-  2,   2,   2,   2,   2,   2,   2,   2
-  2,   2,   2,   2,   2,   2,   2,   2
-  2,   2,   2,   2,   2,   2,   2,   2
-  2,   2,   2,   2,   2,   2,   2,   2
-  2,   2,   2,   2,   2,   2,   2,   2
-  2,   2,   2,   2,   2,   2,   2,   2
-  2,   2,   2,   2,   2,   2,   2,   2
-  2,   2,   2,   2,   2,   2,   2,   2
-  2,   2,   2,   2,   2,   2,   2,   2
-  2,   2,   2,   2,   2,   2,   2,   2
-  2,   2,   2,   2,   2,   2,   2,   1</code></pre></div>
-<p><figcaption>書き込み場所を <code>v[i - 1]</code> にしたループ</figcaption>
-</figure></span></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">  2,   2,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   2,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   2,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   2,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   2,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   2,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   2,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   2,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   2,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   2,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   2,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   2,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   2,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   2,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   2,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   2,   2,   2,   2,   2,   2,   1
+</span></span></code></pre></div><figcaption>書き込み場所を `v[i - 1]` にしたループ</figcaption>
+</figure></span>
 <p>この関数をSIMD化してみましょう。</p>
-
 <p><span><figure></p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">f2</span><span class="p">(</span><span class="n">v</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="p">[</span><span class="kt">f32</span><span class="p">])</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">arch</span>::<span class="n">x86_64</span>::<span class="p">{</span><span class="n">_mm256_add_ps</span><span class="p">,</span><span class="w"> </span><span class="n">_mm256_loadu_ps</span><span class="p">,</span><span class="w"> </span><span class="n">_mm256_set1_ps</span><span class="p">,</span><span class="w"> </span><span class="n">_mm256_storeu_ps</span><span class="p">};</span><span class="w">
-</span><span class="w">    </span><span class="k">unsafe</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">limit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">.</span><span class="n">len</span><span class="p">();</span><span class="w">
-</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ones</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">_mm256_set1_ps</span><span class="p">(</span><span class="mf">1.0</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ptr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">.</span><span class="n">as_mut_ptr</span><span class="p">();</span><span class="w">
-</span><span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="p">(</span><span class="mi">1</span><span class="o">..</span><span class="p">(</span><span class="n">limit</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">SIZE</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">))).</span><span class="n">step_by</span><span class="p">(</span><span class="n">SIZE</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">_mm256_loadu_ps</span><span class="p">(</span><span class="n">ptr</span><span class="p">.</span><span class="n">offset</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="kt">isize</span><span class="p">));</span><span class="w">
-</span><span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">ret</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">_mm256_add_ps</span><span class="p">(</span><span class="n">data</span><span class="p">,</span><span class="w"> </span><span class="n">ones</span><span class="p">);</span><span class="w">
-</span><span class="w">            </span><span class="n">_mm256_storeu_ps</span><span class="p">(</span><span class="n">ptr</span><span class="p">.</span><span class="n">offset</span><span class="p">((</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="kt">isize</span><span class="p">),</span><span class="w"> </span><span class="n">ret</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="p">}</span><span class="w">
-</span><span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="p">((</span><span class="n">limit</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">SIZE</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">SIZE</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">SIZE</span><span class="p">)</span><span class="o">..</span><span class="n">limit</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">            </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<p><figcaption>書き込み場所を <code>v[i - 1]</code> にしたループをSIMD化したプログラム</figcaption>
-</figure></span></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">fn</span> <span class="nf">f2</span><span class="p">(</span><span class="n">v</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="p">[</span><span class="kt">f32</span><span class="p">])</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">arch</span>::<span class="n">x86_64</span>::<span class="p">{</span><span class="n">_mm256_add_ps</span><span class="p">,</span><span class="w"> </span><span class="n">_mm256_loadu_ps</span><span class="p">,</span><span class="w"> </span><span class="n">_mm256_set1_ps</span><span class="p">,</span><span class="w"> </span><span class="n">_mm256_storeu_ps</span><span class="p">};</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">unsafe</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">limit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">.</span><span class="n">len</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ones</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">_mm256_set1_ps</span><span class="p">(</span><span class="mf">1.0</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">ptr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">.</span><span class="n">as_mut_ptr</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="p">(</span><span class="mi">1</span><span class="o">..</span><span class="p">(</span><span class="n">limit</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">SIZE</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">))).</span><span class="n">step_by</span><span class="p">(</span><span class="n">SIZE</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">_mm256_loadu_ps</span><span class="p">(</span><span class="n">ptr</span><span class="p">.</span><span class="n">offset</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="kt">isize</span><span class="p">));</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">ret</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">_mm256_add_ps</span><span class="p">(</span><span class="n">data</span><span class="p">,</span><span class="w"> </span><span class="n">ones</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">_mm256_storeu_ps</span><span class="p">(</span><span class="n">ptr</span><span class="p">.</span><span class="n">offset</span><span class="p">((</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="kt">isize</span><span class="p">),</span><span class="w"> </span><span class="n">ret</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="p">((</span><span class="n">limit</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">SIZE</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">SIZE</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">SIZE</span><span class="p">)</span><span class="o">..</span><span class="n">limit</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><figcaption>書き込み場所を `v[i - 1]` にしたループをSIMD化したプログラム</figcaption>
+</figure></span>
 <p>この結果は変わらずこうなります。</p>
-
 <p><span><figure></p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">  2,   2,   2,   2,   2,   2,   2,   2
-  2,   2,   2,   2,   2,   2,   2,   2
-  2,   2,   2,   2,   2,   2,   2,   2
-  2,   2,   2,   2,   2,   2,   2,   2
-  2,   2,   2,   2,   2,   2,   2,   2
-  2,   2,   2,   2,   2,   2,   2,   2
-  2,   2,   2,   2,   2,   2,   2,   2
-  2,   2,   2,   2,   2,   2,   2,   2
-  2,   2,   2,   2,   2,   2,   2,   2
-  2,   2,   2,   2,   2,   2,   2,   2
-  2,   2,   2,   2,   2,   2,   2,   2
-  2,   2,   2,   2,   2,   2,   2,   2
-  2,   2,   2,   2,   2,   2,   2,   2
-  2,   2,   2,   2,   2,   2,   2,   2
-  2,   2,   2,   2,   2,   2,   2,   2
-  2,   2,   2,   2,   2,   2,   2,   1</code></pre></div>
-<p><figcaption>書き込み場所を <code>v[i - 1]</code> にしたループをSIMD化したプログラムの実行結果</figcaption>
-</figure></span></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">  2,   2,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   2,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   2,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   2,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   2,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   2,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   2,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   2,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   2,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   2,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   2,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   2,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   2,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   2,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   2,   2,   2,   2,   2,   2,   2
+</span></span><span class="line"><span class="cl">  2,   2,   2,   2,   2,   2,   2,   1
+</span></span></code></pre></div><figcaption>書き込み場所を `v[i - 1]` にしたループをSIMD化したプログラムの実行結果</figcaption>
+</figure></span>
 <p>こっちの場合だとSIMD化は合法な変換となりました。
 SIMD化ができればプログラムは速くなるので、書き換えられる場合書き換えられない場合を見極められると嬉しいですよね。</p>
-
 <h1 id="依存関係基本のキ">依存関係基本のキ</h1>
-
 <p>最初のプログラムを再掲します。</p>
-
 <p><span><figure></p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="n">v</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="p">);</span></code></pre></div>
-<p><figcaption>最初のプログラム（再）</figcaption>
-</figure></span></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">v</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><figcaption>最初のプログラム（再）</figcaption>
+</figure></span>
 <p>これの2行目と3行目を入れ替えるとプログラムの結果が変わるのでした。
 それぞれ何をしているか少し抽象的に書くとこうなります。</p>
-
 <ul>
 <li>2行目: 変数 <code>v</code> に値を書き込んでいる</li>
 <li>3行目: 変数 <code>v</code> から値を呼び出している</li>
 </ul>
-
 <p><strong>同じ変数</strong> に対する <strong>書き込み</strong> のあとに <strong>読み出し</strong> です。一般にこれらの順番を入れ替えるとプログラムが壊れるのです。また、入れ替えたあとに元に戻すことを考えると、読み出しのあとに書き込みをしてもプログラムが壊れるのが分かるかと思います。さらに、書き込み同士でも順番を入れ替えるとプログラムの結果が変わります。</p>
-
 <p><span><figure></p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="p">);</span></code></pre></div>
-<p><figcaption>同じ変数に2回書き込むプログラム</figcaption>
-</figure></span></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><figcaption>同じ変数に2回書き込むプログラム</figcaption>
+</figure></span>
 <p>この2行目と3行目を入れ替えると結果が変わりますね。</p>
-
 <p>このように同じ変数に対する読み書きは順番を入れ替えるとプログラムの結果が変わってしまいます。このことをデータの <strong>依存関係</strong> （Dependency）があると言います。先程紹介した読み出し-書き込み、書き込み-読み出し、書き込み-書き込みの依存関係にはそれぞれ名前がついています。</p>
-
 <ul>
 <li>読み出し-書き込み: <strong>フロー依存</strong> (flow dependence)</li>
 <li>書き込み-読み出し: <strong>逆依存</strong> (anti-dependence)</li>
 <li>書き込み-書き込み: <strong>出力依存</strong> (output dependence)</li>
 </ul>
-
 <p>なお、読み出し-読み出しは入れ替えても結果が変らないので気にしないことにします。
 一応これにも <strong>入力依存</strong> (input dependence) という名前がついていて、入力依存のあるプログラム同士を近くに配置するとレジスタやキャッシュの再利用が捗るなどの使い途はあるのですが今回の主眼ではないので扱いません。</p>
-
 <p>さて、プログラムの1行目を $\mathit{L1}$ 、 2行目を $\mathit{L2}$ などと表記することにすると、 $\mathit{LN}$ から $\mathit{LM}$ へフロー依存関係があることを、もったいぶって以下のように書きます。</p>
-
 <p>\[
 \mathit{LN}\ \delta{}^f\ \mathit{LM}
 \]</p>
-
 <p>他にも逆、出力依存はそれぞれ $\mathit{LN}\ \delta{}^a\ \mathit{LM}$ 、 $\mathit{LN}\ \delta{}^o\ \mathit{LM}$ と書きます。あとどの種類でもいいので依存があることを $\delta^*$ と書いたりもします。</p>
-
 <p>最初のプログラムの例でいうと $\mathit{L1}\ \delta^f\ \mathit{L2}$ 、 $\mathit{L2}\ \delta^a\ \mathit{L2}$ （<code>v += 1</code> は <code>v = v + 1</code> なので）、 $\mathit{L2}\ \delta^f\ \mathit{L3}$ ですね。フロー依存と逆依存から構成されています。</p>
-
 <p>記法を紹介しましたが以後も「どこどこからここそこにフロー依存がある」と説明するので特に使う予定はありません。ホワイトボードなんかに書くときに使って下さい。あと論文読んでるとたまに出てきます。</p>
-
 <h1 id="偽りの依存とssa">偽りの依存とSSA</h1>
-
 <p>さて、3つの依存のうち、フロー依存が真の依存、それ以外は偽りの依存と言われています。
 出力依存があるプログラムを思い出してみましょう。</p>
-
 <p><span><figure></p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="p">);</span></code></pre></div>
-<p><figcaption>同じ変数に2回書き込むプログラム（再）</figcaption>
-</figure></span></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><figcaption>同じ変数に2回書き込むプログラム（再）</figcaption>
+</figure></span>
 <p>このプログラムは簡単な書き換えで出力依存が消えます。</p>
-
 <p><span><figure></p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="kd">let</span><span class="w"> </span><span class="n">v1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">v2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">v3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">v3</span><span class="p">);</span></code></pre></div>
-<p><figcaption>同じ変数に2回書き込むプログラムを書き換えて出力依存をなくしたもの</figcaption>
-</figure></span></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="kd">let</span><span class="w"> </span><span class="n">v1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">v2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">v3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">v3</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><figcaption>同じ変数に2回書き込むプログラムを書き換えて出力依存をなくしたもの</figcaption>
+</figure></span>
 <p>同様に逆依存も変数名のつけかえで依存関係を消せます。
 もう少し言うと、変数の上書きを禁止して、上書く場合は新しい変数を導入することにすると、変数の書き換えがそもそもなくなるので逆や出力の依存関係が発生しなくなります。</p>
-
 <p>さてこの変換、便利なのであらゆるプログラムに適用したいのですが1つ障害があります。
 <code>if</code> やループなど制御フローの絡むプログラムだと詰んでしまいます。</p>
-
 <p><span><figure></p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">f</span><span class="p">(</span><span class="n">cond</span>: <span class="kt">bool</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">i32</span> <span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="n">cond</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="n">v</span><span class="w"> </span><span class="o">-=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">v</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<p><figcaption>if文のあるプログラム</figcaption>
-</figure></span></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">fn</span> <span class="nf">f</span><span class="p">(</span><span class="n">cond</span>: <span class="kt">bool</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">i32</span> <span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="n">cond</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">v</span><span class="w"> </span><span class="o">-=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">v</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><figcaption>if文のあるプログラム</figcaption>
+</figure></span>
 <p><span><figure></p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">sum</span><span class="p">(</span><span class="n">n</span>: <span class="kt">i32</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">i32</span> <span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">sum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="k">loop</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">            </span><span class="k">break</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="p">}</span><span class="w">
-</span><span class="w">        </span><span class="n">i</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="n">sum</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">i</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">sum</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<p><figcaption>loop文のあるプログラム</figcaption>
-</figure></span></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">fn</span> <span class="nf">sum</span><span class="p">(</span><span class="n">n</span>: <span class="kt">i32</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">i32</span> <span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">sum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">loop</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="k">break</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">i</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">sum</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">i</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">sum</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><figcaption>loop文のあるプログラム</figcaption>
+</figure></span>
 <p>これらはプログラムのある地点に至るまでに通った経路がその時々で変わるのでバシっと「この値を使う」と言えません。
 そこで「こちらから来たときはこの値、そちらから来たときはその値」を取る演算子 <code>φ</code> を導入してあげます。
 <code>φ</code> 演算子を使うと先程のプログラムも変数の書き換えがないように変換できます。</p>
-
 <p><span><figure></p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">f</span><span class="p">(</span><span class="n">cond</span>: <span class="kt">bool</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">i32</span> <span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">v1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="n">cond</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="c1">// 「変数名」と「変数が定義された場所」と「どの経路を通ってきたか」が簡単に対応づくので
-</span><span class="c1"></span><span class="w">    </span><span class="c1">// 「then節から来たときはv2、else節から来たときはv3」の略記として以下を採用する
-</span><span class="c1"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">v4</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="err">φ</span><span class="p">(</span><span class="n">v2</span><span class="p">,</span><span class="w"> </span><span class="n">v3</span><span class="p">);</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">v4</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<p><figcaption>if文のあるプログラムの変換</figcaption>
-</figure></span></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">fn</span> <span class="nf">f</span><span class="p">(</span><span class="n">cond</span>: <span class="kt">bool</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">i32</span> <span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">v1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="n">cond</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">v3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// 「変数名」と「変数が定義された場所」と「どの経路を通ってきたか」が簡単に対応づくので
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">    </span><span class="c1">// 「then節から来たときはv2、else節から来たときはv3」の略記として以下を採用する
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">v4</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="err">φ</span><span class="p">(</span><span class="n">v2</span><span class="p">,</span><span class="w"> </span><span class="n">v3</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">v4</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><figcaption>if文のあるプログラムの変換</figcaption>
+</figure></span>
 <p><span><figure></p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">sum</span><span class="p">(</span><span class="n">n</span>: <span class="kt">i32</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">i32</span> <span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">i1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">sum1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="k">loop</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">i2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="err">φ</span><span class="p">(</span><span class="n">i1</span><span class="p">,</span><span class="w"> </span><span class="n">i3</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">sum2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="err">φ</span><span class="p">(</span><span class="n">sum1</span><span class="p">,</span><span class="w"> </span><span class="n">sum3</span><span class="p">);</span><span class="w">
-</span><span class="w">
-</span><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="n">i2</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">            </span><span class="k">break</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="p">}</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">i3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i2</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">sum3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sum2</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">i3</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">sum3</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<p><figcaption>loop文のあるプログラムの変換</figcaption>
-</figure></span></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">fn</span> <span class="nf">sum</span><span class="p">(</span><span class="n">n</span>: <span class="kt">i32</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">i32</span> <span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">i1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">sum1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">loop</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">i2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="err">φ</span><span class="p">(</span><span class="n">i1</span><span class="p">,</span><span class="w"> </span><span class="n">i3</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">sum2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="err">φ</span><span class="p">(</span><span class="n">sum1</span><span class="p">,</span><span class="w"> </span><span class="n">sum3</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="n">i2</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="k">break</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">i3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i2</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">sum3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sum2</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">i3</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">sum3</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><figcaption>loop文のあるプログラムの変換</figcaption>
+</figure></span>
 <p>こうしてできあがった「変数の上書き禁止」、つまり1変数あたり1代入のプログラムは <strong>静的単一代入</strong> （Static Single Assignment、SSA）形式と呼ばれます。</p>
-
 <p>SSAは3種類あった依存関係を1種類にまで落としているのでプログラムの諸々解析がやりやすく、LLVMやGCCなど多くのコンパイラで内部表現として使われています。
 LLVMを使っている人には馴染みのある形式でしょう。</p>
-
 <h1 id="ssaの限界">SSAの限界</h1>
-
 <p>前節のストーリーのまま進めばよかったのですが、残念ながらSSAには限界があります。
 ポインタが来ると無力です。LLVMでもスタックやヒープの値は書き換え可能ですよね。
 さらに配列とループが来ると死にます。例えばQuick Sortのプログラムを思い浮かべてみて下さい。これの依存関係を実行前に事前に除去するのは無理そうですね。
 一応SSAを拡張して配列も扱えるようにする話もなくはないみたいですが、大人しく諦めた方がよさそうです。</p>
-
 <p>SSAで配列を扱うのは諦めましたが、これは一般の場合で扱うのが難しいだけです。
 条件が揃えば配列とループを使うコードでも依存関係の分析ができます。
 それをやっていきましょうというのが今回の主題です。</p>
-
 <h1 id="ループの正規化">ループの正規化</h1>
-
 <p>今回扱うのがループと配列ということが決まったので、ループを扱いやすくしておきましょう。
 ループの繰り返しに使う変数（<strong>誘導変数</strong> （induction variable））ってループ展開の例で出てきたように8つ飛ばしだったりします。</p>
-
 <p><span><figure></p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">const</span><span class="w"> </span><span class="n">SIZE</span>: <span class="kt">usize</span> <span class="o">=</span><span class="w"> </span><span class="mi">8</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="p">(</span><span class="mi">1</span><span class="o">..</span><span class="p">(</span><span class="n">limit</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">SIZE</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">))).</span><span class="n">step_by</span><span class="p">(</span><span class="n">SIZE</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">3</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">3</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">4</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">4</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">5</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">5</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">6</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">6</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">7</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<p><figcaption>unrollされて誘導変数が8刻みになったループ</figcaption>
-</figure></span></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">const</span><span class="w"> </span><span class="n">SIZE</span>: <span class="kt">usize</span> <span class="o">=</span><span class="w"> </span><span class="mi">8</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="p">(</span><span class="mi">1</span><span class="o">..</span><span class="p">(</span><span class="n">limit</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">SIZE</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">))).</span><span class="n">step_by</span><span class="p">(</span><span class="n">SIZE</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">3</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">3</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">4</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">4</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">5</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">5</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">6</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">6</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">7</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><figcaption>unrollされて誘導変数が8刻みになったループ</figcaption>
+</figure></span>
 <p>これをループの回転に使う変数とループ内で使う変数に分離します。
 ループの回転に使う変数の方は0から始まって1刻みで進むようにします。
 要するに「今ループのn回目」というのを表現する変数です。
 これをループの <strong>正規誘導変数</strong> （normalized induction variable）といいます。
 元の誘導変数は正規誘導変数から計算します。</p>
-
 <p><span><figure></p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">const</span><span class="w"> </span><span class="n">SIZE</span>: <span class="kt">usize</span> <span class="o">=</span><span class="w"> </span><span class="mi">8</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="c1">// 正規誘導変数 ni を使って0から1刻みでループを回す
-</span><span class="c1"></span><span class="k">for</span><span class="w"> </span><span class="n">ni</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="p">(</span><span class="n">limit</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">SIZE</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">SIZE</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="c1">// 元の誘導変数 i は正規誘導変数 ni から計算する
-</span><span class="c1"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">SIZE</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">ni</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">3</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">3</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">4</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">4</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">5</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">5</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">6</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">6</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">7</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<p><figcaption>unrollされて誘導変数が8刻みになったループ</figcaption>
-</figure></span></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">const</span><span class="w"> </span><span class="n">SIZE</span>: <span class="kt">usize</span> <span class="o">=</span><span class="w"> </span><span class="mi">8</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 正規誘導変数 ni を使って0から1刻みでループを回す
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">for</span><span class="w"> </span><span class="n">ni</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="p">(</span><span class="n">limit</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">SIZE</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">SIZE</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// 元の誘導変数 i は正規誘導変数 ni から計算する
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">SIZE</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">ni</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">3</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">3</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">4</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">4</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">5</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">5</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">6</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">6</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">7</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><figcaption>unrollされて誘導変数が8刻みになったループ</figcaption>
+</figure></span>
 <p>ループの正規形が得られました。
 そして今回扱う対象ですが、ループの <strong>反復空間</strong> （iteration space）が正規誘導変数のアフィン式で書けるようなループのみ扱うことにします。以下に正規誘導変数のアフィン式で書ける反復空間、書けない反復空間の例を挙げます。</p>
-
 <p>例: (<code>i</code> を正規誘導変数、<code>N</code> を適当な定数とする)</p>
-
 <ul>
-<li>OK: <code>0 &lt; i</code>, <code>i &lt; N</code> (= <code>i &gt; 0</code> , <code>-1 * i + N &gt; 0</code>)</li>
+<li>OK: <code>0 &lt; i</code>, <code> i &lt; N</code> (= <code>i &gt; 0</code> , <code>-1 * i + N &gt; 0</code>)</li>
 <li>OK: <code>1 &lt; i</code>,  <code>4 * i + 1 &lt; N</code> (= <code>i - 1 &gt; 0</code>, <code>-4 * i + (-1 + N) &gt; 0</code>)</li>
 <li>NG: <code>0 &lt; i</code>, <code>i * i &lt; N</code></li>
 </ul>
-
 <p>配列を舐める素直なループは大抵該当しますが、 <code>loop</code> でグルグル回って特定の条件を満たしたら <code>break</code> するような変則的なループだと該当しません。</p>
-
 <h1 id="依存関係の分析">依存関係の分析</h1>
-
 <p>準備の万端が整ったので依存性の解析をしていきましょう。</p>
-
 <p>まずはシンプルなループについてです。</p>
-
 <p><span><figure></p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">f</span><span class="p">(</span><span class="n">v</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="p">[</span><span class="kt">f32</span><span class="p">])</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="p">(</span><span class="n">v</span><span class="p">.</span><span class="n">len</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<p><figcaption>シンプルなループ（再）</figcaption>
-</figure></span></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">fn</span> <span class="nf">f</span><span class="p">(</span><span class="n">v</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="p">[</span><span class="kt">f32</span><span class="p">])</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="p">(</span><span class="n">v</span><span class="p">.</span><span class="n">len</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><figcaption>シンプルなループ（再）</figcaption>
+</figure></span>
 <p>このループを正規化します。といってもほぼ正規化されてるのであんまり変化はないです。</p>
-
 <p><span><figure></p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">f</span><span class="p">(</span><span class="n">v</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="p">[</span><span class="kt">f32</span><span class="p">])</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">ni</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="p">(</span><span class="n">v</span><span class="p">.</span><span class="n">len</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ni</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<p><figcaption>正規化したシンプルなループ</figcaption>
-</figure></span></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">fn</span> <span class="nf">f</span><span class="p">(</span><span class="n">v</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="p">[</span><span class="kt">f32</span><span class="p">])</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">ni</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="p">(</span><span class="n">v</span><span class="p">.</span><span class="n">len</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ni</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><figcaption>正規化したシンプルなループ</figcaption>
+</figure></span>
 <p>このループの繰り返しの間での依存関係を求めたいです。
 ループ内では1つ配列から1回読み出して1回書き込んでるので話は簡単ですね。
 「読み出しと書き込みで同じ場所を触るのはいつか」という問いを立てればよさそうです。</p>
-
 <p>もうちょっと言うと「$i_1$ 番目のループでの読み出しと $i_2$ 番目のループでの書き込みが一致する条件」を問えばよいです。読み出しはインデックスに <code>i</code> 、書き込みはインデックスに <code>i + 1</code> を使っていて、 <code>let i = ni</code> なので以下の式が立ちます。</p>
-
 <p>\[
 i_1 = i_2 + 1
 \]</p>
-
 <p>この式から書き込みと読み出しの関係を計算します。配列の要素に書き込んだあと、ループが何回転回ったら読み込むかを計算すればよさそうです。この値を <strong>依存距離</strong>（dependence distance）といいます。</p>
-
 <p>\[
 i_1 - i_2 = 1
 \]</p>
-
 <p>1と出ました。書き出した値を次のループで読み出しているということです。
 つまり、 ループの繰り返しの間にフロー依存があります。
 一般に依存距離が正ならループの繰り返し間にフロー依存があります。
 フロー依存のあるプログラムをSIMD化した（書き込む前に読み出した値で計算した）のでプログラムが壊れた訳です。</p>
-
 <p>さて、では書き込む要素を <code>v[i - 1]</code> にしたバージョンでやってみましょう。</p>
-
 <p><span><figure></p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">f</span><span class="p">(</span><span class="n">v</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="p">[</span><span class="kt">f32</span><span class="p">])</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">1</span><span class="o">..</span><span class="n">v</span><span class="p">.</span><span class="n">len</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<p><figcaption>書き込み場所を <code>v[i - 1]</code> にしたループ（再）</figcaption>
-</figure></span></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">fn</span> <span class="nf">f</span><span class="p">(</span><span class="n">v</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="p">[</span><span class="kt">f32</span><span class="p">])</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">1</span><span class="o">..</span><span class="n">v</span><span class="p">.</span><span class="n">len</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><figcaption>書き込み場所を `v[i - 1]` にしたループ（再）</figcaption>
+</figure></span>
 <p>これもループを正規化します。</p>
-
 <p><span><figure></p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">f</span><span class="p">(</span><span class="n">v</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="p">[</span><span class="kt">f32</span><span class="p">])</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">ni</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="n">v</span><span class="p">.</span><span class="n">len</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ni</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<p><figcaption>正規化した書き込み場所を <code>v[i - 1]</code> にしたループ</figcaption>
-</figure></span></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">fn</span> <span class="nf">f</span><span class="p">(</span><span class="n">v</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="p">[</span><span class="kt">f32</span><span class="p">])</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">ni</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="n">v</span><span class="p">.</span><span class="n">len</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ni</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><figcaption>正規化した書き込み場所を `v[i - 1]` にしたループ</figcaption>
+</figure></span>
 <p>ここから色々あって次の式が立ちます。</p>
-
 <p>\[
 i_1 + 1 = i_2 + 1 - 1
 \]</p>
-
 <p>依存距離を計算します。</p>
-
 <p>\[
 i_1 - i_2 = -1
 \]</p>
-
 <p>今度は-1が出ました。一般に依存距離が負ならループの繰り返し間に逆依存があります。
 逆依存（読み出したあとに書き込まれる依存）のあるプログラムで書き込む前に読み出した値を使って計算しても特に問題はないのでプログラムが壊れなかった訳です。</p>
-
 <p>これでループのあるプログラムでも特定の条件を満たせば依存関係を分析できましたし、SIMD化もできるようになりました。</p>
-
 <h1 id="依存関係の分析の一般化">依存関係の分析の一般化</h1>
-
 <p>先程の依存関係の分析はかなりシンプルなもののみ扱っていました。
 例えば行列の乗算なんかを扱おうとすると一般化が必要です。
 具体的には</p>
-
 <ul>
 <li>ループはネストする
-
 <ul>
 <li>正規誘導変数が複数になるのでそれらのベクトルを考えることになる</li>
 <li>反復空間が多次元化するので正規誘導変数ベクトルのアフィン式 $\mathbf{A}\mathbf{i} + \mathbf{b} &gt; \mathbf{0}$ を考えることになる</li>
 <li>依存距離がベクトル化する（距離ベクトル、distance vector）</li>
-</ul></li>
+</ul>
+</li>
 <li>配列が多次元化する
-
 <ul>
 <li>配列の添字も多次元化するのでベクトルにすることになる</li>
 <li>依存関係の式もベクトル化するので行列とのかけ算やらベクトルの大小関係やらを考えることになる</li>
-</ul></li>
 </ul>
-
+</li>
+</ul>
 <p>依存距離がベクトル化することで依存関係がちょっと複雑化します。
 「一番外側のループでは依存関係はないけど2番目ではフロー依存があってあって一番内側ではなくなって…」のようになります。
 そうすると外側はスレッド並列化できますし、内側はSIMD並列化できますが、真ん中のループはいじれないなんかの「部分的に変換可能な箇所がある」という結果が出たりします。
 都合のいい依存関係でなかった場合はループの順番を入れ替えることで都合のいい依存関係にするような変換もあります。</p>
-
 <p>これらは落ち着いて考えればどうにかなるものが多いのですが、ちょっと長くなってしまうので割愛します。参考文献を参照して下さい。</p>
-
 <h1 id="まとめ">まとめ</h1>
-
 <p>データの依存関係について整理しました。
 そしてフロー依存以外はSSA形式に変換することで取り除けることも確認しました。
 しかし配列とループを扱うときはSSAだけでは対処できないのでループの正規化や正規誘導変数などを用いて依存関係を分析できることを紹介しました。
 さらに今回紹介した簡単な例だけでなく一般化した手法が存在することも紹介しました。</p>
-
 <p>今回の記事は日本語で依存関係の分析を扱った資料ってないよなーと思って書き始めたのですが、よく調べたら中田先生のコンパイラの構成と最適化に載ってました。
 ちゃんと読んでないことがバレますね。</p>
-
 <h1 id="参考文献">参考文献</h1>
-
 <ul>
 <li>M. Wolfe, High performance compilers for parallel computing</li>
 <li>中田育男、コンパイラの構成と最適化</li>

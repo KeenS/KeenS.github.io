@@ -19,17 +19,13 @@
         <meta name="twitter:site" content="@blackenedgold" />
         <meta name="twitter:title" content="moldを使うとRustのビルドが速くなる | κeenのHappy Hacκing Blog"/>
         <meta name="twitter:description" content="このエントリはRust Advent Calendarの2日目の記事です。
-
 空いてる日を埋める担当のκeenです。2日目が空いてたので遡って記事を投稿します。
-
 最近v1.0.0がリリースされたリンカ、moldを使うとビルドが高速化するよというお話です。" />
         <meta property="og:title" content="moldを使うとRustのビルドが速くなる | κeenのHappy Hacκing Blog" />
         <meta property="og:type" content="article" />
         <meta property="og:url" content="https://KeenS.github.io/blog/2021/12/20/moldwotsukautorustnobirudogahayakunaru/" />
         <meta property="og:description" content="このエントリはRust Advent Calendarの2日目の記事です。
-
 空いてる日を埋める担当のκeenです。2日目が空いてたので遡って記事を投稿します。
-
 最近v1.0.0がリリースされたリンカ、moldを使うとビルドが高速化するよというお話です。" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta property="og:image" content="https://KeenS.github.io/images/ogp/post/moldwotsukautoRustnobirudogahayakunaru.png" />
@@ -145,43 +141,34 @@
                     </header>
                     <section>
                         <p>このエントリは<a href="https://qiita.com/advent-calendar/2021/rust">Rust Advent Calendar</a>の2日目の記事です。</p>
-
 <p>空いてる日を埋める担当のκeenです。2日目が空いてたので遡って記事を投稿します。</p>
-
 <p>最近v1.0.0がリリースされたリンカ、<a href="https://github.com/rui314/mold">mold</a>を使うとビルドが高速化するよというお話です。</p>
-
 <p>Rustのビルド、特にインクリメンタルビルドにおいてはRustコンパイラの速さと同じくらいリンカの速度がコンパイル時間に影響します。
 この最後のバイナリを作る時間は意外と効いてきます。</p>
-
 <p>具体例として<a href="https://github.com/actix/actix-web">Actix Web</a>にあるexample、 <code>basic</code> をインクリメンタルビルドする例をみてみましょう。</p>
-
 <p>この <code>basic</code> はたった42行の小さなアプリケーションです。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell">$ wc -l basic.rs
-<span class="m">42</span> basic.rs</code></pre></div>
-<p>ただし、依存に Actix Webという巨大なライブラリを使っているので最終的なバイナリには非常に多くのコードが含まれます。フレームワークを使ってアプリケーションを開発してるときに似た状況な訳です。多くの人にとっては実感のある例でしょう。これを <code>mold</code> ありなしでビルドしたときのコンパイル時間の差をみてみます。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ wc -l basic.rs
+</span></span><span class="line"><span class="cl"><span class="m">42</span> basic.rs
+</span></span></code></pre></div><p>ただし、依存に Actix Webという巨大なライブラリを使っているので最終的なバイナリには非常に多くのコードが含まれます。フレームワークを使ってアプリケーションを開発してるときに似た状況な訳です。多くの人にとっては実感のある例でしょう。これを <code>mold</code> ありなしでビルドしたときのコンパイル時間の差をみてみます。</p>
 <p>まずはビルドキャッシュを有効にするために <code>cargo build</code> を走らせておきます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell">$ <span class="nb">cd</span> actix-web
-$ cargo build --example basic</code></pre></div>
-<p>そのあとインクリメンタルビルドの速度を <code>time</code> コマンドで測ってみます。一度 <code>examples/basics.rs</code> に <code>touch</code> すれば再度ビルドが走ってくれます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell">$ touch examples/basic.rs <span class="o">&amp;&amp;</span> <span class="nb">time</span> cargo build --example basic
-   Compiling actix-web v4.0.0-beta.15 <span class="o">(</span>/home/shun/Rust/actix-web<span class="o">)</span>
-    Finished dev <span class="o">[</span>unoptimized<span class="o">]</span> target<span class="o">(</span>s<span class="o">)</span> in 2.48s
-cargo build --example basic  1.93s user 3.88s system 228% cpu 2.545 total</code></pre></div>
-<p>すると約2.5秒かかります。何も変更がないはずなのにけっこう長いですね。Actix Webで開発するコードにおいては <code>cargo run</code> や <code>cargo test</code> する度にこのリードタイムが税金のように乗ってくる訳です。できる限り減らしたいですよね。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ <span class="nb">cd</span> actix-web
+</span></span><span class="line"><span class="cl">$ cargo build --example basic
+</span></span></code></pre></div><p>そのあとインクリメンタルビルドの速度を <code>time</code> コマンドで測ってみます。一度 <code>examples/basics.rs</code> に <code>touch</code> すれば再度ビルドが走ってくれます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ touch examples/basic.rs <span class="o">&amp;&amp;</span> <span class="nb">time</span> cargo build --example basic
+</span></span><span class="line"><span class="cl">   Compiling actix-web v4.0.0-beta.15 <span class="o">(</span>/home/shun/Rust/actix-web<span class="o">)</span>
+</span></span><span class="line"><span class="cl">    Finished dev <span class="o">[</span>unoptimized<span class="o">]</span> target<span class="o">(</span>s<span class="o">)</span> in 2.48s
+</span></span><span class="line"><span class="cl">cargo build --example basic  1.93s user 3.88s system 228% cpu 2.545 total
+</span></span></code></pre></div><p>すると約2.5秒かかります。何も変更がないはずなのにけっこう長いですね。Actix Webで開発するコードにおいては <code>cargo run</code> や <code>cargo test</code> する度にこのリードタイムが税金のように乗ってくる訳です。できる限り減らしたいですよね。</p>
 <p>次に <code>mold</code> を使ってビルドしてみましょう。 <code>mold</code> はGitHubから <code>clone</code> してきて依存を揃えたら <code>make &amp;&amp; sudo make install</code> でインストールできます。公式の案内に従って下さい。</p>
-
 <p><code>mold</code> をRustのプロジェクトで使うのは簡単です。 <code>mold -run cargo ...</code> のように <code>cargo</code> の前に <code>mold -run</code> を置くだけで使えます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell">$ mold -run cargo build --example basic</code></pre></div>
-<p>これでさきほどの <code>basic</code> を再度ビルドしてみましょう。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell">$ touch examples/basic.rs <span class="o">&amp;&amp;</span> <span class="nb">time</span> mold -run cargo build --example basic
-   Compiling actix-web v4.0.0-beta.15 <span class="o">(</span>/home/shun/Rust/actix-web<span class="o">)</span>
-    Finished dev <span class="o">[</span>unoptimized<span class="o">]</span> target<span class="o">(</span>s<span class="o">)</span> in 0.78s
-mold -run cargo build --example basic  0.59s user 1.06s system 195% cpu 0.848 total</code></pre></div>
-<p>約0.85秒とかなり高速化しました。2.545 / 0.848 ≒ 3 なのでおおむね3倍高速化しています。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ mold -run cargo build --example basic
+</span></span></code></pre></div><p>これでさきほどの <code>basic</code> を再度ビルドしてみましょう。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ touch examples/basic.rs <span class="o">&amp;&amp;</span> <span class="nb">time</span> mold -run cargo build --example basic
+</span></span><span class="line"><span class="cl">   Compiling actix-web v4.0.0-beta.15 <span class="o">(</span>/home/shun/Rust/actix-web<span class="o">)</span>
+</span></span><span class="line"><span class="cl">    Finished dev <span class="o">[</span>unoptimized<span class="o">]</span> target<span class="o">(</span>s<span class="o">)</span> in 0.78s
+</span></span><span class="line"><span class="cl">mold -run cargo build --example basic  0.59s user 1.06s system 195% cpu 0.848 total
+</span></span></code></pre></div><p>約0.85秒とかなり高速化しました。2.545 / 0.848 ≒ 3 なのでおおむね3倍高速化しています。
 この数値はプロジェクトの大きさやマシンスペックなどに応じて変わるので素直に3倍とは言い切れませんが、 <code>mold</code> を使ってインクリメンタルビルドすると少なくない高速化が見込めるのは事実でしょう。</p>
-
 <p><code>cargo test</code> のように小さな修正をしては実行してみるようなユースケースを考えると <code>mold</code> によるコンパイルの高速化、手返しの改善は大きな恩恵があります。
 導入も手軽にできますしお試しで手元で開発するときのテスト用途などで使ってみてはいかがでしょうか。</p>
                     </section>

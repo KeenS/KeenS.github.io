@@ -133,147 +133,126 @@
                     </header>
                     <section>
                         <p>ハ〜イ、κeenさんだよー。FizzBuzzを高速化したから紹介するねー。</p>
-
 <h1 id="背景">背景</h1>
-
 <h2 id="fizzbuzz問題とは">FizzBuzz問題とは</h2>
-
-<p>FizzBuzz問題<sup class="footnote-ref" id="fnref:fizzbuzz"><a href="#fn:fizzbuzz">1</a></sup>とは以下のような動作を行うプログラムを書けという問題です。</p>
-
+<p>FizzBuzz問題<sup id="fnref:1"><a href="#fn:1" class="footnote-ref" role="doc-noteref">1</a></sup>とは以下のような動作を行うプログラムを書けという問題です。</p>
 <ol>
 <li>数を0から順に表示する</li>
-<li>数が3の倍数なら数の代わりに&rdquo;Fizz&rdquo;と表示する</li>
-<li>数が5の倍数なら数の代わりに&rdquo;Buzz&rdquo;と表示する</li>
-<li>数が15の倍数なら数の代わりに&rdquo;FizzBuzz&rdquo;と表示する</li>
+<li>数が3の倍数なら数の代わりに&quot;Fizz&quot;と表示する</li>
+<li>数が5の倍数なら数の代わりに&quot;Buzz&quot;と表示する</li>
+<li>数が15の倍数なら数の代わりに&quot;FizzBuzz&quot;と表示する</li>
 </ol>
-
 <p>このプログラムはループや分岐といった基本的な要素を含んでおり、プログラムの例示として大変よく使われるものです。
 また、プログラマであるか試す試金石として面接で使われるケースもあるなど、使用頻度と重要度がともに高いプログラムです。このプログラムの高速化は非常に価値があると考えられ、本稿で高速化に取り組みます。</p>
-
-<h2 id="graphics-processing-unit-gpu-とは">Graphics Processing Unit（GPU）とは</h2>
-
-<p>GPU<sup class="footnote-ref" id="fnref:gpu"><a href="#fn:gpu">2</a></sup>はリアルタイム画像処理に特化した演算装置です。近年のGPUは画像処理に限らない汎用の処理を行えるようになっており、これを使ったGPGPU<sup class="footnote-ref" id="fnref:gpgpu"><a href="#fn:gpgpu">3</a></sup>はAIやビッグデータなどの高速化に寄与しています。本稿では同様の手法でFizzBuzzを高速化できると考え、GPGPUを用いてFizzBuzzの高速化に取り組みます。</p>
-
+<h2 id="graphics-processing-unitgpuとは">Graphics Processing Unit（GPU）とは</h2>
+<p>GPU<sup id="fnref:2"><a href="#fn:2" class="footnote-ref" role="doc-noteref">2</a></sup>はリアルタイム画像処理に特化した演算装置です。近年のGPUは画像処理に限らない汎用の処理を行えるようになっており、これを使ったGPGPU<sup id="fnref:3"><a href="#fn:3" class="footnote-ref" role="doc-noteref">3</a></sup>はAIやビッグデータなどの高速化に寄与しています。本稿では同様の手法でFizzBuzzを高速化できると考え、GPGPUを用いてFizzBuzzの高速化に取り組みます。</p>
 <h1 id="実装">実装</h1>
-
-<p>実装はGPGPUフレームワークとしてOpenCL<sup class="footnote-ref" id="fnref:opencl"><a href="#fn:opencl">4</a></sup>を使い、記述しました。OpenCLはGPUを使う手段を提供してはくれるものの、高速なプログラムを書くには多少の工夫が必要になります。今回は2点の工夫ありました。分岐発散への対策とメモリレイアウトです。</p>
-
+<p>実装はGPGPUフレームワークとしてOpenCL<sup id="fnref:4"><a href="#fn:4" class="footnote-ref" role="doc-noteref">4</a></sup>を使い、記述しました。OpenCLはGPUを使う手段を提供してはくれるものの、高速なプログラムを書くには多少の工夫が必要になります。今回は2点の工夫ありました。分岐発散への対策とメモリレイアウトです。</p>
 <h2 id="分岐発散への対策">分岐発散への対策</h2>
-
 <p>OpenCLはGPUを駆動するためのホストプログラムとGPU内で動くカーネルプログラムをプログラマが書きます。カーネルプログラムは指定した並列数で動くので <code>0</code> から <code>n-1</code> までのFizzBuzzを実行するのに <code>n</code> 並列で動かすとして、素直に実装すると以下の疑似コードようなカーネルが書けます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="n">kernel</span> <span class="kt">void</span> <span class="nf">fizzbuzz</span><span class="p">(</span><span class="n">global</span> <span class="kt">char</span> <span class="o">*</span><span class="n">dst</span><span class="p">)</span>
-<span class="p">{</span>
-  <span class="kt">int</span> <span class="n">n</span> <span class="o">=</span> <span class="n">get_global_id</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
-  <span class="k">if</span><span class="p">(</span><span class="n">n</span> <span class="o">%</span> <span class="mi">15</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
-    <span class="n">output</span> <span class="s">&#34;fizzbuzz&#34;</span><span class="p">;</span>
-  <span class="p">}</span> <span class="k">else</span> <span class="k">if</span><span class="p">(</span><span class="n">n</span> <span class="o">%</span> <span class="mi">3</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
-    <span class="n">output</span> <span class="s">&#34;fizz&#34;</span><span class="p">;</span>
-  <span class="p">}</span> <span class="k">else</span> <span class="k">if</span><span class="p">(</span><span class="n">n</span> <span class="o">%</span> <span class="mi">5</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
-    <span class="n">output</span> <span class="s">&#34;buzz&#34;</span><span class="p">;</span>
-  <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
-    <span class="n">output</span> <span class="n">n</span><span class="p">;</span>
-  <span class="p">}</span>
-<span class="p">}</span></code></pre></div>
-<p>これでも正しく動くのですが、かなり効率が悪くなります。今回用いたAMDのGPUでは複数のワークアイテムが同じ命令を実行します。ところがワークアイテムごとに分岐処理が違うと、各々で違う命令を実行することになります。これはGPUが実行するときにはあるワークアイテムでしか実行されない処理の間、他のワークアイテムの処理を止めることで疑似的に分岐のようなことをしています。例えば上記のコードを0~15の15並列で実行した場合は以下のようなスケジューリングになります。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">x … 実行
-  … 休み
-
-  0   1   2   3       15
-+---+---+---+---+ ~ +----+
-| x | x | x | x | ~ | x  | kernel void fizzbuzz(global char *dst)
-| x | x | x | x | ~ | x  | {
-| x | x | x | x | ~ | x  |   int n = get_global_id(0);
-| x | x | x | x | ~ | x  |   if(n % 15 == 0) {
-| x |   |   |   | ~ | x  |     output &#34;fizzbuzz&#34;;
-|   | x | x | x | ~ |    |   } else if(n % 3 == 0) {
-|   |   |   | x | ~ |    |     output &#34;fizz&#34;;
-|   | x | x |   | ~ |    |   } else if(n % 5 == 0) {
-|   |   |   |   | ~ |    |     output &#34;buzz&#34;;
-|   | x | x |   | ~ |    |   } else {
-|   | x | x |   | ~ |    |     output n;
-| x | x | x | x | ~ | x  |   }
-| x | x | x | x | ~ | x  | }
-+---+---+---+---+ ~ +----+</code></pre></div>
-<p>これだと処理が走っている割合が小さくなり、非効率になります。そこで1ワークアイテムが15こ分の数を担当するようにして分岐を行わないようにしました。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="n">kernel</span> <span class="kt">void</span> <span class="nf">fizzbuzz</span><span class="p">(</span><span class="n">global</span> <span class="kt">char</span> <span class="o">*</span><span class="n">dst</span><span class="p">)</span>
-<span class="p">{</span>
-  <span class="kt">int</span> <span class="n">n</span> <span class="o">=</span> <span class="n">get_global_id</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span> <span class="o">*</span> <span class="mi">15</span><span class="p">;</span>
-  <span class="n">output</span> <span class="s">&#34;fizzbuzz&#34;</span><span class="p">;</span>
-  <span class="n">output</span> <span class="n">n</span> <span class="o">+</span> <span class="mi">1</span><span class="p">;</span>
-  <span class="n">output</span> <span class="n">n</span> <span class="o">+</span> <span class="mi">2</span><span class="p">;</span>
-  <span class="n">output</span> <span class="s">&#34;fizz&#34;</span><span class="p">;</span>
-  <span class="n">output</span> <span class="n">n</span> <span class="o">+</span> <span class="mi">4</span><span class="p">;</span>
-  <span class="n">output</span> <span class="s">&#34;buzz&#34;</span><span class="p">;</span>
-  <span class="n">output</span> <span class="s">&#34;fizz&#34;</span><span class="p">;</span>
-  <span class="n">output</span> <span class="n">n</span> <span class="o">+</span> <span class="mi">7</span><span class="p">;</span>
-  <span class="n">output</span> <span class="n">n</span> <span class="o">+</span> <span class="mi">8</span><span class="p">;</span>
-  <span class="n">output</span> <span class="s">&#34;fizz&#34;</span><span class="p">;</span>
-  <span class="n">output</span> <span class="s">&#34;buzz&#34;</span><span class="p">;</span>
-  <span class="n">output</span> <span class="n">n</span> <span class="o">+</span> <span class="mi">11</span><span class="p">;</span>
-  <span class="n">output</span> <span class="s">&#34;fizz&#34;</span><span class="p">;</span>
-  <span class="n">output</span> <span class="n">n</span> <span class="o">+</span> <span class="mi">13</span><span class="p">;</span>
-  <span class="n">output</span> <span class="n">n</span> <span class="o">+</span> <span class="mi">14</span><span class="p">;</span>
-<span class="p">}</span></code></pre></div>
-<p>ただし端数処理の関係で <code>n</code> が15の倍数に切り上げられてしまいます。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">kernel</span> <span class="kt">void</span> <span class="nf">fizzbuzz</span><span class="p">(</span><span class="n">global</span> <span class="kt">char</span> <span class="o">*</span><span class="n">dst</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">int</span> <span class="n">n</span> <span class="o">=</span> <span class="n">get_global_id</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="k">if</span><span class="p">(</span><span class="n">n</span> <span class="o">%</span> <span class="mi">15</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">output</span> <span class="s">&#34;fizzbuzz&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span> <span class="k">else</span> <span class="k">if</span><span class="p">(</span><span class="n">n</span> <span class="o">%</span> <span class="mi">3</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">output</span> <span class="s">&#34;fizz&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span> <span class="k">else</span> <span class="k">if</span><span class="p">(</span><span class="n">n</span> <span class="o">%</span> <span class="mi">5</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">output</span> <span class="s">&#34;buzz&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">output</span> <span class="n">n</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>これでも正しく動くのですが、かなり効率が悪くなります。今回用いたAMDのGPUでは複数のワークアイテムが同じ命令を実行します。ところがワークアイテムごとに分岐処理が違うと、各々で違う命令を実行することになります。これはGPUが実行するときにはあるワークアイテムでしか実行されない処理の間、他のワークアイテムの処理を止めることで疑似的に分岐のようなことをしています。例えば上記のコードを0~15の15並列で実行した場合は以下のようなスケジューリングになります。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">x … 実行
+</span></span><span class="line"><span class="cl">  … 休み
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  0   1   2   3       15
+</span></span><span class="line"><span class="cl">+---+---+---+---+ ~ +----+
+</span></span><span class="line"><span class="cl">| x | x | x | x | ~ | x  | kernel void fizzbuzz(global char *dst)
+</span></span><span class="line"><span class="cl">| x | x | x | x | ~ | x  | {
+</span></span><span class="line"><span class="cl">| x | x | x | x | ~ | x  |   int n = get_global_id(0);
+</span></span><span class="line"><span class="cl">| x | x | x | x | ~ | x  |   if(n % 15 == 0) {
+</span></span><span class="line"><span class="cl">| x |   |   |   | ~ | x  |     output &#34;fizzbuzz&#34;;
+</span></span><span class="line"><span class="cl">|   | x | x | x | ~ |    |   } else if(n % 3 == 0) {
+</span></span><span class="line"><span class="cl">|   |   |   | x | ~ |    |     output &#34;fizz&#34;;
+</span></span><span class="line"><span class="cl">|   | x | x |   | ~ |    |   } else if(n % 5 == 0) {
+</span></span><span class="line"><span class="cl">|   |   |   |   | ~ |    |     output &#34;buzz&#34;;
+</span></span><span class="line"><span class="cl">|   | x | x |   | ~ |    |   } else {
+</span></span><span class="line"><span class="cl">|   | x | x |   | ~ |    |     output n;
+</span></span><span class="line"><span class="cl">| x | x | x | x | ~ | x  |   }
+</span></span><span class="line"><span class="cl">| x | x | x | x | ~ | x  | }
+</span></span><span class="line"><span class="cl">+---+---+---+---+ ~ +----+
+</span></span></code></pre></div><p>これだと処理が走っている割合が小さくなり、非効率になります。そこで1ワークアイテムが15こ分の数を担当するようにして分岐を行わないようにしました。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">kernel</span> <span class="kt">void</span> <span class="nf">fizzbuzz</span><span class="p">(</span><span class="n">global</span> <span class="kt">char</span> <span class="o">*</span><span class="n">dst</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">int</span> <span class="n">n</span> <span class="o">=</span> <span class="n">get_global_id</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span> <span class="o">*</span> <span class="mi">15</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">output</span> <span class="s">&#34;fizzbuzz&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">output</span> <span class="n">n</span> <span class="o">+</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">output</span> <span class="n">n</span> <span class="o">+</span> <span class="mi">2</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">output</span> <span class="s">&#34;fizz&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">output</span> <span class="n">n</span> <span class="o">+</span> <span class="mi">4</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">output</span> <span class="s">&#34;buzz&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">output</span> <span class="s">&#34;fizz&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">output</span> <span class="n">n</span> <span class="o">+</span> <span class="mi">7</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">output</span> <span class="n">n</span> <span class="o">+</span> <span class="mi">8</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">output</span> <span class="s">&#34;fizz&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">output</span> <span class="s">&#34;buzz&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">output</span> <span class="n">n</span> <span class="o">+</span> <span class="mi">11</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">output</span> <span class="s">&#34;fizz&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">output</span> <span class="n">n</span> <span class="o">+</span> <span class="mi">13</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">output</span> <span class="n">n</span> <span class="o">+</span> <span class="mi">14</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>ただし端数処理の関係で <code>n</code> が15の倍数に切り上げられてしまいます。</p>
 <h2 id="メモリレイアウト">メモリレイアウト</h2>
-
 <p>上記疑似コードでは <code>output</code> と書きましたが計算した値の出力には慎重な設計が必要です。一応OpenCLには <a href="https://www.khronos.org/registry/OpenCL/sdk/2.2/docs/man/html/printfFunction.html"><code>printf</code> 関数はある</a>ものの、大量の出力には向きません。最適な出力はホストプログラムに任せるとしてカーネル側ではメモリにデータを書き込むに留めます。</p>
-
 <p>ところがそのメモリにデータを書き込むのが意外と難しいです。n番目のFizzBuzzがメモリどこに値を書き込むべきか簡単には分かりません。また、CPUとやりとりできるグローバルなメモリへのアクセスは遅めなので何度かアクセスするデータはローカルなメモリ（ローカルデータストレージ）を使うと速くなります。</p>
-
 <p>そこで、1ワークアイテムごとに少し多めにローカルメモリをあてがい、そこに書き込ませます。これならワークアイテム番号から書き込むべきメモリアドレスが決まるので複雑な計算が不要になります。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">  0               1               2               3
-+---------------+---------------+---------------+---------------+
-| fizzbuzz| ... | fizzbuzz| ... | fizzbuzz| ... | fizzbuzz| ... | local
-+---------------+---------------+---------------+---------------+</code></pre></div>
-<p>しかし、このままだと今度はホスト側で書き出すときにメモリが断片的すぎて不便になってしまいます。そこで各々のワークアイテムが値を書き出したあとある程度の数のワークアイテムのグループ間でメモリをよせ集めてグローバルなメモリに移すことで多少は断片化を解消するようにしています。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">  0               1               2               3
-+---------------+---------------+---------------+---------------+
-| fizzbuzz| ... | fizzbuzz| ... | fizzbuzz| ... | fizzbuzz| ... | local
-+---------------+---------------+---------------+---------------+
-  |              /                |              /
-  |             /                 |             /
-  v            v                  v            v
-  0                               1
-+-------------------------------+-------------------------------+
-| fizzbuzz fizzbuzz| .......... | fizzbuzz fizzbuzz| .......... | global
-+-------------------------------+-------------------------------+</code></pre></div>
-<hr />
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">  0               1               2               3
+</span></span><span class="line"><span class="cl">+---------------+---------------+---------------+---------------+
+</span></span><span class="line"><span class="cl">| fizzbuzz| ... | fizzbuzz| ... | fizzbuzz| ... | fizzbuzz| ... | local
+</span></span><span class="line"><span class="cl">+---------------+---------------+---------------+---------------+
+</span></span></code></pre></div><p>しかし、このままだと今度はホスト側で書き出すときにメモリが断片的すぎて不便になってしまいます。そこで各々のワークアイテムが値を書き出したあとある程度の数のワークアイテムのグループ間でメモリをよせ集めてグローバルなメモリに移すことで多少は断片化を解消するようにしています。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">  0               1               2               3
+</span></span><span class="line"><span class="cl">+---------------+---------------+---------------+---------------+
+</span></span><span class="line"><span class="cl">| fizzbuzz| ... | fizzbuzz| ... | fizzbuzz| ... | fizzbuzz| ... | local
+</span></span><span class="line"><span class="cl">+---------------+---------------+---------------+---------------+
+</span></span><span class="line"><span class="cl">  |              /                |              /
+</span></span><span class="line"><span class="cl">  |             /                 |             /
+</span></span><span class="line"><span class="cl">  v            v                  v            v
+</span></span><span class="line"><span class="cl">  0                               1
+</span></span><span class="line"><span class="cl">+-------------------------------+-------------------------------+
+</span></span><span class="line"><span class="cl">| fizzbuzz fizzbuzz| .......... | fizzbuzz fizzbuzz| .......... | global
+</span></span><span class="line"><span class="cl">+-------------------------------+-------------------------------+
+</span></span></code></pre></div><hr>
 <p>また、その他ホスト側ではIOを工夫するなどした。</p>
-
 <h1 id="計測">計測</h1>
-
 <p>上記のようにOpenCLプログラムを実行したところ、約845 MiB/s の速度になりました。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="gp">$ </span>./main <span class="m">500000000</span> <span class="p">|</span> wc -c
-<span class="go">3907412008
-</span><span class="go"></span><span class="gp">$ </span><span class="nb">time</span> ./main <span class="m">500000000</span> &gt; /dev/null
-<span class="go">./main 500000000 &gt; /dev/null  0.47s user 0.84s system 29% cpu 4.408 total
-</span></code></pre></div>
-<p>これは高速であると考えられます。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="line"><span class="cl"><span class="gp">$</span> ./main <span class="m">500000000</span> <span class="p">|</span> wc -c
+</span></span><span class="line"><span class="cl"><span class="go">3907412008
+</span></span></span><span class="line"><span class="cl"><span class="go"></span><span class="gp">$</span> <span class="nb">time</span> ./main <span class="m">500000000</span> &gt; /dev/null
+</span></span><span class="line"><span class="cl"><span class="go">./main 500000000 &gt; /dev/null  0.47s user 0.84s system 29% cpu 4.408 total
+</span></span></span></code></pre></div><p>これは高速であると考えられます。</p>
 <h1 id="まとめと将来へ向けた課題">まとめと将来へ向けた課題</h1>
-
 <p>本稿ではFizzBuzzと呼ばれる非常に重要なプログラムをGPUを用いて高速化し、その速度は約845 MiB/sになりました。
 本稿で用いたプログラムはGPUが1枚の場合のみを想定しているので複数枚ある場合はそれらを使うようにしてさらなる高速化が望めます。また、同様に処理をGPUでのみ行っているのでCPUでも処理をすることでさらなる高速化が期待できます。</p>
-
 <p>コードは以下にあります。</p>
-
 <p><a href="https://github.com/KeenS/opencl-fizzbuzz">https://github.com/KeenS/opencl-fizzbuzz</a></p>
-<div class="footnotes">
-
-<hr />
-
+<div class="footnotes" role="doc-endnotes">
+<hr>
 <ol>
-<li id="fn:fizzbuzz"><a href="https://ja.wikipedia.org/wiki/Fizz_Buzz">https://ja.wikipedia.org/wiki/Fizz_Buzz</a>
- <a class="footnote-return" href="#fnref:fizzbuzz"><sup>[return]</sup></a></li>
-<li id="fn:gpu">(<a href="https://ja.wikipedia.org/wiki/Graphics_Processing_Unit">https://ja.wikipedia.org/wiki/Graphics_Processing_Unit</a>)
- <a class="footnote-return" href="#fnref:gpu"><sup>[return]</sup></a></li>
-<li id="fn:gpgpu"><a href="https://ja.wikipedia.org/wiki/GPGPU">https://ja.wikipedia.org/wiki/GPGPU</a>
- <a class="footnote-return" href="#fnref:gpgpu"><sup>[return]</sup></a></li>
-<li id="fn:opencl"><a href="https://opencl.org">https://opencl.org</a>
- <a class="footnote-return" href="#fnref:opencl"><sup>[return]</sup></a></li>
+<li id="fn:1">
+<p><a href="https://ja.wikipedia.org/wiki/Fizz_Buzz">https://ja.wikipedia.org/wiki/Fizz_Buzz</a>&#160;<a href="#fnref:1" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></p>
+</li>
+<li id="fn:2">
+<p>(<a href="https://ja.wikipedia.org/wiki/Graphics_Processing_Unit">https://ja.wikipedia.org/wiki/Graphics_Processing_Unit</a>)&#160;<a href="#fnref:2" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></p>
+</li>
+<li id="fn:3">
+<p><a href="https://ja.wikipedia.org/wiki/GPGPU">https://ja.wikipedia.org/wiki/GPGPU</a>&#160;<a href="#fnref:3" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></p>
+</li>
+<li id="fn:4">
+<p><a href="https://opencl.org">https://opencl.org</a>&#160;<a href="#fnref:4" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></p>
+</li>
 </ol>
 </div>
                     </section>

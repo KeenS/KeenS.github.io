@@ -129,222 +129,208 @@
                     </header>
                     <section>
                         <p>κeenです。<a href="https://KeenS.github.io/blog/2015/05/29/daiikkyuuraberuwomotanaigengoniokerudirect_threaded_vmnojissou">先日のエントリー</a>の最後でループ内で例外ハンドルをすると極端に遅くなるということを書きましたが、それについて。</p>
-
 <blockquote class="twitter-tweet" lang="ja"><p lang="ja" dir="ltr">ループ内でExceptionをhandleしてる所為だった。ループの外に出したら超速になってインタプリタの方が20倍遅くなった。</p>&mdash; κeen (@blackenedgold) <a href="https://twitter.com/blackenedgold/status/604235677337714689">2015, 5月 29</a></blockquote>
-
 <blockquote class="twitter-tweet" lang="ja"><p lang="ja" dir="ltr"><a href="https://twitter.com/blackenedgold">@blackenedgold</a> うーん、ちょっと例外のことは詳しくないんですが、予想だと例外ハンドラをループ内にいれると毎回スタックに積むんで外す操作がはさまることになるのでレジスタで完結してるようなループ処理だと露骨に遅くなるかもしれません</p>&mdash; Ocamlアイドル (@no_maddo) <a href="https://twitter.com/no_maddo/status/604537509771501569">2015, 5月 30</a></blockquote>
-
 <blockquote class="twitter-tweet" lang="ja"><p lang="ja" dir="ltr"><a href="https://twitter.com/blackenedgold">@blackenedgold</a> あーありえますね。ジャンプで済むところを戻ってきてスタックに積んだのを除去しないといけませんからね。ちょっと手元にマシンが無いのですがネイティブコードで実験してみますー</p>&mdash; Ocamlアイドル (@no_maddo) <a href="https://twitter.com/no_maddo/status/604540519188815872">2015, 5月 30</a></blockquote>
-
-<p><blockquote class="twitter-tweet" lang="ja"><p lang="ja" dir="ltr"><a href="https://twitter.com/blackenedgold">@blackenedgold</a> ocamlでも例外ハンドラのはさみ方で末尾再帰になったり、ならなかったりするというのは聞いたことがあるので多分あたりな気がします</p>&mdash; Ocamlアイドル (@no_maddo) <a href="https://twitter.com/no_maddo/status/604545844000325632">2015, 5月 30</a></blockquote>
-<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script></p>
-
+<blockquote class="twitter-tweet" lang="ja"><p lang="ja" dir="ltr"><a href="https://twitter.com/blackenedgold">@blackenedgold</a> ocamlでも例外ハンドラのはさみ方で末尾再帰になったり、ならなかったりするというのは聞いたことがあるので多分あたりな気がします</p>&mdash; Ocamlアイドル (@no_maddo) <a href="https://twitter.com/no_maddo/status/604545844000325632">2015, 5月 30</a></blockquote>
+<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
 <p>ということで実験してみましょう。</p>
-
 <p>次のような何がしたいのか分からないループのベンチマークを取ってみます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="kr">let</span>
-    <span class="kr">val</span> <span class="nv">arr</span> <span class="p">=</span> <span class="nn">Array.</span><span class="n">array</span><span class="p">(</span><span class="mi">1000000</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
-    <span class="kr">val</span> <span class="nv">i</span> <span class="p">=</span> <span class="n">ref</span> <span class="mi">0</span>
-    <span class="kr">fun</span> <span class="nf">loop</span> <span class="p">()</span> <span class="n">=</span> <span class="p">(</span>
-        <span class="nn">Array.</span><span class="n">update</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">!i</span><span class="p">,</span> <span class="mi">1</span><span class="p">);</span>
-        <span class="n">i</span> <span class="n">:=</span> <span class="p">(</span><span class="n">!i</span><span class="p">)</span> <span class="n">+</span> <span class="mi">1</span><span class="p">;</span>
-        <span class="n">loop</span> <span class="p">()</span>
-    <span class="p">)</span>
-<span class="kr">in</span>
-    <span class="nn">Benchmark.</span><span class="n">benchmark</span> <span class="s2">&#34;loop&#34;</span> <span class="mi">1</span> <span class="p">(</span><span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> 
-                                     <span class="n">loop</span><span class="p">()</span>
-                                 <span class="p">)</span>
-<span class="kr">end</span></code></pre></div>
-<p>結果は無限ループではなく</p>
-<pre tabindex="0"><code>uncaught exception: Subscript</code></pre>
-<p>と、境界外アクセスの例外が出ます。因みにSubscripは添字って意味だそうです。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="kr">let</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">arr</span> <span class="p">=</span> <span class="nn">Array.</span><span class="n">array</span><span class="p">(</span><span class="mi">1000000</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">i</span> <span class="p">=</span> <span class="n">ref</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">fun</span> <span class="nf">loop</span> <span class="p">()</span> <span class="n">=</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="nn">Array.</span><span class="n">update</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">!i</span><span class="p">,</span> <span class="mi">1</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">        <span class="n">i</span> <span class="n">:=</span> <span class="p">(</span><span class="n">!i</span><span class="p">)</span> <span class="n">+</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="n">loop</span> <span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">in</span>
+</span></span><span class="line"><span class="cl">    <span class="nn">Benchmark.</span><span class="n">benchmark</span> <span class="s2">&#34;loop&#34;</span> <span class="mi">1</span> <span class="p">(</span><span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> 
+</span></span><span class="line"><span class="cl">                                     <span class="n">loop</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">                                 <span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">end</span>
+</span></span></code></pre></div><p>結果は無限ループではなく</p>
+<pre tabindex="0"><code>uncaught exception: Subscript
+</code></pre><p>と、境界外アクセスの例外が出ます。因みにSubscripは添字って意味だそうです。</p>
 <p>これではベンチマークがとれないので、例外が起きたらループを抜けるようにしてみましょう。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="kr">let</span>
-    <span class="kr">val</span> <span class="nv">arr</span> <span class="p">=</span> <span class="nn">Array.</span><span class="n">array</span><span class="p">(</span><span class="mi">1000000</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
-    <span class="kr">val</span> <span class="nv">i</span> <span class="p">=</span> <span class="n">ref</span> <span class="mi">0</span>
-    <span class="kr">fun</span> <span class="nf">loop</span> <span class="p">()</span> <span class="n">=</span> <span class="p">(</span>
-        <span class="nn">Array.</span><span class="n">update</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">!i</span><span class="p">,</span> <span class="mi">1</span><span class="p">);</span>
-        <span class="n">i</span> <span class="n">:=</span> <span class="p">(</span><span class="n">!i</span><span class="p">)</span> <span class="n">+</span> <span class="mi">1</span><span class="p">;</span>
-        <span class="n">loop</span> <span class="p">()</span>
-    <span class="p">)</span>
-<span class="kr">in</span>
-    <span class="nn">Benchmark.</span><span class="n">benchmark</span> <span class="s2">&#34;loop&#34;</span> <span class="mi">1</span> <span class="p">(</span><span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> 
-                                     <span class="n">loop</span><span class="p">()</span>
-                                     <span class="kr">handle</span> <span class="n">Subscript</span> <span class="n">=&gt;</span> <span class="p">()</span>
-                                 <span class="p">)</span>
-<span class="kr">end</span></code></pre></div><pre tabindex="0"><code>loop
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="kr">let</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">arr</span> <span class="p">=</span> <span class="nn">Array.</span><span class="n">array</span><span class="p">(</span><span class="mi">1000000</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">i</span> <span class="p">=</span> <span class="n">ref</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">fun</span> <span class="nf">loop</span> <span class="p">()</span> <span class="n">=</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="nn">Array.</span><span class="n">update</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">!i</span><span class="p">,</span> <span class="mi">1</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">        <span class="n">i</span> <span class="n">:=</span> <span class="p">(</span><span class="n">!i</span><span class="p">)</span> <span class="n">+</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="n">loop</span> <span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">in</span>
+</span></span><span class="line"><span class="cl">    <span class="nn">Benchmark.</span><span class="n">benchmark</span> <span class="s2">&#34;loop&#34;</span> <span class="mi">1</span> <span class="p">(</span><span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> 
+</span></span><span class="line"><span class="cl">                                     <span class="n">loop</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">                                     <span class="kr">handle</span> <span class="n">Subscript</span> <span class="n">=&gt;</span> <span class="p">()</span>
+</span></span><span class="line"><span class="cl">                                 <span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">end</span>
+</span></span></code></pre></div><pre tabindex="0"><code>loop
  Time:
     [Total] 5 ms/1calls
-  [Average] 5.0 ms/call</code></pre>
-<p>一瞬ですね。では、末尾呼び出し位置でhandleしてみます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="kr">let</span>
-    <span class="kr">val</span> <span class="nv">arr</span> <span class="p">=</span> <span class="nn">Array.</span><span class="n">array</span><span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
-    <span class="kr">val</span> <span class="nv">i</span> <span class="p">=</span> <span class="n">ref</span> <span class="mi">0</span>
-    <span class="kr">fun</span> <span class="nf">loop</span> <span class="p">()</span> <span class="n">=</span> <span class="p">(</span>
-        <span class="nn">Array.</span><span class="n">update</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">!i</span><span class="p">,</span> <span class="mi">1</span><span class="p">);</span>
-        <span class="n">i</span> <span class="n">:=</span> <span class="p">(</span><span class="n">!i</span><span class="p">)</span> <span class="n">+</span> <span class="mi">1</span><span class="p">;</span>
-        <span class="n">loop</span> <span class="p">()</span>
-        <span class="kr">handle</span> <span class="n">Subscript</span> <span class="n">=&gt;</span> <span class="p">()</span>
-    <span class="p">)</span>
-<span class="kr">in</span>
-    <span class="nn">Benchmark.</span><span class="n">benchmark</span> <span class="s2">&#34;loop&#34;</span> <span class="mi">1</span> <span class="p">(</span><span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> 
-                                     <span class="n">loop</span><span class="p">()</span>
-                                 <span class="p">)</span>
-<span class="kr">end</span></code></pre></div><pre tabindex="0"><code>loop
+  [Average] 5.0 ms/call
+</code></pre><p>一瞬ですね。では、末尾呼び出し位置でhandleしてみます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="kr">let</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">arr</span> <span class="p">=</span> <span class="nn">Array.</span><span class="n">array</span><span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">i</span> <span class="p">=</span> <span class="n">ref</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">fun</span> <span class="nf">loop</span> <span class="p">()</span> <span class="n">=</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="nn">Array.</span><span class="n">update</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">!i</span><span class="p">,</span> <span class="mi">1</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">        <span class="n">i</span> <span class="n">:=</span> <span class="p">(</span><span class="n">!i</span><span class="p">)</span> <span class="n">+</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="n">loop</span> <span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="kr">handle</span> <span class="n">Subscript</span> <span class="n">=&gt;</span> <span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">in</span>
+</span></span><span class="line"><span class="cl">    <span class="nn">Benchmark.</span><span class="n">benchmark</span> <span class="s2">&#34;loop&#34;</span> <span class="mi">1</span> <span class="p">(</span><span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> 
+</span></span><span class="line"><span class="cl">                                     <span class="n">loop</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">                                 <span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">end</span>
+</span></span></code></pre></div><pre tabindex="0"><code>loop
  Time:
     [Total] 1729 ms/1calls
-  [Average] 1729.0 ms/call</code></pre>
-<p>ふーむ。やはり大分遅くなってますね。しかしループ内で例外をハンドルした所為かもしれないのでループ内で非末尾位置で例外をハンドルしてみます。大域脱出に例外使いますがまあ、パフォーマンスに問題ないでしょう。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">exception</span> <span class="nc">Exit</span>
-<span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="kr">let</span>
-    <span class="kr">val</span> <span class="nv">arr</span> <span class="p">=</span> <span class="nn">Array.</span><span class="n">array</span><span class="p">(</span><span class="mi">1000000</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
-    <span class="kr">val</span> <span class="nv">i</span> <span class="p">=</span> <span class="n">ref</span> <span class="mi">0</span>
-    <span class="kr">fun</span> <span class="nf">loop</span> <span class="p">()</span> <span class="n">=</span> <span class="p">(</span>
-        <span class="nn">Array.</span><span class="n">update</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">!i</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-        <span class="kr">handle</span> <span class="n">Subscript</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Exit</span><span class="p">;</span>
-        <span class="n">i</span> <span class="n">:=</span> <span class="p">(</span><span class="n">!i</span><span class="p">)</span> <span class="n">+</span> <span class="mi">1</span><span class="p">;</span>
-        <span class="n">loop</span> <span class="p">()</span>
-    <span class="p">)</span>
-<span class="kr">in</span>
-    <span class="nn">Benchmark.</span><span class="n">benchmark</span> <span class="s2">&#34;loop&#34;</span> <span class="mi">1</span> <span class="p">(</span><span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> 
-                                     <span class="n">loop</span><span class="p">()</span>
-                                     <span class="kr">handle</span> <span class="n">Exit</span> <span class="n">=&gt;</span> <span class="p">()</span>
-                                 <span class="p">)</span> 
-<span class="kr">end</span></code></pre></div><pre tabindex="0"><code>loop
+  [Average] 1729.0 ms/call
+</code></pre><p>ふーむ。やはり大分遅くなってますね。しかしループ内で例外をハンドルした所為かもしれないのでループ内で非末尾位置で例外をハンドルしてみます。大域脱出に例外使いますがまあ、パフォーマンスに問題ないでしょう。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="kr">exception</span> <span class="nc">Exit</span>
+</span></span><span class="line"><span class="cl"><span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="kr">let</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">arr</span> <span class="p">=</span> <span class="nn">Array.</span><span class="n">array</span><span class="p">(</span><span class="mi">1000000</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">i</span> <span class="p">=</span> <span class="n">ref</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">fun</span> <span class="nf">loop</span> <span class="p">()</span> <span class="n">=</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="nn">Array.</span><span class="n">update</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">!i</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="kr">handle</span> <span class="n">Subscript</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Exit</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="n">i</span> <span class="n">:=</span> <span class="p">(</span><span class="n">!i</span><span class="p">)</span> <span class="n">+</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="n">loop</span> <span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">in</span>
+</span></span><span class="line"><span class="cl">    <span class="nn">Benchmark.</span><span class="n">benchmark</span> <span class="s2">&#34;loop&#34;</span> <span class="mi">1</span> <span class="p">(</span><span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> 
+</span></span><span class="line"><span class="cl">                                     <span class="n">loop</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">                                     <span class="kr">handle</span> <span class="n">Exit</span> <span class="n">=&gt;</span> <span class="p">()</span>
+</span></span><span class="line"><span class="cl">                                 <span class="p">)</span> 
+</span></span><span class="line"><span class="cl"><span class="kr">end</span>
+</span></span></code></pre></div><pre tabindex="0"><code>loop
  Time:
     [Total] 11 ms/1calls
-  [Average] 11.0 ms/call</code></pre>
-<p>やはり多少は遅くなってますが末尾位置の時のように極端には遅くなってないようです。</p>
-
+  [Average] 11.0 ms/call
+</code></pre><p>やはり多少は遅くなってますが末尾位置の時のように極端には遅くなってないようです。</p>
 <p>最後に非末尾再帰ループの速度を測っておきましょう。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="kr">let</span>
-    <span class="kr">val</span> <span class="nv">arr</span> <span class="p">=</span> <span class="nn">Array.</span><span class="n">array</span><span class="p">(</span><span class="mi">1000000</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
-    <span class="kr">val</span> <span class="nv">i</span> <span class="p">=</span> <span class="n">ref</span> <span class="mi">0</span>
-    <span class="kr">fun</span> <span class="nf">loop</span> <span class="p">()</span> <span class="n">=</span> <span class="p">(</span>
-        <span class="nn">Array.</span><span class="n">update</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">!i</span><span class="p">,</span> <span class="mi">1</span><span class="p">);</span>
-        <span class="n">i</span> <span class="n">:=</span> <span class="p">(</span><span class="n">!i</span><span class="p">)</span> <span class="n">+</span> <span class="mi">1</span><span class="p">;</span>
-        <span class="mi">1</span> <span class="n">+</span> <span class="p">(</span><span class="n">loop</span> <span class="p">())</span>
-    <span class="p">)</span>
-<span class="kr">in</span>
-    <span class="nn">Benchmark.</span><span class="n">benchmark</span> <span class="s2">&#34;loop&#34;</span> <span class="mi">1</span> <span class="p">(</span><span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> 
-                                     <span class="n">loop</span><span class="p">()</span>
-                                     <span class="kr">handle</span> <span class="n">Subscript</span> <span class="n">=&gt;</span> <span class="mi">0</span>
-                                 <span class="p">)</span> 
-<span class="kr">end</span></code></pre></div><pre tabindex="0"><code>loop
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="kr">let</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">arr</span> <span class="p">=</span> <span class="nn">Array.</span><span class="n">array</span><span class="p">(</span><span class="mi">1000000</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">i</span> <span class="p">=</span> <span class="n">ref</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">fun</span> <span class="nf">loop</span> <span class="p">()</span> <span class="n">=</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="nn">Array.</span><span class="n">update</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">!i</span><span class="p">,</span> <span class="mi">1</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">        <span class="n">i</span> <span class="n">:=</span> <span class="p">(</span><span class="n">!i</span><span class="p">)</span> <span class="n">+</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="mi">1</span> <span class="n">+</span> <span class="p">(</span><span class="n">loop</span> <span class="p">())</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">in</span>
+</span></span><span class="line"><span class="cl">    <span class="nn">Benchmark.</span><span class="n">benchmark</span> <span class="s2">&#34;loop&#34;</span> <span class="mi">1</span> <span class="p">(</span><span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> 
+</span></span><span class="line"><span class="cl">                                     <span class="n">loop</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">                                     <span class="kr">handle</span> <span class="n">Subscript</span> <span class="n">=&gt;</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">                                 <span class="p">)</span> 
+</span></span><span class="line"><span class="cl"><span class="kr">end</span>
+</span></span></code></pre></div><pre tabindex="0"><code>loop
  Time:
     [Total] 403 ms/1calls
-  [Average] 403.0 ms/call</code></pre>
-<p>思ったより遅いですね。ループか末尾例外ハンドルかというと末尾例外ハンドルに近いスコア。</p>
-
+  [Average] 403.0 ms/call
+</code></pre><p>思ったより遅いですね。ループか末尾例外ハンドルかというと末尾例外ハンドルに近いスコア。</p>
 <h1 id="考察">考察</h1>
-
 <p>末尾位置で例外をハンドルすると遅くなる原因はTCOが効かないから、で合ってそうです。</p>
-
 <p>しかしそれにしても遅いですね。例外ハンドラをスタックに積むのが1関数呼び出しくらいならせいぜい倍くらいの遅さで済む筈です。
 もしかしたらループ展開とかの外の最適化も掛からなくなるのかもしれません。</p>
-
 <h1 id="結論">結論</h1>
-
 <p>例外をハンドルする時は位置に気をつけましょうね。</p>
-
 <h1 id="付録a">付録A</h1>
-
 <p>ベンチマーカはこんなコードです。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">structure</span> <span class="nn">Benchmark</span> <span class="n">=</span>
-<span class="kr">struct</span>
-<span class="kr">fun</span> <span class="nf">repeat</span> <span class="mi">0</span> <span class="n">f</span> <span class="n">=</span> <span class="p">()</span>
-  <span class="p">|</span> <span class="nf">repeat</span> <span class="n">n</span> <span class="n">f</span> <span class="n">=</span>  <span class="p">(</span><span class="n">f</span> <span class="p">();</span><span class="n">repeat</span> <span class="p">(</span><span class="n">n</span> <span class="n">-</span> <span class="mi">1</span><span class="p">)</span> <span class="n">f</span><span class="p">)</span>
- 
-<span class="kr">fun</span> <span class="nf">bench</span> <span class="n">n</span> <span class="n">f</span> <span class="n">=</span> <span class="kr">let</span>
-    <span class="kr">val</span> <span class="nv">startTime</span> <span class="p">=</span> <span class="nn">Time.</span><span class="n">now</span> <span class="p">()</span>
-    <span class="kr">val</span> <span class="p">_</span> <span class="n">=</span> <span class="n">repeat</span> <span class="n">n</span> <span class="n">f</span>
-    <span class="kr">val</span> <span class="nv">endTime</span> <span class="p">=</span> <span class="nn">Time.</span><span class="n">now</span> <span class="p">()</span>
-<span class="kr">in</span>
-    <span class="nn">Time.</span><span class="n">toMilliseconds</span> <span class="p">(</span><span class="nn">Time.</span><span class="n">-</span><span class="p">(</span><span class="n">endTime</span><span class="p">,</span> <span class="n">startTime</span><span class="p">))</span>
-<span class="kr">end</span>
- 
-<span class="kr">fun</span> <span class="nf">benchmark</span> <span class="n">name</span> <span class="n">n</span> <span class="n">f</span> <span class="n">=</span> <span class="kr">let</span>
-    <span class="kr">val</span> <span class="nv">time</span> <span class="p">=</span> <span class="n">bench</span> <span class="n">n</span> <span class="n">f</span>
-<span class="kr">in</span>
-    <span class="n">print</span> <span class="p">(</span><span class="n">name</span> <span class="n">^</span> <span class="s2">&#34;</span><span class="se">\n</span><span class="s2">&#34;</span><span class="p">);</span>
-    <span class="n">print</span> <span class="p">(</span><span class="s2">&#34; Time:</span><span class="se">\n</span><span class="s2">&#34;</span><span class="p">);</span>
-    <span class="n">print</span> <span class="p">(</span><span class="s2">&#34;    [Total] &#34;</span> <span class="n">^</span> <span class="p">(</span><span class="nn">LargeInt.</span><span class="n">toString</span> <span class="n">time</span><span class="p">)</span> <span class="n">^</span> <span class="s2">&#34; ms/&#34;</span> <span class="n">^</span> <span class="p">(</span><span class="nn">Int.</span><span class="n">toString</span> <span class="n">n</span><span class="p">)</span> <span class="n">^</span> <span class="s2">&#34;calls</span><span class="se">\n</span><span class="s2">&#34;</span><span class="p">);</span>
-    <span class="n">print</span> <span class="p">(</span><span class="s2">&#34;  [Average] &#34;</span> <span class="n">^</span> <span class="p">(</span><span class="nn">Real.</span><span class="n">toString</span><span class="p">((</span><span class="nn">Real.</span><span class="n">fromLargeInt</span> <span class="n">time</span><span class="p">)</span> <span class="n">/</span> <span class="p">(</span><span class="nn">Real.</span><span class="n">fromInt</span> <span class="n">n</span><span class="p">)))</span> <span class="n">^</span> <span class="s2">&#34; ms/call</span><span class="se">\n</span><span class="s2">&#34;</span><span class="p">)</span>
-<span class="kr">end</span>
-
-<span class="kr">fun</span> <span class="nf">nChars</span> <span class="n">n</span> <span class="n">char</span> <span class="n">=</span> <span class="nn">CharArray.</span><span class="n">vector</span><span class="p">(</span><span class="nn">CharArray.</span><span class="n">array</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">char</span><span class="p">))</span>
-
-<span class="kr">fun</span> <span class="nf">toWidth</span> <span class="n">width</span> <span class="n">str</span> <span class="n">=</span> <span class="kr">let</span>
-    <span class="kr">val</span> <span class="nv">len</span> <span class="p">=</span> <span class="nn">String.</span><span class="n">size</span> <span class="n">str</span>
-<span class="kr">in</span>
-    <span class="kr">if</span> <span class="n">len</span> <span class="n">&lt;</span> <span class="n">width</span>
-    <span class="kr">then</span> <span class="n">str</span> <span class="n">^</span> <span class="p">(</span><span class="n">nChars</span> <span class="p">(</span><span class="n">width</span> <span class="n">-</span> <span class="n">len</span><span class="p">)</span> <span class="sc">#&#34; &#34;</span><span class="p">)</span>
-    <span class="kr">else</span> <span class="n">str</span>
-<span class="kr">end</span>
-
-<span class="kr">fun</span> <span class="nf">histLine</span> <span class="n">width</span> <span class="n">base</span> <span class="n">value</span> <span class="n">=</span>
-  <span class="p">(</span><span class="n">nChars</span> <span class="p">(</span><span class="nn">Int.</span><span class="n">fromLarge</span><span class="p">(</span><span class="n">width</span> <span class="n">*</span> <span class="n">value</span> <span class="n">div</span> <span class="n">base</span><span class="p">))</span> <span class="sc">#&#34;*&#34;</span><span class="p">)</span> <span class="n">^</span> <span class="s2">&#34;</span><span class="se">\n</span><span class="s2">&#34;</span>
-
-<span class="kr">fun</span> <span class="nf">benchset</span> <span class="n">name</span> <span class="n">n</span> <span class="n">fs</span> <span class="n">=</span> <span class="kr">let</span>
-    <span class="kr">val</span> <span class="nv">res</span> <span class="p">=</span> <span class="nn">List.</span><span class="n">map</span> <span class="p">(</span><span class="kr">fn</span> <span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">bench</span> <span class="n">n</span> <span class="n">f</span><span class="p">))</span> <span class="n">fs</span>
-    <span class="kr">val</span> <span class="nv">max</span> <span class="p">=</span> <span class="nn">List.</span><span class="n">foldl</span> <span class="p">(</span><span class="kr">fn</span> <span class="p">((_,</span> <span class="n">time</span><span class="p">),</span> <span class="n">m</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="nn">LargeInt.</span><span class="n">max</span><span class="p">(</span><span class="n">time</span><span class="p">,</span> <span class="n">m</span><span class="p">))</span> <span class="mi">0</span> <span class="n">res</span>
-    <span class="kr">val</span> <span class="nv">maxLen</span> <span class="p">=</span> <span class="nn">List.</span><span class="n">foldl</span> <span class="p">(</span><span class="kr">fn</span> <span class="p">((</span><span class="n">label</span><span class="p">,</span> <span class="p">_),</span> <span class="n">m</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="nn">Int.</span><span class="n">max</span><span class="p">(</span><span class="nn">String.</span><span class="n">size</span> <span class="n">label</span><span class="p">,</span>  <span class="n">m</span><span class="p">))</span> <span class="mi">0</span> <span class="n">fs</span>
-<span class="kr">in</span>
-    <span class="n">print</span> <span class="s2">&#34;name:</span><span class="se">\n</span><span class="s2">&#34;</span><span class="p">;</span>
-    <span class="n">print</span> <span class="p">((</span><span class="n">nChars</span> <span class="p">((</span><span class="nn">String.</span><span class="n">size</span> <span class="s2">&#34; &#34;</span><span class="p">)</span> <span class="n">+</span> <span class="n">maxLen</span><span class="p">)</span> <span class="sc">#&#34;-&#34;</span><span class="p">)</span> <span class="n">^</span> <span class="s2">&#34;+&#34;</span> <span class="n">^</span> <span class="p">(</span><span class="n">nChars</span> <span class="p">((</span><span class="nn">String.</span><span class="n">size</span> <span class="s2">&#34;|&#34;</span><span class="p">)</span> <span class="n">+</span>  <span class="mi">50</span><span class="p">)</span> <span class="sc">#&#34;-&#34;</span><span class="p">)</span> <span class="n">^</span> <span class="s2">&#34;</span><span class="se">\n</span><span class="s2">&#34;</span><span class="p">);</span>
-    <span class="n">app</span> <span class="p">(</span><span class="kr">fn</span> <span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">time</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="n">print</span><span class="p">(</span><span class="s2">&#34; &#34;</span> <span class="n">^</span> <span class="p">(</span><span class="n">toWidth</span> <span class="n">maxLen</span> <span class="n">label</span><span class="p">)</span> <span class="n">^</span> <span class="s2">&#34;|&#34;</span> <span class="n">^</span><span class="p">(</span><span class="n">histLine</span> <span class="p">(</span><span class="mi">50</span><span class="kr">:</span><span class="nn">LargeInt.</span><span class="n">int</span><span class="p">)</span> <span class="n">max</span> <span class="n">time</span><span class="p">)))</span> <span class="n">res</span><span class="p">;</span>
-    <span class="n">print</span> <span class="p">((</span><span class="n">nChars</span> <span class="p">((</span><span class="nn">String.</span><span class="n">size</span> <span class="s2">&#34; &#34;</span><span class="p">)</span> <span class="n">+</span> <span class="n">maxLen</span><span class="p">)</span> <span class="sc">#&#34;-&#34;</span><span class="p">)</span> <span class="n">^</span> <span class="s2">&#34;+&#34;</span> <span class="n">^</span> <span class="p">(</span><span class="n">nChars</span> <span class="p">((</span><span class="nn">String.</span><span class="n">size</span> <span class="s2">&#34;|&#34;</span><span class="p">)</span> <span class="n">+</span>  <span class="mi">50</span><span class="p">)</span> <span class="sc">#&#34;-&#34;</span><span class="p">)</span> <span class="n">^</span> <span class="s2">&#34;</span><span class="se">\n</span><span class="s2">&#34;</span><span class="p">)</span>
-<span class="kr">end</span>
-
-<span class="kr">end</span></code></pre></div>
-<h1 id="付録b">付録B</h1>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="kr">structure</span> <span class="nn">Benchmark</span> <span class="n">=</span>
+</span></span><span class="line"><span class="cl"><span class="kr">struct</span>
+</span></span><span class="line"><span class="cl"><span class="kr">fun</span> <span class="nf">repeat</span> <span class="mi">0</span> <span class="n">f</span> <span class="n">=</span> <span class="p">()</span>
+</span></span><span class="line"><span class="cl">  <span class="p">|</span> <span class="nf">repeat</span> <span class="n">n</span> <span class="n">f</span> <span class="n">=</span>  <span class="p">(</span><span class="n">f</span> <span class="p">();</span><span class="n">repeat</span> <span class="p">(</span><span class="n">n</span> <span class="n">-</span> <span class="mi">1</span><span class="p">)</span> <span class="n">f</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"> 
+</span></span><span class="line"><span class="cl"><span class="kr">fun</span> <span class="nf">bench</span> <span class="n">n</span> <span class="n">f</span> <span class="n">=</span> <span class="kr">let</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">startTime</span> <span class="p">=</span> <span class="nn">Time.</span><span class="n">now</span> <span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="p">_</span> <span class="n">=</span> <span class="n">repeat</span> <span class="n">n</span> <span class="n">f</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">endTime</span> <span class="p">=</span> <span class="nn">Time.</span><span class="n">now</span> <span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="kr">in</span>
+</span></span><span class="line"><span class="cl">    <span class="nn">Time.</span><span class="n">toMilliseconds</span> <span class="p">(</span><span class="nn">Time.</span><span class="n">-</span><span class="p">(</span><span class="n">endTime</span><span class="p">,</span> <span class="n">startTime</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="kr">end</span>
+</span></span><span class="line"><span class="cl"> 
+</span></span><span class="line"><span class="cl"><span class="kr">fun</span> <span class="nf">benchmark</span> <span class="n">name</span> <span class="n">n</span> <span class="n">f</span> <span class="n">=</span> <span class="kr">let</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">time</span> <span class="p">=</span> <span class="n">bench</span> <span class="n">n</span> <span class="n">f</span>
+</span></span><span class="line"><span class="cl"><span class="kr">in</span>
+</span></span><span class="line"><span class="cl">    <span class="n">print</span> <span class="p">(</span><span class="n">name</span> <span class="n">^</span> <span class="s2">&#34;</span><span class="se">\n</span><span class="s2">&#34;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="n">print</span> <span class="p">(</span><span class="s2">&#34; Time:</span><span class="se">\n</span><span class="s2">&#34;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="n">print</span> <span class="p">(</span><span class="s2">&#34;    [Total] &#34;</span> <span class="n">^</span> <span class="p">(</span><span class="nn">LargeInt.</span><span class="n">toString</span> <span class="n">time</span><span class="p">)</span> <span class="n">^</span> <span class="s2">&#34; ms/&#34;</span> <span class="n">^</span> <span class="p">(</span><span class="nn">Int.</span><span class="n">toString</span> <span class="n">n</span><span class="p">)</span> <span class="n">^</span> <span class="s2">&#34;calls</span><span class="se">\n</span><span class="s2">&#34;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="n">print</span> <span class="p">(</span><span class="s2">&#34;  [Average] &#34;</span> <span class="n">^</span> <span class="p">(</span><span class="nn">Real.</span><span class="n">toString</span><span class="p">((</span><span class="nn">Real.</span><span class="n">fromLargeInt</span> <span class="n">time</span><span class="p">)</span> <span class="n">/</span> <span class="p">(</span><span class="nn">Real.</span><span class="n">fromInt</span> <span class="n">n</span><span class="p">)))</span> <span class="n">^</span> <span class="s2">&#34; ms/call</span><span class="se">\n</span><span class="s2">&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">end</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">fun</span> <span class="nf">nChars</span> <span class="n">n</span> <span class="n">char</span> <span class="n">=</span> <span class="nn">CharArray.</span><span class="n">vector</span><span class="p">(</span><span class="nn">CharArray.</span><span class="n">array</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">char</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">fun</span> <span class="nf">toWidth</span> <span class="n">width</span> <span class="n">str</span> <span class="n">=</span> <span class="kr">let</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">len</span> <span class="p">=</span> <span class="nn">String.</span><span class="n">size</span> <span class="n">str</span>
+</span></span><span class="line"><span class="cl"><span class="kr">in</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">if</span> <span class="n">len</span> <span class="n">&lt;</span> <span class="n">width</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">then</span> <span class="n">str</span> <span class="n">^</span> <span class="p">(</span><span class="n">nChars</span> <span class="p">(</span><span class="n">width</span> <span class="n">-</span> <span class="n">len</span><span class="p">)</span> <span class="sc">#&#34; &#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">else</span> <span class="n">str</span>
+</span></span><span class="line"><span class="cl"><span class="kr">end</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">fun</span> <span class="nf">histLine</span> <span class="n">width</span> <span class="n">base</span> <span class="n">value</span> <span class="n">=</span>
+</span></span><span class="line"><span class="cl">  <span class="p">(</span><span class="n">nChars</span> <span class="p">(</span><span class="nn">Int.</span><span class="n">fromLarge</span><span class="p">(</span><span class="n">width</span> <span class="n">*</span> <span class="n">value</span> <span class="n">div</span> <span class="n">base</span><span class="p">))</span> <span class="sc">#&#34;*&#34;</span><span class="p">)</span> <span class="n">^</span> <span class="s2">&#34;</span><span class="se">\n</span><span class="s2">&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">fun</span> <span class="nf">benchset</span> <span class="n">name</span> <span class="n">n</span> <span class="n">fs</span> <span class="n">=</span> <span class="kr">let</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">res</span> <span class="p">=</span> <span class="nn">List.</span><span class="n">map</span> <span class="p">(</span><span class="kr">fn</span> <span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">bench</span> <span class="n">n</span> <span class="n">f</span><span class="p">))</span> <span class="n">fs</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">max</span> <span class="p">=</span> <span class="nn">List.</span><span class="n">foldl</span> <span class="p">(</span><span class="kr">fn</span> <span class="p">((_,</span> <span class="n">time</span><span class="p">),</span> <span class="n">m</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="nn">LargeInt.</span><span class="n">max</span><span class="p">(</span><span class="n">time</span><span class="p">,</span> <span class="n">m</span><span class="p">))</span> <span class="mi">0</span> <span class="n">res</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">maxLen</span> <span class="p">=</span> <span class="nn">List.</span><span class="n">foldl</span> <span class="p">(</span><span class="kr">fn</span> <span class="p">((</span><span class="n">label</span><span class="p">,</span> <span class="p">_),</span> <span class="n">m</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="nn">Int.</span><span class="n">max</span><span class="p">(</span><span class="nn">String.</span><span class="n">size</span> <span class="n">label</span><span class="p">,</span>  <span class="n">m</span><span class="p">))</span> <span class="mi">0</span> <span class="n">fs</span>
+</span></span><span class="line"><span class="cl"><span class="kr">in</span>
+</span></span><span class="line"><span class="cl">    <span class="n">print</span> <span class="s2">&#34;name:</span><span class="se">\n</span><span class="s2">&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">print</span> <span class="p">((</span><span class="n">nChars</span> <span class="p">((</span><span class="nn">String.</span><span class="n">size</span> <span class="s2">&#34; &#34;</span><span class="p">)</span> <span class="n">+</span> <span class="n">maxLen</span><span class="p">)</span> <span class="sc">#&#34;-&#34;</span><span class="p">)</span> <span class="n">^</span> <span class="s2">&#34;+&#34;</span> <span class="n">^</span> <span class="p">(</span><span class="n">nChars</span> <span class="p">((</span><span class="nn">String.</span><span class="n">size</span> <span class="s2">&#34;|&#34;</span><span class="p">)</span> <span class="n">+</span>  <span class="mi">50</span><span class="p">)</span> <span class="sc">#&#34;-&#34;</span><span class="p">)</span> <span class="n">^</span> <span class="s2">&#34;</span><span class="se">\n</span><span class="s2">&#34;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="n">app</span> <span class="p">(</span><span class="kr">fn</span> <span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">time</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="n">print</span><span class="p">(</span><span class="s2">&#34; &#34;</span> <span class="n">^</span> <span class="p">(</span><span class="n">toWidth</span> <span class="n">maxLen</span> <span class="n">label</span><span class="p">)</span> <span class="n">^</span> <span class="s2">&#34;|&#34;</span> <span class="n">^</span><span class="p">(</span><span class="n">histLine</span> <span class="p">(</span><span class="mi">50</span><span class="kr">:</span><span class="nn">LargeInt.</span><span class="n">int</span><span class="p">)</span> <span class="n">max</span> <span class="n">time</span><span class="p">)))</span> <span class="n">res</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">print</span> <span class="p">((</span><span class="n">nChars</span> <span class="p">((</span><span class="nn">String.</span><span class="n">size</span> <span class="s2">&#34; &#34;</span><span class="p">)</span> <span class="n">+</span> <span class="n">maxLen</span><span class="p">)</span> <span class="sc">#&#34;-&#34;</span><span class="p">)</span> <span class="n">^</span> <span class="s2">&#34;+&#34;</span> <span class="n">^</span> <span class="p">(</span><span class="n">nChars</span> <span class="p">((</span><span class="nn">String.</span><span class="n">size</span> <span class="s2">&#34;|&#34;</span><span class="p">)</span> <span class="n">+</span>  <span class="mi">50</span><span class="p">)</span> <span class="sc">#&#34;-&#34;</span><span class="p">)</span> <span class="n">^</span> <span class="s2">&#34;</span><span class="se">\n</span><span class="s2">&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">end</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">end</span>
+</span></span></code></pre></div><h1 id="付録b">付録B</h1>
 <p>元々、なんでこの問題が生じたかというと一々境界チェックして配列にアクセスするより例外出させといた方が速いんじゃね？ってことでそういうコードを書いたからです。
 例外が出るってことは内部でも境界チェックしてる筈ですから。</p>
-
 <p>ということでどちらが速いか確認してみましょう。</p>
-
 <p>まず例外ハンドル方式。先程のままだと数ミリ秒で終わってたので配列の大きさを10倍しました。あと。実際に書きそうな書き方に変えました。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="kr">let</span>
-    <span class="kr">val</span> <span class="nv">len</span> <span class="p">=</span> <span class="mi">10000000</span>
-    <span class="kr">val</span> <span class="nv">arr</span> <span class="p">=</span> <span class="nn">Array.</span><span class="n">array</span><span class="p">(</span><span class="n">len</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
-    <span class="kr">fun</span> <span class="nf">loop</span> <span class="n">i</span> <span class="n">=</span> <span class="p">(</span>
-        <span class="nn">Array.</span><span class="n">update</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="mi">1</span><span class="p">);</span>
-        <span class="n">loop</span> <span class="p">(</span><span class="n">i</span> <span class="n">+</span> <span class="mi">1</span><span class="p">)</span>
-    <span class="p">)</span>
-<span class="kr">in</span>
-    <span class="nn">Benchmark.</span><span class="n">benchmark</span> <span class="s2">&#34;loop&#34;</span> <span class="mi">1</span> <span class="p">(</span><span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> 
-                                     <span class="n">loop</span> <span class="mi">0</span>
-                                     <span class="kr">handle</span> <span class="n">Subscript</span> <span class="n">=&gt;</span> <span class="p">()</span>
-                                 <span class="p">)</span> 
-<span class="kr">end</span></code></pre></div><pre tabindex="0"><code>loop
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="kr">let</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">len</span> <span class="p">=</span> <span class="mi">10000000</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">arr</span> <span class="p">=</span> <span class="nn">Array.</span><span class="n">array</span><span class="p">(</span><span class="n">len</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">fun</span> <span class="nf">loop</span> <span class="n">i</span> <span class="n">=</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="nn">Array.</span><span class="n">update</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="mi">1</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">        <span class="n">loop</span> <span class="p">(</span><span class="n">i</span> <span class="n">+</span> <span class="mi">1</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">in</span>
+</span></span><span class="line"><span class="cl">    <span class="nn">Benchmark.</span><span class="n">benchmark</span> <span class="s2">&#34;loop&#34;</span> <span class="mi">1</span> <span class="p">(</span><span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> 
+</span></span><span class="line"><span class="cl">                                     <span class="n">loop</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">                                     <span class="kr">handle</span> <span class="n">Subscript</span> <span class="n">=&gt;</span> <span class="p">()</span>
+</span></span><span class="line"><span class="cl">                                 <span class="p">)</span> 
+</span></span><span class="line"><span class="cl"><span class="kr">end</span>
+</span></span></code></pre></div><pre tabindex="0"><code>loop
  Time:
     [Total] 48 ms/1calls
-  [Average] 48.0 ms/call</code></pre>
-<p>まあ、こんなもんですね。</p>
-
+  [Average] 48.0 ms/call
+</code></pre><p>まあ、こんなもんですね。</p>
 <p>次にifで分岐するやりかた。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="kr">let</span>
-    <span class="kr">val</span> <span class="nv">len</span> <span class="p">=</span> <span class="mi">10000000</span>
-    <span class="kr">val</span> <span class="nv">arr</span> <span class="p">=</span> <span class="nn">Array.</span><span class="n">array</span><span class="p">(</span><span class="n">len</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
-    <span class="kr">fun</span>
-    <span class="nf">loop</span> <span class="n">i</span> <span class="n">=</span> <span class="kr">if</span> <span class="n">i</span> <span class="n">&lt;</span> <span class="n">len</span>
-             <span class="kr">then</span> <span class="p">(</span>
-                 <span class="nn">Array.</span><span class="n">update</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="mi">1</span><span class="p">);</span>
-                 <span class="n">loop</span> <span class="p">(</span><span class="n">i</span> <span class="n">+</span> <span class="mi">1</span><span class="p">))</span>
-             <span class="kr">else</span> <span class="p">()</span>
-<span class="kr">in</span>
-    <span class="nn">Benchmark.</span><span class="n">benchmark</span> <span class="s2">&#34;loop&#34;</span> <span class="mi">1</span> <span class="p">(</span><span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> 
-                                     <span class="n">loop</span> <span class="mi">0</span>
-                                     <span class="kr">handle</span> <span class="n">Subscript</span> <span class="n">=&gt;</span> <span class="p">()</span>
-                                 <span class="p">)</span> 
-<span class="kr">end</span></code></pre></div><pre tabindex="0"><code>loop
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="kr">let</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">len</span> <span class="p">=</span> <span class="mi">10000000</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">arr</span> <span class="p">=</span> <span class="nn">Array.</span><span class="n">array</span><span class="p">(</span><span class="n">len</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">fun</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">loop</span> <span class="n">i</span> <span class="n">=</span> <span class="kr">if</span> <span class="n">i</span> <span class="n">&lt;</span> <span class="n">len</span>
+</span></span><span class="line"><span class="cl">             <span class="kr">then</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">                 <span class="nn">Array.</span><span class="n">update</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="mi">1</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">                 <span class="n">loop</span> <span class="p">(</span><span class="n">i</span> <span class="n">+</span> <span class="mi">1</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">             <span class="kr">else</span> <span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="kr">in</span>
+</span></span><span class="line"><span class="cl">    <span class="nn">Benchmark.</span><span class="n">benchmark</span> <span class="s2">&#34;loop&#34;</span> <span class="mi">1</span> <span class="p">(</span><span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> 
+</span></span><span class="line"><span class="cl">                                     <span class="n">loop</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">                                     <span class="kr">handle</span> <span class="n">Subscript</span> <span class="n">=&gt;</span> <span class="p">()</span>
+</span></span><span class="line"><span class="cl">                                 <span class="p">)</span> 
+</span></span><span class="line"><span class="cl"><span class="kr">end</span>
+</span></span></code></pre></div><pre tabindex="0"><code>loop
  Time:
     [Total] 96 ms/1calls
-  [Average] 96.0 ms/call</code></pre>
-<p>倍くらい遅くなってますね。</p>
-
+  [Average] 96.0 ms/call
+</code></pre><p>倍くらい遅くなってますね。</p>
 <p>ということでみだりに境界チェックするより例外を出させといた方が速いようです。</p>
                     </section>
                 </article>

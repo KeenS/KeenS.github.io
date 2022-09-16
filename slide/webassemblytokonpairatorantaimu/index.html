@@ -126,11 +126,10 @@
     </header>
     <div class="reveal">
         <div class="slides">
-            <section data-markdown
+            <textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # WebAssemblyとコンパイラとランタイム
 ----------------------
 [emscripten night !! #3 - connpass](https://emsn.connpass.com/event/48100/)
@@ -452,9 +451,7 @@ fun main: () -> i64 = {
   )<------+
 </code>
 </pre>
-
-===
-
+<p>===</p>
 <pre>
 <code>
 (<span class='hljs-keyword'>block</span>
@@ -466,20 +463,19 @@ fun main: () -> i64 = {
   )<------+
 </code>
 </pre>
-
-===
-
-# loopと前方ジャンプ
-------------
-
-
-* `loop` + `break`で後方ジャンプ
-  + `loop` からの `break` はいわゆる `continue`
-* 開き括弧の位置にジャンプ
-* 閉じ括弧の位置は自由
-
-===
-
+<p>===</p>
+<h1 id="loopと前方ジャンプ">loopと前方ジャンプ</h1>
+<hr>
+<ul>
+<li><code>loop</code> + <code>break</code>で後方ジャンプ
+<ul>
+<li><code>loop</code> からの <code>break</code> はいわゆる <code>continue</code></li>
+</ul>
+</li>
+<li>開き括弧の位置にジャンプ</li>
+<li>閉じ括弧の位置は自由</li>
+</ul>
+<p>===</p>
 <pre>
 <code>
 (<span class='hljs-keyword'>loop</span><----+
@@ -489,10 +485,7 @@ fun main: () -> i64 = {
   )
 </code>
 </pre>
-
-
-===
-
+<p>===</p>
 <pre>
 <code>
 (<span class='hljs-keyword'>loop</span><----+
@@ -504,384 +497,378 @@ fun main: () -> i64 = {
   )
 </code>
 </pre>
-
-
-===
-# ジャンプのクロス
-------------------
-
-* 単一gotoは割り当て出来る
-* 複数のgotoが入り組んだら？
-
-===
-
-# 絶対出来る
-------------
-
-* チューリング完全なら必ず書ける
-  + whileとswitchでステートマシン作ればいい
-* 効率的とは限らない
-* 効率的なコードを吐きたい
-
-===
-# ステートマシンはつらい
------------------------
-
-* これをナイーブに変換すると…
-
-```c
-#include <stdio.h>
-int main() {
-  int sum = 0;
-  for (int i = 1; i <= 100; i++)
-    sum += i;
-  printf("1+...+100=%d\n", sum);
-  return 0;
-}
-```
-
-===
-
-```javascript
-function _main() {
-    var __stackBase__ = STACKTOP;
-    STACKTOP += 12;
-    var __label__ = -1;
-    while(1)
-        switch(__label__) {
-        case -1:
-            ...
-            __label__ = 0;
-            break;
-        case 0:
-            ...
-            if ($4) {
-              __label__ = 1;
-              break;
-            } else {
-              __label__ = 2;
-              break;
-            }
-        case 1:
-            ...
-            __label__ = 3;
-            break;
-        case 3:
-            ...
-            __label__ = 0;
-            break;
-        case 2:
-            ...
-            return 0;
-        }
-}
-```
-
-===
-# ステートマシンはつらい
-----------------------
-
-* どうにかする必要がある
-  + emscriptenは[ReLoop](https://github.com/kripken/emscripten/blob/master/docs/paper.pdf)で最適化
-* なんか気に食わなかった
-* そもそもステートマシンを使わずに生成したい
-* 複数のgotoが入り組んだパターンを自分で考えたの紹介します。
-* CFGと基本ブロックは知ってるかな？
-
-===
-# 前前
-------
-
-```
-[ ]--+
+<p>===</p>
+<h1 id="ジャンプのクロス">ジャンプのクロス</h1>
+<hr>
+<ul>
+<li>単一gotoは割り当て出来る</li>
+<li>複数のgotoが入り組んだら？</li>
+</ul>
+<p>===</p>
+<h1 id="絶対出来る">絶対出来る</h1>
+<hr>
+<ul>
+<li>チューリング完全なら必ず書ける
+<ul>
+<li>whileとswitchでステートマシン作ればいい</li>
+</ul>
+</li>
+<li>効率的とは限らない</li>
+<li>効率的なコードを吐きたい</li>
+</ul>
+<p>===</p>
+<h1 id="ステートマシンはつらい">ステートマシンはつらい</h1>
+<hr>
+<ul>
+<li>これをナイーブに変換すると…</li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;stdio.h&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span><span class="kt">int</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">int</span> <span class="n">sum</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;=</span> <span class="mi">100</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="n">sum</span> <span class="o">+=</span> <span class="n">i</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">printf</span><span class="p">(</span><span class="s">&#34;1+...+100=%d</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">,</span> <span class="n">sum</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>===</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-javascript" data-lang="javascript"><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">_main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">__stackBase__</span> <span class="o">=</span> <span class="nx">STACKTOP</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">STACKTOP</span> <span class="o">+=</span> <span class="mi">12</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">__label__</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">while</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="k">switch</span><span class="p">(</span><span class="nx">__label__</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">case</span> <span class="o">-</span><span class="mi">1</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">            <span class="p">...</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">__label__</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">            <span class="k">break</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="k">case</span> <span class="mi">0</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">            <span class="p">...</span>
+</span></span><span class="line"><span class="cl">            <span class="k">if</span> <span class="p">(</span><span class="nx">$4</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">              <span class="nx">__label__</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">              <span class="k">break</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">            <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">              <span class="nx">__label__</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">              <span class="k">break</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">            <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="k">case</span> <span class="mi">1</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">            <span class="p">...</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">__label__</span> <span class="o">=</span> <span class="mi">3</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">            <span class="k">break</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="k">case</span> <span class="mi">3</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">            <span class="p">...</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">__label__</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">            <span class="k">break</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="k">case</span> <span class="mi">2</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">            <span class="p">...</span>
+</span></span><span class="line"><span class="cl">            <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>===</p>
+<h1 id="ステートマシンはつらい-1">ステートマシンはつらい</h1>
+<hr>
+<ul>
+<li>どうにかする必要がある
+<ul>
+<li>emscriptenは<a href="https://github.com/kripken/emscripten/blob/master/docs/paper.pdf">ReLoop</a>で最適化</li>
+</ul>
+</li>
+<li>なんか気に食わなかった</li>
+<li>そもそもステートマシンを使わずに生成したい</li>
+<li>複数のgotoが入り組んだパターンを自分で考えたの紹介します。</li>
+<li>CFGと基本ブロックは知ってるかな？</li>
+</ul>
+<p>===</p>
+<h1 id="前前">前前</h1>
+<hr>
+<pre tabindex="0"><code>[ ]--+
  |   |
 [ ]--+-+
  |   | |
-[ ]<-+ |
+[ ]&lt;-+ |
  |     |
-[ ]<---+
-```
-
-===
-# 前前
-------
-
-```
-(block
+[ ]&lt;---+
+</code></pre><p>===</p>
+<h1 id="前前-1">前前</h1>
+<hr>
+<pre tabindex="0"><code>(block
   (block
     ...
     (br 0)-+
     ...    |
     (br 1)-+-+
-  )<-------+ |
-)<-----------+
-```
-
-===
-# 後後
-------
-
-
-```
-[ ]<-+
+  )&lt;-------+ |
+)&lt;-----------+
+</code></pre><p>===</p>
+<h1 id="後後">後後</h1>
+<hr>
+<pre tabindex="0"><code>[ ]&lt;-+
  |   |
-[ ]<-+-+
+[ ]&lt;-+-+
  |   | |
 [ ]--+ |
  |     |
 [ ]----+
-```
-
-===
-# 後後
-------
-
-```
-(loop<-----+
-  (loop<---+-+
+</code></pre><p>===</p>
+<h1 id="後後-1">後後</h1>
+<hr>
+<pre tabindex="0"><code>(loop&lt;-----+
+  (loop&lt;---+-+
     ...    | |
     (br 1)-+ |
     ...      |
     (br 0)---+
   )
 )
-```
-
-===
-# 後前
-------
-
-
-```
-[ ]<-+
+</code></pre><p>===</p>
+<h1 id="後前">後前</h1>
+<hr>
+<pre tabindex="0"><code>[ ]&lt;-+
  |   |
 [ ]--+-+
  |   | |
 [ ]--+ |
  |     |
-[ ]<---+
-```
-
-===
-# 後前
-------
-
-```
-(block
-  (loop<---+
+[ ]&lt;---+
+</code></pre><p>===</p>
+<h1 id="後前-1">後前</h1>
+<hr>
+<pre tabindex="0"><code>(block
+  (loop&lt;---+
     ...    |
     (br 1)-+-+
     ...    | |
     (br 0)-+ |
   )          |
-)<-----------+
-```
-
-===
-# 前後
-------
-
-```
-[ ]--+
+)&lt;-----------+
+</code></pre><p>===</p>
+<h1 id="前後">前後</h1>
+<hr>
+<pre tabindex="0"><code>[ ]--+
  |   |
-[ ]<-+-+
+[ ]&lt;-+-+
  |   | |
-[ ]<-+ |
+[ ]&lt;-+ |
  |     |
 [ ]----+
-```
-
-===
-# 前後
-------
-
-* 素直には出来ない…？
-* 部分的にステートマーシン作る？
-
-===
-# 部分的ステートマーシン
--------------------------
-
-```
-[1]--+
+</code></pre><p>===</p>
+<h1 id="前後-1">前後</h1>
+<hr>
+<ul>
+<li>素直には出来ない…？</li>
+<li>部分的にステートマーシン作る？</li>
+</ul>
+<p>===</p>
+<h1 id="部分的ステートマーシン">部分的ステートマーシン</h1>
+<hr>
+<pre tabindex="0"><code>[1]--+
  |   |
-[2]<-+-+
+[2]&lt;-+-+
  |   | |
-[3]<-+ |
+[3]&lt;-+ |
  |     |
 [4]----+
-```
-
-===
-# 部分的ステートマーシン
--------------------------
-
-```
-   [1] label = 0
+</code></pre><p>===</p>
+<h1 id="部分的ステートマーシン-1">部分的ステートマーシン</h1>
+<hr>
+<pre tabindex="0"><code>   [1] label = 0
     |
-+->[br]-+ if label == 0
++-&gt;[br]-+ if label == 0
 |   |   | then goto 3
 |   |   | else goto 2
 |   |   |
 |  [2]  |
 |   |   |
-|  [3]<-+ label = 1
+|  [3]&lt;-+ label = 1
 |   |
 +--[4]
-```
-
-===
-# コード生成
-
+</code></pre><p>===</p>
+<h1 id="コード生成">コード生成</h1>
 <!-- .slide: class="center" -->
-===
-
-# フォーマット
-------------
-
-* バイナリフォーマットとテキストフォーマットがある
-* バイナリ: wasm
-  + コンパクト
-  + intとかもパッキングする
-* テキスト: wast
-  + 人間可読+機械可読=S式
-  + 低級にもちょっと高級にも書ける
-  + 一旦アセンブラ噛まさないと動かない
-
-===
-
-# アセンブラ
-------------
-
-* オンメモリで生成するためにアセンブラ自作
-  + [KeenS/WebAssembler-rs: An in memory wasm assembler for Rust](https://github.com/KeenS/WebAssembler-rs)
-  + ブラウザで動かすのに必要
-  + 既存のツールは使えない
-* アセンブラ自体ブラウザで動かすのでRust製
-* まだ動かしてない
-
-===
-
-```rust
-let mut mb = ModuleBuilder::new();
-let f = mb.new_function(FunctionBuilder::new(funtype!((i32, i32) -> i32))
-    .code(|cb, args| {
-        cb.constant(2)
-            .get_local(args[0])
-            .i32_add()
-    })
-    .build());
-mb.export("addTwo", f);
-let module = mb.build();
-```
-
-===
-# スタック領域
--------------
-
-* Cでいう`struct foo x;`みたいにエフェメラルな多ワード領域が欲しい
-* WebAssemblyのローカルストレージはLVだけ
-  + 最大1ワードしか保存出来ない
-* 可能性
-  1. 諦めてメモリに確保（場合によっては最適化で消えるかも）
-  2. ワード毎に分割してLVに保存（大変だけど速そう）
-
-===
-# ランタイム
-
+<p>===</p>
+<h1 id="フォーマット">フォーマット</h1>
+<hr>
+<ul>
+<li>バイナリフォーマットとテキストフォーマットがある</li>
+<li>バイナリ: wasm
+<ul>
+<li>コンパクト</li>
+<li>intとかもパッキングする</li>
+</ul>
+</li>
+<li>テキスト: wast
+<ul>
+<li>人間可読+機械可読=S式</li>
+<li>低級にもちょっと高級にも書ける</li>
+<li>一旦アセンブラ噛まさないと動かない</li>
+</ul>
+</li>
+</ul>
+<p>===</p>
+<h1 id="アセンブラ">アセンブラ</h1>
+<hr>
+<ul>
+<li>オンメモリで生成するためにアセンブラ自作
+<ul>
+<li><a href="https://github.com/KeenS/WebAssembler-rs">KeenS/WebAssembler-rs: An in memory wasm assembler for Rust</a></li>
+<li>ブラウザで動かすのに必要</li>
+<li>既存のツールは使えない</li>
+</ul>
+</li>
+<li>アセンブラ自体ブラウザで動かすのでRust製</li>
+<li>まだ動かしてない</li>
+</ul>
+<p>===</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">mb</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ModuleBuilder</span>::<span class="n">new</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mb</span><span class="p">.</span><span class="n">new_function</span><span class="p">(</span><span class="n">FunctionBuilder</span>::<span class="n">new</span><span class="p">(</span><span class="n">funtype</span><span class="o">!</span><span class="p">((</span><span class="kt">i32</span><span class="p">,</span><span class="w"> </span><span class="kt">i32</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">i32</span><span class="p">))</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">.</span><span class="n">code</span><span class="p">(</span><span class="o">|</span><span class="n">cb</span><span class="p">,</span><span class="w"> </span><span class="n">args</span><span class="o">|</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">cb</span><span class="p">.</span><span class="n">constant</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">.</span><span class="n">get_local</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">.</span><span class="n">i32_add</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">})</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">.</span><span class="n">build</span><span class="p">());</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">mb</span><span class="p">.</span><span class="n">export</span><span class="p">(</span><span class="s">&#34;addTwo&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">f</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">let</span><span class="w"> </span><span class="n">module</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mb</span><span class="p">.</span><span class="n">build</span><span class="p">();</span><span class="w">
+</span></span></span></code></pre></div><p>===</p>
+<h1 id="スタック領域">スタック領域</h1>
+<hr>
+<ul>
+<li>Cでいう<code>struct foo x;</code>みたいにエフェメラルな多ワード領域が欲しい</li>
+<li>WebAssemblyのローカルストレージはLVだけ
+<ul>
+<li>最大1ワードしか保存出来ない</li>
+</ul>
+</li>
+<li>可能性
+<ol>
+<li>諦めてメモリに確保（場合によっては最適化で消えるかも）</li>
+<li>ワード毎に分割してLVに保存（大変だけど速そう）</li>
+</ol>
+</li>
+</ul>
+<p>===</p>
+<h1 id="ランタイム">ランタイム</h1>
 <!-- .slide: class="center" -->
-===
-# 言語のランタイム
------------------
-
-* 主にはGC
-* その他データのメモリ表現
-  + アラインメントも
-* スタック領域
-* FFI
-* コンパイラなのでシンボルテーブルはなし
-
-===
-# メモリ
---------
-
-* mallocとかはない
-* ページ単位のアロケーションだけ
-* 自前でGCを実装することになる
-
-===
-# GC
------
-
-* コールスタックを遡れない
-  + コールスタックをGCルートに出来ない
-* メモリonlyな走査なら可能
-  + ポインタを都度メモリ領域(arena)にコピーすれば良い。
-  + arenaもルートになる
-  + コールスタックと連動するのでスタックで管理出来る。
-  + CF [Matzにっき(2013-07-31)](http://www.rubyist.net/~matz/20130731.html)
-  + ただしコンパイラなので関数全部をsave/restoreで囲んだりはしない。
-
-===
-# アロケータ
-------------
-
-* どうにか書いてブラウザでリンクする必要がある
-  + ブラウザにもランタイムライブラリの時代…
-  + WASMはライブラリ間でメモリ共有出来る
-* とりあえずRustで書く方針
-  + WASMのページアロケートとかどうすればいいんだろう
-  + まだ色々未定
-
-===
-
-# メモリ表現
-------------
-
-* 出来れば楽して64bit統一したかった
-  + i32やf32を抹殺したかった
-* WASM32しかないのでポインタが32bit…
-* 仕方ないので64bitアラインメントでパディングする
-* 空いた32bitの使い道は未定
-  + 静的型付だし型タグが要らない
-  + 代数的データ型のタグ？
-
-===
-
-# 高階関数
-----------
-
-* WASMに関数ポインタがない
-* テーブルに関数を登録してインデックス参照
-  + C++のvtableのための機能
-  + 型も動的チェック
-* ちょっと遅そう
-* 気合でインライン化を頑張ろう
-
-===
-
-# FFI
-------
-
-* JSの関数を呼びたい
-* 細かいところどうなってるんだろう
-  + 例外は？JSオブジェクトは？GCは？
-* 型付…
-* ノープラン
-
-===
-# 雑にまとめ
--------------
-
-* WASMはちょっと高級なので最適化コンパイラは困るよ
-  + 雑なコンパイラにはむしろ嬉しい
-* コード生成は努力で解決
-* GCは割とつらいよ
-  + 将来楽になるかも
-* JS連携や将来のスレッドとかはみんなで考えよう
-
-</script>
-</section>
+<p>===</p>
+<h1 id="言語のランタイム">言語のランタイム</h1>
+<hr>
+<ul>
+<li>主にはGC</li>
+<li>その他データのメモリ表現
+<ul>
+<li>アラインメントも</li>
+</ul>
+</li>
+<li>スタック領域</li>
+<li>FFI</li>
+<li>コンパイラなのでシンボルテーブルはなし</li>
+</ul>
+<p>===</p>
+<h1 id="メモリ">メモリ</h1>
+<hr>
+<ul>
+<li>mallocとかはない</li>
+<li>ページ単位のアロケーションだけ</li>
+<li>自前でGCを実装することになる</li>
+</ul>
+<p>===</p>
+<h1 id="gc">GC</h1>
+<hr>
+<ul>
+<li>コールスタックを遡れない
+<ul>
+<li>コールスタックをGCルートに出来ない</li>
+</ul>
+</li>
+<li>メモリonlyな走査なら可能
+<ul>
+<li>ポインタを都度メモリ領域(arena)にコピーすれば良い。</li>
+<li>arenaもルートになる</li>
+<li>コールスタックと連動するのでスタックで管理出来る。</li>
+<li>CF <a href="http://www.rubyist.net/~matz/20130731.html">Matzにっき(2013-07-31)</a></li>
+<li>ただしコンパイラなので関数全部をsave/restoreで囲んだりはしない。</li>
+</ul>
+</li>
+</ul>
+<p>===</p>
+<h1 id="アロケータ">アロケータ</h1>
+<hr>
+<ul>
+<li>どうにか書いてブラウザでリンクする必要がある
+<ul>
+<li>ブラウザにもランタイムライブラリの時代…</li>
+<li>WASMはライブラリ間でメモリ共有出来る</li>
+</ul>
+</li>
+<li>とりあえずRustで書く方針
+<ul>
+<li>WASMのページアロケートとかどうすればいいんだろう</li>
+<li>まだ色々未定</li>
+</ul>
+</li>
+</ul>
+<p>===</p>
+<h1 id="メモリ表現">メモリ表現</h1>
+<hr>
+<ul>
+<li>出来れば楽して64bit統一したかった
+<ul>
+<li>i32やf32を抹殺したかった</li>
+</ul>
+</li>
+<li>WASM32しかないのでポインタが32bit…</li>
+<li>仕方ないので64bitアラインメントでパディングする</li>
+<li>空いた32bitの使い道は未定
+<ul>
+<li>静的型付だし型タグが要らない</li>
+<li>代数的データ型のタグ？</li>
+</ul>
+</li>
+</ul>
+<p>===</p>
+<h1 id="高階関数">高階関数</h1>
+<hr>
+<ul>
+<li>WASMに関数ポインタがない</li>
+<li>テーブルに関数を登録してインデックス参照
+<ul>
+<li>C++のvtableのための機能</li>
+<li>型も動的チェック</li>
+</ul>
+</li>
+<li>ちょっと遅そう</li>
+<li>気合でインライン化を頑張ろう</li>
+</ul>
+<p>===</p>
+<h1 id="ffi">FFI</h1>
+<hr>
+<ul>
+<li>JSの関数を呼びたい</li>
+<li>細かいところどうなってるんだろう
+<ul>
+<li>例外は？JSオブジェクトは？GCは？</li>
+</ul>
+</li>
+<li>型付…</li>
+<li>ノープラン</li>
+</ul>
+<p>===</p>
+<h1 id="雑にまとめ">雑にまとめ</h1>
+<hr>
+<ul>
+<li>WASMはちょっと高級なので最適化コンパイラは困るよ
+<ul>
+<li>雑なコンパイラにはむしろ嬉しい</li>
+</ul>
+</li>
+<li>コード生成は努力で解決</li>
+<li>GCは割とつらいよ
+<ul>
+<li>将来楽になるかも</li>
+</ul>
+</li>
+<li>JS連携や将来のスレッドとかはみんなで考えよう</li>
+</ul>
+</textarea>
 
         </div>
     </div>

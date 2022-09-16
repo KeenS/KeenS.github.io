@@ -128,135 +128,107 @@
                     <section>
                         <p>κeenです。async/awaitって実装の都合と利便性の良い所取ってるよなーと常々思ってるのを言語化してインターネットに放流します。
 何度か似たようなことを言ってるのですがスライドであることが多くてあまり情報量を詰め込めなかったのでブログにまとめます。</p>
-
 <h1 id="非同期処理と継続">非同期処理と継続</h1>
-
 <p>非同期処理は時間のかかる処理を待ち合わせずに別の処理をし、時間のかかる処理が終わってから元の処理を継続する仕組みです。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ocaml" data-lang="ocaml"><span class="k">let</span> <span class="n">url</span> <span class="o">=</span> <span class="s2">&#34;http://example.com&#34;</span>
-<span class="k">let</span> <span class="n">html</span> <span class="o">=</span> <span class="n">fetch</span> <span class="n">url</span> <span class="c">(* この結果を待たずに別の計算をする *)</span>
-<span class="c">(* fetch urlが終わったあとでここに戻ってきて後続の処理をする *)</span>
-<span class="n">print</span> <span class="n">html</span></code></pre></div>
-<p>「継続」や「後続」などのキーワードが出てきているとおり、継続の影がチラチラ見えます。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ocaml" data-lang="ocaml"><span class="line"><span class="cl"><span class="k">let</span> <span class="n">url</span> <span class="o">=</span> <span class="s2">&#34;http://example.com&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="k">let</span> <span class="n">html</span> <span class="o">=</span> <span class="n">fetch</span> <span class="n">url</span> <span class="c">(* この結果を待たずに別の計算をする *)</span>
+</span></span><span class="line"><span class="cl"><span class="c">(* fetch urlが終わったあとでここに戻ってきて後続の処理をする *)</span>
+</span></span><span class="line"><span class="cl"><span class="n">print</span> <span class="n">html</span>
+</span></span></code></pre></div><p>「継続」や「後続」などのキーワードが出てきているとおり、継続の影がチラチラ見えます。
 継続とはいってもスレッドのようなタスク単位で分割したいのでフルの継続ではなくて限定継続ですね。</p>
-
 <p>現実的には限定継続が使える言語はそう多くないのでユーザにCPS変換させて、コールバックという名前で継続を取ることが多いようです。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-javascript" data-lang="javascript"><span class="kd">let</span> <span class="nx">url</span> <span class="o">=</span> <span class="s2">&#34;http://example.com&#34;</span><span class="p">;</span>
-<span class="nx">fetch_url_cb</span><span class="p">(</span><span class="nx">url</span><span class="p">,</span> <span class="p">(</span><span class="nx">html</span><span class="p">)</span> <span class="p">=&gt;</span> <span class="p">{</span>
-    <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">html</span><span class="p">);</span>
-<span class="p">});</span></code></pre></div>
-<p>これで一応非同期実行は実現できるのですが、2つ問題があります。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-javascript" data-lang="javascript"><span class="line"><span class="cl"><span class="kd">let</span> <span class="nx">url</span> <span class="o">=</span> <span class="s2">&#34;http://example.com&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fetch_url_cb</span><span class="p">(</span><span class="nx">url</span><span class="p">,</span> <span class="p">(</span><span class="nx">html</span><span class="p">)</span> <span class="p">=&gt;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">html</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="p">});</span>
+</span></span></code></pre></div><p>これで一応非同期実行は実現できるのですが、2つ問題があります。
 1つは書きづらい点。コールバック地獄なんかの名前がついているのでも有名ですね。
 本来は限定継続を使っていれば発生しない問題ですが、ユーザにCPS変換させるとまあ、そうなりますよね。
 もう一つは過剰な要求をしている点。殆どの言語では関数(クロージャ)は何度も呼べます。
 しかしコールバックは一度しか呼ばれないので何度も呼べる関数を要求するのは過剰です。
 もうちょっと具体的に言うとローカル変数のアロケートはタスク単位でスタックになるのに、クロージャはヒープに置かれるので無駄になります。</p>
-
 <p>なのでワンショットで使える限定継続があれば問題は解決します。</p>
-
 <h1 id="コルーチン">コルーチン</h1>
-
 <p>そういうワンショットで使える限定継続はコルーチンという名前で知られています。
 フルネームでいうとstackful asymmetric coroutineと言われるらしいです。</p>
-
 <p>実際、非同期処理とコルーチンを組み合わせた例はいくつかあって、crystalの<a href="https://crystal-lang.org/reference/guides/concurrency.html">fiber</a>だとかgoの<a href="https://tour.golang.org/concurrency/1">goroutine</a>だとかJavaの<a href="https://wiki.openjdk.java.net/display/loom/Main">Project Loom</a>だとかがあります。</p>
-
 <p>しかしこれらは言語設計の段階から準備しないとつらいものがあります。
 Project Loomのように<a href="http://cr.openjdk.java.net/~rpressler/loom/JVMLS2018.pdf">尋常ならざる努力</a>をするなら別として、殆どの言語には後付けでコルーチンを入れるのはつらいでしょう。
 ランタイムをかなりいじり、関数の呼び出しモデルを変えるなどしないと実装できないはずです。
 30億のデバイスで動くJavaで既存の関数の互換性を損なわず、しかもパフォーマンス的にもペナルティのない実装をしようとしているJavaは本当にすごい。</p>
-
 <p>コルーチンの実装のどこがつらいかというとユーザレベルスレッドとも言われるように、スレッド相当の機能を実装しないといけない点です。
 OSのスレッドの上にべったり実装していた関数呼び出し(コールスタックの実装)なんかがユーザレベルスレッドに移ってしまいます。
 単純なインタプリタならそれもそこまで難しくないのですが大抵の実用言語はC拡張も持っているのでCの関数呼び出しまで制御下に置かないといけなくなります。
 やるとしたら一大プロジェクトになるでしょう。</p>
-
 <p>一応Cレベルではコルーチンライブラリはありますが、実装はアセンブラになっているはずです(読んだこと無い)。可搬性を気にする人は注意しましょう。
 もちろん、これで切り取れるスタックはCのスタックなのでインタプリタ言語での実装には使えません。あとネイティブ言語でもGC付き言語だとroot setがどうなるかは知りません。</p>
-
 <h1 id="スタックレスコルーチン">スタックレスコルーチン</h1>
-
 <p>関数呼び出しをサポートしない、1関数内で閉じたコルーチンだと簡単に実装できます。これはコールスタックが必要ないからか、stackless coroutineと呼ばれるようです。
 言語によってはジェネレータと呼ばれるものがこれに相当するものもあります。
 stackless coroutineはかなり簡単な仕組みで実装できます。
 ステートマシンにすればそれで済みます。</p>
-
 <script src="https://gitlab.com/snippets/1788230.js"></script>
-
 <p>ランタイムに手を入れず、1関数内のプログラム変換だけで実装できるので後付けで言語に入れるにはもってこいです。
 さらに特別な仕組みが必要ないということはパフォーマンス的にも優れます。最速なプログラムは何もしないプログラムですからね。
 ただし関数呼び出しを飛び越えられないので恐ろしく不便です。ライブラリでコルーチン処理をする関数すら提供できません。</p>
-
 <h1 id="合成可能性">合成可能性</h1>
-
 <p>言語次第ですが、スタックレスコルーチン(ジェネレータ)を合成可能にしているものもあります。というか合成可能なものをジェネレータということが多いかな？
 1つ1つのジェネレータは1関数内でしか制御できませんが、それらを合成可能にすることで関数を超えて組み合わせることができます。
 例えばPythonのジェネレータは <code>yield from</code> で合成できます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="c1"># ジェネレータ関数を定義する。</span>
-<span class="c1"># yield単体はそれが使われている関数内しか制御できない</span>
-<span class="k">def</span> <span class="nf">upto</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">10</span><span class="p">):</span>
-        <span class="k">yield</span> <span class="n">i</span>
-
-<span class="k">def</span> <span class="nf">downto</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="o">-</span><span class="mi">1</span><span class="p">):</span>
-        <span class="k">yield</span> <span class="n">i</span>
-
-<span class="c1"># ジェネレータ関数を組み合わせて使う</span>
-<span class="k">def</span> <span class="nf">triangle</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
-    <span class="k">yield from</span> <span class="n">upto</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
-    <span class="k">yield from</span> <span class="n">downto</span><span class="p">(</span><span class="n">n</span><span class="p">)</span></code></pre></div>
-<p>JavaScriptでも <code>yield*</code> というキーワードでジェネレータを合成できるみたいですね。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="c1"># ジェネレータ関数を定義する。</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># yield単体はそれが使われている関数内しか制御できない</span>
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">upto</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">10</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">        <span class="k">yield</span> <span class="n">i</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">downto</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="o">-</span><span class="mi">1</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">        <span class="k">yield</span> <span class="n">i</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># ジェネレータ関数を組み合わせて使う</span>
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">triangle</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">    <span class="k">yield from</span> <span class="n">upto</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">yield from</span> <span class="n">downto</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+</span></span></code></pre></div><p>JavaScriptでも <code>yield*</code> というキーワードでジェネレータを合成できるみたいですね。</p>
 <p>1つ1つの機能は小さくても組み合わせられることで利便性が広がります。</p>
-
 <h1 id="future">Future</h1>
-
 <p>話が少し脇道に逸れて(戻って?)、非同期の話です。
 言語によっては同じものをPromiseと呼ぶこともありますし、PromiseとFutureは別のものとして扱っている言語もあります。</p>
-
 <p>非同期処理の「いつか完了する」という概念を値にしたものです。
 値なので第一級市民として扱えて、メソッドを定義できたり関数の引数に渡せたりします。
 コールバック関数の設定をメソッド呼び出しにできます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-javascript" data-lang="javascript"><span class="kd">let</span> <span class="nx">url</span> <span class="o">=</span> <span class="s2">&#34;http://example.com&#34;</span><span class="p">;</span>
-<span class="nx">fetch_url_ft</span><span class="p">(</span><span class="nx">url</span><span class="p">)</span> <span class="c1">// ここの返り値がFutueとする
-</span><span class="c1"></span>  <span class="c1">// Futureのthenメソッドが呼べて、それでコールバックを指定できる
-</span><span class="c1"></span>  <span class="p">.</span><span class="nx">then</span><span class="p">((</span><span class="nx">html</span><span class="p">)</span> <span class="p">=&gt;</span> <span class="p">{</span>
-    <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">html</span><span class="p">);</span>
-<span class="p">});</span></code></pre></div>
-<p>こちらも値なので合成ができます。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-javascript" data-lang="javascript"><span class="line"><span class="cl"><span class="kd">let</span> <span class="nx">url</span> <span class="o">=</span> <span class="s2">&#34;http://example.com&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fetch_url_ft</span><span class="p">(</span><span class="nx">url</span><span class="p">)</span> <span class="c1">// ここの返り値がFutueとする
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="c1">// Futureのthenメソッドが呼べて、それでコールバックを指定できる
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="p">.</span><span class="nx">then</span><span class="p">((</span><span class="nx">html</span><span class="p">)</span> <span class="p">=&gt;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">html</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="p">});</span>
+</span></span></code></pre></div><p>こちらも値なので合成ができます。</p>
 <p>しかしコールバックよりは便利とはいえ、後続の処理を関数で渡すのでコールバックと同様の扱いづらさは残ります。</p>
-
-<h1 id="async-await">async/await</h1>
-
+<h1 id="asyncawait">async/await</h1>
 <p>Futureをジェネレータと同様に構文でラップしたものです。
 Futureが内部モデルで、async/awaitが表層構文という関係です。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-javascript" data-lang="javascript"><span class="kd">let</span> <span class="nx">url</span> <span class="o">=</span> <span class="s2">&#34;http://example.com&#34;</span><span class="p">;</span>
-<span class="kd">let</span> <span class="nx">html</span> <span class="o">=</span> <span class="kr">await</span> <span class="nx">fetch_async</span><span class="p">(</span><span class="nx">url</span><span class="p">);</span>
-<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">html</span><span class="p">);</span></code></pre></div>
-<h1 id="さらなる一般化">さらなる一般化</h1>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-javascript" data-lang="javascript"><span class="line"><span class="cl"><span class="kd">let</span> <span class="nx">url</span> <span class="o">=</span> <span class="s2">&#34;http://example.com&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="kd">let</span> <span class="nx">html</span> <span class="o">=</span> <span class="kr">await</span> <span class="nx">fetch_async</span><span class="p">(</span><span class="nx">url</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">html</span><span class="p">);</span>
+</span></span></code></pre></div><h1 id="さらなる一般化">さらなる一般化</h1>
 <p>Futureとジェネレータで同様の実装ができるということは、もっと一般化できるということです。
 例えばScalaのfor式はそのようになっています。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-scala" data-lang="scala"><span class="c1">// ジェネレータの使い方
-</span><span class="c1"></span><span class="k">for</span> <span class="o">(</span><span class="n">i</span> <span class="k">&lt;-</span> <span class="mi">1</span> <span class="n">to</span> <span class="mi">3</span><span class="o">)</span> <span class="n">println</span><span class="o">(</span><span class="n">i</span><span class="o">)</span>
-<span class="c1">// Futureの使い方
-</span><span class="c1"></span><span class="k">val</span> <span class="n">purchase</span> <span class="k">=</span> <span class="k">for</span> <span class="o">{</span>
-  <span class="n">usd</span> <span class="k">&lt;-</span> <span class="n">usdQuote</span>
-  <span class="n">chf</span> <span class="k">&lt;-</span> <span class="n">chfQuote</span>
-  <span class="k">if</span> <span class="n">isProfitable</span><span class="o">(</span><span class="n">usd</span><span class="o">,</span> <span class="n">chf</span><span class="o">)</span>
-<span class="o">}</span> <span class="k">yield</span> <span class="n">connection</span><span class="o">.</span><span class="n">buy</span><span class="o">(</span><span class="n">amount</span><span class="o">,</span> <span class="n">chf</span><span class="o">)</span></code></pre></div>
-<p>このほうが便利ですよね。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-scala" data-lang="scala"><span class="line"><span class="cl"><span class="c1">// ジェネレータの使い方
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">for</span> <span class="o">(</span><span class="n">i</span> <span class="k">&lt;-</span> <span class="mi">1</span> <span class="n">to</span> <span class="mi">3</span><span class="o">)</span> <span class="n">println</span><span class="o">(</span><span class="n">i</span><span class="o">)</span>
+</span></span><span class="line"><span class="cl"><span class="c1">// Futureの使い方
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">val</span> <span class="n">purchase</span> <span class="k">=</span> <span class="k">for</span> <span class="o">{</span>
+</span></span><span class="line"><span class="cl">  <span class="n">usd</span> <span class="k">&lt;-</span> <span class="n">usdQuote</span>
+</span></span><span class="line"><span class="cl">  <span class="n">chf</span> <span class="k">&lt;-</span> <span class="n">chfQuote</span>
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="n">isProfitable</span><span class="o">(</span><span class="n">usd</span><span class="o">,</span> <span class="n">chf</span><span class="o">)</span>
+</span></span><span class="line"><span class="cl"><span class="o">}</span> <span class="k">yield</span> <span class="n">connection</span><span class="o">.</span><span class="n">buy</span><span class="o">(</span><span class="n">amount</span><span class="o">,</span> <span class="n">chf</span><span class="o">)</span>
+</span></span></code></pre></div><p>このほうが便利ですよね。
 しかしこれには(脱糖と型システムの関係次第ですが)型システムに高カインド多相が必要になり、それなりの言語設計が要求されます。
-高カインド多相は実用されている言語ではScalaくらいにしか実装されていないようです<sup class="footnote-ref" id="fnref:1"><a href="#fn:1">1</a></sup>。</p>
-
+高カインド多相は実用されている言語ではScalaくらいにしか実装されていないようです<sup id="fnref:1"><a href="#fn:1" class="footnote-ref" role="doc-noteref">1</a></sup>。</p>
 <h1 id="まとめ">まとめ</h1>
-
 <p>非同期処理を簡潔に書けるようにするには(限定)継続やコルーチンなどの機能が欲しくなりますが、これらは実装/実行コストが重いです。
 一方でFuture+async/awaitだと比較的楽に入れられる上にそこまで利便性を損ないません。</p>
-
 <p>ここでよくある勘違いを指摘しておきます。</p>
-
 <ul>
 <li>async/awaitはCPS変換で実装されている
 → CPS変換でも実装できるけどもっと軽い方法があるよ</li>
@@ -265,15 +237,13 @@ Futureが内部モデルで、async/awaitが表層構文という関係です。
 <li>何故モナドを入れないのか
 → モナドを入れるには高カインド多相とかそれなりの機能が必要なんやで</li>
 </ul>
-
 <p>たまーにこういう言説を見てもやもやしてたのでムシャムシャしてこの記事を書いた。</p>
-<div class="footnotes">
-
-<hr />
-
+<div class="footnotes" role="doc-endnotes">
+<hr>
 <ol>
-<li id="fn:1">Scalaのfor式は高カインド多相に依存してないのでややこしいですが…
- <a class="footnote-return" href="#fnref:1"><sup>[return]</sup></a></li>
+<li id="fn:1">
+<p>Scalaのfor式は高カインド多相に依存してないのでややこしいですが…&#160;<a href="#fnref:1" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></p>
+</li>
 </ol>
 </div>
                     </section>

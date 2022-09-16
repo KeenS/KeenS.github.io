@@ -132,409 +132,350 @@ GoFのデザインパターンは有名ですが、言語機能によっては�
                     <section>
                         <p>κeenです。
 GoFのデザインパターンは有名ですが、言語機能によっては単純化できたりあるいは不要だったりするのでRust風に書き換えたらどうなるか試してみます。</p>
-
 <p>発端はこのツイート。</p>
-
-<p><blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">デザインパターン、古いJavaの機能の足りなさのワークアラウンド的なテクニックも含まれてるからあまり宜しくないんだよね。enumやクロージャで十分なのもいくつかある。<br><br>Rustで写経、デザインパターン23種 - Qiita<a href="https://t.co/MhpS3Z2OlF">https://t.co/MhpS3Z2OlF</a></p>&mdash; κeen (@blackenedgold) <a href="https://twitter.com/blackenedgold/status/860635079600513024">2017年5月5日</a></blockquote>
-<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script></p>
-
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">デザインパターン、古いJavaの機能の足りなさのワークアラウンド的なテクニックも含まれてるからあまり宜しくないんだよね。enumやクロージャで十分なのもいくつかある。<br><br>Rustで写経、デザインパターン23種 - Qiita<a href="https://t.co/MhpS3Z2OlF">https://t.co/MhpS3Z2OlF</a></p>&mdash; κeen (@blackenedgold) <a href="https://twitter.com/blackenedgold/status/860635079600513024">2017年5月5日</a></blockquote>
+<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
 <p>一応誤解のないように説明しておくと、該当のQiitaの記事に不満がある訳ではなくてGoFのデザインパターンついての言及です。</p>
-
 <p>リンク先のコードで十分な時にはここでは流すのでリンク先も同時に参照下さい。
 また、比較しやすいようにサンプルコードはリンク先のものに則って書きます。</p>
-
 <p>一応デザインパターンの教科書として結城先生の本を参照しつつ書いていきます。</p>
-
 <h1 id="command-パターン">Command パターン</h1>
-
 <p>列挙型を使うところです。
 Javaにまともなenumがないのでクラスが使われていますが、列挙型があるならそちらの方がデータとコードの分離ができて見通しがいいです。また、コマンドが1つの型に収まるのでトレイトオブジェクトを作る必要がなくなります。</p>
-
 <p>比較的マイナーな変更です。</p>
-
 <p>Lispだとクロージャで解決したりしますが、Rustだと列挙型の方がしっくりくるかなと思います。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">trait</span><span class="w"> </span><span class="n">Command</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">execute</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">T</span><span class="p">);</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">undo</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">T</span><span class="p">);</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">struct</span> <span class="nc">Invoker</span><span class="o">&lt;&#39;</span><span class="na">a</span><span class="p">,</span><span class="w"> </span><span class="n">Cmd</span><span class="p">,</span><span class="w"> </span><span class="n">T</span>: <span class="o">&#39;</span><span class="na">a</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="n">commands</span>: <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Cmd</span><span class="o">&gt;</span><span class="p">,</span><span class="w">
-</span><span class="w">    </span><span class="n">target</span>: <span class="kp">&amp;</span><span class="o">&#39;</span><span class="na">a</span> <span class="nc">mut</span><span class="w"> </span><span class="n">T</span><span class="p">,</span><span class="w">
-</span><span class="w">    </span><span class="n">current_index</span>: <span class="kt">usize</span><span class="p">,</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">impl</span><span class="o">&lt;&#39;</span><span class="na">a</span><span class="p">,</span><span class="w"> </span><span class="n">Cmd</span><span class="p">,</span><span class="w"> </span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="n">Invoker</span><span class="o">&lt;&#39;</span><span class="na">a</span><span class="p">,</span><span class="w"> </span><span class="n">Cmd</span><span class="p">,</span><span class="w"> </span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">new</span><span class="p">(</span><span class="n">t</span>: <span class="kp">&amp;</span><span class="o">&#39;</span><span class="na">a</span> <span class="nc">mut</span><span class="w"> </span><span class="n">T</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="n">Invoker</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">            </span><span class="n">commands</span>: <span class="nb">Vec</span>::<span class="n">new</span><span class="p">(),</span><span class="w">
-</span><span class="w">            </span><span class="n">target</span>: <span class="nc">t</span><span class="p">,</span><span class="w">
-</span><span class="w">            </span><span class="n">current_index</span>: <span class="mi">0</span><span class="p">,</span><span class="w">
-</span><span class="w">        </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">target</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kp">&amp;</span><span class="nc">T</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">target</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">append_command</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">c</span>: <span class="nc">Cmd</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">commands</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">c</span><span class="p">);</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">impl</span><span class="o">&lt;&#39;</span><span class="na">a</span><span class="p">,</span><span class="w"> </span><span class="n">Cmd</span><span class="p">,</span><span class="w"> </span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="n">Invoker</span><span class="o">&lt;&#39;</span><span class="na">a</span><span class="p">,</span><span class="w"> </span><span class="n">Cmd</span><span class="p">,</span><span class="w"> </span><span class="n">T</span><span class="o">&gt;</span><span class="w">
-</span><span class="w">    </span><span class="k">where</span><span class="w"> </span><span class="n">Cmd</span>: <span class="nc">Command</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w">
-</span><span class="w"></span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">execute_command</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">commands</span><span class="p">.</span><span class="n">len</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">current_index</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">            </span><span class="c1">// Nothing to do.
-</span><span class="c1"></span><span class="w">            </span><span class="k">return</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">c</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="bp">self</span><span class="p">.</span><span class="n">commands</span><span class="p">[</span><span class="bp">self</span><span class="p">.</span><span class="n">current_index</span><span class="p">];</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="o">*</span><span class="bp">self</span><span class="p">.</span><span class="n">target</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="n">c</span><span class="p">.</span><span class="n">execute</span><span class="p">(</span><span class="n">t</span><span class="p">);</span><span class="w">
-</span><span class="w">
-</span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">current_index</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">execute_all_commands</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">current_index</span><span class="o">..</span><span class="bp">self</span><span class="p">.</span><span class="n">commands</span><span class="p">.</span><span class="n">len</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">            </span><span class="bp">self</span><span class="p">.</span><span class="n">execute_command</span><span class="p">();</span><span class="w">
-</span><span class="w">        </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">undo</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">current_index</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">            </span><span class="k">return</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">current_index</span><span class="w"> </span><span class="o">-=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">c</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="bp">self</span><span class="p">.</span><span class="n">commands</span><span class="p">[</span><span class="bp">self</span><span class="p">.</span><span class="n">current_index</span><span class="p">];</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="o">*</span><span class="bp">self</span><span class="p">.</span><span class="n">target</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="n">c</span><span class="p">.</span><span class="n">undo</span><span class="p">(</span><span class="n">t</span><span class="p">);</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="cp">#[derive(Debug, Eq, PartialEq)]</span><span class="w">
-</span><span class="w"></span><span class="k">struct</span> <span class="nc">Robot</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="n">x</span>: <span class="kt">i32</span><span class="p">,</span><span class="w">
-</span><span class="w">    </span><span class="n">y</span>: <span class="kt">i32</span><span class="p">,</span><span class="w">
-</span><span class="w">    </span><span class="n">dx</span>: <span class="kt">i32</span><span class="p">,</span><span class="w">
-</span><span class="w">    </span><span class="n">dy</span>: <span class="kt">i32</span><span class="p">,</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="n">Robot</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">new</span><span class="p">()</span><span class="w"> </span>-&gt; <span class="nc">Robot</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="n">Robot</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">            </span><span class="n">x</span>: <span class="mi">0</span><span class="p">,</span><span class="w">
-</span><span class="w">            </span><span class="n">y</span>: <span class="mi">0</span><span class="p">,</span><span class="w">
-</span><span class="w">            </span><span class="n">dx</span>: <span class="mi">0</span><span class="p">,</span><span class="w">
-</span><span class="w">            </span><span class="n">dy</span>: <span class="mi">1</span><span class="p">,</span><span class="w">
-</span><span class="w">        </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">move_forward</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">x</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">dx</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">y</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">dy</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">set_direction</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">d</span>: <span class="p">(</span><span class="kt">i32</span><span class="p">,</span><span class="w"> </span><span class="kt">i32</span><span class="p">))</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">dx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">d</span><span class="p">.</span><span class="mi">0</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">dy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">d</span><span class="p">.</span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">get_direction</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="p">(</span><span class="kt">i32</span><span class="p">,</span><span class="w"> </span><span class="kt">i32</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">dx</span><span class="p">,</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">dy</span><span class="p">)</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">enum</span> <span class="nc">RoboCommand</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="n">MoveForward</span><span class="p">,</span><span class="w">
-</span><span class="w">    </span><span class="n">TurnRight</span><span class="p">,</span><span class="w">
-</span><span class="w">    </span><span class="n">TurnLeft</span><span class="p">,</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="n">Command</span><span class="o">&lt;</span><span class="n">Robot</span><span class="o">&gt;</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">RoboCommand</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">execute</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">r</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">Robot</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="k">use</span><span class="w"> </span><span class="n">RoboCommand</span>::<span class="o">*</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="k">match</span><span class="w"> </span><span class="o">*</span><span class="bp">self</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">            </span><span class="n">MoveForward</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">r</span><span class="p">.</span><span class="n">move_forward</span><span class="p">(),</span><span class="w">
-</span><span class="w">            </span><span class="n">TurnRight</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">                </span><span class="kd">let</span><span class="w"> </span><span class="p">(</span><span class="n">dx</span><span class="p">,</span><span class="w"> </span><span class="n">dy</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">r</span><span class="p">.</span><span class="n">get_direction</span><span class="p">();</span><span class="w">
-</span><span class="w">                </span><span class="n">r</span><span class="p">.</span><span class="n">set_direction</span><span class="p">((</span><span class="n">dy</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="n">dx</span><span class="p">))</span><span class="w">
-</span><span class="w">            </span><span class="p">}</span><span class="w">
-</span><span class="w">            </span><span class="n">TurnLeft</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">                </span><span class="kd">let</span><span class="w"> </span><span class="p">(</span><span class="n">dx</span><span class="p">,</span><span class="w"> </span><span class="n">dy</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">r</span><span class="p">.</span><span class="n">get_direction</span><span class="p">();</span><span class="w">
-</span><span class="w">                </span><span class="n">r</span><span class="p">.</span><span class="n">set_direction</span><span class="p">((</span><span class="o">-</span><span class="n">dy</span><span class="p">,</span><span class="w"> </span><span class="n">dx</span><span class="p">));</span><span class="w">
-</span><span class="w">            </span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">        </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">undo</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">r</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">Robot</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="k">use</span><span class="w"> </span><span class="n">RoboCommand</span>::<span class="o">*</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="k">match</span><span class="w"> </span><span class="o">*</span><span class="bp">self</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">            </span><span class="n">MoveForward</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">                </span><span class="kd">let</span><span class="w"> </span><span class="n">c1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">TurnRight</span><span class="p">;</span><span class="w">
-</span><span class="w">                </span><span class="n">c1</span><span class="p">.</span><span class="n">execute</span><span class="p">(</span><span class="n">r</span><span class="p">);</span><span class="w">
-</span><span class="w">                </span><span class="n">c1</span><span class="p">.</span><span class="n">execute</span><span class="p">(</span><span class="n">r</span><span class="p">);</span><span class="w">
-</span><span class="w">                </span><span class="bp">self</span><span class="p">.</span><span class="n">execute</span><span class="p">(</span><span class="n">r</span><span class="p">);</span><span class="w">
-</span><span class="w">                </span><span class="n">c1</span><span class="p">.</span><span class="n">execute</span><span class="p">(</span><span class="n">r</span><span class="p">);</span><span class="w">
-</span><span class="w">                </span><span class="n">c1</span><span class="p">.</span><span class="n">execute</span><span class="p">(</span><span class="n">r</span><span class="p">);</span><span class="w">
-</span><span class="w">            </span><span class="p">}</span><span class="w">
-</span><span class="w">            </span><span class="n">TurnRight</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">                </span><span class="kd">let</span><span class="w"> </span><span class="n">c</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">TurnLeft</span><span class="p">;</span><span class="w">
-</span><span class="w">                </span><span class="n">c</span><span class="p">.</span><span class="n">execute</span><span class="p">(</span><span class="n">r</span><span class="p">);</span><span class="w">
-</span><span class="w">            </span><span class="p">}</span><span class="w">
-</span><span class="w">            </span><span class="n">TurnLeft</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">                </span><span class="kd">let</span><span class="w"> </span><span class="n">c</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">TurnRight</span><span class="p">;</span><span class="w">
-</span><span class="w">                </span><span class="n">c</span><span class="p">.</span><span class="n">execute</span><span class="p">(</span><span class="n">r</span><span class="p">);</span><span class="w">
-</span><span class="w">
-</span><span class="w">            </span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">        </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Robot</span>::<span class="n">new</span><span class="p">();</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">invoker</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Invoker</span>::<span class="n">new</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">r</span><span class="p">);</span><span class="w">
-</span><span class="w">    </span><span class="fm">assert_eq!</span><span class="p">(</span><span class="o">*</span><span class="n">invoker</span><span class="p">.</span><span class="n">target</span><span class="p">(),</span><span class="w">
-</span><span class="w">               </span><span class="n">Robot</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">                   </span><span class="n">x</span>: <span class="mi">0</span><span class="p">,</span><span class="w">
-</span><span class="w">                   </span><span class="n">y</span>: <span class="mi">0</span><span class="p">,</span><span class="w">
-</span><span class="w">                   </span><span class="n">dx</span>: <span class="mi">0</span><span class="p">,</span><span class="w">
-</span><span class="w">                   </span><span class="n">dy</span>: <span class="mi">1</span><span class="p">,</span><span class="w">
-</span><span class="w">               </span><span class="p">});</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="k">use</span><span class="w"> </span><span class="n">RoboCommand</span>::<span class="o">*</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="n">invoker</span><span class="p">.</span><span class="n">append_command</span><span class="p">(</span><span class="n">TurnRight</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="n">invoker</span><span class="p">.</span><span class="n">append_command</span><span class="p">(</span><span class="n">TurnLeft</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="n">invoker</span><span class="p">.</span><span class="n">append_command</span><span class="p">(</span><span class="n">MoveForward</span><span class="p">);</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="n">invoker</span><span class="p">.</span><span class="n">execute_all_commands</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="fm">assert_eq!</span><span class="p">(</span><span class="o">*</span><span class="n">invoker</span><span class="p">.</span><span class="n">target</span><span class="p">(),</span><span class="w">
-</span><span class="w">               </span><span class="n">Robot</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">                   </span><span class="n">x</span>: <span class="mi">0</span><span class="p">,</span><span class="w">
-</span><span class="w">                   </span><span class="n">y</span>: <span class="mi">1</span><span class="p">,</span><span class="w">
-</span><span class="w">                   </span><span class="n">dx</span>: <span class="mi">0</span><span class="p">,</span><span class="w">
-</span><span class="w">                   </span><span class="n">dy</span>: <span class="mi">1</span><span class="p">,</span><span class="w">
-</span><span class="w">               </span><span class="p">});</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="n">invoker</span><span class="p">.</span><span class="n">undo</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="fm">assert_eq!</span><span class="p">(</span><span class="o">*</span><span class="n">invoker</span><span class="p">.</span><span class="n">target</span><span class="p">(),</span><span class="w">
-</span><span class="w">               </span><span class="n">Robot</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">                   </span><span class="n">x</span>: <span class="mi">0</span><span class="p">,</span><span class="w">
-</span><span class="w">                   </span><span class="n">y</span>: <span class="mi">0</span><span class="p">,</span><span class="w">
-</span><span class="w">                   </span><span class="n">dx</span>: <span class="mi">0</span><span class="p">,</span><span class="w">
-</span><span class="w">                   </span><span class="n">dy</span>: <span class="mi">1</span><span class="p">,</span><span class="w">
-</span><span class="w">               </span><span class="p">});</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="n">invoker</span><span class="p">.</span><span class="n">undo</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="fm">assert_eq!</span><span class="p">(</span><span class="o">*</span><span class="n">invoker</span><span class="p">.</span><span class="n">target</span><span class="p">(),</span><span class="w">
-</span><span class="w">               </span><span class="n">Robot</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">                   </span><span class="n">x</span>: <span class="mi">0</span><span class="p">,</span><span class="w">
-</span><span class="w">                   </span><span class="n">y</span>: <span class="mi">0</span><span class="p">,</span><span class="w">
-</span><span class="w">                   </span><span class="n">dx</span>: <span class="mi">1</span><span class="p">,</span><span class="w">
-</span><span class="w">                   </span><span class="n">dy</span>: <span class="mi">0</span><span class="p">,</span><span class="w">
-</span><span class="w">               </span><span class="p">});</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<h1 id="stateパターン">Stateパターン</h1>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">trait</span><span class="w"> </span><span class="n">Command</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">fn</span> <span class="nf">execute</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">T</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">fn</span> <span class="nf">undo</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">T</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">struct</span> <span class="nc">Invoker</span><span class="o">&lt;&#39;</span><span class="na">a</span><span class="p">,</span><span class="w"> </span><span class="n">Cmd</span><span class="p">,</span><span class="w"> </span><span class="n">T</span>: <span class="o">&#39;</span><span class="na">a</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">commands</span>: <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Cmd</span><span class="o">&gt;</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">target</span>: <span class="kp">&amp;</span><span class="o">&#39;</span><span class="na">a</span> <span class="nc">mut</span><span class="w"> </span><span class="n">T</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">current_index</span>: <span class="kt">usize</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">impl</span><span class="o">&lt;&#39;</span><span class="na">a</span><span class="p">,</span><span class="w"> </span><span class="n">Cmd</span><span class="p">,</span><span class="w"> </span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="n">Invoker</span><span class="o">&lt;&#39;</span><span class="na">a</span><span class="p">,</span><span class="w"> </span><span class="n">Cmd</span><span class="p">,</span><span class="w"> </span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">fn</span> <span class="nf">new</span><span class="p">(</span><span class="n">t</span>: <span class="kp">&amp;</span><span class="o">&#39;</span><span class="na">a</span> <span class="nc">mut</span><span class="w"> </span><span class="n">T</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">Invoker</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">commands</span>: <span class="nb">Vec</span>::<span class="n">new</span><span class="p">(),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">target</span>: <span class="nc">t</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">current_index</span>: <span class="mi">0</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">fn</span> <span class="nf">target</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kp">&amp;</span><span class="nc">T</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">target</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">fn</span> <span class="nf">append_command</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">c</span>: <span class="nc">Cmd</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">commands</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">c</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">impl</span><span class="o">&lt;&#39;</span><span class="na">a</span><span class="p">,</span><span class="w"> </span><span class="n">Cmd</span><span class="p">,</span><span class="w"> </span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="n">Invoker</span><span class="o">&lt;&#39;</span><span class="na">a</span><span class="p">,</span><span class="w"> </span><span class="n">Cmd</span><span class="p">,</span><span class="w"> </span><span class="n">T</span><span class="o">&gt;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">where</span><span class="w"> </span><span class="n">Cmd</span>: <span class="nc">Command</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">fn</span> <span class="nf">execute_command</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">commands</span><span class="p">.</span><span class="n">len</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">current_index</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="c1">// Nothing to do.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">            </span><span class="k">return</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">c</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="bp">self</span><span class="p">.</span><span class="n">commands</span><span class="p">[</span><span class="bp">self</span><span class="p">.</span><span class="n">current_index</span><span class="p">];</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="o">*</span><span class="bp">self</span><span class="p">.</span><span class="n">target</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">c</span><span class="p">.</span><span class="n">execute</span><span class="p">(</span><span class="n">t</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">current_index</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">fn</span> <span class="nf">execute_all_commands</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">current_index</span><span class="o">..</span><span class="bp">self</span><span class="p">.</span><span class="n">commands</span><span class="p">.</span><span class="n">len</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="bp">self</span><span class="p">.</span><span class="n">execute_command</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">fn</span> <span class="nf">undo</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">current_index</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="k">return</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">current_index</span><span class="w"> </span><span class="o">-=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">c</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="bp">self</span><span class="p">.</span><span class="n">commands</span><span class="p">[</span><span class="bp">self</span><span class="p">.</span><span class="n">current_index</span><span class="p">];</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="o">*</span><span class="bp">self</span><span class="p">.</span><span class="n">target</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">c</span><span class="p">.</span><span class="n">undo</span><span class="p">(</span><span class="n">t</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="cp">#[derive(Debug, Eq, PartialEq)]</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">struct</span> <span class="nc">Robot</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">x</span>: <span class="kt">i32</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">y</span>: <span class="kt">i32</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">dx</span>: <span class="kt">i32</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">dy</span>: <span class="kt">i32</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="n">Robot</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">fn</span> <span class="nf">new</span><span class="p">()</span><span class="w"> </span>-&gt; <span class="nc">Robot</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">Robot</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">x</span>: <span class="mi">0</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">y</span>: <span class="mi">0</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">dx</span>: <span class="mi">0</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">dy</span>: <span class="mi">1</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">fn</span> <span class="nf">move_forward</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">x</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">dx</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">y</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">dy</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">fn</span> <span class="nf">set_direction</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">d</span>: <span class="p">(</span><span class="kt">i32</span><span class="p">,</span><span class="w"> </span><span class="kt">i32</span><span class="p">))</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">dx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">d</span><span class="p">.</span><span class="mi">0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">dy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">d</span><span class="p">.</span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">fn</span> <span class="nf">get_direction</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="p">(</span><span class="kt">i32</span><span class="p">,</span><span class="w"> </span><span class="kt">i32</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">dx</span><span class="p">,</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">dy</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">enum</span> <span class="nc">RoboCommand</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">MoveForward</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">TurnRight</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">TurnLeft</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="n">Command</span><span class="o">&lt;</span><span class="n">Robot</span><span class="o">&gt;</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">RoboCommand</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">fn</span> <span class="nf">execute</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">r</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">Robot</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">use</span><span class="w"> </span><span class="n">RoboCommand</span>::<span class="o">*</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">match</span><span class="w"> </span><span class="o">*</span><span class="bp">self</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">MoveForward</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">r</span><span class="p">.</span><span class="n">move_forward</span><span class="p">(),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">TurnRight</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="kd">let</span><span class="w"> </span><span class="p">(</span><span class="n">dx</span><span class="p">,</span><span class="w"> </span><span class="n">dy</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">r</span><span class="p">.</span><span class="n">get_direction</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">r</span><span class="p">.</span><span class="n">set_direction</span><span class="p">((</span><span class="n">dy</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="n">dx</span><span class="p">))</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">TurnLeft</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="kd">let</span><span class="w"> </span><span class="p">(</span><span class="n">dx</span><span class="p">,</span><span class="w"> </span><span class="n">dy</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">r</span><span class="p">.</span><span class="n">get_direction</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">r</span><span class="p">.</span><span class="n">set_direction</span><span class="p">((</span><span class="o">-</span><span class="n">dy</span><span class="p">,</span><span class="w"> </span><span class="n">dx</span><span class="p">));</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">fn</span> <span class="nf">undo</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">r</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">Robot</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">use</span><span class="w"> </span><span class="n">RoboCommand</span>::<span class="o">*</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">match</span><span class="w"> </span><span class="o">*</span><span class="bp">self</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">MoveForward</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="kd">let</span><span class="w"> </span><span class="n">c1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">TurnRight</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">c1</span><span class="p">.</span><span class="n">execute</span><span class="p">(</span><span class="n">r</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">c1</span><span class="p">.</span><span class="n">execute</span><span class="p">(</span><span class="n">r</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="bp">self</span><span class="p">.</span><span class="n">execute</span><span class="p">(</span><span class="n">r</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">c1</span><span class="p">.</span><span class="n">execute</span><span class="p">(</span><span class="n">r</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">c1</span><span class="p">.</span><span class="n">execute</span><span class="p">(</span><span class="n">r</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">TurnRight</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="kd">let</span><span class="w"> </span><span class="n">c</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">TurnLeft</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">c</span><span class="p">.</span><span class="n">execute</span><span class="p">(</span><span class="n">r</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">TurnLeft</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="kd">let</span><span class="w"> </span><span class="n">c</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">TurnRight</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">c</span><span class="p">.</span><span class="n">execute</span><span class="p">(</span><span class="n">r</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Robot</span>::<span class="n">new</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">invoker</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Invoker</span>::<span class="n">new</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">r</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="fm">assert_eq!</span><span class="p">(</span><span class="o">*</span><span class="n">invoker</span><span class="p">.</span><span class="n">target</span><span class="p">(),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">               </span><span class="n">Robot</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                   </span><span class="n">x</span>: <span class="mi">0</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                   </span><span class="n">y</span>: <span class="mi">0</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                   </span><span class="n">dx</span>: <span class="mi">0</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                   </span><span class="n">dy</span>: <span class="mi">1</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">               </span><span class="p">});</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">use</span><span class="w"> </span><span class="n">RoboCommand</span>::<span class="o">*</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">invoker</span><span class="p">.</span><span class="n">append_command</span><span class="p">(</span><span class="n">TurnRight</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">invoker</span><span class="p">.</span><span class="n">append_command</span><span class="p">(</span><span class="n">TurnLeft</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">invoker</span><span class="p">.</span><span class="n">append_command</span><span class="p">(</span><span class="n">MoveForward</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">invoker</span><span class="p">.</span><span class="n">execute_all_commands</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="fm">assert_eq!</span><span class="p">(</span><span class="o">*</span><span class="n">invoker</span><span class="p">.</span><span class="n">target</span><span class="p">(),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">               </span><span class="n">Robot</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                   </span><span class="n">x</span>: <span class="mi">0</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                   </span><span class="n">y</span>: <span class="mi">1</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                   </span><span class="n">dx</span>: <span class="mi">0</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                   </span><span class="n">dy</span>: <span class="mi">1</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">               </span><span class="p">});</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">invoker</span><span class="p">.</span><span class="n">undo</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="fm">assert_eq!</span><span class="p">(</span><span class="o">*</span><span class="n">invoker</span><span class="p">.</span><span class="n">target</span><span class="p">(),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">               </span><span class="n">Robot</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                   </span><span class="n">x</span>: <span class="mi">0</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                   </span><span class="n">y</span>: <span class="mi">0</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                   </span><span class="n">dx</span>: <span class="mi">0</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                   </span><span class="n">dy</span>: <span class="mi">1</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">               </span><span class="p">});</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">invoker</span><span class="p">.</span><span class="n">undo</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="fm">assert_eq!</span><span class="p">(</span><span class="o">*</span><span class="n">invoker</span><span class="p">.</span><span class="n">target</span><span class="p">(),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">               </span><span class="n">Robot</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                   </span><span class="n">x</span>: <span class="mi">0</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                   </span><span class="n">y</span>: <span class="mi">0</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                   </span><span class="n">dx</span>: <span class="mi">1</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                   </span><span class="n">dy</span>: <span class="mi">0</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">               </span><span class="p">});</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><h1 id="stateパターン">Stateパターン</h1>
 <p>参照先のままです。トレイトオブジェクトを使う代表的なケースだと思います。。
 あるいは列挙型を使う可能性もあります。</p>
-
 <h1 id="strategyパターン">Strategyパターン</h1>
-
 <p>参照先でも説明されていますが、Rustにはクロージャがあるので不要です。</p>
-
 <h1 id="template-methodパターン">Template Methodパターン</h1>
-
 <p>そもそもトレイトを使った普通のプログラミングなのでRustでわざわざ名前をつけるほどかな？と個人的には思いますがあえて書くなら参照先のままです。
 あるいはものによっては高階関数でも。</p>
-
 <p>個人的にはトレイトオブジェクトを作るより関連型を使った方が好みです。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">trait</span><span class="w"> </span><span class="n">AbstractFactory</span><span class="o">&lt;&#39;</span><span class="na">a</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">type</span> <span class="nc">ProdX</span>: <span class="nc">ProductX</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="k">type</span> <span class="nc">ProdY</span>: <span class="nc">ProductY</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">create_product_x</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">Box</span><span class="o">&lt;</span><span class="n">ProdX</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="o">&#39;</span><span class="na">a</span><span class="o">&gt;</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">create_product_y</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">Box</span><span class="o">&lt;</span><span class="n">ProdY</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="o">&#39;</span><span class="na">a</span><span class="o">&gt;</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="c1">// ...
-</span></code></pre></div>
-<h1 id="mementoパターン">Mementoパターン</h1>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">trait</span><span class="w"> </span><span class="n">AbstractFactory</span><span class="o">&lt;&#39;</span><span class="na">a</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">type</span> <span class="nc">ProdX</span>: <span class="nc">ProductX</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">type</span> <span class="nc">ProdY</span>: <span class="nc">ProductY</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">fn</span> <span class="nf">create_product_x</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">Box</span><span class="o">&lt;</span><span class="n">ProdX</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="o">&#39;</span><span class="na">a</span><span class="o">&gt;</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">fn</span> <span class="nf">create_product_y</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">Box</span><span class="o">&lt;</span><span class="n">ProdY</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="o">&#39;</span><span class="na">a</span><span class="o">&gt;</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// ...
+</span></span></span></code></pre></div><h1 id="mementoパターン">Mementoパターン</h1>
 <p>参照先のままです</p>
-
 <h1 id="observerパターン">Observerパターン</h1>
-
 <p>参照先のままです</p>
-
 <h1 id="visitorパターン">Visitorパターン</h1>
-
 <p>参照先では簡単な例なので分かりづらいのですが、列挙型を使うところです。
 まともな列挙型がない+シングルディスパッチしかなく引数はオーバーロードという二重苦によって生まれたパターンであり、まともな列挙型か多重ディスパッチがあれば複雑怪奇なプログラムは書かなくて済みます。</p>
-
 <p>ここでは参照先とは違ってもう少し複雑な例を出します。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">trait</span><span class="w"> </span><span class="n">Visitor</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">visit</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">T</span><span class="p">);</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">enum</span> <span class="nc">Entity</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="n">File</span><span class="p">(</span><span class="nb">String</span><span class="p">),</span><span class="w">
-</span><span class="w">    </span><span class="n">Dir</span><span class="p">(</span><span class="nb">String</span><span class="p">,</span><span class="w"> </span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Entity</span><span class="o">&gt;</span><span class="p">),</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">struct</span> <span class="nc">ConcreteFileVisitor</span><span class="p">;</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="n">Visitor</span><span class="o">&lt;</span><span class="n">Entity</span><span class="o">&gt;</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">ConcreteFileVisitor</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">visit</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">e</span>: <span class="kp">&amp;</span><span class="nc">Entity</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="k">use</span><span class="w"> </span><span class="n">Entity</span>::<span class="o">*</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="k">match</span><span class="w"> </span><span class="o">*</span><span class="n">e</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">            </span><span class="n">File</span><span class="p">(</span><span class="k">ref</span><span class="w"> </span><span class="n">name</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;file: {}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">name</span><span class="p">),</span><span class="w">
-</span><span class="w">            </span><span class="n">Dir</span><span class="p">(</span><span class="k">ref</span><span class="w"> </span><span class="n">name</span><span class="p">,</span><span class="w"> </span><span class="k">ref</span><span class="w"> </span><span class="n">files</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">                </span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;dir: {}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">name</span><span class="p">);</span><span class="w">
-</span><span class="w">                </span><span class="k">for</span><span class="w"> </span><span class="n">file</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="n">files</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">                    </span><span class="bp">self</span><span class="p">.</span><span class="n">visit</span><span class="p">(</span><span class="n">file</span><span class="p">)</span><span class="w">
-</span><span class="w">                </span><span class="p">}</span><span class="w">
-</span><span class="w">            </span><span class="p">}</span><span class="w">
-</span><span class="w">        </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">use</span><span class="w"> </span><span class="n">Entity</span>::<span class="o">*</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">e</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Dir</span><span class="p">(</span><span class="s">&#34;/&#34;</span><span class="p">.</span><span class="n">to_string</span><span class="p">(),</span><span class="w">
-</span><span class="w">                </span><span class="fm">vec!</span><span class="p">[</span><span class="n">File</span><span class="p">(</span><span class="s">&#34;etc&#34;</span><span class="p">.</span><span class="n">to_string</span><span class="p">()),</span><span class="w"> </span><span class="n">File</span><span class="p">(</span><span class="s">&#34;usr&#34;</span><span class="p">.</span><span class="n">to_string</span><span class="p">())]);</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">visitor</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ConcreteFileVisitor</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="n">visitor</span><span class="p">.</span><span class="n">visit</span><span class="p">(</span><span class="o">&amp;</span><span class="n">e</span><span class="p">);</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<p>特段パターンというほどの処理をしている感じがしませんね。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">trait</span><span class="w"> </span><span class="n">Visitor</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">fn</span> <span class="nf">visit</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">T</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">enum</span> <span class="nc">Entity</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">File</span><span class="p">(</span><span class="nb">String</span><span class="p">),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">Dir</span><span class="p">(</span><span class="nb">String</span><span class="p">,</span><span class="w"> </span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Entity</span><span class="o">&gt;</span><span class="p">),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">struct</span> <span class="nc">ConcreteFileVisitor</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="n">Visitor</span><span class="o">&lt;</span><span class="n">Entity</span><span class="o">&gt;</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">ConcreteFileVisitor</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">fn</span> <span class="nf">visit</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">e</span>: <span class="kp">&amp;</span><span class="nc">Entity</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">use</span><span class="w"> </span><span class="n">Entity</span>::<span class="o">*</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">match</span><span class="w"> </span><span class="o">*</span><span class="n">e</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">File</span><span class="p">(</span><span class="k">ref</span><span class="w"> </span><span class="n">name</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;file: {}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">name</span><span class="p">),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">Dir</span><span class="p">(</span><span class="k">ref</span><span class="w"> </span><span class="n">name</span><span class="p">,</span><span class="w"> </span><span class="k">ref</span><span class="w"> </span><span class="n">files</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;dir: {}&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">name</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="k">for</span><span class="w"> </span><span class="n">file</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="n">files</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                    </span><span class="bp">self</span><span class="p">.</span><span class="n">visit</span><span class="p">(</span><span class="n">file</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">use</span><span class="w"> </span><span class="n">Entity</span>::<span class="o">*</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">e</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Dir</span><span class="p">(</span><span class="s">&#34;/&#34;</span><span class="p">.</span><span class="n">to_string</span><span class="p">(),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="fm">vec!</span><span class="p">[</span><span class="n">File</span><span class="p">(</span><span class="s">&#34;etc&#34;</span><span class="p">.</span><span class="n">to_string</span><span class="p">()),</span><span class="w"> </span><span class="n">File</span><span class="p">(</span><span class="s">&#34;usr&#34;</span><span class="p">.</span><span class="n">to_string</span><span class="p">())]);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">visitor</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ConcreteFileVisitor</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">visitor</span><span class="p">.</span><span class="n">visit</span><span class="p">(</span><span class="o">&amp;</span><span class="n">e</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>特段パターンというほどの処理をしている感じがしませんね。</p>
 <h1 id="iteratorパターン">Iteratorパターン</h1>
-
 <p>参照先のままです。</p>
-
 <h1 id="mediatorパターン">Mediatorパターン</h1>
-
 <p>だいたい参照先のままです。複雑なことをしようと思うと<code>Colleague</code>が複数種類出てきて列挙型かトレイトオブジェクトが必要になりそうな気がします。</p>
-
 <h1 id="interpreterパターン">Interpreterパターン</h1>
-
 <p>略</p>
-
 <h1 id="builderパターン">Builderパターン</h1>
-
 <p>あまりここまで抽象化してるのは見たことありませんがやるとしたら参照先のままです。
 そもそもRustには継承がないので抽象化する意義があまりなく、型固有のBuilderパターンで十分です。</p>
-
 <h1 id="prototypeパターン">Prototypeパターン</h1>
-
 <p>参照先のままです。</p>
-
 <h1 id="factoryパターン">Factoryパターン</h1>
-
 <p>クロージャで十分です。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">trait</span><span class="w"> </span><span class="n">Product</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">convert</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="nb">String</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">String</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">struct</span> <span class="nc">Factory</span><span class="p">;</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="n">Factory</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">convert</span><span class="o">&lt;</span><span class="n">P</span><span class="p">,</span><span class="w"> </span><span class="n">F</span><span class="o">&gt;</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">s</span>: <span class="nb">String</span><span class="p">,</span><span class="w"> </span><span class="n">create_product</span>: <span class="nc">F</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">String</span>
-        <span class="nc">where</span><span class="w"> </span><span class="n">P</span>: <span class="nc">Product</span><span class="p">,</span><span class="w">
-</span><span class="w">              </span><span class="n">F</span>: <span class="nb">FnOnce</span><span class="p">()</span><span class="w"> </span>-&gt; <span class="nc">P</span><span class="w">
-</span><span class="w">    </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="n">create_product</span><span class="p">().</span><span class="n">convert</span><span class="p">(</span><span class="n">s</span><span class="p">)</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">struct</span> <span class="nc">ConcreteProductX</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="n">Product</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">ConcreteProductX</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">convert</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">s</span>: <span class="nb">String</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">String</span> <span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="n">s</span><span class="p">.</span><span class="n">to_uppercase</span><span class="p">()</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Factory</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w">
-</span><span class="w">             </span><span class="n">f</span><span class="p">.</span><span class="n">convert</span><span class="p">(</span><span class="s">&#34;hogehoge piyopiyo&#34;</span><span class="p">.</span><span class="n">to_string</span><span class="p">(),</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">ConcreteProductX</span><span class="p">))</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<h1 id="abstractfactoryパターン">AbstractFactoryパターン</h1>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">trait</span><span class="w"> </span><span class="n">Product</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">fn</span> <span class="nf">convert</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="nb">String</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">String</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">struct</span> <span class="nc">Factory</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="n">Factory</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">fn</span> <span class="nf">convert</span><span class="o">&lt;</span><span class="n">P</span><span class="p">,</span><span class="w"> </span><span class="n">F</span><span class="o">&gt;</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">s</span>: <span class="nb">String</span><span class="p">,</span><span class="w"> </span><span class="n">create_product</span>: <span class="nc">F</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">String</span>
+</span></span><span class="line"><span class="cl">        <span class="nc">where</span><span class="w"> </span><span class="n">P</span>: <span class="nc">Product</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">              </span><span class="n">F</span>: <span class="nb">FnOnce</span><span class="p">()</span><span class="w"> </span>-&gt; <span class="nc">P</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">create_product</span><span class="p">().</span><span class="n">convert</span><span class="p">(</span><span class="n">s</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">struct</span> <span class="nc">ConcreteProductX</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="n">Product</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">ConcreteProductX</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">fn</span> <span class="nf">convert</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">s</span>: <span class="nb">String</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">String</span> <span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">s</span><span class="p">.</span><span class="n">to_uppercase</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Factory</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;{}&#34;</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">             </span><span class="n">f</span><span class="p">.</span><span class="n">convert</span><span class="p">(</span><span class="s">&#34;hogehoge piyopiyo&#34;</span><span class="p">.</span><span class="n">to_string</span><span class="p">(),</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">ConcreteProductX</span><span class="p">))</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><h1 id="abstractfactoryパターン">AbstractFactoryパターン</h1>
 <p>そもそもここまでやる？というのは置いといてやるとしたら参照先のままかなぁと思います。</p>
-
 <p>TemplateMethodパターンでも述べた通り個人的には関連型を使う方が好みです。</p>
-
-<h1 id="chain-of-responsibility-cor-パターン">Chain of Responsibility/CoR パターン</h1>
-
+<h1 id="chain-of-responsibilitycor-パターン">Chain of Responsibility/CoR パターン</h1>
 <p>参照先のままです。</p>
-
 <h1 id="singletonパターン">Singletonパターン</h1>
-
 <p>そもそもアンチパターンです。分かりづらいグローバル変数なだけです。あえてRustでやるとしたら<a href="https://github.com/rust-lang-nursery/lazy-static.rs">lazy_static</a>かなと思います。</p>
-
 <h1 id="adapterパターン">Adapterパターン</h1>
-
 <p>これは捉え方が2種類あるかなーと思います。。</p>
-
 <p>1つにはクラスの定義時にしかインターフェースを実装できない窮屈な言語仕様へのワークアラウンドとして。
 この捉え方では参照先のコードようにただトレイトを実装してしまえば終わりです。</p>
-
 <p>もう1つにはラッパーオブジェクトとして。<code>std::fs::File</code>の実装とかがそれっぽいと思います。。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">struct</span> <span class="nc">File</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="n">inner</span>: <span class="nc">fs_imp</span>::<span class="n">File</span><span class="p">,</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<h1 id="bridgeパターン">Bridgeパターン</h1>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">pub</span><span class="w"> </span><span class="k">struct</span> <span class="nc">File</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">inner</span>: <span class="nc">fs_imp</span>::<span class="n">File</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><h1 id="bridgeパターン">Bridgeパターン</h1>
 <p>そもそも機能の追加とAPIの抽象化をどちらも継承に押し込める言語仕様が悪い。
 それにRustでは継承しないので関係ないです。</p>
-
 <h1 id="proxyパターン">Proxyパターン</h1>
-
 <p>参照先のままです。</p>
-
 <h1 id="facadeパターン">Facadeパターン</h1>
-
 <p>参照先のままです。Rustにはモジュールや可視性の制御があって特別意識することなく普段からやっていることなのであまり名前をつけるほどのことではないと思ってます。</p>
-
 <h1 id="flyweightパターン">Flyweightパターン</h1>
-
 <p>所有権があるのでRustだとちょっと難しいパターンです。
 参照だけなら参照先のように<code>HashMap</code>にいれるか、オブジェクトを区別しないなら<code>Vec</code>にいれるかなと思います。</p>
-
 <p>因みにLispとかでは<code>intern</code>という名前で呼ばれてると思います。</p>
-
 <h1 id="compositeパターン">Compositeパターン</h1>
-
 <p>ただの列挙型の再実装です。</p>
-
 <h1 id="decoratorパターン">Decoratorパターン</h1>
-
 <p>よくあるやつです。参照先のコードの他、<code>std::io::WriteBuf</code>のようなものが代表的です。</p>
-
 <h1 id="おわりに">おわりに</h1>
-
 <p>デザインパターンをdisろうと思って書いたのですが案外多くのケースで便利でした。Rustで不要なものは10本指で数えられる程度でしたね。すごい。</p>
-
 <p>因みにLisperでAIの研究者（確か今GoogleのAI研究所の所長）のPeter Norvigは<a href="http://www.norvig.com/design-patterns/design-patterns.pdf">Design Patterns in Dynamic Languages</a>で16個はLispの機能を使えばパターンという程のものではなくなると言ってます。
 それぞれどの機能でどれが不要になるかを解説しているのですが、Rustは高階関数とモジュールの分に加えて列挙型の分で不要になってるかなと思います。</p>
                     </section>

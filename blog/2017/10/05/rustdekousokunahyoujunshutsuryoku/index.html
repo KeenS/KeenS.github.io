@@ -125,174 +125,150 @@
                     </header>
                     <section>
                         <p>κeenです。Rustで何も考えずに標準出力に吐いてると遅いよねーって話です。</p>
-
 <p>今回、標準出力に「yes」と1000万回出力するアプリケーションを書いてみたいと思います。</p>
-
 <h1 id="println"><code>println!</code></h1>
-
 <p>まあ、最初に思いつくのはこれでしょうか。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="mi">10_000_000</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;yes&#34;</span><span class="p">);</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="gp">$ </span>rustc -O yes.rs
-<span class="gp">$ </span><span class="nb">time</span> ./yes &gt; /dev/null
-<span class="go">./yes &gt; /dev/null  1.19s user 0.49s system 99% cpu 1.681 total
-</span></code></pre></div>
-<p>はい、1.681秒。結構時間掛かります。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="mi">10_000_000</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="fm">println!</span><span class="p">(</span><span class="s">&#34;yes&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="line"><span class="cl"><span class="gp">$</span> rustc -O yes.rs
+</span></span><span class="line"><span class="cl"><span class="gp">$</span> <span class="nb">time</span> ./yes &gt; /dev/null
+</span></span><span class="line"><span class="cl"><span class="go">./yes &gt; /dev/null  1.19s user 0.49s system 99% cpu 1.681 total
+</span></span></span></code></pre></div><p>はい、1.681秒。結構時間掛かります。</p>
 <h1 id="ロックレス">ロックレス</h1>
-
 <p>上記の<code>println!</code>が遅いのは毎度ロックを取ってるからなので、直接stdoutを取得して一度だけロックを取るようにすると速度は改善します。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">io</span>::<span class="p">{</span><span class="n">stdout</span><span class="p">,</span><span class="w"> </span><span class="n">Write</span><span class="p">};</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">stdout</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">out</span><span class="p">.</span><span class="n">lock</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="mi">10_000_000</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="fm">writeln!</span><span class="p">(</span><span class="n">out</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;yes&#34;</span><span class="p">).</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="gp">$ </span>rustc -O yes.rs
-<span class="gp">$ </span><span class="nb">time</span> ./yes &gt; /dev/null
-<span class="go">./yes &gt; /dev/null  0.62s user 0.49s system 99% cpu 1.111 total
-</span></code></pre></div>
-<p>1.111秒。多少は速くなりましたがあんまり変わんないですね。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">io</span>::<span class="p">{</span><span class="n">stdout</span><span class="p">,</span><span class="w"> </span><span class="n">Write</span><span class="p">};</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">stdout</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">out</span><span class="p">.</span><span class="n">lock</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="mi">10_000_000</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="fm">writeln!</span><span class="p">(</span><span class="n">out</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;yes&#34;</span><span class="p">).</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="line"><span class="cl"><span class="gp">$</span> rustc -O yes.rs
+</span></span><span class="line"><span class="cl"><span class="gp">$</span> <span class="nb">time</span> ./yes &gt; /dev/null
+</span></span><span class="line"><span class="cl"><span class="go">./yes &gt; /dev/null  0.62s user 0.49s system 99% cpu 1.111 total
+</span></span></span></code></pre></div><p>1.111秒。多少は速くなりましたがあんまり変わんないですね。</p>
 <h1 id="改行">改行？</h1>
-
 <p>ところで上記のプログラム、<code>writeln!</code>の代わりに<code>write!</code>を使うと（改行を挟まないと）急激に速くなります。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">io</span>::<span class="p">{</span><span class="n">stdout</span><span class="p">,</span><span class="w"> </span><span class="n">Write</span><span class="p">};</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">stdout</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">out</span><span class="p">.</span><span class="n">lock</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="mi">10_000_000</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="fm">write!</span><span class="p">(</span><span class="n">out</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;yes&#34;</span><span class="p">).</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="gp">$ </span>rustc -O yes.rs
-<span class="gp">$ </span><span class="nb">time</span> ./yes &gt; /dev/null
-<span class="go">./yes &gt; /dev/null  0.25s user 0.00s system 98% cpu 0.255 total
-</span></code></pre></div>
-<p>0.255秒、4.4倍くらいになりました。 何故だか分かりますか？</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">io</span>::<span class="p">{</span><span class="n">stdout</span><span class="p">,</span><span class="w"> </span><span class="n">Write</span><span class="p">};</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">stdout</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">out</span><span class="p">.</span><span class="n">lock</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="mi">10_000_000</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="fm">write!</span><span class="p">(</span><span class="n">out</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;yes&#34;</span><span class="p">).</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="line"><span class="cl"><span class="gp">$</span> rustc -O yes.rs
+</span></span><span class="line"><span class="cl"><span class="gp">$</span> <span class="nb">time</span> ./yes &gt; /dev/null
+</span></span><span class="line"><span class="cl"><span class="go">./yes &gt; /dev/null  0.25s user 0.00s system 98% cpu 0.255 total
+</span></span></span></code></pre></div><p>0.255秒、4.4倍くらいになりました。 何故だか分かりますか？</p>
 <p><code>writeln!</code>の方は改行でフラッシュされるからです。<code>write!</code>だと（改行がないと）されない。あれ？フラッシュ？</p>
-
 <h1 id="バッファリング">バッファリング</h1>
-
 <p>はい、ということで忘れがちですが標準出力もデフォルトではバッファリングされないのでバッファリングしてあげましょう。バッファリングしなくてIOが遅い、Rustあるあるですね。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">io</span>::<span class="p">{</span><span class="n">stdout</span><span class="p">,</span><span class="w"> </span><span class="n">Write</span><span class="p">,</span><span class="w"> </span><span class="n">BufWriter</span><span class="p">};</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">stdout</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">BufWriter</span>::<span class="n">new</span><span class="p">(</span><span class="n">out</span><span class="p">.</span><span class="n">lock</span><span class="p">());</span><span class="w">
-</span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="mi">10_000_000</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="fm">writeln!</span><span class="p">(</span><span class="n">out</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;yes&#34;</span><span class="p">).</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="gp">$ </span>rustc -O yes.rs
-<span class="gp">$ </span><span class="nb">time</span> ./yes &gt; /dev/null
-<span class="go">./yes &gt; /dev/null  0.15s user 0.00s system 97% cpu 0.152 total
-</span></code></pre></div>
-<p>はい、最初から比べると10倍以上速くなりました。めでたしめでたし。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">io</span>::<span class="p">{</span><span class="n">stdout</span><span class="p">,</span><span class="w"> </span><span class="n">Write</span><span class="p">,</span><span class="w"> </span><span class="n">BufWriter</span><span class="p">};</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">stdout</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">BufWriter</span>::<span class="n">new</span><span class="p">(</span><span class="n">out</span><span class="p">.</span><span class="n">lock</span><span class="p">());</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="mi">10_000_000</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="fm">writeln!</span><span class="p">(</span><span class="n">out</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;yes&#34;</span><span class="p">).</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="line"><span class="cl"><span class="gp">$</span> rustc -O yes.rs
+</span></span><span class="line"><span class="cl"><span class="gp">$</span> <span class="nb">time</span> ./yes &gt; /dev/null
+</span></span><span class="line"><span class="cl"><span class="go">./yes &gt; /dev/null  0.15s user 0.00s system 97% cpu 0.152 total
+</span></span></span></code></pre></div><p>はい、最初から比べると10倍以上速くなりました。めでたしめでたし。</p>
 <h1 id="さらなる高み">さらなる高み</h1>
-
 <p>一般的にはここまでで十分ですが、興味としてさらに高速化してみましょう。</p>
-
 <p>1行yesを書く度に毎度<code>write!</code>を呼んでいては遅いです。ある程度まとめて<code>write!</code>を呼びましょう。</p>
-
 <p>今回2048 yes毎に<code>write_all</code>を呼ぶようにしてみます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">io</span>::<span class="p">{</span><span class="n">stdout</span><span class="p">,</span><span class="w"> </span><span class="n">Write</span><span class="p">,</span><span class="w"> </span><span class="n">BufWriter</span><span class="p">};</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">stdout</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">BufWriter</span>::<span class="n">new</span><span class="p">(</span><span class="n">out</span><span class="p">.</span><span class="n">lock</span><span class="p">());</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">yes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">String</span>::<span class="n">with_capacity</span><span class="p">(</span><span class="mi">4096</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="mi">2048</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">            </span><span class="n">s</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="s">&#34;yes\n&#34;</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="p">}</span><span class="w">
-</span><span class="w">        </span><span class="n">s</span><span class="w">
-</span><span class="w">    </span><span class="p">};</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">rest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">String</span>::<span class="n">with_capacity</span><span class="p">(</span><span class="mi">4096</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="p">(</span><span class="mi">10_000_000</span><span class="w"> </span><span class="o">%</span><span class="w"> </span><span class="mi">2048</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">            </span><span class="n">s</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="s">&#34;yes\n&#34;</span><span class="p">;</span><span class="w">
-</span><span class="w">        </span><span class="p">}</span><span class="w">
-</span><span class="w">        </span><span class="n">s</span><span class="w">
-</span><span class="w">    </span><span class="p">};</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="p">(</span><span class="mi">10_000_000</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mi">2048</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="n">out</span><span class="p">.</span><span class="n">write_all</span><span class="p">(</span><span class="n">yes</span><span class="p">.</span><span class="n">as_bytes</span><span class="p">()).</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="n">out</span><span class="p">.</span><span class="n">write_all</span><span class="p">(</span><span class="n">rest</span><span class="p">.</span><span class="n">as_bytes</span><span class="p">()).</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="gp">$ </span>rustc -O yes.rs
-<span class="gp">$ </span><span class="nb">time</span> ./yes &gt; /dev/null
-<span class="go">./yes &gt; /dev/null  0.00s user 0.00s system 0% cpu 0.003 total
-</span></code></pre></div>
-<p>比べようもないくらい速くなりました。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">io</span>::<span class="p">{</span><span class="n">stdout</span><span class="p">,</span><span class="w"> </span><span class="n">Write</span><span class="p">,</span><span class="w"> </span><span class="n">BufWriter</span><span class="p">};</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">stdout</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">BufWriter</span>::<span class="n">new</span><span class="p">(</span><span class="n">out</span><span class="p">.</span><span class="n">lock</span><span class="p">());</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">yes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">String</span>::<span class="n">with_capacity</span><span class="p">(</span><span class="mi">4096</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="mi">2048</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">s</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="s">&#34;yes\n&#34;</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">s</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">};</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">rest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">String</span>::<span class="n">with_capacity</span><span class="p">(</span><span class="mi">4096</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="p">(</span><span class="mi">10_000_000</span><span class="w"> </span><span class="o">%</span><span class="w"> </span><span class="mi">2048</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">s</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="s">&#34;yes\n&#34;</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">s</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">};</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="p">(</span><span class="mi">10_000_000</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mi">2048</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">out</span><span class="p">.</span><span class="n">write_all</span><span class="p">(</span><span class="n">yes</span><span class="p">.</span><span class="n">as_bytes</span><span class="p">()).</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">out</span><span class="p">.</span><span class="n">write_all</span><span class="p">(</span><span class="n">rest</span><span class="p">.</span><span class="n">as_bytes</span><span class="p">()).</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="line"><span class="cl"><span class="gp">$</span> rustc -O yes.rs
+</span></span><span class="line"><span class="cl"><span class="gp">$</span> <span class="nb">time</span> ./yes &gt; /dev/null
+</span></span><span class="line"><span class="cl"><span class="go">./yes &gt; /dev/null  0.00s user 0.00s system 0% cpu 0.003 total
+</span></span></span></code></pre></div><p>比べようもないくらい速くなりました。</p>
 <h1 id="参考">参考</h1>
-
 <ul>
 <li><a href="https://github.com/rust-lang/rust/pull/32695">Drop the default buffer size to 8K by sfackler · Pull Request #32695 · rust-lang/rust</a></li>
 <li><a href="https://www.reddit.com/r/unix/comments/6gxduc/how_is_gnu_yes_so_fast/">How is GNU <code>yes</code> so fast? : unix</a></li>
 </ul>
-
 <p>因みにですが手元の環境だとGNU yesより速いです。※Rust版の方は出力数を10億回に増やしたものを使用</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="gp">$ </span>./yes <span class="p">|</span> pv &gt; /dev/null
-<span class="go">3.73GiB 0:00:00 [7.73GiB/s]
-</span><span class="go"></span><span class="gp">$ </span>yes <span class="p">|</span> pv &gt; /dev/null
-<span class="go">^C.6GiB 0:00:06 [7.29GiB/s]
-</span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="gp">$ </span>yes --version
-<span class="go">yes (GNU coreutils) 8.26
-</span><span class="go">Copyright (C) 2016 Free Software Foundation, Inc.
-</span><span class="go">ライセンス GPLv3+: GNU GPL version 3 or later &lt;http://gnu.org/licenses/gpl.html&gt;.
-</span><span class="go">This is free software: you are free to change and redistribute it.
-</span><span class="go">There is NO WARRANTY, to the extent permitted by law.
-</span><span class="go"></span><span class="err">
-</span><span class="err"></span><span class="go">作者 David MacKenzie。
-</span></code></pre></div>
-<h1 id="2017-10-08-追記">2017-10-08 追記</h1>
-
-<p><blockquote class="twitter-tweet" data-conversation="none" data-lang="ja"><p lang="ja" dir="ltr">バッファリングするやつの<br>writeln!(out, &quot;yes&quot;).unwrap();<br>を<br>out.write(b&quot;yes\n&quot;).unwrap();<br>にするだけで最期の 2048 ごとのに匹敵するほどはやくなりました。<br>文字列からバイトへの変換にコピーが発生していそう。</p>&mdash; いじゅういん (@kei10in) <a href="https://twitter.com/kei10in/status/916038667600142336?ref_src=twsrc%5Etfw">2017年10月5日</a></blockquote>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="line"><span class="cl"><span class="gp">$</span> ./yes <span class="p">|</span> pv &gt; /dev/null
+</span></span><span class="line"><span class="cl"><span class="go">3.73GiB 0:00:00 [7.73GiB/s]
+</span></span></span><span class="line"><span class="cl"><span class="go"></span><span class="gp">$</span> yes <span class="p">|</span> pv &gt; /dev/null
+</span></span><span class="line"><span class="cl"><span class="go">^C.6GiB 0:00:06 [7.29GiB/s]
+</span></span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="line"><span class="cl"><span class="gp">$</span> yes --version
+</span></span><span class="line"><span class="cl"><span class="go">yes (GNU coreutils) 8.26
+</span></span></span><span class="line"><span class="cl"><span class="go">Copyright (C) 2016 Free Software Foundation, Inc.
+</span></span></span><span class="line"><span class="cl"><span class="go">ライセンス GPLv3+: GNU GPL version 3 or later &lt;http://gnu.org/licenses/gpl.html&gt;.
+</span></span></span><span class="line"><span class="cl"><span class="go">This is free software: you are free to change and redistribute it.
+</span></span></span><span class="line"><span class="cl"><span class="go">There is NO WARRANTY, to the extent permitted by law.
+</span></span></span><span class="line"><span class="cl"><span class="go"></span><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err"></span><span class="go">作者 David MacKenzie。
+</span></span></span></code></pre></div><h1 id="2017-10-08-追記">2017-10-08 追記</h1>
+<blockquote class="twitter-tweet" data-conversation="none" data-lang="ja"><p lang="ja" dir="ltr">バッファリングするやつの<br>writeln!(out, &quot;yes&quot;).unwrap();<br>を<br>out.write(b&quot;yes\n&quot;).unwrap();<br>にするだけで最期の 2048 ごとのに匹敵するほどはやくなりました。<br>文字列からバイトへの変換にコピーが発生していそう。</p>&mdash; いじゅういん (@kei10in) <a href="https://twitter.com/kei10in/status/916038667600142336?ref_src=twsrc%5Etfw">2017年10月5日</a></blockquote>
 <blockquote class="twitter-tweet" data-conversation="none" data-lang="ja"><p lang="ja" dir="ltr">ありがとうございます。言われてみれば確かwritelnは一旦改行文字を結合してから（新たにアロケートしてから）出力していた気がします。後程追記しますね。</p>&mdash; κeen (@blackenedgold) <a href="https://twitter.com/blackenedgold/status/916088821741101056?ref_src=twsrc%5Etfw">2017年10月5日</a></blockquote>
-<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script></p>
-
+<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
 <p>ということで実験してみましょう。</p>
-
 <p>まずは指摘されたコード。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">io</span>::<span class="p">{</span><span class="n">stdout</span><span class="p">,</span><span class="w"> </span><span class="n">Write</span><span class="p">,</span><span class="w"> </span><span class="n">BufWriter</span><span class="p">};</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">stdout</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">BufWriter</span>::<span class="n">new</span><span class="p">(</span><span class="n">out</span><span class="p">.</span><span class="n">lock</span><span class="p">());</span><span class="w">
-</span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="mi">10_000_000</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="n">out</span><span class="p">.</span><span class="n">write</span><span class="p">(</span><span class="s">b&#34;yes</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">).</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="gp">$ </span>rustc -O yes.rs
-<span class="gp">$ </span><span class="nb">time</span> ./yes &gt; /dev/null
-<span class="go">./yes &gt; /dev/null  0.02s user 0.00s system 89% cpu 0.027 total
-</span></code></pre></div>
-<p>かなり速くなってます。ふむむむ。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">io</span>::<span class="p">{</span><span class="n">stdout</span><span class="p">,</span><span class="w"> </span><span class="n">Write</span><span class="p">,</span><span class="w"> </span><span class="n">BufWriter</span><span class="p">};</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">stdout</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">BufWriter</span>::<span class="n">new</span><span class="p">(</span><span class="n">out</span><span class="p">.</span><span class="n">lock</span><span class="p">());</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="mi">10_000_000</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">out</span><span class="p">.</span><span class="n">write</span><span class="p">(</span><span class="s">b&#34;yes</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">).</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="line"><span class="cl"><span class="gp">$</span> rustc -O yes.rs
+</span></span><span class="line"><span class="cl"><span class="gp">$</span> <span class="nb">time</span> ./yes &gt; /dev/null
+</span></span><span class="line"><span class="cl"><span class="go">./yes &gt; /dev/null  0.02s user 0.00s system 89% cpu 0.027 total
+</span></span></span></code></pre></div><p>かなり速くなってます。ふむむむ。</p>
 <p>もう1つ、私が言及した<code>writeln!</code>よりも<code>write!</code>の方が速いというやつ。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">io</span>::<span class="p">{</span><span class="n">stdout</span><span class="p">,</span><span class="w"> </span><span class="n">Write</span><span class="p">,</span><span class="w"> </span><span class="n">BufWriter</span><span class="p">};</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">stdout</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">BufWriter</span>::<span class="n">new</span><span class="p">(</span><span class="n">out</span><span class="p">.</span><span class="n">lock</span><span class="p">());</span><span class="w">
-</span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="mi">10_000_000</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="n">out</span><span class="p">.</span><span class="n">write</span><span class="p">(</span><span class="s">b&#34;yes</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">).</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="gp">$ </span>rustc -O yes.rs
-<span class="gp">$ </span><span class="nb">time</span> ./yes &gt; /dev/null
-<span class="go">./yes &gt; /dev/null  0.15s user 0.00s system 98% cpu 0.155 total
-</span></code></pre></div>
-<p>あれ！？<code>write!</code>を使うと遅い…。<code>write!</code>は単に<a href="https://github.com/rust-lang/rust/blob/master/src/libcore/macros.rs#L403"><code>write_fmt</code>に置き換えられる</a>だけなので大したコストじゃないと思ってたんですが<code>write_fmt</code>って以外とコストかかるんですね。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">io</span>::<span class="p">{</span><span class="n">stdout</span><span class="p">,</span><span class="w"> </span><span class="n">Write</span><span class="p">,</span><span class="w"> </span><span class="n">BufWriter</span><span class="p">};</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">stdout</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">BufWriter</span>::<span class="n">new</span><span class="p">(</span><span class="n">out</span><span class="p">.</span><span class="n">lock</span><span class="p">());</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="mi">10_000_000</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">out</span><span class="p">.</span><span class="n">write</span><span class="p">(</span><span class="s">b&#34;yes</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">).</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="line"><span class="cl"><span class="gp">$</span> rustc -O yes.rs
+</span></span><span class="line"><span class="cl"><span class="gp">$</span> <span class="nb">time</span> ./yes &gt; /dev/null
+</span></span><span class="line"><span class="cl"><span class="go">./yes &gt; /dev/null  0.15s user 0.00s system 98% cpu 0.155 total
+</span></span></span></code></pre></div><p>あれ！？<code>write!</code>を使うと遅い…。<code>write!</code>は単に<a href="https://github.com/rust-lang/rust/blob/master/src/libcore/macros.rs#L403"><code>write_fmt</code>に置き換えられる</a>だけなので大したコストじゃないと思ってたんですが<code>write_fmt</code>って以外とコストかかるんですね。</p>
 <p>ところで<code>writeln!</code>は<a href="https://github.com/rust-lang/rust/blob/master/src/libcore/macros.rs#L448">マクロの<code>concat!</code>を呼んでいる</a>ので実行時にはアロケーションコストが掛からなそうです（汗。調べもせずに適当なことを言うのはやめましょう（戒め）</p>
-
 <p>/追記</p>
                     </section>
                 </article>

@@ -19,7 +19,6 @@
         <meta name="twitter:site" content="@blackenedgold" />
         <meta name="twitter:title" content="リソースを管理する型 | κeenのHappy Hacκing Blog"/>
         <meta name="twitter:description" content="このエントリは型 Advent Calendar 2019 - Qiita 22日目の記事です。
-
 κeenです。Session Typeの話をするつもりでしたが気が変わったのでリソースを管理する型の話をします。
 リソースといっても所有権の話ではないです。
 DBにWriteできるだとかS3からGetできるだとかです。リソースというよりはアクセス権限の方が正確かもしれません。" />
@@ -27,7 +26,6 @@ DBにWriteできるだとかS3からGetできるだとかです。リソース�
         <meta property="og:type" content="article" />
         <meta property="og:url" content="https://KeenS.github.io/blog/2019/12/21/riso_suwokanrisurukata/" />
         <meta property="og:description" content="このエントリは型 Advent Calendar 2019 - Qiita 22日目の記事です。
-
 κeenです。Session Typeの話をするつもりでしたが気が変わったのでリソースを管理する型の話をします。
 リソースといっても所有権の話ではないです。
 DBにWriteできるだとかS3からGetできるだとかです。リソースというよりはアクセス権限の方が正確かもしれません。" />
@@ -137,251 +135,217 @@ DBにWriteできるだとかS3からGetできるだとかです。リソース�
                     </header>
                     <section>
                         <p>このエントリは<a href="https://qiita.com/advent-calendar/2019/type">型 Advent Calendar 2019 - Qiita</a> 22日目の記事です。</p>
-
 <p>κeenです。Session Typeの話をするつもりでしたが気が変わったのでリソースを管理する型の話をします。
 リソースといっても所有権の話ではないです。
 DBにWriteできるだとかS3からGetできるだとかです。リソースというよりはアクセス権限の方が正確かもしれません。</p>
-
 <p>他のエントリが学術的なものばかりなのに対してこれは実装テクニック的な記事です。
 型理論のアドベントカレンダーですが、まあいいや。</p>
-
 <h1 id="モチベーション">モチベーション</h1>
-
 <p>Webアプリケーションを作っていると、アプリケーションが触るリソースを静的に知りたいことがあります。
 例えば、以下のような需要があります。</p>
-
 <ul>
 <li>データベースが壊れてReadしかできなくなった時にそれでも動く機能はどれか知りたい</li>
 <li>この機能遅そうだけどキャッシュしたりしてる？</li>
 <li>このアプリケーションに渡すAWSの権限はどれが適切か
-
 <ul>
 <li>例えば「このリソース使ってなさそうだから権限外したいんだけど大丈夫？」とか</li>
-</ul></li>
 </ul>
-
+</li>
+</ul>
 <p>そのくらい作った人が知っとけよと思うかもしれませんが、複雑になったアプリケーションで正確に把握するのは簡単ではありません。
 そういうときに型で静的に「この関数を呼ぶにはこのリソースへのこの権限によるアクセスが必要になる」というのが分かると嬉しいです。</p>
-
 <p>もうちょっと言うと、それが自動的に求まると嬉しいです。
 以下の抽象的な例を見ましょう。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">fetchData:
-    let result = getFromCache
-    if result is null:
-      let data = getFromDB
-      writeToCache(data)
-      result &lt;- data
-    enfif
-    return result</code></pre></div>
-<p>キャッシュにRead/Write、DBにReadしています。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">fetchData:
+</span></span><span class="line"><span class="cl">    let result = getFromCache
+</span></span><span class="line"><span class="cl">    if result is null:
+</span></span><span class="line"><span class="cl">      let data = getFromDB
+</span></span><span class="line"><span class="cl">      writeToCache(data)
+</span></span><span class="line"><span class="cl">      result &lt;- data
+</span></span><span class="line"><span class="cl">    enfif
+</span></span><span class="line"><span class="cl">    return result
+</span></span></code></pre></div><p>キャッシュにRead/Write、DBにReadしています。
 このコードから <code>fetchData</code> がアクセスするリソースが「キャッシュにread/write、dbにread」であることが自動で求まって欲しいです。</p>
-
 <p>この例だとリソースは2種類、権限もreadとwriteの2種類ですが、現実ではもっと沢山のリソースと権限が必要になります。
 例えばawsのリソースはサービス、さらにその中での特定のパスのようにいくらでも細かく分けられますし、そのリソースの各操作単位で権限を管理できるので多様なリソースと権限が出てきます。
 以下はawsのドキュメントの<a href="https://docs.aws.amazon.com/ja_jp/iam/latest/userguide/access_policies.html">ポリシーとアクセス許可</a>から引用した設定json。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="p">{</span>
-  <span class="nt">&#34;version&#34;</span><span class="p">:</span> <span class="s2">&#34;2012-10-17&#34;</span><span class="p">,</span>
-  <span class="nt">&#34;statement&#34;</span><span class="p">:</span> <span class="p">[</span>
-    <span class="p">{</span>
-      <span class="nt">&#34;sid&#34;</span><span class="p">:</span> <span class="s2">&#34;firststatement&#34;</span><span class="p">,</span>
-      <span class="nt">&#34;effect&#34;</span><span class="p">:</span> <span class="s2">&#34;allow&#34;</span><span class="p">,</span>
-      <span class="nt">&#34;action&#34;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&#34;iam:changepassword&#34;</span><span class="p">],</span>
-      <span class="nt">&#34;resource&#34;</span><span class="p">:</span> <span class="s2">&#34;*&#34;</span>
-    <span class="p">},</span>
-    <span class="p">{</span>
-      <span class="nt">&#34;sid&#34;</span><span class="p">:</span> <span class="s2">&#34;secondstatement&#34;</span><span class="p">,</span>
-      <span class="nt">&#34;effect&#34;</span><span class="p">:</span> <span class="s2">&#34;allow&#34;</span><span class="p">,</span>
-      <span class="nt">&#34;action&#34;</span><span class="p">:</span> <span class="s2">&#34;s3:listallmybuckets&#34;</span><span class="p">,</span>
-      <span class="nt">&#34;resource&#34;</span><span class="p">:</span> <span class="s2">&#34;*&#34;</span>
-    <span class="p">},</span>
-    <span class="p">{</span>
-      <span class="nt">&#34;sid&#34;</span><span class="p">:</span> <span class="s2">&#34;thirdstatement&#34;</span><span class="p">,</span>
-      <span class="nt">&#34;effect&#34;</span><span class="p">:</span> <span class="s2">&#34;allow&#34;</span><span class="p">,</span>
-      <span class="nt">&#34;action&#34;</span><span class="p">:</span> <span class="p">[</span>
-        <span class="s2">&#34;s3:list*&#34;</span><span class="p">,</span>
-        <span class="s2">&#34;s3:get*&#34;</span>
-      <span class="p">],</span>
-      <span class="nt">&#34;resource&#34;</span><span class="p">:</span> <span class="p">[</span>
-        <span class="s2">&#34;arn:aws:s3:::confidential-data&#34;</span><span class="p">,</span>
-        <span class="s2">&#34;arn:aws:s3:::confidential-data/*&#34;</span>
-      <span class="p">],</span>
-      <span class="nt">&#34;condition&#34;</span><span class="p">:</span> <span class="p">{</span><span class="nt">&#34;bool&#34;</span><span class="p">:</span> <span class="p">{</span><span class="nt">&#34;aws:multifactorauthpresent&#34;</span><span class="p">:</span> <span class="s2">&#34;true&#34;</span><span class="p">}}</span>
-    <span class="p">}</span>
-  <span class="p">]</span>
-<span class="p">}</span></code></pre></div>
-<p>リソースやアクション（権限）が色々あるのが分かるかと思います。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;version&#34;</span><span class="p">:</span> <span class="s2">&#34;2012-10-17&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;statement&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;sid&#34;</span><span class="p">:</span> <span class="s2">&#34;firststatement&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;effect&#34;</span><span class="p">:</span> <span class="s2">&#34;allow&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;action&#34;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&#34;iam:changepassword&#34;</span><span class="p">],</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;resource&#34;</span><span class="p">:</span> <span class="s2">&#34;*&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;sid&#34;</span><span class="p">:</span> <span class="s2">&#34;secondstatement&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;effect&#34;</span><span class="p">:</span> <span class="s2">&#34;allow&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;action&#34;</span><span class="p">:</span> <span class="s2">&#34;s3:listallmybuckets&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;resource&#34;</span><span class="p">:</span> <span class="s2">&#34;*&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;sid&#34;</span><span class="p">:</span> <span class="s2">&#34;thirdstatement&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;effect&#34;</span><span class="p">:</span> <span class="s2">&#34;allow&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;action&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;s3:list*&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;s3:get*&#34;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">],</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;resource&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;arn:aws:s3:::confidential-data&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;arn:aws:s3:::confidential-data/*&#34;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">],</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;condition&#34;</span><span class="p">:</span> <span class="p">{</span><span class="nt">&#34;bool&#34;</span><span class="p">:</span> <span class="p">{</span><span class="nt">&#34;aws:multifactorauthpresent&#34;</span><span class="p">:</span> <span class="s2">&#34;true&#34;</span><span class="p">}}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>リソースやアクション（権限）が色々あるのが分かるかと思います。</p>
 <p>こういうのを（ある程度）表現できる型があると実行時に権限が足りなくて落ちるなんてことがないので嬉しいよね、というのがモチベーションです。</p>
-
 <h1 id="要件を詰める">要件を詰める</h1>
-
 <p>何が欲しいのかもうちょっとはっきりさせていきましょう。</p>
-
 <p>前提として、コードはDBやキャッシュなど外部にアクセスする部分とロジックを組み立てる部分に分かれてますしロジックは具体的なDBに依存せずに書かれているとします。</p>
-
 <p>つまり先程の例をもう少し詳細に書くと以下ではなくて</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">fetchData():
-    let cache = connect to redis
-    let result = cache.query(&#34;get data&#34;)
-    if result is null:
-      let db = connect to postgres
-      let data = db.query(&#34;SELECT * from DATA&#34;)
-      cache.setData(&#34;set ?&#34;, data)
-      result &lt;- data
-    enfif
-    return result
-
-fetchData()</code></pre></div>
-<p>以下のように書かれています。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">getFromCache(conn):
-    return conn.query(&#34;get data&#34;)
-
-writeToCache(conn, data):
-    return conn.setData(&#34;set ?&#34;, data)
-
-getFromDB(conn):
-    return db.query(&#34;SELECT * from DATA&#34;)
-
-fetchData(ctx):
-    let result = getFromCache(ctx.cache)
-    if result is null:
-      let data = getFromDB(ctx.db)
-      writeToCache(data)
-      result &lt;- data
-    enfif
-    return result
-
-let cache = connect to redis
-let db = connect to postgres
-let ctx = {cache, db}
-fetchData(ctx)</code></pre></div>
-<p>こういう状況から</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">fetchData():
+</span></span><span class="line"><span class="cl">    let cache = connect to redis
+</span></span><span class="line"><span class="cl">    let result = cache.query(&#34;get data&#34;)
+</span></span><span class="line"><span class="cl">    if result is null:
+</span></span><span class="line"><span class="cl">      let db = connect to postgres
+</span></span><span class="line"><span class="cl">      let data = db.query(&#34;SELECT * from DATA&#34;)
+</span></span><span class="line"><span class="cl">      cache.setData(&#34;set ?&#34;, data)
+</span></span><span class="line"><span class="cl">      result &lt;- data
+</span></span><span class="line"><span class="cl">    enfif
+</span></span><span class="line"><span class="cl">    return result
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">fetchData()
+</span></span></code></pre></div><p>以下のように書かれています。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">getFromCache(conn):
+</span></span><span class="line"><span class="cl">    return conn.query(&#34;get data&#34;)
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">writeToCache(conn, data):
+</span></span><span class="line"><span class="cl">    return conn.setData(&#34;set ?&#34;, data)
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">getFromDB(conn):
+</span></span><span class="line"><span class="cl">    return db.query(&#34;SELECT * from DATA&#34;)
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">fetchData(ctx):
+</span></span><span class="line"><span class="cl">    let result = getFromCache(ctx.cache)
+</span></span><span class="line"><span class="cl">    if result is null:
+</span></span><span class="line"><span class="cl">      let data = getFromDB(ctx.db)
+</span></span><span class="line"><span class="cl">      writeToCache(data)
+</span></span><span class="line"><span class="cl">      result &lt;- data
+</span></span><span class="line"><span class="cl">    enfif
+</span></span><span class="line"><span class="cl">    return result
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">let cache = connect to redis
+</span></span><span class="line"><span class="cl">let db = connect to postgres
+</span></span><span class="line"><span class="cl">let ctx = {cache, db}
+</span></span><span class="line"><span class="cl">fetchData(ctx)
+</span></span></code></pre></div><p>こういう状況から</p>
 <ul>
 <li><code>fetchData</code> がアクセスするリソースはDBとキャッシュである
-
 <ul>
 <li>つまり <code>ctx</code> はDBとキャシュへのアクセスを提供するコンテキストでないといけない</li>
-</ul></li>
+</ul>
+</li>
 <li><code>fetchData</code> がアクセスするDBにはRead権限が必要である
-
 <ul>
 <li>つまり <code>ctx</code> が提供するDBへのアクセスにはRead権限が含まれる</li>
-</ul></li>
+</ul>
+</li>
 <li><code>fetchData</code> がアクセスするキャッシュにはReadとWriteの権限が必要である
-
 <ul>
 <li>つまり <code>ctx</code> が提供するキャッシュへのアクセスにはReadとWriteの権限が含まれる</li>
-</ul></li>
 </ul>
-
+</li>
+</ul>
 <p>というのを抜き出して欲しいです。
 もちろん、 <code>fetchData</code> はDBへのReadしか要求していませんが ReadとWrite両方のアクセス権限があるコンテキストを渡されてもコンパイルが通ってほしいです。</p>
-
 <p>これらの要件をそれっぽい言い方をすると</p>
-
 <ul>
 <li>アクセスするリソースのintersectionを自動でとってほしい</li>
 <li>リソースの中でもさらにその権限のintersectionを自動でとってほしい</li>
 <li>リソースの一覧や権限の一覧はサブタイピングなどの構造的多相性が欲しい</li>
 </ul>
-
 <p>ということになります。</p>
-
 <p><code>fetchData</code> の話をしましたが流石に <code>getFromCache</code> などは外部ライブラリになるので手でアノテーションをつけます。</p>
-
 <p>こういったシステムに見覚えないですか？</p>
-
 <p>…そう、レコード多相です。</p>
-
-<h1 id="sml-による解法">SML#による解法</h1>
-
+<h1 id="smlによる解法">SML#による解法</h1>
 <p>上記の例をSML#で実装してみます。</p>
-
 <p>その前にSML#のレコード多相の記法についておさらいしておきましょう。</p>
-
 <h2 id="smlの多相パラメータ">SMLの多相パラメータ</h2>
-
 <p>(SML#とは限らない一般の)SMLの関数定義では <code>fun</code> に続いて多相パラメータを導入できます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="cm">(* 型アノテーションなしの `id` 関数 *)</span>
-<span class="kr">fun</span> <span class="nf">id</span> <span class="n">x</span> <span class="n">=x</span>
-
-<span class="cm">(* 型アノテーションありの `id` 関数。 `fun` に続いて型パラメータ &#39;a を導入している。 *)</span>
-<span class="kr">fun</span> <span class="nd">&#39;a</span> <span class="nf">id</span> <span class="p">(</span><span class="n">x:</span> <span class="nd">&#39;a</span><span class="p">)</span><span class="n">:</span> <span class="nd">&#39;a</span> <span class="n">=</span> <span class="n">x</span></code></pre></div>
-<h2 id="sml-のレコード多相">SML# のレコード多相</h2>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="cm">(* 型アノテーションなしの `id` 関数 *)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">fun</span> <span class="nf">id</span> <span class="n">x</span> <span class="n">=x</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="cm">(* 型アノテーションありの `id` 関数。 `fun` に続いて型パラメータ &#39;a を導入している。 *)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">fun</span> <span class="nd">&#39;a</span> <span class="nf">id</span> <span class="p">(</span><span class="n">x:</span> <span class="nd">&#39;a</span><span class="p">)</span><span class="n">:</span> <span class="nd">&#39;a</span> <span class="n">=</span> <span class="n">x</span>
+</span></span></code></pre></div><h2 id="sml-のレコード多相">SML# のレコード多相</h2>
 <p>SML# はこの <code>'a</code> に続いて <code>'a#{..}</code> と書いて型にアノテーションを書けます。
 例えば 「<code>name</code> フィールドを持つレコード」 を表わす型パラメータ以下のように書けます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="nd">&#39;a</span><span class="n">#</span><span class="p">{</span><span class="n">name:</span> <span class="nd">&#39;b</span><span class="p">}</span></code></pre></div>
-<h2 id="レコード多相によるリソースの管理">レコード多相によるリソースの管理</h2>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="nd">&#39;a</span><span class="n">#</span><span class="p">{</span><span class="n">name:</span> <span class="nd">&#39;b</span><span class="p">}</span>
+</span></span></code></pre></div><h2 id="レコード多相によるリソースの管理">レコード多相によるリソースの管理</h2>
 <p>それではSML#でリソースを管理してみましょう。</p>
-
 <p>まずはデータベースへのコネクションは幽霊型を付けておきます。
 この幽霊型で権限を表わします。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">datatype</span> <span class="nd">&#39;a</span> <span class="kt">db_conn</span> <span class="p">=</span> <span class="nc">DbConn</span>
-<span class="kr">datatype</span> <span class="nd">&#39;a</span> <span class="kt">cache_conn</span> <span class="p">=</span> <span class="nc">CacheConn</span></code></pre></div>
-<p>権限はReadならば <code>{read : unit}</code> 、 Writeならば <code>{write: unit}</code> とつけることにします。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="kr">datatype</span> <span class="nd">&#39;a</span> <span class="kt">db_conn</span> <span class="p">=</span> <span class="nc">DbConn</span>
+</span></span><span class="line"><span class="cl"><span class="kr">datatype</span> <span class="nd">&#39;a</span> <span class="kt">cache_conn</span> <span class="p">=</span> <span class="nc">CacheConn</span>
+</span></span></code></pre></div><p>権限はReadならば <code>{read : unit}</code> 、 Writeならば <code>{write: unit}</code> とつけることにします。</p>
 <p>そしてそれぞれデータアクセス関数には最小限の権限のアノテーションをつけておきます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="cm">(* それぞれの実装は空 *)</span>
-<span class="kr">fun</span> <span class="nd">&#39;a</span><span class="nf">#</span><span class="p">{</span>  <span class="n">read:</span> <span class="n">unit</span> <span class="p">}</span>     <span class="n">readDb</span> <span class="p">(</span><span class="n">DbConn:</span>    <span class="nd">&#39;a</span> <span class="n">db_conn</span><span class="p">)</span>    <span class="n">=</span> <span class="p">()</span>
-<span class="kr">fun</span> <span class="nd">&#39;a</span><span class="nf">#</span><span class="p">{</span> <span class="n">write:</span> <span class="n">unit</span> <span class="p">}</span>    <span class="n">writeDb</span> <span class="p">(</span><span class="n">DbConn:</span>    <span class="nd">&#39;a</span> <span class="n">db_conn</span><span class="p">)</span>    <span class="n">=</span> <span class="p">()</span>
-<span class="kr">fun</span> <span class="nd">&#39;a</span><span class="nf">#</span><span class="p">{</span>  <span class="n">read:</span> <span class="n">unit</span> <span class="p">}</span>  <span class="n">readCache</span> <span class="p">(</span><span class="n">CacheConn:</span> <span class="nd">&#39;a</span> <span class="n">cache_conn</span><span class="p">)</span> <span class="n">=</span> <span class="p">()</span>
-<span class="kr">fun</span> <span class="nd">&#39;a</span><span class="nf">#</span><span class="p">{</span> <span class="n">write:</span> <span class="n">unit</span> <span class="p">}</span> <span class="n">writeCache</span> <span class="p">(</span><span class="n">CacheConn:</span> <span class="nd">&#39;a</span> <span class="n">cache_conn</span><span class="p">)</span> <span class="n">=</span> <span class="p">()</span></code></pre></div>
-<p>これを使って <code>fetchData</code> を定義します。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="cm">(* それぞれの実装は空 *)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">fun</span> <span class="nd">&#39;a</span><span class="nf">#</span><span class="p">{</span>  <span class="n">read:</span> <span class="n">unit</span> <span class="p">}</span>     <span class="n">readDb</span> <span class="p">(</span><span class="n">DbConn:</span>    <span class="nd">&#39;a</span> <span class="n">db_conn</span><span class="p">)</span>    <span class="n">=</span> <span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="kr">fun</span> <span class="nd">&#39;a</span><span class="nf">#</span><span class="p">{</span> <span class="n">write:</span> <span class="n">unit</span> <span class="p">}</span>    <span class="n">writeDb</span> <span class="p">(</span><span class="n">DbConn:</span>    <span class="nd">&#39;a</span> <span class="n">db_conn</span><span class="p">)</span>    <span class="n">=</span> <span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="kr">fun</span> <span class="nd">&#39;a</span><span class="nf">#</span><span class="p">{</span>  <span class="n">read:</span> <span class="n">unit</span> <span class="p">}</span>  <span class="n">readCache</span> <span class="p">(</span><span class="n">CacheConn:</span> <span class="nd">&#39;a</span> <span class="n">cache_conn</span><span class="p">)</span> <span class="n">=</span> <span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="kr">fun</span> <span class="nd">&#39;a</span><span class="nf">#</span><span class="p">{</span> <span class="n">write:</span> <span class="n">unit</span> <span class="p">}</span> <span class="n">writeCache</span> <span class="p">(</span><span class="n">CacheConn:</span> <span class="nd">&#39;a</span> <span class="n">cache_conn</span><span class="p">)</span> <span class="n">=</span> <span class="p">()</span>
+</span></span></code></pre></div><p>これを使って <code>fetchData</code> を定義します。
 この関数には型アノテーションが一切出てこないことに注目して下さい。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">fun</span> <span class="nf">fetchData</span> <span class="n">ctx</span> <span class="n">=</span> <span class="kr">let</span>
-    <span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="n">readCache</span> <span class="p">(</span><span class="nl">#cache_conn</span> <span class="n">ctx</span><span class="p">)</span>
-    <span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="n">readDb</span> <span class="p">(</span><span class="nl">#db_conn</span> <span class="n">ctx</span><span class="p">)</span>
-    <span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="n">writeCache</span> <span class="p">(</span><span class="nl">#cache_conn</span> <span class="n">ctx</span><span class="p">)</span>
-<span class="kr">in</span> <span class="p">()</span> <span class="kr">end</span></code></pre></div>
-<p>この関数をREPLにロードすると望み通りDBにRead、キャッシュにWriteの型がついていることが分かります。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">val fetchData = fn
-  : [&#39;a#{cache_conn: &#39;b cache_conn, db_conn: &#39;c db_conn},
-     &#39;b#{read: unit, write: unit},
-     &#39;c#{read: unit}.
-       &#39;a -&gt; unit]</code></pre></div>
-<p>一応ちゃんと型検査で弾けるか試してみましょう。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="kr">fun</span> <span class="nf">fetchData</span> <span class="n">ctx</span> <span class="n">=</span> <span class="kr">let</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="n">readCache</span> <span class="p">(</span><span class="nl">#cache_conn</span> <span class="n">ctx</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="n">readDb</span> <span class="p">(</span><span class="nl">#db_conn</span> <span class="n">ctx</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="n">writeCache</span> <span class="p">(</span><span class="nl">#cache_conn</span> <span class="n">ctx</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">in</span> <span class="p">()</span> <span class="kr">end</span>
+</span></span></code></pre></div><p>この関数をREPLにロードすると望み通りDBにRead、キャッシュにWriteの型がついていることが分かります。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">val fetchData = fn
+</span></span><span class="line"><span class="cl">  : [&#39;a#{cache_conn: &#39;b cache_conn, db_conn: &#39;c db_conn},
+</span></span><span class="line"><span class="cl">     &#39;b#{read: unit, write: unit},
+</span></span><span class="line"><span class="cl">     &#39;c#{read: unit}.
+</span></span><span class="line"><span class="cl">       &#39;a -&gt; unit]
+</span></span></code></pre></div><p>一応ちゃんと型検査で弾けるか試してみましょう。</p>
 <p>各のリソースにread only、 read writeな権限を持つコンテキストを用意します。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">type</span> <span class="kt">read_context</span> <span class="p">=</span> <span class="p">{</span>
-    <span class="n">db_conn:</span> <span class="p">{</span><span class="n">read:</span> <span class="n">unit</span><span class="p">}</span> <span class="n">db_conn</span><span class="p">,</span>
-    <span class="n">cache_conn:</span> <span class="p">{</span><span class="n">read:</span> <span class="n">unit</span><span class="p">}</span> <span class="n">cache_conn</span>
-<span class="p">}</span>
-
-<span class="kr">type</span> <span class="kt">read_write_context</span> <span class="p">=</span> <span class="p">{</span>
-    <span class="n">db_conn:</span> <span class="p">{</span><span class="n">read:</span> <span class="n">unit</span><span class="p">,</span> <span class="n">write:</span> <span class="n">unit</span><span class="p">}</span> <span class="n">db_conn</span><span class="p">,</span>
-    <span class="n">cache_conn:</span> <span class="p">{</span><span class="n">read:</span> <span class="n">unit</span><span class="p">,</span> <span class="n">write:</span> <span class="n">unit</span><span class="p">}</span> <span class="n">cache_conn</span>
-<span class="p">}</span>
-
-<span class="kr">val</span> <span class="nv">readContext</span><span class="n">:</span>            <span class="n">read_context</span> <span class="n">=</span> <span class="p">{</span> <span class="n">db_conn</span> <span class="n">=</span> <span class="n">DbConn</span><span class="p">,</span> <span class="n">cache_conn</span> <span class="n">=</span> <span class="n">CacheConn</span> <span class="p">}</span>
-<span class="kr">val</span> <span class="nv">readWriteContext</span><span class="n">:</span> <span class="n">read_write_context</span> <span class="n">=</span> <span class="p">{</span> <span class="n">db_conn</span> <span class="n">=</span> <span class="n">DbConn</span><span class="p">,</span> <span class="n">cache_conn</span> <span class="n">=</span> <span class="n">CacheConn</span> <span class="p">}</span></code></pre></div>
-<p>今回の <code>fetchData</code> はキャッシュに書き込んでいてWriteを要求するので <code>readContext</code> ではだめで、 <code>readWriteContext</code> が必要になります。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="kr">type</span> <span class="kt">read_context</span> <span class="p">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">db_conn:</span> <span class="p">{</span><span class="n">read:</span> <span class="n">unit</span><span class="p">}</span> <span class="n">db_conn</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">cache_conn:</span> <span class="p">{</span><span class="n">read:</span> <span class="n">unit</span><span class="p">}</span> <span class="n">cache_conn</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">type</span> <span class="kt">read_write_context</span> <span class="p">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">db_conn:</span> <span class="p">{</span><span class="n">read:</span> <span class="n">unit</span><span class="p">,</span> <span class="n">write:</span> <span class="n">unit</span><span class="p">}</span> <span class="n">db_conn</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">cache_conn:</span> <span class="p">{</span><span class="n">read:</span> <span class="n">unit</span><span class="p">,</span> <span class="n">write:</span> <span class="n">unit</span><span class="p">}</span> <span class="n">cache_conn</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">val</span> <span class="nv">readContext</span><span class="n">:</span>            <span class="n">read_context</span> <span class="n">=</span> <span class="p">{</span> <span class="n">db_conn</span> <span class="n">=</span> <span class="n">DbConn</span><span class="p">,</span> <span class="n">cache_conn</span> <span class="n">=</span> <span class="n">CacheConn</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="kr">val</span> <span class="nv">readWriteContext</span><span class="n">:</span> <span class="n">read_write_context</span> <span class="n">=</span> <span class="p">{</span> <span class="n">db_conn</span> <span class="n">=</span> <span class="n">DbConn</span><span class="p">,</span> <span class="n">cache_conn</span> <span class="n">=</span> <span class="n">CacheConn</span> <span class="p">}</span>
+</span></span></code></pre></div><p>今回の <code>fetchData</code> はキャッシュに書き込んでいてWriteを要求するので <code>readContext</code> ではだめで、 <code>readWriteContext</code> が必要になります。
 <code>fetchData</code> に <code>readContext</code> と <code>readWriteContext</code> をそれぞれ与えて実行できるか試してみましょう。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">(* `readContext` を与えると型エラー *)
-# fetchData readContext;
-(interactive):14.0-14.20 Error:
-  (type inference 016) operator and operand don&#39;t agree
-  operator domain: &#39;BTNJ#{cache_conn:
-                            &#39;BTNK#{read: unit, write: unit} (lambdaDepth: 2147483647 )
-                              cache_conn,
-                          db_conn:
-                            &#39;BTNL#{read: unit} (lambdaDepth: 2147483647 )
-                              db_conn}
-          operand: {cache_conn: {read: unit} cache_conn,
-                    db_conn: {read: unit} db_conn}</code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">(* `readWriteContext` を与えると実行される *)
-# fetchData readWriteContext;
-val it = () : unit</code></pre></div>
-<p>目論見通り正しいコンテキストでのみ実行されました。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">(* `readContext` を与えると型エラー *)
+</span></span><span class="line"><span class="cl"># fetchData readContext;
+</span></span><span class="line"><span class="cl">(interactive):14.0-14.20 Error:
+</span></span><span class="line"><span class="cl">  (type inference 016) operator and operand don&#39;t agree
+</span></span><span class="line"><span class="cl">  operator domain: &#39;BTNJ#{cache_conn:
+</span></span><span class="line"><span class="cl">                            &#39;BTNK#{read: unit, write: unit} (lambdaDepth: 2147483647 )
+</span></span><span class="line"><span class="cl">                              cache_conn,
+</span></span><span class="line"><span class="cl">                          db_conn:
+</span></span><span class="line"><span class="cl">                            &#39;BTNL#{read: unit} (lambdaDepth: 2147483647 )
+</span></span><span class="line"><span class="cl">                              db_conn}
+</span></span><span class="line"><span class="cl">          operand: {cache_conn: {read: unit} cache_conn,
+</span></span><span class="line"><span class="cl">                    db_conn: {read: unit} db_conn}
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">(* `readWriteContext` を与えると実行される *)
+</span></span><span class="line"><span class="cl"># fetchData readWriteContext;
+</span></span><span class="line"><span class="cl">val it = () : unit
+</span></span></code></pre></div><p>目論見通り正しいコンテキストでのみ実行されました。
 fetchという名前からReadアクセスしかしないだろと思って痛い目に遭わずに済みますね。</p>
-
 <h1 id="まとめ">まとめ</h1>
-
 <p>SML#を使えば安全なWebアプリケーションが作れることが分かりました。</p>
-
 <h1 id="余談">余談</h1>
-
 <p>アクセスするリソースを型で管理するというアイディアは<a href="https://qiita.com/pab_tech/items/86e4c31d052c678f6fa6">ドワンゴのFujitask</a>からきています。
 これを真似て作った<a href="https://keens.github.io/blog/2017/06/06/rustnotoranzakushonchuushoukaraiburaritsukutta/">Rustのトランザクション抽象化ライブラリ</a>ではリソースの管理まではしていませんでした。
 そのときは特にやるモチベーションがなかったのと、サブタイピングを使ったアクセス権限管理がRustとは相性が悪そうだったのでためらったという経緯があります。

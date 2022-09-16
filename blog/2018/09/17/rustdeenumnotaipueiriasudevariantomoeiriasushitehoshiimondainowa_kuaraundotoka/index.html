@@ -125,67 +125,57 @@
                     </header>
                     <section>
                         <p>κeenです。何度か「Rustでenumのタイプエイリアスしたときにヴァリアントもエイリアスして欲しい」という話を聞くので自分なりにどうにか出来ないかなと考えたやつをまとめます。</p>
-
 <h1 id="モチベーション">モチベーション</h1>
-
 <p>やりたいことはこんなの。
 enumに<code>type</code>で別名を付けたときに <code>別名::ヴァリアント名</code> でアクセスしたいというもの。
 特にジェネリクスを使ってるときにやりたくなる。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">enum</span> <span class="nc">Foo</span><span class="o">&lt;</span><span class="n">V</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="n">Hoge</span><span class="p">,</span><span class="w">
-</span><span class="w">    </span><span class="n">Piyo</span><span class="p">(</span><span class="n">V</span><span class="p">),</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">type</span> <span class="nc">IntFoo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Foo</span><span class="o">&lt;</span><span class="kt">i64</span><span class="o">&gt;</span><span class="p">;</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="c1">// ここで `IntFoo::Piyo` とアクセスしたい。
-</span></code></pre></div>
-<p>一応<a href="https://github.com/rust-lang/rfcs/blob/master/text/2338-type-alias-enum-variants.md">RFC</a>にもなっているのでいつかは解決される。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">enum</span> <span class="nc">Foo</span><span class="o">&lt;</span><span class="n">V</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">Hoge</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">Piyo</span><span class="p">(</span><span class="n">V</span><span class="p">),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">type</span> <span class="nc">IntFoo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Foo</span><span class="o">&lt;</span><span class="kt">i64</span><span class="o">&gt;</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// ここで `IntFoo::Piyo` とアクセスしたい。
+</span></span></span></code></pre></div><p>一応<a href="https://github.com/rust-lang/rfcs/blob/master/text/2338-type-alias-enum-variants.md">RFC</a>にもなっているのでいつかは解決される。
 しかし<a href="https://github.com/rust-lang/rust/issues/49683">Tracking issue</a>はOpenでありいつ解決されるかは分からない。</p>
-
 <p>そこでワークアラウンドを考えてみた。</p>
-
 <h1 id="コード">コード</h1>
-
 <p>要は型だけでなく名前空間もエイリアスしたのでイメージとしてはやりたいことはこうなる。
 単相化する必要があるのでシンプルに <code>use Foo::*</code> するのはできなくて、真心込めて関数やConstを書いていく必要がある。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">enum</span> <span class="nc">Foo</span><span class="o">&lt;</span><span class="n">V</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="n">Hoge</span><span class="p">,</span><span class="w">
-</span><span class="w">    </span><span class="n">Fuga</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">x</span>: <span class="kt">i64</span><span class="p">,</span><span class="w"> </span><span class="n">y</span>: <span class="kt">i64</span> <span class="p">},</span><span class="w">
-</span><span class="w">    </span><span class="n">Piyo</span><span class="p">(</span><span class="n">V</span><span class="p">),</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">type</span> <span class="nc">IntFoo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Foo</span><span class="o">&lt;</span><span class="kt">i64</span><span class="o">&gt;</span><span class="p">;</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">mod</span> <span class="nn">IntFoo</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">use</span><span class="w"> </span><span class="k">super</span>::<span class="p">{</span><span class="n">Foo</span><span class="p">,</span><span class="w"> </span><span class="n">IntFoo</span><span class="p">};</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="c1">// Fooがpubでないので可視性を`pub(super)`にしてある。この辺は臨機応変に。
-</span><span class="c1"></span><span class="w">    </span><span class="k">pub</span><span class="p">(</span><span class="k">super</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">Hoge</span>: <span class="nc">IntFoo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Foo</span>::<span class="n">Hoge</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="k">pub</span><span class="p">(</span><span class="k">super</span><span class="p">)</span><span class="w"> </span><span class="k">fn</span> <span class="nf">Piyo</span><span class="p">(</span><span class="n">v</span>: <span class="kt">i64</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">IntFoo</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="n">Foo</span>::<span class="n">Piyo</span><span class="p">(</span><span class="n">v</span><span class="p">)</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<p>ただし問題が2つある。1つ目はシンプルにコンパイルエラーになる点。型名とモジュール名は被ってはいけないらしい。というかモジュールって型名空間に入るんだ。</p>
-
-<p><code class="nohighlight">
-<pre><font color="#EF2929"><b>error[E0428]</b></font><b>: the name `IntFoo` is defined multiple times</b>
- <font color="#729FCF"><b>&ndash;&gt; </b></font>enum_typename.rs:9:1
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">enum</span> <span class="nc">Foo</span><span class="o">&lt;</span><span class="n">V</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">Hoge</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">Fuga</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">x</span>: <span class="kt">i64</span><span class="p">,</span><span class="w"> </span><span class="n">y</span>: <span class="kt">i64</span> <span class="p">},</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">Piyo</span><span class="p">(</span><span class="n">V</span><span class="p">),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">type</span> <span class="nc">IntFoo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Foo</span><span class="o">&lt;</span><span class="kt">i64</span><span class="o">&gt;</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">mod</span> <span class="nn">IntFoo</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">use</span><span class="w"> </span><span class="k">super</span>::<span class="p">{</span><span class="n">Foo</span><span class="p">,</span><span class="w"> </span><span class="n">IntFoo</span><span class="p">};</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// Fooがpubでないので可視性を`pub(super)`にしてある。この辺は臨機応変に。
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">    </span><span class="k">pub</span><span class="p">(</span><span class="k">super</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">Hoge</span>: <span class="nc">IntFoo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Foo</span>::<span class="n">Hoge</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">pub</span><span class="p">(</span><span class="k">super</span><span class="p">)</span><span class="w"> </span><span class="k">fn</span> <span class="nf">Piyo</span><span class="p">(</span><span class="n">v</span>: <span class="kt">i64</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">IntFoo</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">Foo</span>::<span class="n">Piyo</span><span class="p">(</span><span class="n">v</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>ただし問題が2つある。1つ目はシンプルにコンパイルエラーになる点。型名とモジュール名は被ってはいけないらしい。というかモジュールって型名空間に入るんだ。</p>
+<code class="nohighlight">
+<pre><font color="#EF2929"><b>error[E0428]</b></font><b>: the name \`IntFoo\` is defined multiple times</b>
+ <font color="#729FCF"><b>--&gt; </b></font>enum_typename.rs:9:1
   <font color="#729FCF"><b>|</b></font>
 <font color="#729FCF"><b>7</b></font> <font color="#729FCF"><b>| </b></font>type IntFoo = Foo&lt;i64&gt;;
-  <font color="#729FCF"><b>| &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;</b></font> <font color="#729FCF"><b>previous definition of the type `IntFoo` here</b></font>
+  <font color="#729FCF"><b>| -----------------------</b></font> <font color="#729FCF"><b>previous definition of the type \`IntFoo\` here</b></font>
 <font color="#729FCF"><b>8</b></font> <font color="#729FCF"><b>| </b></font>
 <font color="#729FCF"><b>9</b></font> <font color="#729FCF"><b>| </b></font>mod IntFoo {
-  <font color="#729FCF"><b>| </b></font><font color="#EF2929"><b>^^^^^^^^^^</b></font> <font color="#EF2929"><b>`IntFoo` redefined here</b></font>
+  <font color="#729FCF"><b>| </b></font><font color="#EF2929"><b>^^^^^^^^^^</b></font> <font color="#EF2929"><b>\`IntFoo\` redefined here</b></font>
   <font color="#729FCF"><b>|</b></font>
-  <font color="#729FCF"><b>= </b></font><b>note</b>: `IntFoo` must be defined only once in the type namespace of this module
+  <font color="#729FCF"><b>= </b></font><b>note</b>: \`IntFoo\` must be defined only once in the type namespace of this module
 </pre>
-</code></p>
-
+</code>
 <p>もう一つは構造体型のヴァリアントをエイリアス出来ない点。上の例でも <code>Fuga</code> だけエイリアスがない。</p>
-
 <p>これを回避したワークアラウンドがいくつかある。</p>
-
 <p>1つ目の問題の解決策は2つある。
 1つはモジュール名を変える。<code>IntFoo_</code> とか。ダサいけど。
 もう一つは<code>type IntFoo</code>の方を変える。モジュール内に入れてしまって名前を <code>T</code> とかにする。</p>
@@ -193,31 +183,28 @@ enumに<code>type</code>で別名を付けたときに <code>別名::ヴァリ�
     use super::Foo;
 
     pub(super) type T = Foo&lt;i64&gt;;
-}</code></pre>
-<p>RustっぽくはないけどMLのモジュールっぽい使い方。
+}
+</code></pre><p>RustっぽくはないけどMLのモジュールっぽい使い方。
 残念ながらどちらの方法もRustにヴァリアントのエイリアスが実装されたら既存コードを変更して回らないといけない。</p>
-
 <p>2つめの問題はシンプルに単相化を諦めるしかなさそう。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">mod</span> <span class="nn">IntFoo</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">use</span><span class="w"> </span><span class="k">super</span>::<span class="n">Foo</span><span class="p">;</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="k">pub</span><span class="p">(</span><span class="k">super</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">Hoge</span>: <span class="nc">T</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Foo</span>::<span class="n">Hoge</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="c1">// FooのFugaをそのまま使う
-</span><span class="c1"></span><span class="w">    </span><span class="k">pub</span><span class="p">(</span><span class="k">super</span><span class="p">)</span><span class="w"> </span><span class="k">use</span><span class="w"> </span><span class="k">super</span>::<span class="n">Foo</span>::<span class="n">Fuga</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="k">pub</span><span class="p">(</span><span class="k">super</span><span class="p">)</span><span class="w"> </span><span class="k">fn</span> <span class="nf">Piyo</span><span class="p">(</span><span class="n">v</span>: <span class="kt">i64</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">T</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="n">Foo</span>::<span class="n">Piyo</span><span class="p">(</span><span class="n">v</span><span class="p">)</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<p><code>Fuga</code> だけ多相のままにすることであるいは諦めて全部多相のままにすれば幾分がシンプルになる。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">mod</span> <span class="nn">IntFoo</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">use</span><span class="w"> </span><span class="k">super</span>::<span class="n">Foo</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">pub</span><span class="p">(</span><span class="k">super</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">Hoge</span>: <span class="nc">T</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Foo</span>::<span class="n">Hoge</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// FooのFugaをそのまま使う
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">    </span><span class="k">pub</span><span class="p">(</span><span class="k">super</span><span class="p">)</span><span class="w"> </span><span class="k">use</span><span class="w"> </span><span class="k">super</span>::<span class="n">Foo</span>::<span class="n">Fuga</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">pub</span><span class="p">(</span><span class="k">super</span><span class="p">)</span><span class="w"> </span><span class="k">fn</span> <span class="nf">Piyo</span><span class="p">(</span><span class="n">v</span>: <span class="kt">i64</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">T</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">Foo</span>::<span class="n">Piyo</span><span class="p">(</span><span class="n">v</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p><code>Fuga</code> だけ多相のままにすることであるいは諦めて全部多相のままにすれば幾分がシンプルになる。</p>
 <pre tabindex="0"><code>mod IntFoo {
     use super::Foo;
 
     pub(super) use super::Foo::*;
-}</code></pre>
-<p>これも状況に応じて。</p>
-
+}
+</code></pre><p>これも状況に応じて。</p>
 <h1 id="まとめ">まとめ</h1>
-
 <p>「Rustでenumのタイプエイリアスしたときにヴァリアントもエイリアスして欲しい」という欲求にはには言語側で対応中だが今すぐには使えない。
 そこでいくつかワークアラウンドの案を挙げたがどれも言語側の対応が済むとコードの変更が必要になり中途半端。
 また、実現したいことを全て出来るわけではない。</p>

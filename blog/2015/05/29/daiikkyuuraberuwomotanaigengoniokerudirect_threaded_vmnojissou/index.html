@@ -136,26 +136,18 @@ SMLのようにgotoがない言語だとDT VMの実装出来ないよなー、�
                     <section>
                         <p>こんにちは。κeenです。このブログでちょくちょく出てくるDirect Threaded VMについて。
 SMLのようにgotoがない言語だとDT VMの実装出来ないよなー、と思ってた所、ふとアイディアが浮かんだのでそれについて。</p>
-
 <h1 id="序論">序論</h1>
-
 <p>DSL、例えば正規表現などの処理系を実装することを考えてみて下さい。</p>
-
 <p>言語処理系において最も素朴な実装はインタプリタですが、速度面で不利なので一旦仮想命令にコンパイルして仮想命令実行器(VM)で実行することが一般的です。
 コンパイラのように複雑な記号処理をするプログラムはCommon LispやMLのような記号処理に強い高級言語が得意とする分野です。
 一方、ランタイムには低レベルなことが出来て処理速度の速いCommon LispやCを使いたくなるでしょう。</p>
-
 <p>Common Lisp以外の言語ではコンパイラとランタイムを分離するのが妥当な選択肢のようですが、高級言語とcの間のブッジングが必要になり、少なからぬコストを支払う必要があります。
 また、ffiを持たない言語ではブリッジ出来ないのでランタイムもその言語で実装する必要があります。つまり、高級言語でVMを実装する必要があるケースが存在します。</p>
-
 <p>VMの実行を高速化する技術の一つとしてDirect Threadingというものがあります。
 命令ディスパッチのループを短絡することで余計なオーバーヘッドが減り、また、命令毎にジャンプ命令を持つことで分岐予測も効きやすくなるのでVMが高速化します。
 しかしDTの実装にはgotoのラベルを第一級オブジェクトとして保存する必要があり、gccやclangのように拡張されたcコンパイラなど、限られた言語でしか実現出来ません。まあ、Common Lispなら<code>eval</code>と<code>compile</code>を使えばJITが出来るので不要ですが。</p>
-
 <p>そこで、gotoのない言語でDirect Threadingを実現してみたいと思います。</p>
-
 <h1 id="direct-threading">Direct Threading</h1>
-
 <p>Direct Threaded <em>でない</em> VMは大抵次のような構造をしています。</p>
 <pre tabindex="0"><code>loop {
   op = fetchNextOp
@@ -168,9 +160,8 @@ SMLのようにgotoがない言語だとDT VMの実装出来ないよなー、�
      break
     ....
   }
-}</code></pre>
-<p>つまり、</p>
-
+}
+</code></pre><p>つまり、</p>
 <ol>
 <li>次の命令を取得する</li>
 <li>命令でディスパッチする</li>
@@ -178,15 +169,24 @@ SMLのようにgotoがない言語だとDT VMの実装出来ないよなー、�
 <li>ディスパッチを抜ける</li>
 <li>1.に戻る</li>
 </ol>
-
 <p>という動きをします。自然に思えるかもしれませんが、</p>
-
 <ul>
 <li>命令のディスパッチはlogオーダの時間が掛かる（可能性がある）。</li>
-<li>4. 5. のステップが不要</li>
-<li>2. で毎回違う命令にディスパッチするので分岐予測がほぼ意味を成さない</li>
+<li>
+<ol start="4">
+<li>
+<ol start="5">
+<li>のステップが不要</li>
+</ol>
+</li>
+</ol>
+</li>
+<li>
+<ol start="2">
+<li>で毎回違う命令にディスパッチするので分岐予測がほぼ意味を成さない</li>
+</ol>
+</li>
 </ul>
-
 <p>という無駄があります。それを改良したのがDirect Threaded VMで、オペコードではなくgotoのラベルを使うことで</p>
 <pre tabindex="0"><code>label = fetchNextLabel
 goto label
@@ -198,220 +198,206 @@ label2:
   ...
   label = fetchNextLabel
   goto label
-...</code></pre>
-<ol>
+...
+</code></pre><ol>
 <li>次のラベルを取得する</li>
 <li>ラベルにgotoする</li>
 <li>命令に対応するコードを実行する</li>
 <li>次のラベルを取得する</li>
 <li>ラベルにgotoする(次の処理は3. 相当)</li>
 </ol>
-
 <p>と、ループ内の2ステップを飛ばした他、ディスパッチもなくなるので高速になります。
 また、ラベル毎にgotoがついていて、それぞれのgotoに分岐予測があるので普通のVMに比べて分岐予測がある程度効きます。</p>
-
 <h1 id="第一級ラベルを持たない言語におけるdirect-threaded-vm">第一級ラベルを持たない言語におけるDirect Threaded VM</h1>
-
 <p>結論から言うと関数の配列を使います。ラベルの代わりに配列のインデックス、gotoの代わりに配列へのアクセスとcallを使います。
 ランダムアクセスでアドレスの取得をするために配列を、任意コードへのジャンプのために関数を使えばエミュレート出来るよねって発想です。</p>
-
 <h1 id="実装">実装</h1>
-
 <p><a href="https://github.com/KeenS/SML-VM">ソースコード全体</a>はGithuに上げてます。SML/NJで動きます。SML#向けのインターフェースファイルを書いていますが何故かコンパイルが通りません。</p>
-
 <p>次のようなASTを実行するインタプリタ、VM、Direct Threaded VMを実装しました。但し、VMとDTVMはクロージャをサポートしていません。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">datatype</span> <span class="kt">monoop</span>
-  <span class="p">=</span> <span class="nc">Not</span>
-
-<span class="kr">datatype</span> <span class="kt">binop</span>
-  <span class="p">=</span> <span class="nc">Equal</span>
-  <span class="p">|</span> <span class="nc">GreaterThan</span>
-  <span class="p">|</span> <span class="nc">Add</span>
-
-<span class="kr">datatype</span> <span class="kt">t</span>
-  <span class="p">=</span> <span class="nc">Int</span> <span class="kr">of</span> <span class="n">int</span>
-  <span class="p">|</span> <span class="nc">Bool</span> <span class="kr">of</span> <span class="n">bool</span>
-  <span class="p">|</span> <span class="nc">MonoOp</span> <span class="kr">of</span> <span class="n">monoop</span> <span class="n">*</span> <span class="n">t</span>
-  <span class="p">|</span> <span class="nc">BinOp</span> <span class="kr">of</span> <span class="n">binop</span> <span class="n">*</span> <span class="n">t</span> <span class="n">*</span> <span class="n">t</span>
-  <span class="p">|</span> <span class="nc">Bind</span> <span class="kr">of</span> <span class="n">t</span> <span class="n">*</span> <span class="n">t</span>
-  <span class="p">|</span> <span class="nc">If</span> <span class="kr">of</span> <span class="n">t</span> <span class="n">*</span> <span class="n">t</span> <span class="n">*</span> <span class="n">t</span>
-  <span class="p">|</span> <span class="nc">Var</span> <span class="kr">of</span> <span class="n">string</span>
-  <span class="p">|</span> <span class="nc">Lambda</span> <span class="kr">of</span> <span class="n">t</span> <span class="n">list</span> <span class="n">*</span> <span class="n">t</span>
-  <span class="p">|</span> <span class="nc">Call</span> <span class="kr">of</span> <span class="n">t</span> <span class="n">*</span> <span class="n">t</span> <span class="n">list</span>
-  <span class="p">|</span> <span class="nc">Progn</span> <span class="kr">of</span> <span class="n">t</span> <span class="n">list</span></code></pre></div>
-<p>インタプリタはこのASTを解釈実行、VMはいくつかの中間表現を経てオペコードにコンパイルし、それを実行します。尚、最適化は行いません。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="kr">datatype</span> <span class="kt">monoop</span>
+</span></span><span class="line"><span class="cl">  <span class="p">=</span> <span class="nc">Not</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">datatype</span> <span class="kt">binop</span>
+</span></span><span class="line"><span class="cl">  <span class="p">=</span> <span class="nc">Equal</span>
+</span></span><span class="line"><span class="cl">  <span class="p">|</span> <span class="nc">GreaterThan</span>
+</span></span><span class="line"><span class="cl">  <span class="p">|</span> <span class="nc">Add</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">datatype</span> <span class="kt">t</span>
+</span></span><span class="line"><span class="cl">  <span class="p">=</span> <span class="nc">Int</span> <span class="kr">of</span> <span class="n">int</span>
+</span></span><span class="line"><span class="cl">  <span class="p">|</span> <span class="nc">Bool</span> <span class="kr">of</span> <span class="n">bool</span>
+</span></span><span class="line"><span class="cl">  <span class="p">|</span> <span class="nc">MonoOp</span> <span class="kr">of</span> <span class="n">monoop</span> <span class="n">*</span> <span class="n">t</span>
+</span></span><span class="line"><span class="cl">  <span class="p">|</span> <span class="nc">BinOp</span> <span class="kr">of</span> <span class="n">binop</span> <span class="n">*</span> <span class="n">t</span> <span class="n">*</span> <span class="n">t</span>
+</span></span><span class="line"><span class="cl">  <span class="p">|</span> <span class="nc">Bind</span> <span class="kr">of</span> <span class="n">t</span> <span class="n">*</span> <span class="n">t</span>
+</span></span><span class="line"><span class="cl">  <span class="p">|</span> <span class="nc">If</span> <span class="kr">of</span> <span class="n">t</span> <span class="n">*</span> <span class="n">t</span> <span class="n">*</span> <span class="n">t</span>
+</span></span><span class="line"><span class="cl">  <span class="p">|</span> <span class="nc">Var</span> <span class="kr">of</span> <span class="n">string</span>
+</span></span><span class="line"><span class="cl">  <span class="p">|</span> <span class="nc">Lambda</span> <span class="kr">of</span> <span class="n">t</span> <span class="n">list</span> <span class="n">*</span> <span class="n">t</span>
+</span></span><span class="line"><span class="cl">  <span class="p">|</span> <span class="nc">Call</span> <span class="kr">of</span> <span class="n">t</span> <span class="n">*</span> <span class="n">t</span> <span class="n">list</span>
+</span></span><span class="line"><span class="cl">  <span class="p">|</span> <span class="nc">Progn</span> <span class="kr">of</span> <span class="n">t</span> <span class="n">list</span>
+</span></span></code></pre></div><p>インタプリタはこのASTを解釈実行、VMはいくつかの中間表現を経てオペコードにコンパイルし、それを実行します。尚、最適化は行いません。</p>
 <p>VMのディスパッチ部分は次のような実装になっています。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml">    <span class="kr">fun</span> <span class="nf">aux</span> <span class="p">()</span> <span class="n">=</span> <span class="p">(</span>
-        <span class="kr">case</span>  <span class="p">(</span><span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">ops</span><span class="p">,</span> <span class="n">!pc</span><span class="p">))</span> <span class="kr">of</span>
-            <span class="nn">O.</span><span class="n">Not</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="kr">case</span> <span class="n">pop</span> <span class="n">vm</span> <span class="kr">of</span>
-                         <span class="nn">V.</span><span class="n">Bool</span> <span class="n">x</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="p">(</span><span class="n">not</span> <span class="n">x</span><span class="p">))</span>
-                       <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">)</span>
-          <span class="n">|</span> <span class="nn">O.</span><span class="n">Add</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="kr">case</span> <span class="p">(</span><span class="n">pop</span> <span class="n">vm</span><span class="p">,</span> <span class="n">pop</span> <span class="n">vm</span><span class="p">)</span> <span class="kr">of</span>
-                         <span class="p">(</span><span class="nn">V.</span><span class="n">Int</span> <span class="n">x</span><span class="p">,</span> <span class="nn">V.</span><span class="n">Int</span> <span class="n">y</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Int</span> <span class="p">(</span><span class="n">x</span> <span class="n">+</span> <span class="n">y</span><span class="p">))</span>
-                       <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">)</span>
-          <span class="n">|</span> <span class="nn">O.</span><span class="n">Eq</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="kr">case</span> <span class="p">(</span><span class="n">pop</span> <span class="n">vm</span><span class="p">,</span> <span class="n">pop</span> <span class="n">vm</span><span class="p">)</span> <span class="kr">of</span>
-                        <span class="p">(</span><span class="nn">V.</span><span class="n">Int</span> <span class="n">x</span><span class="p">,</span> <span class="nn">V.</span><span class="n">Int</span> <span class="n">y</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="p">(</span><span class="n">x</span> <span class="n">=</span> <span class="n">y</span><span class="p">))</span>
-                      <span class="n">|</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="n">x</span><span class="p">,</span> <span class="nn">V.</span><span class="n">Bool</span> <span class="n">y</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="p">(</span><span class="n">x</span> <span class="n">=</span> <span class="n">y</span><span class="p">))</span>
-                      <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">)</span>
-          <span class="n">|</span> <span class="nn">O.</span><span class="n">Gt</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="kr">case</span> <span class="p">(</span><span class="n">pop</span> <span class="n">vm</span><span class="p">,</span> <span class="n">pop</span> <span class="n">vm</span><span class="p">)</span> <span class="kr">of</span>
-                        <span class="p">(</span><span class="nn">V.</span><span class="n">Int</span> <span class="n">x</span><span class="p">,</span> <span class="nn">V.</span><span class="n">Int</span> <span class="n">y</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="p">(</span><span class="n">x</span> <span class="n">&lt;</span> <span class="n">y</span><span class="p">))</span>
-                      <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">)</span>
-          <span class="n">|</span> <span class="nn">O.</span><span class="n">Jump</span> <span class="n">label</span> <span class="n">=&gt;</span> <span class="n">pc</span> <span class="n">:=</span> <span class="p">(</span><span class="n">label</span> <span class="n">-</span> <span class="mi">1</span><span class="p">)</span>
-          <span class="n">|</span> <span class="nn">O.</span><span class="n">Jtrue</span> <span class="n">label</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="kr">case</span> <span class="n">pop</span> <span class="n">vm</span> <span class="kr">of</span>
-                                 <span class="nn">V.</span><span class="n">Bool</span> <span class="n">true</span> <span class="n">=&gt;</span> <span class="n">pc</span> <span class="n">:=</span> <span class="p">(</span><span class="n">label</span> <span class="n">-</span> <span class="mi">1</span><span class="p">)</span>
-                               <span class="n">|</span> <span class="nn">V.</span><span class="n">Bool</span> <span class="n">false</span> <span class="n">=&gt;</span> <span class="p">()</span>
-                               <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">)</span>
-          <span class="n">|</span> <span class="nn">O.</span><span class="n">Call</span> <span class="n">i</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="kr">case</span> <span class="p">(</span><span class="n">pop</span> <span class="n">vm</span><span class="p">)</span> <span class="kr">of</span>
-                            <span class="nn">V.</span><span class="n">Lambda</span> <span class="n">label</span> <span class="n">=&gt;</span> <span class="p">(</span>
-                             <span class="n">pushCi</span> <span class="n">vm</span><span class="p">;</span>
-                             <span class="n">fp</span> <span class="n">:=</span> <span class="p">(</span><span class="n">!fp</span><span class="p">)</span> <span class="n">-</span> <span class="n">i</span><span class="p">;</span>
-                             <span class="n">pc</span> <span class="n">:=</span> <span class="p">(</span><span class="n">label</span> <span class="n">-</span> <span class="mi">1</span><span class="p">))</span>
-                          <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">)</span>
-          <span class="n">|</span> <span class="nn">O.</span><span class="n">Ret</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="nn">Array.</span><span class="n">update</span><span class="p">(</span><span class="n">stack</span><span class="p">,</span> <span class="n">!fp</span><span class="p">,</span> <span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">stack</span><span class="p">,</span> <span class="p">(</span><span class="n">!sp</span><span class="p">)</span> <span class="n">-</span> <span class="mi">1</span><span class="p">));</span>
-                     <span class="n">popCi</span> <span class="n">vm</span><span class="p">;</span>
-                     <span class="n">pc</span> <span class="n">:=</span> <span class="p">(</span><span class="n">!pc</span><span class="p">))</span>
-          <span class="n">|</span> <span class="nn">O.</span><span class="n">Push</span> <span class="n">v</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="n">v</span>
-          <span class="n">|</span> <span class="nn">O.</span><span class="n">Pop</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="n">pop</span> <span class="n">vm</span><span class="p">;())</span>
-          <span class="n">|</span> <span class="nn">O.</span><span class="n">Lref</span> <span class="n">i</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">stack</span><span class="p">,</span> <span class="p">(</span><span class="n">!fp</span><span class="p">)</span> <span class="n">+</span> <span class="n">i</span><span class="p">))</span>
-          <span class="n">|</span> <span class="nn">O.</span><span class="n">Lset</span> <span class="n">i</span> <span class="n">=&gt;</span>  <span class="p">((</span><span class="nn">Array.</span><span class="n">update</span><span class="p">(</span><span class="n">stack</span><span class="p">,</span> <span class="p">(</span><span class="n">!fp</span><span class="p">)</span> <span class="n">+</span> <span class="n">i</span><span class="p">,</span> <span class="n">pop</span> <span class="n">vm</span><span class="p">));</span>
-                         <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="n">true</span><span class="p">))</span>
-          <span class="n">|</span> <span class="nn">O.</span><span class="n">Gref</span> <span class="n">i</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">pool</span><span class="p">,</span> <span class="n">i</span><span class="p">))</span>
-          <span class="n">|</span> <span class="nn">O.</span><span class="n">Gset</span> <span class="n">i</span> <span class="n">=&gt;</span>  <span class="p">(</span><span class="nn">Array.</span><span class="n">update</span><span class="p">(</span><span class="n">pool</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">pop</span> <span class="n">vm</span><span class="p">);</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="n">true</span><span class="p">))</span>
-          <span class="n">|</span> <span class="nn">O.</span><span class="n">Nop</span> <span class="n">=&gt;</span> <span class="p">()</span>
-          <span class="n">|</span> <span class="nn">O.</span><span class="n">End</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Exit</span>
-      <span class="p">;</span>
-        <span class="n">pc</span> <span class="n">:=</span> <span class="p">(</span><span class="n">!pc</span><span class="p">)</span> <span class="n">+</span> <span class="mi">1</span><span class="p">;</span>
-      <span class="n">aux</span> <span class="p">())</span></code></pre></div>
-<p>DT VMではこれを次のように書き換えました。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">fun</span> <span class="nf">next</span> <span class="p">()</span> <span class="n">=</span> <span class="kr">let</span>
-    <span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="n">pc</span> <span class="n">:=</span> <span class="p">(</span><span class="n">!pc</span><span class="p">)</span> <span class="n">+</span> <span class="mi">1</span><span class="p">;</span>
-    <span class="kr">val</span> <span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">arg</span><span class="p">)</span> <span class="nv">=</span> <span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">cops</span><span class="p">,</span> <span class="n">!pc</span><span class="p">)</span> <span class="kr">in</span>
-    <span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">opArray</span><span class="p">,</span> <span class="n">index</span><span class="p">)</span> <span class="n">arg</span>
-<span class="kr">end</span>
-
-<span class="nn">Array.</span><span class="n">fromList</span> <span class="p">[</span>
-            <span class="cm">(* Not *)</span>
-            <span class="kr">fn</span> <span class="p">_</span> <span class="n">=&gt;</span>
-                <span class="p">(</span><span class="kr">case</span> <span class="n">pop</span> <span class="n">vm</span> <span class="kr">of</span>
-                    <span class="nn">V.</span><span class="n">Bool</span> <span class="n">x</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="p">(</span><span class="n">not</span> <span class="n">x</span><span class="p">))</span>
-                  <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">;</span>
-                <span class="n">next</span> <span class="p">()),</span>
-            <span class="cm">(* Add *)</span>
-            <span class="kr">fn</span> <span class="p">_</span> <span class="n">=&gt;</span>
-                <span class="p">(</span><span class="kr">case</span> <span class="p">(</span><span class="n">pop</span> <span class="n">vm</span><span class="p">,</span> <span class="n">pop</span> <span class="n">vm</span><span class="p">)</span> <span class="kr">of</span>
-                    <span class="p">(</span><span class="nn">V.</span><span class="n">Int</span> <span class="n">x</span><span class="p">,</span> <span class="nn">V.</span><span class="n">Int</span> <span class="n">y</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Int</span> <span class="p">(</span><span class="n">x</span> <span class="n">+</span> <span class="n">y</span><span class="p">))</span>
-                  <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">;</span>
-                 <span class="n">next</span> <span class="p">()),</span>
-            <span class="cm">(* Eq *)</span>
-            <span class="kr">fn</span> <span class="p">_</span> <span class="n">=&gt;</span>
-                <span class="p">(</span><span class="kr">case</span> <span class="p">(</span><span class="n">pop</span> <span class="n">vm</span><span class="p">,</span> <span class="n">pop</span> <span class="n">vm</span><span class="p">)</span> <span class="kr">of</span>
-                    <span class="p">(</span><span class="nn">V.</span><span class="n">Int</span> <span class="n">x</span><span class="p">,</span> <span class="nn">V.</span><span class="n">Int</span> <span class="n">y</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="p">(</span><span class="n">x</span> <span class="n">=</span> <span class="n">y</span><span class="p">))</span>
-                  <span class="n">|</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="n">x</span><span class="p">,</span> <span class="nn">V.</span><span class="n">Bool</span> <span class="n">y</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="p">(</span><span class="n">x</span> <span class="n">=</span> <span class="n">y</span><span class="p">))</span>
-                  <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">;</span>
-                  <span class="n">next</span> <span class="p">()),</span>
-            <span class="cm">(* Gt *)</span>
-            <span class="kr">fn</span> <span class="p">_</span> <span class="n">=&gt;</span>
-                <span class="p">(</span><span class="kr">case</span> <span class="p">(</span><span class="n">pop</span> <span class="n">vm</span><span class="p">,</span> <span class="n">pop</span> <span class="n">vm</span><span class="p">)</span> <span class="kr">of</span>
-                    <span class="p">(</span><span class="nn">V.</span><span class="n">Int</span> <span class="n">x</span><span class="p">,</span> <span class="nn">V.</span><span class="n">Int</span> <span class="n">y</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="p">(</span><span class="n">x</span> <span class="n">&lt;</span> <span class="n">y</span><span class="p">))</span>
-                  <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">;</span>
-                 <span class="n">next</span> <span class="p">()),</span>
-            <span class="cm">(* Jump *)</span>
-            <span class="kr">fn</span> <span class="p">({</span><span class="n">int</span> <span class="n">=</span> <span class="n">label</span><span class="p">,</span> <span class="p">...}</span><span class="n">:</span> <span class="n">oparg</span><span class="p">)</span> <span class="n">=&gt;</span>
-               <span class="p">(</span><span class="n">pc</span> <span class="n">:=</span> <span class="p">(</span><span class="n">label</span> <span class="n">-</span> <span class="mi">1</span><span class="p">);</span>
-               <span class="n">next</span> <span class="p">()),</span>
-            <span class="cm">(* Jtrue *)</span>
-            <span class="kr">fn</span> <span class="p">({</span><span class="n">int</span> <span class="n">=</span> <span class="n">label</span><span class="p">,</span> <span class="p">...}</span><span class="n">:</span> <span class="n">oparg</span><span class="p">)</span> <span class="n">=&gt;</span>
-                <span class="p">(</span><span class="kr">case</span> <span class="n">pop</span> <span class="n">vm</span> <span class="kr">of</span>
-                    <span class="nn">V.</span><span class="n">Bool</span> <span class="n">true</span> <span class="n">=&gt;</span> <span class="n">pc</span> <span class="n">:=</span> <span class="p">(</span><span class="n">label</span> <span class="n">-</span> <span class="mi">1</span><span class="p">)</span>
-                  <span class="n">|</span> <span class="nn">V.</span><span class="n">Bool</span> <span class="n">false</span> <span class="n">=&gt;</span> <span class="p">()</span>
-                  <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">;</span>
-                <span class="n">next</span> <span class="p">()),</span>
-            <span class="cm">(* Call *)</span>
-            <span class="kr">fn</span> <span class="p">({</span><span class="n">int</span> <span class="n">=</span> <span class="n">i</span><span class="p">,</span> <span class="p">...}</span><span class="n">:</span> <span class="n">oparg</span><span class="p">)</span> <span class="n">=&gt;</span>
-                <span class="p">(</span><span class="kr">case</span> <span class="p">(</span><span class="n">pop</span> <span class="n">vm</span><span class="p">)</span> <span class="kr">of</span>
-                    <span class="nn">V.</span><span class="n">Lambda</span> <span class="n">label</span> <span class="n">=&gt;</span> <span class="p">(</span>
-                     <span class="n">pushCi</span> <span class="n">vm</span><span class="p">;</span>
-                     <span class="n">fp</span> <span class="n">:=</span> <span class="p">(</span><span class="n">!fp</span><span class="p">)</span> <span class="n">-</span> <span class="n">i</span><span class="p">;</span>
-                     <span class="n">pc</span> <span class="n">:=</span> <span class="p">(</span><span class="n">label</span> <span class="n">-</span> <span class="mi">1</span><span class="p">))</span>
-                  <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">;</span>
-                <span class="n">next</span> <span class="p">()),</span>
-            <span class="cm">(* Ret *)</span>
-            <span class="kr">fn</span> <span class="p">_</span> <span class="n">=&gt;</span>
-                <span class="p">(</span><span class="nn">Array.</span><span class="n">update</span><span class="p">(</span><span class="n">stack</span><span class="p">,</span> <span class="n">!fp</span><span class="p">,</span> <span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">stack</span><span class="p">,</span> <span class="p">(</span><span class="n">!sp</span><span class="p">)</span> <span class="n">-</span> <span class="mi">1</span><span class="p">));</span>
-                 <span class="n">popCi</span> <span class="n">vm</span><span class="p">;</span>
-                 <span class="n">pc</span> <span class="n">:=</span> <span class="p">(</span><span class="n">!pc</span><span class="p">);</span>
-                <span class="n">next</span> <span class="p">()),</span>
-            <span class="cm">(* Push *)</span>
-            <span class="kr">fn</span> <span class="p">({</span><span class="n">vmvalue</span> <span class="n">=</span> <span class="n">v</span><span class="p">,</span> <span class="p">...}</span><span class="n">:</span> <span class="n">oparg</span><span class="p">)</span> <span class="n">=&gt;</span>
-               <span class="p">(</span><span class="n">push</span> <span class="n">vm</span> <span class="n">v</span><span class="p">;</span>
-               <span class="n">next</span> <span class="p">()),</span>
-            <span class="cm">(* Pop *)</span>
-            <span class="kr">fn</span> <span class="p">_</span> <span class="n">=&gt;</span>
-               <span class="p">(</span><span class="n">pop</span> <span class="n">vm</span><span class="p">;</span>
-                <span class="n">next</span> <span class="p">()),</span>
-            <span class="cm">(* Lref *)</span>
-            <span class="kr">fn</span> <span class="p">({</span><span class="n">int</span> <span class="n">=</span> <span class="n">i</span><span class="p">,</span> <span class="p">...}</span><span class="n">:</span> <span class="n">oparg</span><span class="p">)</span> <span class="n">=&gt;</span>
-               <span class="p">(</span><span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">stack</span><span class="p">,</span> <span class="p">(</span><span class="n">!fp</span><span class="p">)</span> <span class="n">+</span> <span class="n">i</span><span class="p">));</span>
-               <span class="n">next</span> <span class="p">()),</span>
-            <span class="cm">(* Lset *)</span>
-            <span class="kr">fn</span> <span class="p">({</span><span class="n">int</span> <span class="n">=</span> <span class="n">i</span><span class="p">,</span> <span class="p">...}</span><span class="n">:</span> <span class="n">oparg</span><span class="p">)</span> <span class="n">=&gt;</span>
-                <span class="p">((</span><span class="nn">Array.</span><span class="n">update</span><span class="p">(</span><span class="n">stack</span><span class="p">,</span> <span class="p">(</span><span class="n">!fp</span><span class="p">)</span> <span class="n">+</span> <span class="n">i</span><span class="p">,</span> <span class="n">pop</span> <span class="n">vm</span><span class="p">));</span>
-                 <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="n">true</span><span class="p">);</span>
-                <span class="n">next</span> <span class="p">()),</span>
-            <span class="cm">(* Gref *)</span>
-            <span class="kr">fn</span> <span class="p">({</span><span class="n">int</span> <span class="n">=</span> <span class="n">i</span><span class="p">,</span> <span class="p">...}</span><span class="n">:</span> <span class="n">oparg</span><span class="p">)</span> <span class="n">=&gt;</span>
-               <span class="p">(</span><span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">pool</span><span class="p">,</span> <span class="n">i</span><span class="p">));</span>
-               <span class="n">next</span> <span class="p">()),</span>
-            <span class="cm">(* Gset *)</span>
-            <span class="kr">fn</span> <span class="p">({</span><span class="n">int</span> <span class="n">=</span> <span class="n">i</span><span class="p">,</span> <span class="p">...}</span><span class="n">:</span> <span class="n">oparg</span><span class="p">)</span> <span class="n">=&gt;</span>
-               <span class="p">(</span><span class="nn">Array.</span><span class="n">update</span><span class="p">(</span><span class="n">pool</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">pop</span> <span class="n">vm</span><span class="p">);</span>
-                <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="n">true</span><span class="p">);</span>
-               <span class="n">next</span> <span class="p">()),</span>
-            <span class="cm">(* Nop *)</span>
-            <span class="p">(</span><span class="kr">fn</span> <span class="p">_</span> <span class="n">=&gt;</span>
-                <span class="n">next</span> <span class="p">()),</span>
-            <span class="p">(</span><span class="kr">fn</span> <span class="p">_</span> <span class="n">=&gt;</span>
-                <span class="kr">raise</span> <span class="n">Exit</span><span class="p">)</span>
-        <span class="p">]</span>
-
-<span class="kr">fun</span> <span class="nf">aux</span> <span class="p">()</span> <span class="n">=</span> <span class="kr">let</span> <span class="kr">val</span> <span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">arg</span><span class="p">)</span> <span class="nv">=</span> <span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">cops</span><span class="p">,</span> <span class="n">!pc</span><span class="p">)</span> <span class="kr">in</span>
-                 <span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">opArray</span><span class="p">,</span> <span class="n">index</span><span class="p">)</span> <span class="n">arg</span>
-             <span class="kr">end</span></code></pre></div>
-<p>1引数を受け取ってunitを返す関数の配列としてVMを表しています。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl">    <span class="kr">fun</span> <span class="nf">aux</span> <span class="p">()</span> <span class="n">=</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="kr">case</span>  <span class="p">(</span><span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">ops</span><span class="p">,</span> <span class="n">!pc</span><span class="p">))</span> <span class="kr">of</span>
+</span></span><span class="line"><span class="cl">            <span class="nn">O.</span><span class="n">Not</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="kr">case</span> <span class="n">pop</span> <span class="n">vm</span> <span class="kr">of</span>
+</span></span><span class="line"><span class="cl">                         <span class="nn">V.</span><span class="n">Bool</span> <span class="n">x</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="p">(</span><span class="n">not</span> <span class="n">x</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">                       <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">          <span class="n">|</span> <span class="nn">O.</span><span class="n">Add</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="kr">case</span> <span class="p">(</span><span class="n">pop</span> <span class="n">vm</span><span class="p">,</span> <span class="n">pop</span> <span class="n">vm</span><span class="p">)</span> <span class="kr">of</span>
+</span></span><span class="line"><span class="cl">                         <span class="p">(</span><span class="nn">V.</span><span class="n">Int</span> <span class="n">x</span><span class="p">,</span> <span class="nn">V.</span><span class="n">Int</span> <span class="n">y</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Int</span> <span class="p">(</span><span class="n">x</span> <span class="n">+</span> <span class="n">y</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">                       <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">          <span class="n">|</span> <span class="nn">O.</span><span class="n">Eq</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="kr">case</span> <span class="p">(</span><span class="n">pop</span> <span class="n">vm</span><span class="p">,</span> <span class="n">pop</span> <span class="n">vm</span><span class="p">)</span> <span class="kr">of</span>
+</span></span><span class="line"><span class="cl">                        <span class="p">(</span><span class="nn">V.</span><span class="n">Int</span> <span class="n">x</span><span class="p">,</span> <span class="nn">V.</span><span class="n">Int</span> <span class="n">y</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="p">(</span><span class="n">x</span> <span class="n">=</span> <span class="n">y</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">                      <span class="n">|</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="n">x</span><span class="p">,</span> <span class="nn">V.</span><span class="n">Bool</span> <span class="n">y</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="p">(</span><span class="n">x</span> <span class="n">=</span> <span class="n">y</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">                      <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">          <span class="n">|</span> <span class="nn">O.</span><span class="n">Gt</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="kr">case</span> <span class="p">(</span><span class="n">pop</span> <span class="n">vm</span><span class="p">,</span> <span class="n">pop</span> <span class="n">vm</span><span class="p">)</span> <span class="kr">of</span>
+</span></span><span class="line"><span class="cl">                        <span class="p">(</span><span class="nn">V.</span><span class="n">Int</span> <span class="n">x</span><span class="p">,</span> <span class="nn">V.</span><span class="n">Int</span> <span class="n">y</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="p">(</span><span class="n">x</span> <span class="n">&lt;</span> <span class="n">y</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">                      <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">          <span class="n">|</span> <span class="nn">O.</span><span class="n">Jump</span> <span class="n">label</span> <span class="n">=&gt;</span> <span class="n">pc</span> <span class="n">:=</span> <span class="p">(</span><span class="n">label</span> <span class="n">-</span> <span class="mi">1</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">          <span class="n">|</span> <span class="nn">O.</span><span class="n">Jtrue</span> <span class="n">label</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="kr">case</span> <span class="n">pop</span> <span class="n">vm</span> <span class="kr">of</span>
+</span></span><span class="line"><span class="cl">                                 <span class="nn">V.</span><span class="n">Bool</span> <span class="n">true</span> <span class="n">=&gt;</span> <span class="n">pc</span> <span class="n">:=</span> <span class="p">(</span><span class="n">label</span> <span class="n">-</span> <span class="mi">1</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">                               <span class="n">|</span> <span class="nn">V.</span><span class="n">Bool</span> <span class="n">false</span> <span class="n">=&gt;</span> <span class="p">()</span>
+</span></span><span class="line"><span class="cl">                               <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">          <span class="n">|</span> <span class="nn">O.</span><span class="n">Call</span> <span class="n">i</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="kr">case</span> <span class="p">(</span><span class="n">pop</span> <span class="n">vm</span><span class="p">)</span> <span class="kr">of</span>
+</span></span><span class="line"><span class="cl">                            <span class="nn">V.</span><span class="n">Lambda</span> <span class="n">label</span> <span class="n">=&gt;</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">                             <span class="n">pushCi</span> <span class="n">vm</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">                             <span class="n">fp</span> <span class="n">:=</span> <span class="p">(</span><span class="n">!fp</span><span class="p">)</span> <span class="n">-</span> <span class="n">i</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">                             <span class="n">pc</span> <span class="n">:=</span> <span class="p">(</span><span class="n">label</span> <span class="n">-</span> <span class="mi">1</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">                          <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">          <span class="n">|</span> <span class="nn">O.</span><span class="n">Ret</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="nn">Array.</span><span class="n">update</span><span class="p">(</span><span class="n">stack</span><span class="p">,</span> <span class="n">!fp</span><span class="p">,</span> <span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">stack</span><span class="p">,</span> <span class="p">(</span><span class="n">!sp</span><span class="p">)</span> <span class="n">-</span> <span class="mi">1</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">                     <span class="n">popCi</span> <span class="n">vm</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">                     <span class="n">pc</span> <span class="n">:=</span> <span class="p">(</span><span class="n">!pc</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">          <span class="n">|</span> <span class="nn">O.</span><span class="n">Push</span> <span class="n">v</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="n">v</span>
+</span></span><span class="line"><span class="cl">          <span class="n">|</span> <span class="nn">O.</span><span class="n">Pop</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="n">pop</span> <span class="n">vm</span><span class="p">;())</span>
+</span></span><span class="line"><span class="cl">          <span class="n">|</span> <span class="nn">O.</span><span class="n">Lref</span> <span class="n">i</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">stack</span><span class="p">,</span> <span class="p">(</span><span class="n">!fp</span><span class="p">)</span> <span class="n">+</span> <span class="n">i</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">          <span class="n">|</span> <span class="nn">O.</span><span class="n">Lset</span> <span class="n">i</span> <span class="n">=&gt;</span>  <span class="p">((</span><span class="nn">Array.</span><span class="n">update</span><span class="p">(</span><span class="n">stack</span><span class="p">,</span> <span class="p">(</span><span class="n">!fp</span><span class="p">)</span> <span class="n">+</span> <span class="n">i</span><span class="p">,</span> <span class="n">pop</span> <span class="n">vm</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">                         <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="n">true</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">          <span class="n">|</span> <span class="nn">O.</span><span class="n">Gref</span> <span class="n">i</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">pool</span><span class="p">,</span> <span class="n">i</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">          <span class="n">|</span> <span class="nn">O.</span><span class="n">Gset</span> <span class="n">i</span> <span class="n">=&gt;</span>  <span class="p">(</span><span class="nn">Array.</span><span class="n">update</span><span class="p">(</span><span class="n">pool</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">pop</span> <span class="n">vm</span><span class="p">);</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="n">true</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">          <span class="n">|</span> <span class="nn">O.</span><span class="n">Nop</span> <span class="n">=&gt;</span> <span class="p">()</span>
+</span></span><span class="line"><span class="cl">          <span class="n">|</span> <span class="nn">O.</span><span class="n">End</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Exit</span>
+</span></span><span class="line"><span class="cl">      <span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="n">pc</span> <span class="n">:=</span> <span class="p">(</span><span class="n">!pc</span><span class="p">)</span> <span class="n">+</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="n">aux</span> <span class="p">())</span>
+</span></span></code></pre></div><p>DT VMではこれを次のように書き換えました。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="kr">fun</span> <span class="nf">next</span> <span class="p">()</span> <span class="n">=</span> <span class="kr">let</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="n">pc</span> <span class="n">:=</span> <span class="p">(</span><span class="n">!pc</span><span class="p">)</span> <span class="n">+</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">arg</span><span class="p">)</span> <span class="nv">=</span> <span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">cops</span><span class="p">,</span> <span class="n">!pc</span><span class="p">)</span> <span class="kr">in</span>
+</span></span><span class="line"><span class="cl">    <span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">opArray</span><span class="p">,</span> <span class="n">index</span><span class="p">)</span> <span class="n">arg</span>
+</span></span><span class="line"><span class="cl"><span class="kr">end</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nn">Array.</span><span class="n">fromList</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">            <span class="cm">(* Not *)</span>
+</span></span><span class="line"><span class="cl">            <span class="kr">fn</span> <span class="p">_</span> <span class="n">=&gt;</span>
+</span></span><span class="line"><span class="cl">                <span class="p">(</span><span class="kr">case</span> <span class="n">pop</span> <span class="n">vm</span> <span class="kr">of</span>
+</span></span><span class="line"><span class="cl">                    <span class="nn">V.</span><span class="n">Bool</span> <span class="n">x</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="p">(</span><span class="n">not</span> <span class="n">x</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">                <span class="n">next</span> <span class="p">()),</span>
+</span></span><span class="line"><span class="cl">            <span class="cm">(* Add *)</span>
+</span></span><span class="line"><span class="cl">            <span class="kr">fn</span> <span class="p">_</span> <span class="n">=&gt;</span>
+</span></span><span class="line"><span class="cl">                <span class="p">(</span><span class="kr">case</span> <span class="p">(</span><span class="n">pop</span> <span class="n">vm</span><span class="p">,</span> <span class="n">pop</span> <span class="n">vm</span><span class="p">)</span> <span class="kr">of</span>
+</span></span><span class="line"><span class="cl">                    <span class="p">(</span><span class="nn">V.</span><span class="n">Int</span> <span class="n">x</span><span class="p">,</span> <span class="nn">V.</span><span class="n">Int</span> <span class="n">y</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Int</span> <span class="p">(</span><span class="n">x</span> <span class="n">+</span> <span class="n">y</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">                 <span class="n">next</span> <span class="p">()),</span>
+</span></span><span class="line"><span class="cl">            <span class="cm">(* Eq *)</span>
+</span></span><span class="line"><span class="cl">            <span class="kr">fn</span> <span class="p">_</span> <span class="n">=&gt;</span>
+</span></span><span class="line"><span class="cl">                <span class="p">(</span><span class="kr">case</span> <span class="p">(</span><span class="n">pop</span> <span class="n">vm</span><span class="p">,</span> <span class="n">pop</span> <span class="n">vm</span><span class="p">)</span> <span class="kr">of</span>
+</span></span><span class="line"><span class="cl">                    <span class="p">(</span><span class="nn">V.</span><span class="n">Int</span> <span class="n">x</span><span class="p">,</span> <span class="nn">V.</span><span class="n">Int</span> <span class="n">y</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="p">(</span><span class="n">x</span> <span class="n">=</span> <span class="n">y</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">|</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="n">x</span><span class="p">,</span> <span class="nn">V.</span><span class="n">Bool</span> <span class="n">y</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="p">(</span><span class="n">x</span> <span class="n">=</span> <span class="n">y</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">next</span> <span class="p">()),</span>
+</span></span><span class="line"><span class="cl">            <span class="cm">(* Gt *)</span>
+</span></span><span class="line"><span class="cl">            <span class="kr">fn</span> <span class="p">_</span> <span class="n">=&gt;</span>
+</span></span><span class="line"><span class="cl">                <span class="p">(</span><span class="kr">case</span> <span class="p">(</span><span class="n">pop</span> <span class="n">vm</span><span class="p">,</span> <span class="n">pop</span> <span class="n">vm</span><span class="p">)</span> <span class="kr">of</span>
+</span></span><span class="line"><span class="cl">                    <span class="p">(</span><span class="nn">V.</span><span class="n">Int</span> <span class="n">x</span><span class="p">,</span> <span class="nn">V.</span><span class="n">Int</span> <span class="n">y</span><span class="p">)</span> <span class="n">=&gt;</span> <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="p">(</span><span class="n">x</span> <span class="n">&lt;</span> <span class="n">y</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">                 <span class="n">next</span> <span class="p">()),</span>
+</span></span><span class="line"><span class="cl">            <span class="cm">(* Jump *)</span>
+</span></span><span class="line"><span class="cl">            <span class="kr">fn</span> <span class="p">({</span><span class="n">int</span> <span class="n">=</span> <span class="n">label</span><span class="p">,</span> <span class="p">...}</span><span class="n">:</span> <span class="n">oparg</span><span class="p">)</span> <span class="n">=&gt;</span>
+</span></span><span class="line"><span class="cl">               <span class="p">(</span><span class="n">pc</span> <span class="n">:=</span> <span class="p">(</span><span class="n">label</span> <span class="n">-</span> <span class="mi">1</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">               <span class="n">next</span> <span class="p">()),</span>
+</span></span><span class="line"><span class="cl">            <span class="cm">(* Jtrue *)</span>
+</span></span><span class="line"><span class="cl">            <span class="kr">fn</span> <span class="p">({</span><span class="n">int</span> <span class="n">=</span> <span class="n">label</span><span class="p">,</span> <span class="p">...}</span><span class="n">:</span> <span class="n">oparg</span><span class="p">)</span> <span class="n">=&gt;</span>
+</span></span><span class="line"><span class="cl">                <span class="p">(</span><span class="kr">case</span> <span class="n">pop</span> <span class="n">vm</span> <span class="kr">of</span>
+</span></span><span class="line"><span class="cl">                    <span class="nn">V.</span><span class="n">Bool</span> <span class="n">true</span> <span class="n">=&gt;</span> <span class="n">pc</span> <span class="n">:=</span> <span class="p">(</span><span class="n">label</span> <span class="n">-</span> <span class="mi">1</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">|</span> <span class="nn">V.</span><span class="n">Bool</span> <span class="n">false</span> <span class="n">=&gt;</span> <span class="p">()</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">                <span class="n">next</span> <span class="p">()),</span>
+</span></span><span class="line"><span class="cl">            <span class="cm">(* Call *)</span>
+</span></span><span class="line"><span class="cl">            <span class="kr">fn</span> <span class="p">({</span><span class="n">int</span> <span class="n">=</span> <span class="n">i</span><span class="p">,</span> <span class="p">...}</span><span class="n">:</span> <span class="n">oparg</span><span class="p">)</span> <span class="n">=&gt;</span>
+</span></span><span class="line"><span class="cl">                <span class="p">(</span><span class="kr">case</span> <span class="p">(</span><span class="n">pop</span> <span class="n">vm</span><span class="p">)</span> <span class="kr">of</span>
+</span></span><span class="line"><span class="cl">                    <span class="nn">V.</span><span class="n">Lambda</span> <span class="n">label</span> <span class="n">=&gt;</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">                     <span class="n">pushCi</span> <span class="n">vm</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">                     <span class="n">fp</span> <span class="n">:=</span> <span class="p">(</span><span class="n">!fp</span><span class="p">)</span> <span class="n">-</span> <span class="n">i</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">                     <span class="n">pc</span> <span class="n">:=</span> <span class="p">(</span><span class="n">label</span> <span class="n">-</span> <span class="mi">1</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">|</span> <span class="p">_</span> <span class="n">=&gt;</span> <span class="kr">raise</span> <span class="n">Type</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">                <span class="n">next</span> <span class="p">()),</span>
+</span></span><span class="line"><span class="cl">            <span class="cm">(* Ret *)</span>
+</span></span><span class="line"><span class="cl">            <span class="kr">fn</span> <span class="p">_</span> <span class="n">=&gt;</span>
+</span></span><span class="line"><span class="cl">                <span class="p">(</span><span class="nn">Array.</span><span class="n">update</span><span class="p">(</span><span class="n">stack</span><span class="p">,</span> <span class="n">!fp</span><span class="p">,</span> <span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">stack</span><span class="p">,</span> <span class="p">(</span><span class="n">!sp</span><span class="p">)</span> <span class="n">-</span> <span class="mi">1</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">                 <span class="n">popCi</span> <span class="n">vm</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">                 <span class="n">pc</span> <span class="n">:=</span> <span class="p">(</span><span class="n">!pc</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">                <span class="n">next</span> <span class="p">()),</span>
+</span></span><span class="line"><span class="cl">            <span class="cm">(* Push *)</span>
+</span></span><span class="line"><span class="cl">            <span class="kr">fn</span> <span class="p">({</span><span class="n">vmvalue</span> <span class="n">=</span> <span class="n">v</span><span class="p">,</span> <span class="p">...}</span><span class="n">:</span> <span class="n">oparg</span><span class="p">)</span> <span class="n">=&gt;</span>
+</span></span><span class="line"><span class="cl">               <span class="p">(</span><span class="n">push</span> <span class="n">vm</span> <span class="n">v</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">               <span class="n">next</span> <span class="p">()),</span>
+</span></span><span class="line"><span class="cl">            <span class="cm">(* Pop *)</span>
+</span></span><span class="line"><span class="cl">            <span class="kr">fn</span> <span class="p">_</span> <span class="n">=&gt;</span>
+</span></span><span class="line"><span class="cl">               <span class="p">(</span><span class="n">pop</span> <span class="n">vm</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">                <span class="n">next</span> <span class="p">()),</span>
+</span></span><span class="line"><span class="cl">            <span class="cm">(* Lref *)</span>
+</span></span><span class="line"><span class="cl">            <span class="kr">fn</span> <span class="p">({</span><span class="n">int</span> <span class="n">=</span> <span class="n">i</span><span class="p">,</span> <span class="p">...}</span><span class="n">:</span> <span class="n">oparg</span><span class="p">)</span> <span class="n">=&gt;</span>
+</span></span><span class="line"><span class="cl">               <span class="p">(</span><span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">stack</span><span class="p">,</span> <span class="p">(</span><span class="n">!fp</span><span class="p">)</span> <span class="n">+</span> <span class="n">i</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">               <span class="n">next</span> <span class="p">()),</span>
+</span></span><span class="line"><span class="cl">            <span class="cm">(* Lset *)</span>
+</span></span><span class="line"><span class="cl">            <span class="kr">fn</span> <span class="p">({</span><span class="n">int</span> <span class="n">=</span> <span class="n">i</span><span class="p">,</span> <span class="p">...}</span><span class="n">:</span> <span class="n">oparg</span><span class="p">)</span> <span class="n">=&gt;</span>
+</span></span><span class="line"><span class="cl">                <span class="p">((</span><span class="nn">Array.</span><span class="n">update</span><span class="p">(</span><span class="n">stack</span><span class="p">,</span> <span class="p">(</span><span class="n">!fp</span><span class="p">)</span> <span class="n">+</span> <span class="n">i</span><span class="p">,</span> <span class="n">pop</span> <span class="n">vm</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">                 <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="n">true</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">                <span class="n">next</span> <span class="p">()),</span>
+</span></span><span class="line"><span class="cl">            <span class="cm">(* Gref *)</span>
+</span></span><span class="line"><span class="cl">            <span class="kr">fn</span> <span class="p">({</span><span class="n">int</span> <span class="n">=</span> <span class="n">i</span><span class="p">,</span> <span class="p">...}</span><span class="n">:</span> <span class="n">oparg</span><span class="p">)</span> <span class="n">=&gt;</span>
+</span></span><span class="line"><span class="cl">               <span class="p">(</span><span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">pool</span><span class="p">,</span> <span class="n">i</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">               <span class="n">next</span> <span class="p">()),</span>
+</span></span><span class="line"><span class="cl">            <span class="cm">(* Gset *)</span>
+</span></span><span class="line"><span class="cl">            <span class="kr">fn</span> <span class="p">({</span><span class="n">int</span> <span class="n">=</span> <span class="n">i</span><span class="p">,</span> <span class="p">...}</span><span class="n">:</span> <span class="n">oparg</span><span class="p">)</span> <span class="n">=&gt;</span>
+</span></span><span class="line"><span class="cl">               <span class="p">(</span><span class="nn">Array.</span><span class="n">update</span><span class="p">(</span><span class="n">pool</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">pop</span> <span class="n">vm</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">                <span class="n">push</span> <span class="n">vm</span> <span class="p">(</span><span class="nn">V.</span><span class="n">Bool</span> <span class="n">true</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">               <span class="n">next</span> <span class="p">()),</span>
+</span></span><span class="line"><span class="cl">            <span class="cm">(* Nop *)</span>
+</span></span><span class="line"><span class="cl">            <span class="p">(</span><span class="kr">fn</span> <span class="p">_</span> <span class="n">=&gt;</span>
+</span></span><span class="line"><span class="cl">                <span class="n">next</span> <span class="p">()),</span>
+</span></span><span class="line"><span class="cl">            <span class="p">(</span><span class="kr">fn</span> <span class="p">_</span> <span class="n">=&gt;</span>
+</span></span><span class="line"><span class="cl">                <span class="kr">raise</span> <span class="n">Exit</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="p">]</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">fun</span> <span class="nf">aux</span> <span class="p">()</span> <span class="n">=</span> <span class="kr">let</span> <span class="kr">val</span> <span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">arg</span><span class="p">)</span> <span class="nv">=</span> <span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">cops</span><span class="p">,</span> <span class="n">!pc</span><span class="p">)</span> <span class="kr">in</span>
+</span></span><span class="line"><span class="cl">                 <span class="nn">Array.</span><span class="n">sub</span><span class="p">(</span><span class="n">opArray</span><span class="p">,</span> <span class="n">index</span><span class="p">)</span> <span class="n">arg</span>
+</span></span><span class="line"><span class="cl">             <span class="kr">end</span>
+</span></span></code></pre></div><p>1引数を受け取ってunitを返す関数の配列としてVMを表しています。
 1つ注意点として、前処理としてタグ付き共用体として表されている命令をタグ(配列のインデックス)と共用体に分解するのですが、SMLに共用体はないので構造体で代用しています。 <code>oparg</code> 型がそれにあたります。</p>
-
 <p>ディスパッチを関数<code>next</code>に括り出していて、一見すると分岐予測に関する利点が失われるように思われますが、
 <code>next</code>は小さいのでインライン化されるだろうと踏んでそのままにしています。実際、手動でインライン化しても速度に変化はありませんでした。</p>
-
 <p>今回のメインの話はVMなのでインタプリタについては省略します。</p>
-
 <h1 id="実行速度">実行速度</h1>
-
 <h2 id="予測">予測</h2>
-
 <p>普通のVMはディスパッチをlogオーダーの時間で行ないますがDT VMは定数オーダーの時間で行ないます。しかし配列の参照と関数呼び出しを挟むので定数倍の部分は大きくなります。
 どちらが速いでしょうか。</p>
-
 <h2 id="計測">計測</h2>
-
 <p>今回、次のようなフィボナッチ数列を計算するコードの実行速度を計測しました。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">fun</span> <span class="nf">fib</span> <span class="n">n</span> <span class="n">=</span> <span class="p">(</span><span class="n">Progn</span> <span class="p">[</span>
-                <span class="n">Bind</span> <span class="p">(</span><span class="n">Var</span> <span class="s2">&#34;fib&#34;</span><span class="p">,</span>
-                      <span class="n">Lambda</span><span class="p">([</span><span class="n">Var</span> <span class="s2">&#34;n&#34;</span><span class="p">],</span>
-                               <span class="p">(</span><span class="n">If</span> <span class="p">(</span><span class="n">BinOp</span><span class="p">(</span><span class="n">GreaterThan</span><span class="p">,</span>
-                                          <span class="p">(</span><span class="n">Int</span> <span class="mi">2</span><span class="p">),</span>
-                                          <span class="p">(</span><span class="n">Var</span> <span class="s2">&#34;n&#34;</span><span class="p">)),</span>
-                                    <span class="n">Int</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span>
-                                    <span class="n">BinOp</span><span class="p">(</span><span class="n">Add</span><span class="p">,</span>
-                                          <span class="n">Call</span><span class="p">(</span><span class="n">Var</span> <span class="s2">&#34;fib&#34;</span><span class="p">,</span> <span class="p">[</span><span class="n">BinOp</span><span class="p">(</span><span class="n">Add</span><span class="p">,</span>
-                                                                 <span class="n">Var</span> <span class="s2">&#34;n&#34;</span><span class="p">,</span>
-                                                                 <span class="n">Int</span> <span class="mi">~1</span><span class="p">)]),</span>
-                                          <span class="n">Call</span><span class="p">(</span><span class="n">Var</span> <span class="s2">&#34;fib&#34;</span><span class="p">,</span> <span class="p">[</span><span class="n">BinOp</span><span class="p">(</span><span class="n">Add</span><span class="p">,</span>
-                                                                 <span class="n">Var</span> <span class="s2">&#34;n&#34;</span><span class="p">,</span>
-                                                                 <span class="n">Int</span> <span class="mi">~2</span><span class="p">)])))))),</span>
-                <span class="n">Call</span><span class="p">(</span><span class="n">Var</span> <span class="s2">&#34;fib&#34;</span><span class="p">,</span> <span class="p">[</span><span class="n">Int</span> <span class="n">n</span><span class="p">])])</span></code></pre></div>
-<p>コンパイラは以下のような命令列を吐きます。命令の内部表現が違うだけで命令列自体はVMとDTVMで共通です。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="kr">fun</span> <span class="nf">fib</span> <span class="n">n</span> <span class="n">=</span> <span class="p">(</span><span class="n">Progn</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">                <span class="n">Bind</span> <span class="p">(</span><span class="n">Var</span> <span class="s2">&#34;fib&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                      <span class="n">Lambda</span><span class="p">([</span><span class="n">Var</span> <span class="s2">&#34;n&#34;</span><span class="p">],</span>
+</span></span><span class="line"><span class="cl">                               <span class="p">(</span><span class="n">If</span> <span class="p">(</span><span class="n">BinOp</span><span class="p">(</span><span class="n">GreaterThan</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                                          <span class="p">(</span><span class="n">Int</span> <span class="mi">2</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">                                          <span class="p">(</span><span class="n">Var</span> <span class="s2">&#34;n&#34;</span><span class="p">)),</span>
+</span></span><span class="line"><span class="cl">                                    <span class="n">Int</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">                                    <span class="n">BinOp</span><span class="p">(</span><span class="n">Add</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                                          <span class="n">Call</span><span class="p">(</span><span class="n">Var</span> <span class="s2">&#34;fib&#34;</span><span class="p">,</span> <span class="p">[</span><span class="n">BinOp</span><span class="p">(</span><span class="n">Add</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                                                                 <span class="n">Var</span> <span class="s2">&#34;n&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                                                                 <span class="n">Int</span> <span class="mi">~1</span><span class="p">)]),</span>
+</span></span><span class="line"><span class="cl">                                          <span class="n">Call</span><span class="p">(</span><span class="n">Var</span> <span class="s2">&#34;fib&#34;</span><span class="p">,</span> <span class="p">[</span><span class="n">BinOp</span><span class="p">(</span><span class="n">Add</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                                                                 <span class="n">Var</span> <span class="s2">&#34;n&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                                                                 <span class="n">Int</span> <span class="mi">~2</span><span class="p">)])))))),</span>
+</span></span><span class="line"><span class="cl">                <span class="n">Call</span><span class="p">(</span><span class="n">Var</span> <span class="s2">&#34;fib&#34;</span><span class="p">,</span> <span class="p">[</span><span class="n">Int</span> <span class="n">n</span><span class="p">])])</span>
+</span></span></code></pre></div><p>コンパイラは以下のような命令列を吐きます。命令の内部表現が違うだけで命令列自体はVMとDTVMで共通です。
 繰り返しますが、最適化はしてないのでL25で次の命令にジャンプしてるだとか目に見えて無駄なコードもあります。</p>
 <pre tabindex="0"><code>0	Push Lambda 7
 1	Gset 0
@@ -439,61 +425,57 @@ label2:
 23	Call 1
 24	Add
 25	Jump 26
-26	Ret</code></pre>
-<p>計測には次のようなコードを使いました。コンパイラは実行効率を無視して書いたのでベンチマークには含めていません。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">val</span> <span class="nv">target</span> <span class="p">=</span> <span class="p">(</span><span class="nn">AST.</span><span class="n">fib</span> <span class="mi">35</span><span class="p">)</span>
-<span class="kr">val</span> <span class="nv">compiled</span> <span class="p">=</span> <span class="nn">VM.</span><span class="n">compile</span> <span class="n">target</span>
-<span class="kr">val</span> <span class="nv">dtcompiled</span> <span class="p">=</span> <span class="nn">DTVM.</span><span class="n">compile</span> <span class="n">target</span>
-<span class="kr">val</span> <span class="nv">vm</span> <span class="p">=</span> <span class="nn">VM.</span><span class="n">new</span> <span class="p">()</span>
-<span class="kr">val</span> <span class="nv">dtvm</span> <span class="p">=</span> <span class="nn">DTVM.</span><span class="n">new</span> <span class="p">()</span>
-
-<span class="kr">val</span> <span class="p">_</span> <span class="n">=</span> <span class="nn">Benchmark.</span><span class="n">benchset</span> <span class="s2">&#34;fib 35&#34;</span> <span class="mi">1</span> <span class="p">[</span>
-        <span class="p">(</span><span class="s2">&#34;Interpreter&#34;</span><span class="p">,</span>
-         <span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="nn">Interp.</span><span class="n">run</span> <span class="n">target</span><span class="p">;</span> <span class="p">())),</span>
-        <span class="p">(</span><span class="s2">&#34;Normal VM&#34;</span><span class="p">,</span>
-         <span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="nn">VM.</span><span class="n">run</span> <span class="n">vm</span> <span class="n">compiled</span><span class="p">;</span> <span class="p">())),</span>
-        <span class="p">(</span><span class="s2">&#34;Direct Threaded VM&#34;</span><span class="p">,</span>
-         <span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="nn">DTVM.</span><span class="n">run</span> <span class="n">dtvm</span> <span class="n">dtcompiled</span><span class="p">;</span> <span class="p">()))</span>
-    <span class="p">]</span></code></pre></div>
-<h2 id="結果">結果</h2>
-
+26	Ret
+</code></pre><p>計測には次のようなコードを使いました。コンパイラは実行効率を無視して書いたのでベンチマークには含めていません。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="kr">val</span> <span class="nv">target</span> <span class="p">=</span> <span class="p">(</span><span class="nn">AST.</span><span class="n">fib</span> <span class="mi">35</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">val</span> <span class="nv">compiled</span> <span class="p">=</span> <span class="nn">VM.</span><span class="n">compile</span> <span class="n">target</span>
+</span></span><span class="line"><span class="cl"><span class="kr">val</span> <span class="nv">dtcompiled</span> <span class="p">=</span> <span class="nn">DTVM.</span><span class="n">compile</span> <span class="n">target</span>
+</span></span><span class="line"><span class="cl"><span class="kr">val</span> <span class="nv">vm</span> <span class="p">=</span> <span class="nn">VM.</span><span class="n">new</span> <span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="kr">val</span> <span class="nv">dtvm</span> <span class="p">=</span> <span class="nn">DTVM.</span><span class="n">new</span> <span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">val</span> <span class="p">_</span> <span class="n">=</span> <span class="nn">Benchmark.</span><span class="n">benchset</span> <span class="s2">&#34;fib 35&#34;</span> <span class="mi">1</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">        <span class="p">(</span><span class="s2">&#34;Interpreter&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">         <span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="nn">Interp.</span><span class="n">run</span> <span class="n">target</span><span class="p">;</span> <span class="p">())),</span>
+</span></span><span class="line"><span class="cl">        <span class="p">(</span><span class="s2">&#34;Normal VM&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">         <span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="nn">VM.</span><span class="n">run</span> <span class="n">vm</span> <span class="n">compiled</span><span class="p">;</span> <span class="p">())),</span>
+</span></span><span class="line"><span class="cl">        <span class="p">(</span><span class="s2">&#34;Direct Threaded VM&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">         <span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="nn">DTVM.</span><span class="n">run</span> <span class="n">dtvm</span> <span class="n">dtcompiled</span><span class="p">;</span> <span class="p">()))</span>
+</span></span><span class="line"><span class="cl">    <span class="p">]</span>
+</span></span></code></pre></div><h2 id="結果">結果</h2>
 <p>Intel Core i5 M450 2.4GHz 2コア4スレッド、Ubunt 15.04、SML/NJ v110.77で実行しました。</p>
 <pre tabindex="0"><code>-------------------+---------------------------------------------------
  Interpreter       |********************************************* 47170ms
  Normal VM         |****************** 19170ms
  Direct Threaded VM|************************************************** 51460ms
--------------------+---------------------------------------------------</code></pre>
-<p>ダントツで速いのがVMで、インタプリタに比べてかなりの性能向上が見られます。一方DT VMはインタプリタより遅いという結果になりました。</p>
-
+-------------------+---------------------------------------------------
+</code></pre><p>ダントツで速いのがVMで、インタプリタに比べてかなりの性能向上が見られます。一方DT VMはインタプリタより遅いという結果になりました。</p>
 <h1 id="考察">考察</h1>
-
 <p>冷静に考えたらインタプリタは毎回関数呼び出して遅いよねってことからループで処理を済ませるのがVMなのにVMで毎回関数を呼び出してたら遅いに決まってるじゃん。
 というかこれ、Direct Threaded VMじゃないじゃん。死にたい。</p>
-
 <h1 id="余談">余談</h1>
-
-<p><blockquote class="twitter-tweet" lang="ja"><p lang="ja" dir="ltr">ループ内でExceptionをhandleしてる所為だった。ループの外に出したら超速になってインタプリタの方が20倍遅くなった。</p>&mdash; κeen (@blackenedgold) <a href="https://twitter.com/blackenedgold/status/604235677337714689">2015, 5月 29</a></blockquote>
-<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script></p>
-
+<blockquote class="twitter-tweet" lang="ja"><p lang="ja" dir="ltr">ループ内でExceptionをhandleしてる所為だった。ループの外に出したら超速になってインタプリタの方が20倍遅くなった。</p>&mdash; κeen (@blackenedgold) <a href="https://twitter.com/blackenedgold/status/604235677337714689">2015, 5月 29</a></blockquote>
+<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
 <p>尚、このつぶやきはfibの引数を小さくして繰り返しを増やした時のものです。多分コンパイルを外に出してるので繰り返しが多いとその分のオーバーヘッドの差が効いてくるのでしょう。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">val</span> <span class="nv">target</span> <span class="p">=</span> <span class="p">(</span><span class="nn">AST.</span><span class="n">fib</span> <span class="mi">24</span><span class="p">)</span>
-<span class="kr">val</span> <span class="nv">compiled</span> <span class="p">=</span> <span class="nn">VM.</span><span class="n">compile</span> <span class="n">target</span>
-<span class="kr">val</span> <span class="nv">dtcompiled</span> <span class="p">=</span> <span class="nn">DTVM.</span><span class="n">compile</span> <span class="n">target</span>
-<span class="kr">val</span> <span class="nv">vm</span> <span class="p">=</span> <span class="nn">VM.</span><span class="n">new</span> <span class="p">()</span>
-<span class="kr">val</span> <span class="nv">dtvm</span> <span class="p">=</span> <span class="nn">DTVM.</span><span class="n">new</span> <span class="p">()</span>
-
-<span class="kr">val</span> <span class="p">_</span> <span class="n">=</span> <span class="nn">Benchmark.</span><span class="n">benchset</span> <span class="s2">&#34;fib 24&#34;</span> <span class="mi">10</span> <span class="p">[</span>
-        <span class="p">(</span><span class="s2">&#34;Interpreter&#34;</span><span class="p">,</span>
-         <span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="nn">Interp.</span><span class="n">run</span> <span class="n">target</span><span class="p">;</span> <span class="p">())),</span>
-        <span class="p">(</span><span class="s2">&#34;Normal VM&#34;</span><span class="p">,</span>
-         <span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="nn">VM.</span><span class="n">run</span> <span class="n">vm</span> <span class="n">compiled</span><span class="p">;</span> <span class="p">())),</span>
-        <span class="p">(</span><span class="s2">&#34;Direct Threaded VM&#34;</span><span class="p">,</span>
-         <span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="nn">DTVM.</span><span class="n">run</span> <span class="n">dtvm</span> <span class="n">dtcompiled</span><span class="p">;</span> <span class="p">()))</span>
-    <span class="p">]</span></code></pre></div><pre tabindex="0"><code>-------------------+---------------------------------------------------
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="kr">val</span> <span class="nv">target</span> <span class="p">=</span> <span class="p">(</span><span class="nn">AST.</span><span class="n">fib</span> <span class="mi">24</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">val</span> <span class="nv">compiled</span> <span class="p">=</span> <span class="nn">VM.</span><span class="n">compile</span> <span class="n">target</span>
+</span></span><span class="line"><span class="cl"><span class="kr">val</span> <span class="nv">dtcompiled</span> <span class="p">=</span> <span class="nn">DTVM.</span><span class="n">compile</span> <span class="n">target</span>
+</span></span><span class="line"><span class="cl"><span class="kr">val</span> <span class="nv">vm</span> <span class="p">=</span> <span class="nn">VM.</span><span class="n">new</span> <span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="kr">val</span> <span class="nv">dtvm</span> <span class="p">=</span> <span class="nn">DTVM.</span><span class="n">new</span> <span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">val</span> <span class="p">_</span> <span class="n">=</span> <span class="nn">Benchmark.</span><span class="n">benchset</span> <span class="s2">&#34;fib 24&#34;</span> <span class="mi">10</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">        <span class="p">(</span><span class="s2">&#34;Interpreter&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">         <span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="nn">Interp.</span><span class="n">run</span> <span class="n">target</span><span class="p">;</span> <span class="p">())),</span>
+</span></span><span class="line"><span class="cl">        <span class="p">(</span><span class="s2">&#34;Normal VM&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">         <span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="nn">VM.</span><span class="n">run</span> <span class="n">vm</span> <span class="n">compiled</span><span class="p">;</span> <span class="p">())),</span>
+</span></span><span class="line"><span class="cl">        <span class="p">(</span><span class="s2">&#34;Direct Threaded VM&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">         <span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> <span class="p">(</span><span class="nn">DTVM.</span><span class="n">run</span> <span class="n">dtvm</span> <span class="n">dtcompiled</span><span class="p">;</span> <span class="p">()))</span>
+</span></span><span class="line"><span class="cl">    <span class="p">]</span>
+</span></span></code></pre></div><pre tabindex="0"><code>-------------------+---------------------------------------------------
  Interpreter       |************************************************** 2052ms
  Normal VM         |** 104ms
  Direct Threaded VM|***** 238ms
--------------------+---------------------------------------------------</code></pre>
+-------------------+---------------------------------------------------
+</code></pre>
                     </section>
                 </article>
             </div>

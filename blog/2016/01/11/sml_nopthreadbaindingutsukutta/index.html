@@ -133,106 +133,89 @@
                     </header>
                     <section>
                         <p>κeenです。またしても深夜になってしまいましたがSML#のpthreadバインディングを作ったのでその報告を。</p>
-
 <p>SML#はC FFIを簡単に書け、さらにランタイムがnon Moving GCなのでSML#自体はサポートしていないもののランタイムそのものはマルチスレッドに対応しているという大変興味深い特徴を持っています。
 処理系側としてもマルチスレッドが欲しいならpthreadのFFIを使って好きにやってくれというスタンスのようです。</p>
-
 <p>ということでさまざまなマルチスレッドアプリケーションの下地になるべくpthreadのバインディングを作りました。とはいってもまだ不完全ですが。</p>
-
 <p>どういうものが用意出来ているかは<a href="https://github.com/KeenS/smlsharp_pthread/blob/master/src/pthread.smi">こちら</a>が一覧として機能しています。</p>
-
 <p>SML的には改善の余地がある(例えば、排他的なフラグをdatatypeで定義するとか)のですが、あくまで低レベルなバインディングに徹するためにintのままで残してあります。</p>
-
 <p>他にはCのマクロで実現されていたものはインポート出来ないのでどうにかしてあったりどうにかしてなかったりしてます。
 例えば<code>PTHREAD_XXX_INITIALIZER</code>はマクロで定義された初期値ですが、SMLからは参照出来ないのであきらめました。
 代わりに<code>pthread_xxx_new</code>関数を用意したので<code>pthread_xxx_init</code>と併せて使うことでそれらの値を初期化出来ます。
 メモリ確保と初期化同時にやれよとの声が聞こえてきそうですが繰り返すとあくまで低レベルなバインディングなのでそういうのは他に譲ることにします。</p>
-
 <p><code>pthread_cleanup_{pop/push}</code>はバインディングが書けませんでした。
 それらはマクロとして実現されていて、しかも<code>pthread_cleanup_push</code>で開き括弧を挿入して<code>pthread_cleanup_pop</code>で閉じるというエグい実装なので移植は無理でしょう。
 POSIX的にもマクロとして実現して良いことになっているので文句は言えません。</p>
-
 <h1 id="サンプルコード">サンプルコード</h1>
-
 <p>レポジトリにも入ってますが、スレッドを作る小さな例だとこうなります。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">open</span> <span class="nn">PThread</span>
-<span class="kr">fun</span> <span class="nf">exit</span> <span class="n">reason</span> <span class="n">=</span> <span class="p">(</span>
-    <span class="n">print</span> <span class="p">(</span><span class="n">reason</span> <span class="n">^</span> <span class="s2">&#34;</span><span class="se">\n</span><span class="s2">&#34;</span><span class="p">);</span>
-    <span class="nn">OS.Process.</span><span class="n">exit</span> <span class="nn">OS.Process.</span><span class="n">failure</span>
-<span class="p">)</span>
-
-
-<span class="kr">val</span> <span class="nv">fromUnitPtr</span> <span class="p">=</span> <span class="nn">SMLSharp_Builtin.Pointer.</span><span class="n">fromUnitPtr</span>
-<span class="kr">val</span> <span class="nv">toUnitPtr</span> <span class="p">=</span> <span class="nn">SMLSharp_Builtin.Pointer.</span><span class="n">toUnitPtr</span>
-<span class="cm">(* durty hack *)</span>
-<span class="kr">val</span> <span class="nv">sml_str_new</span> <span class="p">=</span> <span class="p">_</span><span class="n">import</span> <span class="s2">&#34;sml_str_new&#34;</span><span class="n">:</span> <span class="p">(</span><span class="n">string</span><span class="p">)</span> <span class="n">-&gt;</span> <span class="n">char</span> <span class="n">ptr</span>
-
-<span class="kr">fun</span> <span class="nf">threadFunc</span> <span class="p">(</span><span class="n">arg</span><span class="kr">:</span><span class="n">unit</span> <span class="n">ptr</span><span class="p">)</span><span class="n">:</span> <span class="n">unit</span> <span class="n">ptr</span> <span class="n">=</span> <span class="kr">let</span>
-    <span class="kr">val</span> <span class="nv">cp</span><span class="n">:</span> <span class="n">char</span> <span class="n">ptr</span> <span class="n">=</span> <span class="n">fromUnitPtr</span> <span class="n">arg</span>
-    <span class="kr">val</span> <span class="nv">s</span> <span class="p">=</span> <span class="nn">Pointer.</span><span class="n">importString</span> <span class="n">cp</span>
-    <span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="n">print</span> <span class="n">s</span>
-    <span class="cm">(* val ret =ref _NULL *)</span>
-    <span class="cm">(* val () = ret := (String.size s) *)</span>
-<span class="kr">in</span>
-    <span class="cm">(* ret *)</span>
-    <span class="p">_</span><span class="n">NULL</span>
-<span class="kr">end</span>
-                   
-<span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="kr">let</span>
-    <span class="kr">val</span> <span class="nv">tattr</span> <span class="p">=</span> <span class="n">ref</span> <span class="p">(</span><span class="n">pthread_attr_new</span><span class="p">())</span>
-    <span class="kr">val</span> <span class="nv">s</span> <span class="p">=</span> <span class="n">pthread_attr_init</span><span class="p">(</span><span class="n">tattr</span><span class="p">)</span>
-    <span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="kr">if</span> <span class="n">s</span> <span class="n">&lt;&gt;</span> <span class="mi">0</span>
-             <span class="kr">then</span> <span class="n">exit</span> <span class="s2">&#34;pthread_attr_init&#34;</span>
-             <span class="kr">else</span> <span class="p">()</span>
-    <span class="kr">val</span> <span class="nv">thread_ref</span> <span class="p">=</span> <span class="n">ref</span> <span class="p">(</span><span class="n">pthread_new</span><span class="p">())</span>
-    <span class="kr">val</span> <span class="nv">arg</span> <span class="p">=</span> <span class="n">sml_str_new</span> <span class="s2">&#34;Hello world</span><span class="se">\n</span><span class="s2">&#34;</span>
-    <span class="kr">val</span> <span class="nv">s</span> <span class="p">=</span> <span class="n">pthread_create</span><span class="p">(</span><span class="n">thread_ref</span><span class="p">,</span> <span class="n">tattr</span><span class="p">,</span> <span class="n">threadFunc</span><span class="p">,</span> <span class="n">toUnitPtr</span> <span class="n">arg</span><span class="p">)</span>
-    <span class="kr">val</span> <span class="nv">t1</span> <span class="p">=</span> <span class="n">!thread_ref</span>
-    <span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="kr">if</span> <span class="n">s</span> <span class="n">&lt;&gt;</span> <span class="mi">0</span>
-             <span class="kr">then</span> <span class="n">exit</span> <span class="s2">&#34;thread creation failed&#34;</span>
-             <span class="kr">else</span> <span class="p">()</span>
-    <span class="kr">val</span> <span class="nv">s</span> <span class="p">=</span> <span class="n">pthread_attr_destroy</span><span class="p">(</span><span class="n">tattr</span><span class="p">)</span>
-    <span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="kr">if</span> <span class="n">s</span> <span class="n">&lt;&gt;</span> <span class="mi">0</span>
-             <span class="kr">then</span> <span class="n">exit</span> <span class="s2">&#34;pthread_attr_destroy&#34;</span>
-             <span class="kr">else</span> <span class="p">()</span>
-    <span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="n">print</span> <span class="s2">&#34;Message from main()</span><span class="se">\n</span><span class="s2">&#34;</span><span class="p">;</span>
-    <span class="kr">val</span> <span class="nv">resRef</span> <span class="p">=</span> <span class="n">ref</span> <span class="p">(</span><span class="nn">Pointer.</span><span class="n">NULL</span> <span class="p">())</span>
-    <span class="kr">val</span> <span class="nv">s</span> <span class="p">=</span> <span class="n">pthread_join</span><span class="p">(</span><span class="n">t1</span><span class="p">,</span> <span class="n">resRef</span><span class="p">)</span>
-    <span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="kr">if</span> <span class="n">s</span> <span class="n">&lt;&gt;</span> <span class="mi">0</span>
-             <span class="kr">then</span> <span class="n">exit</span> <span class="s2">&#34;thread creation failed&#34;</span>
-             <span class="kr">else</span> <span class="p">()</span>
-    <span class="cm">(* val () = print (&#34;Thread returned&#34; ^ Int.toString  (!resRef) ^ &#34;\n&#34;) *)</span>
-<span class="kr">in</span>
-    <span class="p">()</span>
-<span class="kr">end</span></code></pre></div>
-<p>言わずとも雰囲気で読み取れそうですがこの例はCのサンプルをそのまま移植しました。Cだと<code>(void *)</code>と文字列で相互変換が出来るのですがSML#だと一筋縄では出来ないので内部APIを叩くとかのかなりアレなハックしてます。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="kr">open</span> <span class="nn">PThread</span>
+</span></span><span class="line"><span class="cl"><span class="kr">fun</span> <span class="nf">exit</span> <span class="n">reason</span> <span class="n">=</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="n">print</span> <span class="p">(</span><span class="n">reason</span> <span class="n">^</span> <span class="s2">&#34;</span><span class="se">\n</span><span class="s2">&#34;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="nn">OS.Process.</span><span class="n">exit</span> <span class="nn">OS.Process.</span><span class="n">failure</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">val</span> <span class="nv">fromUnitPtr</span> <span class="p">=</span> <span class="nn">SMLSharp_Builtin.Pointer.</span><span class="n">fromUnitPtr</span>
+</span></span><span class="line"><span class="cl"><span class="kr">val</span> <span class="nv">toUnitPtr</span> <span class="p">=</span> <span class="nn">SMLSharp_Builtin.Pointer.</span><span class="n">toUnitPtr</span>
+</span></span><span class="line"><span class="cl"><span class="cm">(* durty hack *)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">val</span> <span class="nv">sml_str_new</span> <span class="p">=</span> <span class="p">_</span><span class="n">import</span> <span class="s2">&#34;sml_str_new&#34;</span><span class="n">:</span> <span class="p">(</span><span class="n">string</span><span class="p">)</span> <span class="n">-&gt;</span> <span class="n">char</span> <span class="n">ptr</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">fun</span> <span class="nf">threadFunc</span> <span class="p">(</span><span class="n">arg</span><span class="kr">:</span><span class="n">unit</span> <span class="n">ptr</span><span class="p">)</span><span class="n">:</span> <span class="n">unit</span> <span class="n">ptr</span> <span class="n">=</span> <span class="kr">let</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">cp</span><span class="n">:</span> <span class="n">char</span> <span class="n">ptr</span> <span class="n">=</span> <span class="n">fromUnitPtr</span> <span class="n">arg</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">s</span> <span class="p">=</span> <span class="nn">Pointer.</span><span class="n">importString</span> <span class="n">cp</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="n">print</span> <span class="n">s</span>
+</span></span><span class="line"><span class="cl">    <span class="cm">(* val ret =ref _NULL *)</span>
+</span></span><span class="line"><span class="cl">    <span class="cm">(* val () = ret := (String.size s) *)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">in</span>
+</span></span><span class="line"><span class="cl">    <span class="cm">(* ret *)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">_</span><span class="n">NULL</span>
+</span></span><span class="line"><span class="cl"><span class="kr">end</span>
+</span></span><span class="line"><span class="cl">                   
+</span></span><span class="line"><span class="cl"><span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="kr">let</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">tattr</span> <span class="p">=</span> <span class="n">ref</span> <span class="p">(</span><span class="n">pthread_attr_new</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">s</span> <span class="p">=</span> <span class="n">pthread_attr_init</span><span class="p">(</span><span class="n">tattr</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="kr">if</span> <span class="n">s</span> <span class="n">&lt;&gt;</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">             <span class="kr">then</span> <span class="n">exit</span> <span class="s2">&#34;pthread_attr_init&#34;</span>
+</span></span><span class="line"><span class="cl">             <span class="kr">else</span> <span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">thread_ref</span> <span class="p">=</span> <span class="n">ref</span> <span class="p">(</span><span class="n">pthread_new</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">arg</span> <span class="p">=</span> <span class="n">sml_str_new</span> <span class="s2">&#34;Hello world</span><span class="se">\n</span><span class="s2">&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">s</span> <span class="p">=</span> <span class="n">pthread_create</span><span class="p">(</span><span class="n">thread_ref</span><span class="p">,</span> <span class="n">tattr</span><span class="p">,</span> <span class="n">threadFunc</span><span class="p">,</span> <span class="n">toUnitPtr</span> <span class="n">arg</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">t1</span> <span class="p">=</span> <span class="n">!thread_ref</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="kr">if</span> <span class="n">s</span> <span class="n">&lt;&gt;</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">             <span class="kr">then</span> <span class="n">exit</span> <span class="s2">&#34;thread creation failed&#34;</span>
+</span></span><span class="line"><span class="cl">             <span class="kr">else</span> <span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">s</span> <span class="p">=</span> <span class="n">pthread_attr_destroy</span><span class="p">(</span><span class="n">tattr</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="kr">if</span> <span class="n">s</span> <span class="n">&lt;&gt;</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">             <span class="kr">then</span> <span class="n">exit</span> <span class="s2">&#34;pthread_attr_destroy&#34;</span>
+</span></span><span class="line"><span class="cl">             <span class="kr">else</span> <span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="n">print</span> <span class="s2">&#34;Message from main()</span><span class="se">\n</span><span class="s2">&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">resRef</span> <span class="p">=</span> <span class="n">ref</span> <span class="p">(</span><span class="nn">Pointer.</span><span class="n">NULL</span> <span class="p">())</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">s</span> <span class="p">=</span> <span class="n">pthread_join</span><span class="p">(</span><span class="n">t1</span><span class="p">,</span> <span class="n">resRef</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="kr">if</span> <span class="n">s</span> <span class="n">&lt;&gt;</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">             <span class="kr">then</span> <span class="n">exit</span> <span class="s2">&#34;thread creation failed&#34;</span>
+</span></span><span class="line"><span class="cl">             <span class="kr">else</span> <span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="cm">(* val () = print (&#34;Thread returned&#34; ^ Int.toString  (!resRef) ^ &#34;\n&#34;) *)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">in</span>
+</span></span><span class="line"><span class="cl">    <span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="kr">end</span>
+</span></span></code></pre></div><p>言わずとも雰囲気で読み取れそうですがこの例はCのサンプルをそのまま移植しました。Cだと<code>(void *)</code>と文字列で相互変換が出来るのですがSML#だと一筋縄では出来ないので内部APIを叩くとかのかなりアレなハックしてます。
 <a href="https://github.com/smlsharp/smlsharp/issues/45">SML#にイシューに上げ</a>ましたが<code>(void *)</code>が強敵ですね。</p>
-
 <h1 id="可搬性の話">可搬性の話</h1>
-
 <p>ところで、pthreadはp(POSIX)の名が付いている通り様々なプラットフォームで利用出来、そしてそれぞれのプラットフォーム毎に実装が異なります。
 勿論、POSIXで定められているのでAPIレベルでは互換性がある(≒関数のバインディングは問題ない)のですが、ABI、データの表現に互換性がありません(≒データ型のバインディングに問題がある)</p>
-
 <p>実はその辺で苦労がありました。今のところ手元の環境(Linux)でしか移植が済んでません。しかし他のプラットフォームの移植は書ける形になっています。
 これは<a href="//KeenS.github.io/blog/2015/12/26/sml_tocpuripurosessanorenkei/">以前</a>書いたSMLのファイルにCのプリプロセッサを適用するというなんともいえないハックを使うことで実現しています。
 他のプラットフォームに移植するには</p>
-
 <ol>
 <li>どういうマクロが定義されている時にどのプラットフォームのpthreadを使っているかの対応を調べる</li>
 <li>そのプラットフォームの<code>pthread.h</code>を入手してデータ型を移植する</li>
 </ol>
-
 <p>手順が必要です。私は手元の環境で動かすのが精一杯なのでMacとかで動かしたい方がいればプルリクを頂けると。
 前述の通り、関数のバインディングは可搬性があるので必要なのはデータ型と定数の移植です。ある程度はプリプロセッサも使えるのでほぼヘッダファイルを移植する感じですね。</p>
-
 <p>まあ、実をいうと関数の移植も細々したものが面倒なので放置していたりします。ここら辺は作業ゲーなので気が向いたらやります。</p>
-
 <p>あとは若干迷っているのが必ずしも実装されているとは限らないオプショナルな機能の移植ですね。
 バリアやリードライトロック、スピンロックがそれにあたります。
 可搬性とはいってもSML#自身が動く環境が限られているのでMacでもそれらが使えるなら移植してしまおうかと思っていますがまだ調べきれてません。</p>
-
 <h1 id="まとめ">まとめ</h1>
-
 <ul>
 <li>pthreadのバインディング作ったよ</li>
 <li>まだバインドが書かれてない関数もあるよ</li>

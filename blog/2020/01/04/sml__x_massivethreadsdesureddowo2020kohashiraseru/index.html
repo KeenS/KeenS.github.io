@@ -133,183 +133,155 @@
                     </header>
                     <section>
                         <p>κeenです。2020年ですね。スレッドを2020個走らせてみましょう。</p>
-
 <h1 id="massivethreadsとは">MassiveThreadsとは</h1>
-
 <p><a href="https://github.com/massivethreads/massivethreads">これ</a> 。東大の<a href="https://www.eidos.ic.i.u-tokyo.ac.jp/">田浦研</a>が開発している超軽量スレッドライブラリで、通常よりも2桁高速にスレッドを作れるらしいです。</p>
-
 <p>APIはだいたいpthreadに似てます。</p>
-
-<h1 id="sml-とmassivethreads">SML#とMassiveThreads</h1>
-
+<h1 id="smlとmassivethreads">SML#とMassiveThreads</h1>
 <p>SML# 3.3.0からデフォルトでMassiveThreadsを<a href="https://www.pllab.riec.tohoku.ac.jp/smlsharp/docs/3.3.0/ja/Ch10.S2.xhtml">使うようになりました</a>。
 また、最近リリースされたSML# 3.5.0からpthreadとMassiveThreadsを同時に使うことができるようになりました。
 SML#でスレッドをじゃぶじゃぶ扱える訳です。
 もうそろそろ64コア128スレッドのThreadripper 3990Xも出るようですしスレッド沢山作れると嬉しいですよね。</p>
-
 <p>ということでナチュラルにSML#からMassiveThreadsを使ってみましょう。</p>
-
 <h1 id="api">API</h1>
-
 <p>ベラっと張るとこうなっています。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">structure</span> <span class="nn">Myth</span> <span class="n">=</span>
-<span class="kr">struct</span>
-
-  <span class="kr">type</span> <span class="kt">thread</span> <span class="p">(</span><span class="n">=</span> <span class="n">*</span><span class="p">)</span>
-  <span class="kr">structure</span> <span class="nn">Thread</span> <span class="n">=</span>
-  <span class="kr">struct</span>
-    <span class="kr">type</span> <span class="kt">thread</span> <span class="p">=</span> <span class="n">thread</span>
-    <span class="kr">val</span> <span class="nv">create</span> <span class="n">:</span> <span class="p">(</span><span class="n">unit</span> <span class="n">-&gt;</span> <span class="n">int</span><span class="p">)</span> <span class="n">-&gt;</span> <span class="n">thread</span>
-    <span class="kr">val</span> <span class="nv">detach</span> <span class="n">:</span> <span class="n">thread</span> <span class="n">-&gt;</span> <span class="n">unit</span>
-    <span class="kr">val</span> <span class="nv">join</span> <span class="n">:</span> <span class="n">thread</span> <span class="n">-&gt;</span> <span class="n">int</span>
-    <span class="kr">val</span> <span class="nv">exit</span> <span class="n">:</span> <span class="n">int</span> <span class="n">-&gt;</span> <span class="n">unit</span>
-    <span class="kr">val</span> <span class="nv">yield</span> <span class="n">:</span> <span class="n">unit</span> <span class="n">-&gt;</span> <span class="n">unit</span>
-    <span class="kr">val</span> <span class="nv">self</span> <span class="n">:</span> <span class="n">unit</span> <span class="n">-&gt;</span> <span class="n">thread</span>
-    <span class="kr">val</span> <span class="nv">equal</span> <span class="n">:</span> <span class="n">thread</span> <span class="n">*</span> <span class="n">thread</span> <span class="n">-&gt;</span> <span class="n">bool</span>
-  <span class="kr">end</span>
-
-  <span class="kr">type</span> <span class="kt">mutex</span> <span class="p">(</span><span class="n">=</span> <span class="n">array</span><span class="p">)</span>
-  <span class="kr">structure</span> <span class="nn">Mutex</span> <span class="n">=</span>
-  <span class="kr">struct</span>
-    <span class="kr">type</span> <span class="kt">mutex</span> <span class="p">=</span> <span class="n">mutex</span>
-    <span class="kr">val</span> <span class="nv">create</span> <span class="n">:</span> <span class="n">unit</span> <span class="n">-&gt;</span> <span class="n">mutex</span>
-    <span class="kr">val</span> <span class="nv">lock</span> <span class="n">:</span> <span class="n">mutex</span> <span class="n">-&gt;</span> <span class="n">unit</span>
-    <span class="kr">val</span> <span class="nv">unlock</span> <span class="n">:</span> <span class="n">mutex</span> <span class="n">-&gt;</span> <span class="n">unit</span>
-    <span class="kr">val</span> <span class="nv">trylock</span> <span class="n">:</span> <span class="n">mutex</span> <span class="n">-&gt;</span> <span class="n">bool</span>
-    <span class="kr">val</span> <span class="nv">destroy</span> <span class="n">:</span> <span class="n">mutex</span> <span class="n">-&gt;</span> <span class="n">unit</span>
-  <span class="kr">end</span>
-
-  <span class="kr">type</span> <span class="kt">cond</span> <span class="p">(</span><span class="n">=</span> <span class="n">array</span><span class="p">)</span>
-  <span class="kr">structure</span> <span class="nn">Cond</span> <span class="n">=</span>
-  <span class="kr">struct</span>
-    <span class="kr">type</span> <span class="kt">cond</span> <span class="p">=</span> <span class="n">cond</span>
-    <span class="kr">val</span> <span class="nv">create</span> <span class="n">:</span> <span class="n">unit</span> <span class="n">-&gt;</span> <span class="n">cond</span>
-    <span class="kr">val</span> <span class="nv">signal</span> <span class="n">:</span> <span class="n">cond</span> <span class="n">-&gt;</span> <span class="n">unit</span>
-    <span class="kr">val</span> <span class="nv">broadcast</span> <span class="n">:</span> <span class="n">cond</span> <span class="n">-&gt;</span> <span class="n">unit</span>
-    <span class="kr">val</span> <span class="nv">wait</span> <span class="n">:</span> <span class="n">cond</span> <span class="n">*</span> <span class="n">mutex</span> <span class="n">-&gt;</span> <span class="n">unit</span>
-    <span class="kr">val</span> <span class="nv">destroy</span> <span class="n">:</span> <span class="n">cond</span> <span class="n">-&gt;</span> <span class="n">unit</span>
-  <span class="kr">end</span>
-
-  <span class="kr">type</span> <span class="kt">barrier</span> <span class="p">(</span><span class="n">=</span> <span class="n">array</span><span class="p">)</span>
-  <span class="kr">structure</span> <span class="nn">Barrier</span> <span class="n">=</span>
-  <span class="kr">struct</span>
-    <span class="kr">type</span> <span class="kt">barrier</span> <span class="p">=</span> <span class="n">barrier</span>
-    <span class="kr">val</span> <span class="nv">create</span> <span class="n">:</span> <span class="n">int</span> <span class="n">-&gt;</span> <span class="n">barrier</span>
-    <span class="kr">val</span> <span class="nv">wait</span> <span class="n">:</span> <span class="n">barrier</span> <span class="n">-&gt;</span> <span class="n">bool</span>
-    <span class="kr">val</span> <span class="nv">destroy</span> <span class="n">:</span> <span class="n">barrier</span> <span class="n">-&gt;</span> <span class="n">unit</span>
-  <span class="kr">end</span>
-
-<span class="kr">end</span></code></pre></div>
-<p>See on <a href="https://github.com/smlsharp/smlsharp/blob/master/src/thread/main/Myth.smi">GitHub</a></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="kr">structure</span> <span class="nn">Myth</span> <span class="n">=</span>
+</span></span><span class="line"><span class="cl"><span class="kr">struct</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kr">type</span> <span class="kt">thread</span> <span class="p">(</span><span class="n">=</span> <span class="n">*</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">structure</span> <span class="nn">Thread</span> <span class="n">=</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">struct</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">type</span> <span class="kt">thread</span> <span class="p">=</span> <span class="n">thread</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">create</span> <span class="n">:</span> <span class="p">(</span><span class="n">unit</span> <span class="n">-&gt;</span> <span class="n">int</span><span class="p">)</span> <span class="n">-&gt;</span> <span class="n">thread</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">detach</span> <span class="n">:</span> <span class="n">thread</span> <span class="n">-&gt;</span> <span class="n">unit</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">join</span> <span class="n">:</span> <span class="n">thread</span> <span class="n">-&gt;</span> <span class="n">int</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">exit</span> <span class="n">:</span> <span class="n">int</span> <span class="n">-&gt;</span> <span class="n">unit</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">yield</span> <span class="n">:</span> <span class="n">unit</span> <span class="n">-&gt;</span> <span class="n">unit</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">self</span> <span class="n">:</span> <span class="n">unit</span> <span class="n">-&gt;</span> <span class="n">thread</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">equal</span> <span class="n">:</span> <span class="n">thread</span> <span class="n">*</span> <span class="n">thread</span> <span class="n">-&gt;</span> <span class="n">bool</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">end</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kr">type</span> <span class="kt">mutex</span> <span class="p">(</span><span class="n">=</span> <span class="n">array</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">structure</span> <span class="nn">Mutex</span> <span class="n">=</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">struct</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">type</span> <span class="kt">mutex</span> <span class="p">=</span> <span class="n">mutex</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">create</span> <span class="n">:</span> <span class="n">unit</span> <span class="n">-&gt;</span> <span class="n">mutex</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">lock</span> <span class="n">:</span> <span class="n">mutex</span> <span class="n">-&gt;</span> <span class="n">unit</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">unlock</span> <span class="n">:</span> <span class="n">mutex</span> <span class="n">-&gt;</span> <span class="n">unit</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">trylock</span> <span class="n">:</span> <span class="n">mutex</span> <span class="n">-&gt;</span> <span class="n">bool</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">destroy</span> <span class="n">:</span> <span class="n">mutex</span> <span class="n">-&gt;</span> <span class="n">unit</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">end</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kr">type</span> <span class="kt">cond</span> <span class="p">(</span><span class="n">=</span> <span class="n">array</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">structure</span> <span class="nn">Cond</span> <span class="n">=</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">struct</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">type</span> <span class="kt">cond</span> <span class="p">=</span> <span class="n">cond</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">create</span> <span class="n">:</span> <span class="n">unit</span> <span class="n">-&gt;</span> <span class="n">cond</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">signal</span> <span class="n">:</span> <span class="n">cond</span> <span class="n">-&gt;</span> <span class="n">unit</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">broadcast</span> <span class="n">:</span> <span class="n">cond</span> <span class="n">-&gt;</span> <span class="n">unit</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">wait</span> <span class="n">:</span> <span class="n">cond</span> <span class="n">*</span> <span class="n">mutex</span> <span class="n">-&gt;</span> <span class="n">unit</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">destroy</span> <span class="n">:</span> <span class="n">cond</span> <span class="n">-&gt;</span> <span class="n">unit</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">end</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kr">type</span> <span class="kt">barrier</span> <span class="p">(</span><span class="n">=</span> <span class="n">array</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">structure</span> <span class="nn">Barrier</span> <span class="n">=</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">struct</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">type</span> <span class="kt">barrier</span> <span class="p">=</span> <span class="n">barrier</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">create</span> <span class="n">:</span> <span class="n">int</span> <span class="n">-&gt;</span> <span class="n">barrier</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">wait</span> <span class="n">:</span> <span class="n">barrier</span> <span class="n">-&gt;</span> <span class="n">bool</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">destroy</span> <span class="n">:</span> <span class="n">barrier</span> <span class="n">-&gt;</span> <span class="n">unit</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">end</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">end</span>
+</span></span></code></pre></div><p>See on <a href="https://github.com/smlsharp/smlsharp/blob/master/src/thread/main/Myth.smi">GitHub</a></p>
 <p>FFIなのでfinalizerである <code>join</code> や <code>destroy</code> は自分で呼ぶ規約です。</p>
-
 <p>ところで、これだけだと使いづらいのでいくつかスレッドライブラリの上に構築されたライブラリもあります。<a href="https://github.com/smlsharp/smlsharp/blob/master/src/thread/main/Concurrent.smi">Concurrent</a>や<a href="https://github.com/smlsharp/smlsharp/blob/master/src/thread/main/CML.smi">CML</a>など。
 これらも使おうとしたのですが色々あって使ってません。気になる人は使ってみて下さい。</p>
-
 <h1 id="quicksort">QuickSort</h1>
-
 <p>良い題材が全く思い浮かばなかったのでQuickSortを実装してみます。</p>
-
 <p>まずはインタフェースファイルに以下を書きます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="p">_</span><span class="n">require</span> <span class="s2">&#34;basis.smi&#34;</span>
-<span class="p">_</span><span class="n">require</span> <span class="s2">&#34;thread.smi&#34;</span></code></pre></div>
-<p>そして並列実行用の関数 <code>join</code> を定義しておきましょう。<a href="https://KeenS.github.io/blog/2018/04/08/rayonnoshinkahabunkatsutouchiniari/">rayonの <code>join</code></a>を意識してみました。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">structure</span> <span class="nn">Thread</span> <span class="n">=</span> <span class="nn">Myth.</span><span class="n">Thread</span>
-
-<span class="kr">fun</span> <span class="nf">join</span> <span class="p">(</span><span class="n">f1</span><span class="p">,</span> <span class="n">f2</span><span class="p">)</span> <span class="n">=</span> <span class="kr">let</span>
-    <span class="kr">val</span> <span class="nv">chan</span> <span class="p">=</span> <span class="n">ref</span> <span class="n">NONE</span>
-    <span class="kr">val</span> <span class="nv">th</span> <span class="p">=</span> <span class="nn">Thread.</span><span class="n">create</span> <span class="p">(</span><span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> <span class="mi">0</span> <span class="n">before</span> <span class="n">chan</span> <span class="n">:=</span> <span class="n">SOME</span><span class="p">(</span><span class="n">f2</span> <span class="p">()))</span>
-    <span class="kr">val</span> <span class="nv">r1</span> <span class="p">=</span> <span class="n">f1</span> <span class="p">()</span>
-    <span class="kr">val</span> <span class="p">_</span> <span class="n">=</span> <span class="nn">Thread.</span><span class="n">join</span> <span class="n">th</span>
-    <span class="kr">val</span> <span class="nv">r2</span> <span class="p">=</span> <span class="nn">Option.</span><span class="n">valOf</span> <span class="n">$</span> <span class="n">!chan</span>
-<span class="kr">in</span> <span class="p">(</span><span class="n">r1</span><span class="p">,</span> <span class="n">r2</span><span class="p">)</span> <span class="kr">end</span></code></pre></div>
-<p>マルチスレッドで <code>ref</code> を使ってるのが気持ち悪いですが一応競合状態にはならないはずなので大丈夫でしょう。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="p">_</span><span class="n">require</span> <span class="s2">&#34;basis.smi&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">_</span><span class="n">require</span> <span class="s2">&#34;thread.smi&#34;</span>
+</span></span></code></pre></div><p>そして並列実行用の関数 <code>join</code> を定義しておきましょう。<a href="https://KeenS.github.io/blog/2018/04/08/rayonnoshinkahabunkatsutouchiniari/">rayonの <code>join</code></a>を意識してみました。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="kr">structure</span> <span class="nn">Thread</span> <span class="n">=</span> <span class="nn">Myth.</span><span class="n">Thread</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">fun</span> <span class="nf">join</span> <span class="p">(</span><span class="n">f1</span><span class="p">,</span> <span class="n">f2</span><span class="p">)</span> <span class="n">=</span> <span class="kr">let</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">chan</span> <span class="p">=</span> <span class="n">ref</span> <span class="n">NONE</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">th</span> <span class="p">=</span> <span class="nn">Thread.</span><span class="n">create</span> <span class="p">(</span><span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> <span class="mi">0</span> <span class="n">before</span> <span class="n">chan</span> <span class="n">:=</span> <span class="n">SOME</span><span class="p">(</span><span class="n">f2</span> <span class="p">()))</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">r1</span> <span class="p">=</span> <span class="n">f1</span> <span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="p">_</span> <span class="n">=</span> <span class="nn">Thread.</span><span class="n">join</span> <span class="n">th</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">r2</span> <span class="p">=</span> <span class="nn">Option.</span><span class="n">valOf</span> <span class="n">$</span> <span class="n">!chan</span>
+</span></span><span class="line"><span class="cl"><span class="kr">in</span> <span class="p">(</span><span class="n">r1</span><span class="p">,</span> <span class="n">r2</span><span class="p">)</span> <span class="kr">end</span>
+</span></span></code></pre></div><p>マルチスレッドで <code>ref</code> を使ってるのが気持ち悪いですが一応競合状態にはならないはずなので大丈夫でしょう。</p>
 <p>さて、これを使ってQuickSortを書いていきます。
 関係ない関数はバッサり省いて以下のように書けますね。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">fun</span> <span class="nf">qsortSlice</span> <span class="n">arr</span> <span class="n">=</span>
-    <span class="kr">if</span> <span class="nn">ArraySlice.</span><span class="n">length</span><span class="p">(</span><span class="n">arr</span><span class="p">)</span> <span class="n">&lt;=</span> <span class="mi">1</span>
-    <span class="kr">then</span> <span class="p">()</span>
-    <span class="kr">else</span> <span class="kr">let</span>
-        <span class="kr">open</span> <span class="nn">ArraySlice</span>
-        <span class="kr">val</span> <span class="p">(</span><span class="n">l</span><span class="p">,</span> <span class="n">h</span><span class="p">)</span> <span class="nv">=</span> <span class="n">partition</span> <span class="n">arr</span>
-    <span class="cm">(*          vvvv  ここで `join` を使った*)</span>
-    <span class="kr">in</span> <span class="n">ignore</span> <span class="n">$</span> <span class="n">join</span><span class="p">((</span><span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> <span class="n">qsortSlice</span> <span class="n">l</span><span class="p">),</span> <span class="p">(</span><span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> <span class="n">qsortSlice</span> <span class="n">h</span><span class="p">))</span> <span class="kr">end</span>
-
-<span class="kr">fun</span> <span class="nf">qsort</span> <span class="n">arr</span> <span class="n">=</span> <span class="n">qsortSlice</span> <span class="p">(</span><span class="nn">ArraySlice.</span><span class="n">full</span> <span class="n">arr</span><span class="p">)</span></code></pre></div>
-<p>普通のアルゴリズムの1箇所を書き換えるだけで並列化できます。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="kr">fun</span> <span class="nf">qsortSlice</span> <span class="n">arr</span> <span class="n">=</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">if</span> <span class="nn">ArraySlice.</span><span class="n">length</span><span class="p">(</span><span class="n">arr</span><span class="p">)</span> <span class="n">&lt;=</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">then</span> <span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">else</span> <span class="kr">let</span>
+</span></span><span class="line"><span class="cl">        <span class="kr">open</span> <span class="nn">ArraySlice</span>
+</span></span><span class="line"><span class="cl">        <span class="kr">val</span> <span class="p">(</span><span class="n">l</span><span class="p">,</span> <span class="n">h</span><span class="p">)</span> <span class="nv">=</span> <span class="n">partition</span> <span class="n">arr</span>
+</span></span><span class="line"><span class="cl">    <span class="cm">(*          vvvv  ここで `join` を使った*)</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">in</span> <span class="n">ignore</span> <span class="n">$</span> <span class="n">join</span><span class="p">((</span><span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> <span class="n">qsortSlice</span> <span class="n">l</span><span class="p">),</span> <span class="p">(</span><span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> <span class="n">qsortSlice</span> <span class="n">h</span><span class="p">))</span> <span class="kr">end</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">fun</span> <span class="nf">qsort</span> <span class="n">arr</span> <span class="n">=</span> <span class="n">qsortSlice</span> <span class="p">(</span><span class="nn">ArraySlice.</span><span class="n">full</span> <span class="n">arr</span><span class="p">)</span>
+</span></span></code></pre></div><p>普通のアルゴリズムの1箇所を書き換えるだけで並列化できます。</p>
 <p>しかしまあ、これだと遅いので要素数が少なくなったらシングルスレッドにしたり挿入ソートにしたりしましょう。
 それが以下のコード。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">val</span> <span class="nv">cutOff</span> <span class="p">=</span> <span class="mi">50</span>
-<span class="kr">val</span> <span class="nv">singleThread</span> <span class="p">=</span> <span class="mi">400</span>
-
-<span class="kr">fun</span> <span class="nf">qsortSlice</span> <span class="n">arr</span> <span class="n">=</span>
-    <span class="cm">(* 要素数が少なければ挿入ソートに変更 *)</span>
-    <span class="kr">if</span> <span class="nn">ArraySlice.</span><span class="n">length</span><span class="p">(</span><span class="n">arr</span><span class="p">)</span> <span class="n">&lt;=</span> <span class="n">cutOff</span>
-    <span class="kr">then</span> <span class="n">insertionSortSlice</span> <span class="n">arr</span>
-    <span class="kr">else</span> <span class="kr">let</span>
-        <span class="kr">open</span> <span class="nn">ArraySlice</span>
-        <span class="kr">val</span> <span class="p">(</span><span class="n">l</span><span class="p">,</span> <span class="n">h</span><span class="p">)</span> <span class="nv">=</span> <span class="n">partition</span> <span class="n">arr</span>
-        <span class="cm">(* 要素数に応じてスレッドを使うかを変える *)</span>
-        <span class="kr">val</span> <span class="nv">join</span> <span class="p">=</span> <span class="kr">if</span> <span class="n">length</span><span class="p">(</span><span class="n">arr</span><span class="p">)</span> <span class="n">&lt;=</span> <span class="n">singleThread</span> <span class="kr">then</span> <span class="n">joinSingle</span> <span class="kr">else</span> <span class="n">join</span>
-    <span class="kr">in</span> <span class="n">ignore</span> <span class="n">$</span> <span class="n">join</span><span class="p">((</span><span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> <span class="n">qsortSlice</span> <span class="n">l</span><span class="p">),</span> <span class="p">(</span><span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> <span class="n">qsortSlice</span> <span class="n">h</span><span class="p">))</span> <span class="kr">end</span></code></pre></div>
-<p>ここで、 <code>insertionSortSlice</code> は挿入ソートをする関数で、 <code>joinSingle</code> は <code>join</code> のシングルスレッド版、つまり <code>fun joinSingle (f1, f2) = (f1(), f2())</code> です。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="kr">val</span> <span class="nv">cutOff</span> <span class="p">=</span> <span class="mi">50</span>
+</span></span><span class="line"><span class="cl"><span class="kr">val</span> <span class="nv">singleThread</span> <span class="p">=</span> <span class="mi">400</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">fun</span> <span class="nf">qsortSlice</span> <span class="n">arr</span> <span class="n">=</span>
+</span></span><span class="line"><span class="cl">    <span class="cm">(* 要素数が少なければ挿入ソートに変更 *)</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">if</span> <span class="nn">ArraySlice.</span><span class="n">length</span><span class="p">(</span><span class="n">arr</span><span class="p">)</span> <span class="n">&lt;=</span> <span class="n">cutOff</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">then</span> <span class="n">insertionSortSlice</span> <span class="n">arr</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">else</span> <span class="kr">let</span>
+</span></span><span class="line"><span class="cl">        <span class="kr">open</span> <span class="nn">ArraySlice</span>
+</span></span><span class="line"><span class="cl">        <span class="kr">val</span> <span class="p">(</span><span class="n">l</span><span class="p">,</span> <span class="n">h</span><span class="p">)</span> <span class="nv">=</span> <span class="n">partition</span> <span class="n">arr</span>
+</span></span><span class="line"><span class="cl">        <span class="cm">(* 要素数に応じてスレッドを使うかを変える *)</span>
+</span></span><span class="line"><span class="cl">        <span class="kr">val</span> <span class="nv">join</span> <span class="p">=</span> <span class="kr">if</span> <span class="n">length</span><span class="p">(</span><span class="n">arr</span><span class="p">)</span> <span class="n">&lt;=</span> <span class="n">singleThread</span> <span class="kr">then</span> <span class="n">joinSingle</span> <span class="kr">else</span> <span class="n">join</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">in</span> <span class="n">ignore</span> <span class="n">$</span> <span class="n">join</span><span class="p">((</span><span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> <span class="n">qsortSlice</span> <span class="n">l</span><span class="p">),</span> <span class="p">(</span><span class="kr">fn</span> <span class="p">()</span> <span class="n">=&gt;</span> <span class="n">qsortSlice</span> <span class="n">h</span><span class="p">))</span> <span class="kr">end</span>
+</span></span></code></pre></div><p>ここで、 <code>insertionSortSlice</code> は挿入ソートをする関数で、 <code>joinSingle</code> は <code>join</code> のシングルスレッド版、つまり <code>fun joinSingle (f1, f2) = (f1(), f2())</code> です。
 <code>cutOff</code> や <code>singleThread</code> のパラメータは何度か走らせてチューニングしたものです。</p>
-
 <p>それでは、実行してみましょう。
 雑な線形合同法で初期化した配列をソートしてみます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="kr">fun</span> <span class="nf">rng</span> <span class="n">seed</span> <span class="n">=</span> <span class="kr">let</span>
-    <span class="kr">open</span> <span class="nn">Word32</span>
-    <span class="kr">val</span> <span class="nv">seed</span> <span class="p">=</span> <span class="n">fromInt</span> <span class="n">seed</span>
-    <span class="kr">val</span> <span class="nv">state</span> <span class="p">=</span> <span class="n">ref</span> <span class="n">seed</span>
-    <span class="kr">fun</span> <span class="nf">next</span> <span class="p">()</span> <span class="n">=</span> <span class="kr">let</span> <span class="kr">val</span> <span class="nv">v</span> <span class="p">=</span> <span class="p">(</span><span class="n">!state</span> <span class="n">*</span> <span class="mi">0w2017</span> <span class="n">+</span> <span class="mi">0w2020</span><span class="p">)</span> <span class="n">mod</span> <span class="mi">0w2027</span>
-                  <span class="kr">in</span> <span class="n">toInt</span> <span class="n">v</span> <span class="n">before</span> <span class="n">state</span> <span class="n">:=</span> <span class="n">v</span> <span class="kr">end</span>
-<span class="kr">in</span> <span class="n">next</span> <span class="kr">end</span>
-
-<span class="kr">val</span> <span class="nv">rand</span> <span class="p">=</span> <span class="n">rng</span> <span class="mi">7</span>
-<span class="kr">val</span> <span class="nv">n</span> <span class="p">=</span> <span class="kr">case</span> <span class="nn">CommandLine.</span><span class="n">arguments</span> <span class="p">()</span> <span class="kr">of</span>
-            <span class="p">[]</span> <span class="n">=&gt;</span> <span class="mi">2020</span>
-          <span class="n">|</span> <span class="n">arg::</span><span class="p">_</span>  <span class="n">=&gt;</span> <span class="nn">Option.</span><span class="n">valOf</span> <span class="n">$</span> <span class="nn">Int.</span><span class="n">fromString</span> <span class="n">arg</span>
-<span class="kr">val</span> <span class="nv">arr</span> <span class="p">=</span> <span class="nn">Array.</span><span class="n">tabulate</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="kr">fn</span> <span class="n">i</span> <span class="n">=&gt;</span> <span class="n">rand</span> <span class="p">()</span> <span class="n">+</span> <span class="mi">1</span><span class="p">)</span>
-<span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="n">qsort</span> <span class="n">arr</span></code></pre></div>
-<p>このコードを <code>-O3</code> をつけてコンパイルしてみます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="gp">$ </span>smlsharp -O3 -o qsort qsort.sml
-</code></pre></div>
-<p>デフォルトではMassiveThreadsのワーカが1つしか立ち上がらないのでコア数分立ち上がるようにしながら実行します。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sml" data-lang="sml"><span class="line"><span class="cl"><span class="kr">fun</span> <span class="nf">rng</span> <span class="n">seed</span> <span class="n">=</span> <span class="kr">let</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">open</span> <span class="nn">Word32</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">seed</span> <span class="p">=</span> <span class="n">fromInt</span> <span class="n">seed</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">val</span> <span class="nv">state</span> <span class="p">=</span> <span class="n">ref</span> <span class="n">seed</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">fun</span> <span class="nf">next</span> <span class="p">()</span> <span class="n">=</span> <span class="kr">let</span> <span class="kr">val</span> <span class="nv">v</span> <span class="p">=</span> <span class="p">(</span><span class="n">!state</span> <span class="n">*</span> <span class="mi">0w2017</span> <span class="n">+</span> <span class="mi">0w2020</span><span class="p">)</span> <span class="n">mod</span> <span class="mi">0w2027</span>
+</span></span><span class="line"><span class="cl">                  <span class="kr">in</span> <span class="n">toInt</span> <span class="n">v</span> <span class="n">before</span> <span class="n">state</span> <span class="n">:=</span> <span class="n">v</span> <span class="kr">end</span>
+</span></span><span class="line"><span class="cl"><span class="kr">in</span> <span class="n">next</span> <span class="kr">end</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">val</span> <span class="nv">rand</span> <span class="p">=</span> <span class="n">rng</span> <span class="mi">7</span>
+</span></span><span class="line"><span class="cl"><span class="kr">val</span> <span class="nv">n</span> <span class="p">=</span> <span class="kr">case</span> <span class="nn">CommandLine.</span><span class="n">arguments</span> <span class="p">()</span> <span class="kr">of</span>
+</span></span><span class="line"><span class="cl">            <span class="p">[]</span> <span class="n">=&gt;</span> <span class="mi">2020</span>
+</span></span><span class="line"><span class="cl">          <span class="n">|</span> <span class="n">arg::</span><span class="p">_</span>  <span class="n">=&gt;</span> <span class="nn">Option.</span><span class="n">valOf</span> <span class="n">$</span> <span class="nn">Int.</span><span class="n">fromString</span> <span class="n">arg</span>
+</span></span><span class="line"><span class="cl"><span class="kr">val</span> <span class="nv">arr</span> <span class="p">=</span> <span class="nn">Array.</span><span class="n">tabulate</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="kr">fn</span> <span class="n">i</span> <span class="n">=&gt;</span> <span class="n">rand</span> <span class="p">()</span> <span class="n">+</span> <span class="mi">1</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">val</span> <span class="p">()</span> <span class="nv">=</span> <span class="n">qsort</span> <span class="n">arr</span>
+</span></span></code></pre></div><p>このコードを <code>-O3</code> をつけてコンパイルしてみます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="line"><span class="cl"><span class="gp">$</span> smlsharp -O3 -o qsort qsort.sml
+</span></span></code></pre></div><p>デフォルトではMassiveThreadsのワーカが1つしか立ち上がらないのでコア数分立ち上がるようにしながら実行します。
 Ubuntu 19.10、16コア32スレッドのマシンで <code>time</code> で計測した結果が以下。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="gp">$ </span><span class="nb">time</span> <span class="nv">MYTH_NUM_WORKERS</span><span class="o">=</span><span class="m">0</span> ./qsort <span class="m">808080</span>
-<span class="go">MYTH_NUM_WORKERS=0 ./qsort 808080  93.84s user 1.36s system 1244% cpu 7.648 total
-</span></code></pre></div>
-<p>7.6秒くらいで終わりました。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="line"><span class="cl"><span class="gp">$</span> <span class="nb">time</span> <span class="nv">MYTH_NUM_WORKERS</span><span class="o">=</span><span class="m">0</span> ./qsort <span class="m">808080</span>
+</span></span><span class="line"><span class="cl"><span class="go">MYTH_NUM_WORKERS=0 ./qsort 808080  93.84s user 1.36s system 1244% cpu 7.648 total
+</span></span></span></code></pre></div><p>7.6秒くらいで終わりました。
 配列がおおむねランダム、400要素ごとに並列化しているので808080要素の配列をソートするとざっくり2020個のスレッドが立ち上がってるはずです。</p>
-
 <p>他のパラメータでもやってみましょう。 <code>MYTH_NUM_WORKERS</code> を設定せずに1並列で実行してみます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="gp">$ </span><span class="nb">time</span> ./qsort <span class="m">808080</span>
-<span class="go">./qsort 808080  28.55s user 0.76s system 117% cpu 24.884 total
-</span></code></pre></div>
-<p>フルの並列の3倍くらいの時間ですかね。16コアあるのに3倍は世知辛い。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="line"><span class="cl"><span class="gp">$</span> <span class="nb">time</span> ./qsort <span class="m">808080</span>
+</span></span><span class="line"><span class="cl"><span class="go">./qsort 808080  28.55s user 0.76s system 117% cpu 24.884 total
+</span></span></span></code></pre></div><p>フルの並列の3倍くらいの時間ですかね。16コアあるのに3倍は世知辛い。</p>
 <p>ところでスレッドを立てるのにもコストがかかります。スレッドを一切立てない(= <code>val singleThread = 808080</code>)で実行してみましょう。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="gp">$ </span><span class="nb">time</span> ./qsort <span class="m">808080</span>
-<span class="go">./qsort 808080  8.29s user 0.05s system 100% cpu 8.293 total
-</span></code></pre></div>
-<p>んー、速い。スレッドを立てるだけでかなりのオーバーヘッドがあるのが分かりますね。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="line"><span class="cl"><span class="gp">$</span> <span class="nb">time</span> ./qsort <span class="m">808080</span>
+</span></span><span class="line"><span class="cl"><span class="go">./qsort 808080  8.29s user 0.05s system 100% cpu 8.293 total
+</span></span></span></code></pre></div><p>んー、速い。スレッドを立てるだけでかなりのオーバーヘッドがあるのが分かりますね。</p>
 <p>とはいえそもそもスレッドを2000個も立てるの自体普通はやりませんし、まともに動きません。
 むしろ、2000個もスレッドを立てた上に何もしないコードより速いと見るべきでしょう。</p>
-
 <p>ということでゆるーくMassiveThreadsを触ってみました。</p>
-
 <p>今回のコードは<a href="https://gist.github.com/KeenS/a7a353ef240486ac9aad6da029fecd1c">こちら</a>に置いておきます。</p>
-
 <h1 id="余談">余談</h1>
-
 <p>当初はCMLなどの高レベルなAPIを触ろうとしてたのですがやめて、シンプルに <code>Myth</code> を触る方向に舵を切りました。
 <code>select</code> を使ってスリープソート的なことでもしようかと思ったのですが <code>CML.sameChannel</code> や <code>CML.timeOutEvt</code> が未実装だったり、 <code>Concurrent</code> の <code>Mvar</code> などを使うと遅くなったりしてやめました。
 Goくらい雑にスレッドとチャネルを使えると嬉しいんですが。あとIOは勝手にスケジューリングしてくれるんですかね？</p>
-
 <p>あと全然関係ないですがGCがMassiveThreadsのスタックをどう見にいってるのか気になってます。</p>
                     </section>
                 </article>

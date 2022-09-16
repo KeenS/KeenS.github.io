@@ -21,7 +21,6 @@
         <meta name="twitter:description" content="このエントリはRust 2 Advent Calendar 2020の10日目の記事です。
 前は mocyutoさんでRustでEC2検索を簡単にするCLIの作り方 - Screaming Loud、
 後は mas-yoさんでRustでstaticなEntity Component System - Qiitaでした
-
 空いてる日を埋める担当のκeenです。
 気付いたら空きができてたので埋めます。
 Rustのリリースノートなどでよくみる const fn についてです。" />
@@ -31,7 +30,6 @@ Rustのリリースノートなどでよくみる const fn についてです。
         <meta property="og:description" content="このエントリはRust 2 Advent Calendar 2020の10日目の記事です。
 前は mocyutoさんでRustでEC2検索を簡単にするCLIの作り方 - Screaming Loud、
 後は mas-yoさんでRustでstaticなEntity Component System - Qiitaでした
-
 空いてる日を埋める担当のκeenです。
 気付いたら空きができてたので埋めます。
 Rustのリリースノートなどでよくみる const fn についてです。" />
@@ -149,119 +147,101 @@ Rustのリリースノートなどでよくみる const fn についてです。
                     </header>
                     <section>
                         <p>このエントリは<a href="https://qiita.com/advent-calendar/2020/rust2">Rust 2 Advent Calendar 2020</a>の10日目の記事です。
-前は mocyutoさんで<a href="https://yuutookun.hatenablog.com/entry/rust_ec2_search">RustでEC2検索を簡単にするCLIの作り方 - Screaming Loud</a>、<br />
+前は mocyutoさんで<a href="https://yuutookun.hatenablog.com/entry/rust_ec2_search">RustでEC2検索を簡単にするCLIの作り方 - Screaming Loud</a>、<br>
 後は mas-yoさんで<a href="https://qiita.com/mas-yo/items/e966e2429b142bfc2f20">RustでstaticなEntity Component System - Qiita</a>でした</p>
-
 <p>空いてる日を埋める担当のκeenです。
 気付いたら空きができてたので埋めます。
 Rustのリリースノートなどでよくみる <code>const fn</code> についてです。</p>
-
 <h1 id="const文脈">const文脈</h1>
-
 <p>Rustにはグローバルに値に名前をつける手段として <code>const</code> と <code>static</code> がありますね。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">static</span><span class="w"> </span><span class="n">VERSION</span>: <span class="kt">u64</span> <span class="o">=</span><span class="w"> </span><span class="mi">130</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="k">const</span><span class="w"> </span><span class="n">PAGE_SIZE</span>: <span class="kt">usize</span> <span class="o">=</span><span class="w"> </span><span class="mi">4096</span><span class="p">;</span></code></pre></div>
-<p>これらの右辺の値に注目しましょう。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">static</span><span class="w"> </span><span class="n">VERSION</span>: <span class="kt">u64</span> <span class="o">=</span><span class="w"> </span><span class="mi">130</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">const</span><span class="w"> </span><span class="n">PAGE_SIZE</span>: <span class="kt">usize</span> <span class="o">=</span><span class="w"> </span><span class="mi">4096</span><span class="p">;</span><span class="w">
+</span></span></span></code></pre></div><p>これらの右辺の値に注目しましょう。
 これらはコンパイル時に計算されて、生成されたバイナリの中に埋め込まれます。
 となるとこの中に書ける式には制約がつきます。IOなどはできないのはもちろんのこと、ヒープにアクセスするコードも書けません。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">const</span><span class="w"> </span><span class="n">VEC</span>: <span class="nb">Vec</span><span class="o">&lt;</span><span class="kt">i32</span><span class="o">&gt;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="fm">vec!</span><span class="p">[</span><span class="mi">1</span><span class="p">];</span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">error[E0010]: allocations are not allowed in constants
- --&gt; const.rs:1:23
-  |
-1 | const VEC: Vec&lt;i32&gt; = vec![1];
-  |                       ^^^^^^^ allocation not allowed in constants
-  |
-  = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)</code></pre></div>
-<p>この制限された <code>static</code> や <code>const</code> の右辺に書くときの文脈を <a href="https://doc.rust-lang.org/reference/const_eval.html#const-context"><strong>const文脈</strong></a> と呼びます。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">const</span><span class="w"> </span><span class="n">VEC</span>: <span class="nb">Vec</span><span class="o">&lt;</span><span class="kt">i32</span><span class="o">&gt;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="fm">vec!</span><span class="p">[</span><span class="mi">1</span><span class="p">];</span><span class="w">
+</span></span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">error[E0010]: allocations are not allowed in constants
+</span></span><span class="line"><span class="cl"> --&gt; const.rs:1:23
+</span></span><span class="line"><span class="cl">  |
+</span></span><span class="line"><span class="cl">1 | const VEC: Vec&lt;i32&gt; = vec![1];
+</span></span><span class="line"><span class="cl">  |                       ^^^^^^^ allocation not allowed in constants
+</span></span><span class="line"><span class="cl">  |
+</span></span><span class="line"><span class="cl">  = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)
+</span></span></code></pre></div><p>この制限された <code>static</code> や <code>const</code> の右辺に書くときの文脈を <a href="https://doc.rust-lang.org/reference/const_eval.html#const-context"><strong>const文脈</strong></a> と呼びます。
 この他には配列初期化構文 <code>[init; size]</code> の <code>size</code> の部分やその型 <code>[Type; Size]</code> の <code>Size</code> 、あとはC-like列挙型の判別子の設定に書ける式もconst文脈で評価されます。</p>
-
 <p>昔はconst文脈に書ける式の制限がかなり強かったです。具体的にはタプルやデータ型のコンストラクタなどに制限されていました。
 これで困るのが一部のデータ型です。例えば <code>static</code> 変数に <code>Vec</code> を持たせようにも、 <code>Vec</code> のフィールドは公開されていないので <code>Vec::new()</code> などの関数を呼ないとなりません。でも関数呼び出しは <code>const</code> 文脈じゃ書けないので八方塞がりです。</p>
-
 <p>ということである程度条件を満たした関数をconst文脈で書けるようにしよう、というのがconst fnです。</p>
-
 <h1 id="const-fn">const fn</h1>
-
 <p><a href="https://doc.rust-lang.org/reference/const_eval.html#const-functions">const fn</a>はRust 1.31.0で導入された機能です。<a href="https://blog.rust-lang.org/2018/12/06/Rust-1.31-and-rust-2018.html">そのときのリリースブログ</a>。</p>
-
 <p>普通の関数定義に <code>const</code> を前置して  <code>const fn name() {}</code> の構文で定義します。</p>
-
 <p><code>const fn</code> はざっくり言うと以下の2つの機能を持ちます。</p>
-
 <ol>
 <li>const文脈で呼べる（そのときはコンパイル時に評価される）</li>
-<li>関数本体で呼べる機能に制約がある
-
+<li>関数本体で呼べる機能に制約がある</li>
+</ol>
 <ul>
 <li>const文脈とは微妙に違う制約</li>
-</ul></li>
-</ol>
-
+</ul>
 <p>1は分かりやすいですね。const文脈でconst fnを呼べます。例えば <a href="https://doc.rust-lang.org/std/vec/struct.Vec.html#method.new"><code>Vec::new</code></a>は <code>const fn</code> なのでconst文脈で呼べます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">const</span><span class="w"> </span><span class="n">VEC</span>: <span class="nb">Vec</span><span class="o">&lt;</span><span class="kt">i32</span><span class="o">&gt;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Vec</span>::<span class="n">new</span><span class="p">();</span></code></pre></div>
-<p>const文脈で呼べる関数は増えるに越したことはないのでconst fnにできそうな関数は順次const fnにされていってます。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">const</span><span class="w"> </span><span class="n">VEC</span>: <span class="nb">Vec</span><span class="o">&lt;</span><span class="kt">i32</span><span class="o">&gt;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Vec</span>::<span class="n">new</span><span class="p">();</span><span class="w">
+</span></span></span></code></pre></div><p>const文脈で呼べる関数は増えるに越したことはないのでconst fnにできそうな関数は順次const fnにされていってます。</p>
 <p>あるいは、const文脈でできることが増えたので昔はハックが必要だったことも簡単にできるようになりました
 cf: <a href="https://zenn.dev/frozenlib/articles/lazy_static_to_once_cell">lazy_static はもう古い！？ once_cell を使おう</a>。</p>
-
 <p>2は、おおむねconst文脈といっしょです。
 ですが浮動小数点数の演算ができないなど、いくつか異なる制約があります。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">const</span><span class="w"> </span><span class="n">FLT</span>: <span class="kt">f64</span> <span class="o">=</span><span class="w"> </span><span class="mf">1.0</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">2.0</span><span class="p">;</span><span class="w"> </span><span class="c1">// OK
-</span><span class="c1"></span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">const</span><span class="w"> </span><span class="k">fn</span> <span class="nf">flt</span><span class="p">()</span><span class="w"> </span>-&gt; <span class="kt">f64</span> <span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="mf">1.0</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">2.0</span><span class="w">
-</span><span class="w">    </span><span class="c1">// error[E0658]: floating point arithmetic is not allowed in constant functions
-</span><span class="c1"></span><span class="w">    </span><span class="c1">//  --&gt; const.rs:6:5
-</span><span class="c1"></span><span class="w">    </span><span class="c1">//   |
-</span><span class="c1"></span><span class="w">    </span><span class="c1">// 6 |     1.0 + 2.0
-</span><span class="c1"></span><span class="w">    </span><span class="c1">//   |     ^^^^^^^^^
-</span><span class="c1"></span><span class="w">    </span><span class="c1">//   |
-</span><span class="c1"></span><span class="w">    </span><span class="c1">//   = note: see issue #57241 &lt;https://github.com/rust-lang/rust/issues/57241&gt; for more information
-</span><span class="c1"></span><span class="p">}</span></code></pre></div>
-<p>まあ、これは細かい話なのでエラーになったらはじめて調べればいいでしょう。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">const</span><span class="w"> </span><span class="n">FLT</span>: <span class="kt">f64</span> <span class="o">=</span><span class="w"> </span><span class="mf">1.0</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">2.0</span><span class="p">;</span><span class="w"> </span><span class="c1">// OK
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">const</span><span class="w"> </span><span class="k">fn</span> <span class="nf">flt</span><span class="p">()</span><span class="w"> </span>-&gt; <span class="kt">f64</span> <span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="mf">1.0</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">2.0</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// error[E0658]: floating point arithmetic is not allowed in constant functions
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">    </span><span class="c1">//  --&gt; const.rs:6:5
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">    </span><span class="c1">//   |
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">    </span><span class="c1">// 6 |     1.0 + 2.0
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">    </span><span class="c1">//   |     ^^^^^^^^^
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">    </span><span class="c1">//   |
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">    </span><span class="c1">//   = note: see issue #57241 &lt;https://github.com/rust-lang/rust/issues/57241&gt; for more information
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>まあ、これは細かい話なのでエラーになったらはじめて調べればいいでしょう。</p>
 <h1 id="const-fnでできること">const fnでできること</h1>
-
 <p><code>const fn</code> に限らずconst文脈でできることも多いですが、意外と表現力があります。
 例えば変数の破壊的代入と <code>while</code> ループが書けるのでこういうことも書けます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="c1">// const文脈
-</span><span class="c1"></span><span class="k">const</span><span class="w"> </span><span class="n">SUM</span>: <span class="kt">i32</span> <span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">];</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">len</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">.</span><span class="n">len</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="k">while</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">len</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="n">result</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">];</span><span class="w">
-</span><span class="w">        </span><span class="n">i</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="n">result</span><span class="w">
-</span><span class="w"></span><span class="p">};</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="c1">// const fn
-</span><span class="c1"></span><span class="k">const</span><span class="w"> </span><span class="k">fn</span> <span class="nf">sum</span><span class="p">(</span><span class="n">v</span>: <span class="kp">&amp;</span><span class="p">[</span><span class="kt">i32</span><span class="p">])</span><span class="w"> </span>-&gt; <span class="kt">i32</span> <span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">len</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">.</span><span class="n">len</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="k">while</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">len</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="n">result</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">];</span><span class="w">
-</span><span class="w">        </span><span class="n">i</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="n">result</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<p><code>for</code> 式は内部で <code>Iterator::next</code> を呼び出しているのですが、これが <code>const fn</code> でないので使えません。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="c1">// const文脈
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">const</span><span class="w"> </span><span class="n">SUM</span>: <span class="kt">i32</span> <span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">];</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">len</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">.</span><span class="n">len</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">while</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">len</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">result</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">];</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">i</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">result</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">};</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// const fn
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">const</span><span class="w"> </span><span class="k">fn</span> <span class="nf">sum</span><span class="p">(</span><span class="n">v</span>: <span class="kp">&amp;</span><span class="p">[</span><span class="kt">i32</span><span class="p">])</span><span class="w"> </span>-&gt; <span class="kt">i32</span> <span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">len</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">.</span><span class="n">len</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">while</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">len</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">result</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">];</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">i</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">result</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p><code>for</code> 式は内部で <code>Iterator::next</code> を呼び出しているのですが、これが <code>const fn</code> でないので使えません。</p>
 <p>あるいは <code>if</code> と再帰呼出もできるので <code>n</code> 番目のフィボナッチ数を求めるコードも簡単に書けます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">const</span><span class="w"> </span><span class="k">fn</span> <span class="nf">fib</span><span class="p">(</span><span class="n">n</span>: <span class="kt">u32</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">u64</span> <span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="mi">1</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="n">fib</span><span class="p">(</span><span class="n">n</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">fib</span><span class="p">(</span><span class="n">n</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
-<p>おもしろいですね。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="k">const</span><span class="w"> </span><span class="k">fn</span> <span class="nf">fib</span><span class="p">(</span><span class="n">n</span>: <span class="kt">u32</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">u64</span> <span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="mi">1</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">fib</span><span class="p">(</span><span class="n">n</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">fib</span><span class="p">(</span><span class="n">n</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>おもしろいですね。</p>
 <h1 id="まとめ">まとめ</h1>
-
 <p>const文脈についてと、const文脈で関数を呼べるようになる機能const fnについて紹介しました。</p>
                     </section>
                 </article>

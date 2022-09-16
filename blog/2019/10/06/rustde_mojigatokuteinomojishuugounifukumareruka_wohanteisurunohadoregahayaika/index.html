@@ -20,14 +20,12 @@
         <meta name="twitter:title" content="Rustで「文字が特定の文字集合に含まれるか」を判定するのはどれが速いか | κeenのHappy Hacκing Blog"/>
         <meta name="twitter:description" content="κeenです。ブログタイトルが長い。
 普段、どれがいいとか特に気にせず書いている「文字が特定の文字集合に含まれるか」の判定をするのはどの方法が速いかが気になったのでベンチマークを取ってみました。
-
 想定しているのは何かのパーサを書いていて、例えば識別子に使える文字が [a-zA-Z0-9_!?=&lt;&gt;] だったときにそれを判定する方法です。" />
         <meta property="og:title" content="Rustで「文字が特定の文字集合に含まれるか」を判定するのはどれが速いか | κeenのHappy Hacκing Blog" />
         <meta property="og:type" content="article" />
         <meta property="og:url" content="https://KeenS.github.io/blog/2019/10/06/rustde_mojigatokuteinomojishuugounifukumareruka_wohanteisurunohadoregahayaika/" />
         <meta property="og:description" content="κeenです。ブログタイトルが長い。
 普段、どれがいいとか特に気にせず書いている「文字が特定の文字集合に含まれるか」の判定をするのはどの方法が速いかが気になったのでベンチマークを取ってみました。
-
 想定しているのは何かのパーサを書いていて、例えば識別子に使える文字が [a-zA-Z0-9_!?=&lt;&gt;] だったときにそれを判定する方法です。" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta property="og:image" content="https://KeenS.github.io/images/ogp/post/Rustde_mojigatokuteinomojishuugounifukumareruka_wohanteisurunohadoregahayaika.png" />
@@ -136,113 +134,99 @@
                     <section>
                         <p>κeenです。ブログタイトルが長い。
 普段、どれがいいとか特に気にせず書いている「文字が特定の文字集合に含まれるか」の判定をするのはどの方法が速いかが気になったのでベンチマークを取ってみました。</p>
-
 <p>想定しているのは何かのパーサを書いていて、例えば識別子に使える文字が <code>[a-zA-Z0-9_!?=&lt;&gt;]</code> だったときにそれを判定する方法です。</p>
-
 <p>今回試すのは3種類。</p>
-
 <ol>
 <li>文字集合を <code>HashSet</code> に入れて、 <code>contains</code> で判定する</li>
-<li>文字集合を文字列(文字ベクトル)に入れて、 <code>contains</code> で判定する
-
-<ol>
+<li>文字集合を文字列(文字ベクトル)に入れて、 <code>contains</code> で判定する</li>
 <li><code>contains</code> の代わりに先に文字列をソートしておいて、 <code>binary_search</code> で探索する</li>
-</ol></li>
 <li><code>char::is_alphanumeric</code> などのメソッドを組み合わせる</li>
 <li>正規表現を使う</li>
 </ol>
-
 <p>教科書的な知識だと、 1. は $O(1)$ で文字集合の濃度に依らず高速に動作するはずです。
 一方 2. は $O(n)$ なので文字集合の濃度に比例してしまい、分は悪そうです。
-しかし実際には 2. が使われることが多いような気がします。
-1. は多少複雑な計算が必要なので少し遅く、 2. は連続した要素の探索なので現代のCPUは得意な操作で有利なのかもしれません。 2.1. は教科書的には 2. より速そうですが、やはり 2. は連続した要素の探索なのでそちらが速い可能性もあります。
-3. はどう考えても速いやつですが、 <code>alphanumeric</code> 以外の文字を <code>c = '-' &amp;&amp; ...</code> と繋ぐと分岐が多くなるのでもしかしたら不利かもしれません。
-4. は一見遅そうですが、Rustの正規表現はかなりよく出来てるので実は速いかもしれません。</p>
-
+しかし実際には 2. が使われることが多いような気がします。</p>
+<ol>
+<li>は多少複雑な計算が必要なので少し遅く、 2. は連続した要素の探索なので現代のCPUは得意な操作で有利なのかもしれません。 2.1. は教科書的には 2. より速そうですが、やはり 2. は連続した要素の探索なのでそちらが速い可能性もあります。</li>
+<li>はどう考えても速いやつですが、 <code>alphanumeric</code> 以外の文字を <code>c = '-' &amp;&amp; ...</code> と繋ぐと分岐が多くなるのでもしかしたら不利かもしれません。</li>
+<li>は一見遅そうですが、Rustの正規表現はかなりよく出来てるので実は速いかもしれません。</li>
+</ol>
 <p>それではベンチマークを取ってみましょう。
 線形探索が一番不利になるように、また、 <code>alphanumeric</code> にも引っ掛からないように、 <code>&lt;</code> を対象に探索してみます。</p>
-
 <p>コードはこちら。
 ベンチマークにはbencherを使っています。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#[macro_use]</span><span class="w">
-</span><span class="w"></span><span class="k">extern</span><span class="w"> </span><span class="k">crate</span><span class="w"> </span><span class="n">bencher</span><span class="p">;</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">bencher</span>::<span class="n">Bencher</span><span class="p">;</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">const</span><span class="w"> </span><span class="n">CHAR</span>: <span class="kt">char</span> <span class="o">=</span><span class="w"> </span><span class="sc">&#39;&gt;&#39;</span><span class="p">;</span><span class="w">
-</span><span class="w"></span><span class="k">const</span><span class="w"> </span><span class="n">CHARSET</span>: <span class="kp">&amp;</span><span class="kt">str</span> <span class="o">=</span><span class="w"> </span><span class="s">&#34;abcdefghijklmnopqrstuvwxyz1234567890_!?=&lt;&gt;&#34;</span><span class="p">;</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">fn</span> <span class="nf">hashset</span><span class="p">(</span><span class="n">bench</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">Bencher</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">collections</span>::<span class="n">HashSet</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">hash</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CHARSET</span><span class="p">.</span><span class="n">chars</span><span class="p">().</span><span class="n">collect</span>::<span class="o">&lt;</span><span class="n">HashSet</span><span class="o">&lt;</span><span class="n">_</span><span class="o">&gt;&gt;</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="n">bench</span><span class="p">.</span><span class="n">iter</span><span class="p">(</span><span class="o">||</span><span class="w"> </span><span class="n">hash</span><span class="p">.</span><span class="n">contains</span><span class="p">(</span><span class="o">&amp;</span><span class="n">CHAR</span><span class="p">))</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">fn</span> <span class="nf">contains</span><span class="p">(</span><span class="n">bench</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">Bencher</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="c1">// contains は str には使えないので Vec&lt;char&gt; を作る
-</span><span class="c1"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">vec</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CHARSET</span><span class="p">.</span><span class="n">chars</span><span class="p">().</span><span class="n">collect</span>::<span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">_</span><span class="o">&gt;&gt;</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="n">bench</span><span class="p">.</span><span class="n">iter</span><span class="p">(</span><span class="o">||</span><span class="w"> </span><span class="n">vec</span><span class="p">.</span><span class="n">contains</span><span class="p">(</span><span class="o">&amp;</span><span class="n">CHAR</span><span class="p">));</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">fn</span> <span class="nf">contains_binary_search</span><span class="p">(</span><span class="n">bench</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">Bencher</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">vec</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CHARSET</span><span class="p">.</span><span class="n">chars</span><span class="p">().</span><span class="n">collect</span>::<span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">_</span><span class="o">&gt;&gt;</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="n">vec</span><span class="p">.</span><span class="n">sort</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="n">bench</span><span class="p">.</span><span class="n">iter</span><span class="p">(</span><span class="o">||</span><span class="w"> </span><span class="n">vec</span><span class="p">.</span><span class="n">binary_search</span><span class="p">(</span><span class="o">&amp;</span><span class="n">CHAR</span><span class="p">).</span><span class="n">is_ok</span><span class="p">());</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">fn</span> <span class="nf">is_alphanumeric</span><span class="p">(</span><span class="n">bench</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">Bencher</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="c1">// 今回は小文字しか扱わないので `is_ascii_alphanumeric` は直接には使わない
-</span><span class="c1"></span><span class="w">    </span><span class="n">bench</span><span class="p">.</span><span class="n">iter</span><span class="p">(</span><span class="o">||</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="p">(</span><span class="n">CHAR</span><span class="p">.</span><span class="n">is_ascii_alphabetic</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">CHAR</span><span class="p">.</span><span class="n">is_ascii_lowercase</span><span class="p">())</span><span class="w">
-</span><span class="w">            </span><span class="o">||</span><span class="w"> </span><span class="n">CHAR</span><span class="p">.</span><span class="n">is_digit</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span><span class="w">
-</span><span class="w">            </span><span class="o">||</span><span class="w"> </span><span class="n">CHAR</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="sc">&#39;_&#39;</span><span class="w">
-</span><span class="w">            </span><span class="o">||</span><span class="w"> </span><span class="n">CHAR</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="sc">&#39;!&#39;</span><span class="w">
-</span><span class="w">            </span><span class="o">||</span><span class="w"> </span><span class="n">CHAR</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="sc">&#39;?&#39;</span><span class="w">
-</span><span class="w">            </span><span class="o">||</span><span class="w"> </span><span class="n">CHAR</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="sc">&#39;=&#39;</span><span class="w">
-</span><span class="w">            </span><span class="o">||</span><span class="w"> </span><span class="n">CHAR</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="sc">&#39;&lt;&#39;</span><span class="w">
-</span><span class="w">            </span><span class="o">||</span><span class="w"> </span><span class="n">CHAR</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="sc">&#39;&gt;&#39;</span><span class="w">
-</span><span class="w">    </span><span class="p">});</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">fn</span> <span class="nf">regex</span><span class="p">(</span><span class="n">bench</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">Bencher</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="k">use</span><span class="w"> </span><span class="n">regex</span>::<span class="n">Regex</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">regex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Regex</span>::<span class="n">new</span><span class="p">(</span><span class="s">&#34;[a-zA-Z0-9_!?=&lt;&gt;]&#34;</span><span class="p">).</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">c</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CHAR</span><span class="p">.</span><span class="n">to_string</span><span class="p">();</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="n">bench</span><span class="p">.</span><span class="n">iter</span><span class="p">(</span><span class="o">||</span><span class="w"> </span><span class="n">regex</span><span class="p">.</span><span class="n">is_match</span><span class="p">(</span><span class="o">&amp;</span><span class="n">c</span><span class="p">))</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="n">benchmark_group</span><span class="o">!</span><span class="p">(</span><span class="w">
-</span><span class="w">    </span><span class="n">benches</span><span class="p">,</span><span class="w">
-</span><span class="w">    </span><span class="n">hashset</span><span class="p">,</span><span class="w">
-</span><span class="w">    </span><span class="n">contains</span><span class="p">,</span><span class="w">
-</span><span class="w">    </span><span class="n">contains_binary_search</span><span class="p">,</span><span class="w">
-</span><span class="w">    </span><span class="n">is_alphanumeric</span><span class="p">,</span><span class="w">
-</span><span class="w">    </span><span class="n">regex</span><span class="w">
-</span><span class="w"></span><span class="p">);</span><span class="w">
-</span><span class="w"></span><span class="n">benchmark_main</span><span class="o">!</span><span class="p">(</span><span class="n">benches</span><span class="p">);</span></code></pre></div>
-<p>追記:
-コードを修正しました。
-<blockquote class="twitter-tweet"><p lang="ja" dir="ltr">is_alphanumeric() よりも is_ascii_alphanumeric() などの方がこの場合適切なのでは (is_lowercase() と is_ascii_lowercase() も同様)</p>&mdash; らりお・ザ・何らかの🈗然㊌㋞㋰㋷㋓ (Mastodon に引っ越しました) (@lo48576) <a href="https://twitter.com/lo48576/status/1180805193887354881?ref_src=twsrc%5Etfw">October 6, 2019</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script></p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="line"><span class="cl"><span class="cp">#[macro_use]</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">extern</span><span class="w"> </span><span class="k">crate</span><span class="w"> </span><span class="n">bencher</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="n">bencher</span>::<span class="n">Bencher</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">const</span><span class="w"> </span><span class="n">CHAR</span>: <span class="kt">char</span> <span class="o">=</span><span class="w"> </span><span class="sc">&#39;&gt;&#39;</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">const</span><span class="w"> </span><span class="n">CHARSET</span>: <span class="kp">&amp;</span><span class="kt">str</span> <span class="o">=</span><span class="w"> </span><span class="s">&#34;abcdefghijklmnopqrstuvwxyz1234567890_!?=&lt;&gt;&#34;</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">fn</span> <span class="nf">hashset</span><span class="p">(</span><span class="n">bench</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">Bencher</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">use</span><span class="w"> </span><span class="n">std</span>::<span class="n">collections</span>::<span class="n">HashSet</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">hash</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CHARSET</span><span class="p">.</span><span class="n">chars</span><span class="p">().</span><span class="n">collect</span>::<span class="o">&lt;</span><span class="n">HashSet</span><span class="o">&lt;</span><span class="n">_</span><span class="o">&gt;&gt;</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">bench</span><span class="p">.</span><span class="n">iter</span><span class="p">(</span><span class="o">||</span><span class="w"> </span><span class="n">hash</span><span class="p">.</span><span class="n">contains</span><span class="p">(</span><span class="o">&amp;</span><span class="n">CHAR</span><span class="p">))</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">fn</span> <span class="nf">contains</span><span class="p">(</span><span class="n">bench</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">Bencher</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// contains は str には使えないので Vec&lt;char&gt; を作る
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">vec</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CHARSET</span><span class="p">.</span><span class="n">chars</span><span class="p">().</span><span class="n">collect</span>::<span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">_</span><span class="o">&gt;&gt;</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">bench</span><span class="p">.</span><span class="n">iter</span><span class="p">(</span><span class="o">||</span><span class="w"> </span><span class="n">vec</span><span class="p">.</span><span class="n">contains</span><span class="p">(</span><span class="o">&amp;</span><span class="n">CHAR</span><span class="p">));</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">fn</span> <span class="nf">contains_binary_search</span><span class="p">(</span><span class="n">bench</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">Bencher</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">vec</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CHARSET</span><span class="p">.</span><span class="n">chars</span><span class="p">().</span><span class="n">collect</span>::<span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">_</span><span class="o">&gt;&gt;</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">vec</span><span class="p">.</span><span class="n">sort</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">bench</span><span class="p">.</span><span class="n">iter</span><span class="p">(</span><span class="o">||</span><span class="w"> </span><span class="n">vec</span><span class="p">.</span><span class="n">binary_search</span><span class="p">(</span><span class="o">&amp;</span><span class="n">CHAR</span><span class="p">).</span><span class="n">is_ok</span><span class="p">());</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">fn</span> <span class="nf">is_alphanumeric</span><span class="p">(</span><span class="n">bench</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">Bencher</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// 今回は小文字しか扱わないので `is_ascii_alphanumeric` は直接には使わない
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">    </span><span class="n">bench</span><span class="p">.</span><span class="n">iter</span><span class="p">(</span><span class="o">||</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">(</span><span class="n">CHAR</span><span class="p">.</span><span class="n">is_ascii_alphabetic</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">CHAR</span><span class="p">.</span><span class="n">is_ascii_lowercase</span><span class="p">())</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="o">||</span><span class="w"> </span><span class="n">CHAR</span><span class="p">.</span><span class="n">is_digit</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="o">||</span><span class="w"> </span><span class="n">CHAR</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="sc">&#39;_&#39;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="o">||</span><span class="w"> </span><span class="n">CHAR</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="sc">&#39;!&#39;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="o">||</span><span class="w"> </span><span class="n">CHAR</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="sc">&#39;?&#39;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="o">||</span><span class="w"> </span><span class="n">CHAR</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="sc">&#39;=&#39;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="o">||</span><span class="w"> </span><span class="n">CHAR</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="sc">&#39;&lt;&#39;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="o">||</span><span class="w"> </span><span class="n">CHAR</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="sc">&#39;&gt;&#39;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">});</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">fn</span> <span class="nf">regex</span><span class="p">(</span><span class="n">bench</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">Bencher</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">use</span><span class="w"> </span><span class="n">regex</span>::<span class="n">Regex</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">regex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Regex</span>::<span class="n">new</span><span class="p">(</span><span class="s">&#34;[a-zA-Z0-9_!?=&lt;&gt;]&#34;</span><span class="p">).</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">c</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CHAR</span><span class="p">.</span><span class="n">to_string</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">bench</span><span class="p">.</span><span class="n">iter</span><span class="p">(</span><span class="o">||</span><span class="w"> </span><span class="n">regex</span><span class="p">.</span><span class="n">is_match</span><span class="p">(</span><span class="o">&amp;</span><span class="n">c</span><span class="p">))</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">benchmark_group</span><span class="o">!</span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">benches</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">hashset</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">contains</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">contains_binary_search</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">is_alphanumeric</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">regex</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">benchmark_main</span><span class="o">!</span><span class="p">(</span><span class="n">benches</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>追記:
+コードを修正しました。</p>
+<blockquote class="twitter-tweet"><p lang="ja" dir="ltr">is_alphanumeric() よりも is_ascii_alphanumeric() などの方がこの場合適切なのでは (is_lowercase() と is_ascii_lowercase() も同様)</p>&mdash; らりお・ザ・何らかの🈗然㊌㋞㋰㋷㋓ (Mastodon に引っ越しました) (@lo48576) <a href="https://twitter.com/lo48576/status/1180805193887354881?ref_src=twsrc%5Etfw">October 6, 2019</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script> 
 <p>/追記</p>
-
 <p>HashSetや正規表現などは事前に準備してからベンチマークにかけています。</p>
-
 <p>実行結果は</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="go">test contains               ... bench:          10 ns/iter (+/- 2)
-</span><span class="go">test contains_binary_search ... bench:           3 ns/iter (+/- 1)
-</span><span class="go">test hashset                ... bench:          13 ns/iter (+/- 1)
-</span><span class="go">test is_alphanumeric        ... bench:           0 ns/iter (+/- 0)
-</span><span class="go">test regex                  ... bench:          18 ns/iter (+/- 3)
-</span></code></pre></div>
-<p>と、 <code>is_alphanumeric</code> &gt; binary search &gt;  <code>contains</code> &gt; <code>HashSet</code> &gt; 正規表現 の結果になりました。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="line"><span class="cl"><span class="go">test contains               ... bench:          10 ns/iter (+/- 2)
+</span></span></span><span class="line"><span class="cl"><span class="go">test contains_binary_search ... bench:           3 ns/iter (+/- 1)
+</span></span></span><span class="line"><span class="cl"><span class="go">test hashset                ... bench:          13 ns/iter (+/- 1)
+</span></span></span><span class="line"><span class="cl"><span class="go">test is_alphanumeric        ... bench:           0 ns/iter (+/- 0)
+</span></span></span><span class="line"><span class="cl"><span class="go">test regex                  ... bench:          18 ns/iter (+/- 3)
+</span></span></span></code></pre></div><p>と、 <code>is_alphanumeric</code> &gt; binary search &gt;  <code>contains</code> &gt; <code>HashSet</code> &gt; 正規表現 の結果になりました。
 まあ、全部ns単位なのであんまり意味ないんですけどね。</p>
-
 <p>ということでシンプルに <code>is_alphanumeric</code> を使いましょう。</p>
-
 <h1 id="参考">参考</h1>
-
 <ul>
 <li><a href="https://doc.rust-lang.org/src/core/char/methods.rs.html#542-548"><code>is_alphabetic</code> の実装</a></li>
 <li><a href="https://gitlab.com/blackenedgold/bench_alphabetic">今回のコード</a></li>

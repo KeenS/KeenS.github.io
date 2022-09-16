@@ -132,183 +132,152 @@
                     <section>
                         <p>κeenです。
 以前雑な実装でブログにOGP画像を生成するようにしましたが、禁則処理が気になったのでそれを工夫したときの記録です。</p>
-
 <h1 id="モチベーション">モチベーション</h1>
-
 <p>以前の作業はこれです。</p>
-
 <p><a href="https://keens.github.io/blog/2020/11/09/inkscapewotsukattesvgkaraogpime_jiwohanjidouseiseisuru/">Inkscapeを使ってSVGからOGPイメージを半自動生成する | κeenのHappy Hacκing Blog</a></p>
-
 <p>読んでない方に説明すると、SVGのERBテンプレートを作って記事データをあてはめたものからInkscapeでPNG画像を生成しているのでした。
 その際に改行が自動で入らないので自分で改行をいれる必要があります。
 今回はその改行を入れる位置を工夫したというお話。</p>
-
-<p>文書に改行をいれるにあたって<a href="https://ja.wikipedia.org/wiki/禁則処理">禁則処理</a>というのがあります。
+<p>文書に改行をいれるにあたって<a href="https://ja.wikipedia.org/wiki/%E7%A6%81%E5%89%87%E5%87%A6%E7%90%86">禁則処理</a>というのがあります。
 恐らく小学校でも習ったと思いますが、行末に開き鉤括弧（「）を置かない、句点（。）読点（、）を行頭に置かない、などです。</p>
-
 <p>もうちょっというと、今回の対象は文章ではなく中央揃えのタイトルなので禁則事項に触れないだけでなく「ちょうどいい」場所で改行してほしいです。</p>
-
 <p>何故改行を入れる位置にこだわるかというと、このツイートがわかりやすいかもしれません。</p>
-
-<p><blockquote class="twitter-tweet"><p lang="ja" dir="ltr">ブログのOGPの生成をちょっと工夫した。それっぽいかたまりをトークンとしてまとめて、トークンの境目でしか改行しないようにした。<br><br>←before after→ <a href="https://t.co/kbRUwag7sp">pic.twitter.com/kbRUwag7sp</a></p>&mdash; κeen (@blackenedgold) <a href="https://twitter.com/blackenedgold/status/1335608625172103168?ref_src=twsrc%5Etfw">December 6, 2020</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script></p>
-
-<p>「使<br />
+<blockquote class="twitter-tweet"><p lang="ja" dir="ltr">ブログのOGPの生成をちょっと工夫した。それっぽいかたまりをトークンとしてまとめて、トークンの境目でしか改行しないようにした。<br><br>←before after→ <a href="https://t.co/kbRUwag7sp">pic.twitter.com/kbRUwag7sp</a></p>&mdash; κeen (@blackenedgold) <a href="https://twitter.com/blackenedgold/status/1335608625172103168?ref_src=twsrc%5Etfw">December 6, 2020</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+<p>「使<br>
 って」</p>
-
 <p>と格好悪い見た目になってますね。これを防ぎたい訳です。他にも英単語の途中で改行されたくないだとか色々と条件があります。</p>
-
 <p>本気出してやるなら自然言語処理して文節単位で区切って〜となるのですが、あんまり頑張りたくないので適当なヒューリスティックで近似します。</p>
-
 <h1 id="方針">方針</h1>
-
 <p>最初に細かい実装上の都合なんですが、文字の正確な横幅の情報を取り出せるのがInkscapeに渡して画像としての準備ができてからになります。
 そこからデータを取り出すのが少し手間ですし、遅いです。なので数回Inkscapeに横幅を問い合わせるだけでアルゴリズムを完了させたいです。</p>
-
 <p>幸いにもInkscapeには1度のクエリで複数の結果を返す機能がついています。
 なので細切れにした情報を送り込めれば一度に色々な情報を取り出せます。
 ということで以下の方針で実装することにします。</p>
-
 <ol>
 <li>タイトルを改行しない塊（トークン）に区切る</li>
-<li>トークン単位でタグ付けしたタイトルのSVGを生成する
-
+<li>トークン単位でタグ付けしたタイトルのSVGを生成する</li>
+</ol>
 <ul>
 <li><code>&lt;title&gt;&lt;tsapn&gt;トークン1&lt;/tspan&gt;&lt;tspan&gt;トークン2&lt;/tspan&gt; ... &lt;/title</code> のような見た目</li>
-</ul></li>
+</ul>
+<ol start="3">
 <li>生成したSVGをInkscapeに読み込み、タイトルの全体の長さとトークンの長さを取得する</li>
 <li>タイトル全体の長さが画像の横幅より大きければトークンのどれかに改行文字を入れる</li>
 </ol>
-
 <p>2、3は私の書いたOGP画像生成スクリプトの都合です。
 4は先頭から1つ1つトークンを取得して横幅を足していって、規定の長さを越えたトークンの1つ前で改行すればいいだけなので難しいことはありません。</p>
-
 <p>なので1について解説します。</p>
-
 <h1 id="トークン分割処理">トークン分割処理</h1>
-
 <p>まず、対象データがどういうものかを確認します</p>
-
 <ul>
 <li>漢字かなカナ英字記号交じり</li>
 <li>漢字かなカナ英字は同じくらいの割合で交じっている</li>
 <li>約物（。や！など）は少ないが、ないことはない</li>
 </ul>
-
 <p>ここから、字種（漢字かなカナ英字）が変わるタイミングで区切ればそれっぽいのではないかと仮説を立てます。
 ただしいくつか例外規定も設けます。</p>
-
 <ul>
 <li>鉤括弧の行末禁止などは別途実装する</li>
 <li>漢字からひらがなへの変化は区切りとしない
-
 <ul>
 <li>「使ってる」を「使」と「ってる」に区切りたくない</li>
-</ul></li>
+</ul>
+</li>
 <li>その他細則</li>
 </ul>
-
 <p>この規則を実装していきましょう。</p>
-
 <p>まず、字種を判別するメソッドから。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ruby" data-lang="ruby"><span class="k">def</span> <span class="nf">char_class_of</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
-  <span class="k">case</span> <span class="n">c</span>
-  <span class="k">when</span> <span class="sr">/[a-zA-Zα-ωΑ-Ω]/</span>
-    <span class="ss">:alphabetic</span>
-  <span class="k">when</span> <span class="sr">/[0-9０−９]/</span>
-    <span class="ss">:numeral</span>
-  <span class="k">when</span> <span class="sr">/\s/</span>
-    <span class="ss">:spaces</span>
-  <span class="k">when</span> <span class="sr">/[「（(\[&#34;&#39;※『{〔〘〈《【〖]/</span>
-    <span class="ss">:yaku_start</span>
-  <span class="k">when</span> <span class="sr">/[。、…)）」!?？！\]ー』}〕〙》〉】〗]/</span>
-    <span class="ss">:yaku_end</span>
-  <span class="k">when</span> <span class="sr">/[\p{Hiragana}]/</span>
-    <span class="ss">:hiragana</span>
-  <span class="k">when</span> <span class="sr">/[\p{Katakana}]/</span>
-    <span class="ss">:katakana</span>
-  <span class="k">when</span> <span class="sr">/[\p{Han}]/</span>
-    <span class="ss">:kanji</span>
-  <span class="k">else</span>
-    <span class="ss">:other</span>
-  <span class="k">end</span>
-<span class="k">end</span></code></pre></div>
-<p>私のブログのタイトルに使われそうなものしか考慮してないので雑ですね。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ruby" data-lang="ruby"><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">char_class_of</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="k">case</span> <span class="n">c</span>
+</span></span><span class="line"><span class="cl">  <span class="k">when</span> <span class="sr">/[a-zA-Zα-ωΑ-Ω]/</span>
+</span></span><span class="line"><span class="cl">    <span class="ss">:alphabetic</span>
+</span></span><span class="line"><span class="cl">  <span class="k">when</span> <span class="sr">/[0-9０−９]/</span>
+</span></span><span class="line"><span class="cl">    <span class="ss">:numeral</span>
+</span></span><span class="line"><span class="cl">  <span class="k">when</span> <span class="sr">/\s/</span>
+</span></span><span class="line"><span class="cl">    <span class="ss">:spaces</span>
+</span></span><span class="line"><span class="cl">  <span class="k">when</span> <span class="sr">/[「（(\[&#34;&#39;※『{〔〘〈《【〖]/</span>
+</span></span><span class="line"><span class="cl">    <span class="ss">:yaku_start</span>
+</span></span><span class="line"><span class="cl">  <span class="k">when</span> <span class="sr">/[。、…)）」!?？！\]ー』}〕〙》〉】〗]/</span>
+</span></span><span class="line"><span class="cl">    <span class="ss">:yaku_end</span>
+</span></span><span class="line"><span class="cl">  <span class="k">when</span> <span class="sr">/[\p{Hiragana}]/</span>
+</span></span><span class="line"><span class="cl">    <span class="ss">:hiragana</span>
+</span></span><span class="line"><span class="cl">  <span class="k">when</span> <span class="sr">/[\p{Katakana}]/</span>
+</span></span><span class="line"><span class="cl">    <span class="ss">:katakana</span>
+</span></span><span class="line"><span class="cl">  <span class="k">when</span> <span class="sr">/[\p{Han}]/</span>
+</span></span><span class="line"><span class="cl">    <span class="ss">:kanji</span>
+</span></span><span class="line"><span class="cl">  <span class="k">else</span>
+</span></span><span class="line"><span class="cl">    <span class="ss">:other</span>
+</span></span><span class="line"><span class="cl">  <span class="k">end</span>
+</span></span><span class="line"><span class="cl"><span class="k">end</span>
+</span></span></code></pre></div><p>私のブログのタイトルに使われそうなものしか考慮してないので雑ですね。</p>
 <p><code>:alphabetic</code> にギリシャ文字も含んでいるのは私のハンドルネームのκeenのκがギリシャ文字だからです。たまにはブログタイトルに自分の名前を使うこともあるだろうという判断です。</p>
-
 <p>正規表現の <code>\p{Hogehoge}</code> というのはUnicode Propertyというやつです。</p>
-
 <p>参考: <a href="https://qiita.com/dico_leque/items/08b6c5aa523216376b78">正規表現 \p{&hellip;} メモ - Qiita</a></p>
-
 <p>探せば色々プロパティがあるのでしょうが、探すのが面倒だったのでパッとみつかった漢字かなカナにのみ使ってます。</p>
-
 <p>次に2つの文字種を受け取って、その文字種の間に改行を入れるべきかを返す <code>split_point</code> メソッドです。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ruby" data-lang="ruby"><span class="k">def</span> <span class="nf">japanese_classes</span>
-  <span class="o">[</span><span class="ss">:hiragana</span><span class="p">,</span> <span class="ss">:katakana</span><span class="p">,</span> <span class="ss">:kanji</span><span class="o">]</span>
-<span class="k">end</span>
-
-<span class="k">def</span> <span class="nf">split_point?</span><span class="p">(</span><span class="n">before</span><span class="p">,</span> <span class="n">after</span><span class="p">)</span>
-  <span class="c1"># 行頭の場合</span>
-  <span class="k">if</span> <span class="n">before</span> <span class="o">==</span> <span class="kp">nil</span>
-    <span class="k">return</span> <span class="kp">false</span>
-  <span class="k">end</span>
-
-  <span class="k">if</span> <span class="n">after</span> <span class="o">==</span> <span class="ss">:yaku_start</span>
-    <span class="k">return</span> <span class="kp">true</span>
-  <span class="k">end</span>
-
-  <span class="k">if</span> <span class="n">before</span> <span class="o">==</span> <span class="ss">:yaku_start</span>
-    <span class="k">return</span> <span class="kp">false</span>
-  <span class="k">end</span>
-
-  <span class="k">if</span> <span class="n">after</span> <span class="o">==</span> <span class="ss">:yaku_end</span>
-    <span class="k">return</span> <span class="kp">false</span>
-  <span class="k">end</span>
-
-  <span class="k">if</span> <span class="n">japanese_classes</span><span class="o">.</span><span class="n">map</span><span class="p">{</span><span class="o">|</span><span class="n">j</span><span class="o">|</span> <span class="o">[</span><span class="ss">:kanji</span><span class="p">,</span> <span class="n">j</span><span class="o">]</span><span class="p">}</span><span class="o">.</span><span class="n">include?</span><span class="p">(</span><span class="o">[</span><span class="n">before</span><span class="p">,</span> <span class="n">after</span><span class="o">]</span><span class="p">)</span>
-    <span class="k">return</span> <span class="kp">false</span>
-  <span class="k">end</span>
-
-  <span class="k">if</span> <span class="o">[[</span><span class="ss">:alphabetic</span><span class="p">,</span> <span class="ss">:hiragana</span><span class="o">]].</span><span class="n">include?</span><span class="p">(</span><span class="o">[</span><span class="n">before</span><span class="p">,</span> <span class="n">after</span><span class="o">]</span><span class="p">)</span>
-    <span class="k">return</span> <span class="kp">false</span>
-  <span class="k">end</span>
-
-  <span class="n">before</span> <span class="o">!=</span> <span class="n">after</span>
-<span class="k">end</span></code></pre></div>
-<p>いくつかの禁則処理や漢字+ひらがな、英字+ひらがなで例外が入ってますが、基本は <code>before != after</code> の文字種が違ったら分割するという処理です。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ruby" data-lang="ruby"><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">japanese_classes</span>
+</span></span><span class="line"><span class="cl">  <span class="o">[</span><span class="ss">:hiragana</span><span class="p">,</span> <span class="ss">:katakana</span><span class="p">,</span> <span class="ss">:kanji</span><span class="o">]</span>
+</span></span><span class="line"><span class="cl"><span class="k">end</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">split_point?</span><span class="p">(</span><span class="n">before</span><span class="p">,</span> <span class="n">after</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="c1"># 行頭の場合</span>
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="n">before</span> <span class="o">==</span> <span class="kp">nil</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="kp">false</span>
+</span></span><span class="line"><span class="cl">  <span class="k">end</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="n">after</span> <span class="o">==</span> <span class="ss">:yaku_start</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="kp">true</span>
+</span></span><span class="line"><span class="cl">  <span class="k">end</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="n">before</span> <span class="o">==</span> <span class="ss">:yaku_start</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="kp">false</span>
+</span></span><span class="line"><span class="cl">  <span class="k">end</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="n">after</span> <span class="o">==</span> <span class="ss">:yaku_end</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="kp">false</span>
+</span></span><span class="line"><span class="cl">  <span class="k">end</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="n">japanese_classes</span><span class="o">.</span><span class="n">map</span><span class="p">{</span><span class="o">|</span><span class="n">j</span><span class="o">|</span> <span class="o">[</span><span class="ss">:kanji</span><span class="p">,</span> <span class="n">j</span><span class="o">]</span><span class="p">}</span><span class="o">.</span><span class="n">include?</span><span class="p">(</span><span class="o">[</span><span class="n">before</span><span class="p">,</span> <span class="n">after</span><span class="o">]</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="kp">false</span>
+</span></span><span class="line"><span class="cl">  <span class="k">end</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="o">[[</span><span class="ss">:alphabetic</span><span class="p">,</span> <span class="ss">:hiragana</span><span class="o">]].</span><span class="n">include?</span><span class="p">(</span><span class="o">[</span><span class="n">before</span><span class="p">,</span> <span class="n">after</span><span class="o">]</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="kp">false</span>
+</span></span><span class="line"><span class="cl">  <span class="k">end</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">before</span> <span class="o">!=</span> <span class="n">after</span>
+</span></span><span class="line"><span class="cl"><span class="k">end</span>
+</span></span></code></pre></div><p>いくつかの禁則処理や漢字+ひらがな、英字+ひらがなで例外が入ってますが、基本は <code>before != after</code> の文字種が違ったら分割するという処理です。</p>
 <p>あとはこれらを使って <code>split_point?</code> がtrueだった場合に分割するメソッドを書くだけです。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ruby" data-lang="ruby"><span class="k">def</span> <span class="nf">tokenize</span><span class="p">(</span><span class="n">str</span><span class="p">)</span>
-  <span class="n">result</span> <span class="o">=</span> <span class="o">[]</span>
-  <span class="n">current</span> <span class="o">=</span> <span class="s2">&#34;&#34;</span>
-  <span class="n">last_char_class</span> <span class="o">=</span> <span class="kp">nil</span>
-
-  <span class="n">str</span><span class="o">.</span><span class="n">each_char</span> <span class="k">do</span> <span class="o">|</span><span class="n">c</span><span class="o">|</span>
-    <span class="n">char_class</span> <span class="o">=</span> <span class="n">char_class_of</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">split_point?</span><span class="p">(</span><span class="n">last_char_class</span><span class="p">,</span> <span class="n">char_class</span><span class="p">)</span>
-      <span class="n">result</span> <span class="o">&lt;&lt;</span> <span class="n">current</span>
-      <span class="n">last_char_class</span> <span class="o">=</span> <span class="kp">nil</span>
-      <span class="n">current</span> <span class="o">=</span> <span class="n">c</span>
-    <span class="k">else</span>
-      <span class="n">current</span> <span class="o">+=</span> <span class="n">c</span>
-    <span class="k">end</span>
-    <span class="n">last_char_class</span> <span class="o">=</span> <span class="n">char_class</span>
-  <span class="k">end</span>
-  <span class="n">result</span> <span class="o">&lt;&lt;</span> <span class="n">current</span> <span class="k">if</span> <span class="n">current</span> <span class="o">!=</span> <span class="s2">&#34;&#34;</span>
-  <span class="n">result</span>
-<span class="k">end</span></code></pre></div>
-<p>これはirbなどにロードして動作を確認できます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">irb(main):079:0&gt; tokenize(&#34;Inkscapeを使ってSVGからOGPイメージを半自動生成する&#34;)
-=&gt; [&#34;Inkscapeを&#34;, &#34;使って&#34;, &#34;SVGから&#34;, &#34;OGP&#34;, &#34;イメー&#34;, &#34;ジ&#34;, &#34;を&#34;, &#34;半自動生成する&#34;]
-irb(main):080:0&gt; tokenize(&#34;Inkscapeで生成するOGP画像の禁則処理をちょっとだけ頑張る&#34;)
-=&gt; [&#34;Inkscapeで&#34;, &#34;生成する&#34;, &#34;OGP&#34;, &#34;画像の&#34;, &#34;禁則処理をちょっとだけ&#34;, &#34;頑張る&#34;]</code></pre></div>
-<p>まあ、悪くないんじゃないでしょうか。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ruby" data-lang="ruby"><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">tokenize</span><span class="p">(</span><span class="n">str</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="n">result</span> <span class="o">=</span> <span class="o">[]</span>
+</span></span><span class="line"><span class="cl">  <span class="n">current</span> <span class="o">=</span> <span class="s2">&#34;&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">last_char_class</span> <span class="o">=</span> <span class="kp">nil</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">str</span><span class="o">.</span><span class="n">each_char</span> <span class="k">do</span> <span class="o">|</span><span class="n">c</span><span class="o">|</span>
+</span></span><span class="line"><span class="cl">    <span class="n">char_class</span> <span class="o">=</span> <span class="n">char_class_of</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="n">split_point?</span><span class="p">(</span><span class="n">last_char_class</span><span class="p">,</span> <span class="n">char_class</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">      <span class="n">result</span> <span class="o">&lt;&lt;</span> <span class="n">current</span>
+</span></span><span class="line"><span class="cl">      <span class="n">last_char_class</span> <span class="o">=</span> <span class="kp">nil</span>
+</span></span><span class="line"><span class="cl">      <span class="n">current</span> <span class="o">=</span> <span class="n">c</span>
+</span></span><span class="line"><span class="cl">    <span class="k">else</span>
+</span></span><span class="line"><span class="cl">      <span class="n">current</span> <span class="o">+=</span> <span class="n">c</span>
+</span></span><span class="line"><span class="cl">    <span class="k">end</span>
+</span></span><span class="line"><span class="cl">    <span class="n">last_char_class</span> <span class="o">=</span> <span class="n">char_class</span>
+</span></span><span class="line"><span class="cl">  <span class="k">end</span>
+</span></span><span class="line"><span class="cl">  <span class="n">result</span> <span class="o">&lt;&lt;</span> <span class="n">current</span> <span class="k">if</span> <span class="n">current</span> <span class="o">!=</span> <span class="s2">&#34;&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">result</span>
+</span></span><span class="line"><span class="cl"><span class="k">end</span>
+</span></span></code></pre></div><p>これはirbなどにロードして動作を確認できます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">irb(main):079:0&gt; tokenize(&#34;Inkscapeを使ってSVGからOGPイメージを半自動生成する&#34;)
+</span></span><span class="line"><span class="cl">=&gt; [&#34;Inkscapeを&#34;, &#34;使って&#34;, &#34;SVGから&#34;, &#34;OGP&#34;, &#34;イメー&#34;, &#34;ジ&#34;, &#34;を&#34;, &#34;半自動生成する&#34;]
+</span></span><span class="line"><span class="cl">irb(main):080:0&gt; tokenize(&#34;Inkscapeで生成するOGP画像の禁則処理をちょっとだけ頑張る&#34;)
+</span></span><span class="line"><span class="cl">=&gt; [&#34;Inkscapeで&#34;, &#34;生成する&#34;, &#34;OGP&#34;, &#34;画像の&#34;, &#34;禁則処理をちょっとだけ&#34;, &#34;頑張る&#34;]
+</span></span></code></pre></div><p>まあ、悪くないんじゃないでしょうか。</p>
 <p>一応既知の問題として長音符（ー）が約物になるのでカタカナ語の分割が下手というのはあります。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text">irb(main):082:0&gt; tokenize(&#34;ロード時間を短くする&#34;)
-=&gt; [&#34;ロー&#34;, &#34;ド&#34;, &#34;時間を&#34;, &#34;短くする&#34;]</code></pre></div>
-<p>あとは2, 3, 4を実装してあげれば完成です。</p>
-
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">irb(main):082:0&gt; tokenize(&#34;ロード時間を短くする&#34;)
+</span></span><span class="line"><span class="cl">=&gt; [&#34;ロー&#34;, &#34;ド&#34;, &#34;時間を&#34;, &#34;短くする&#34;]
+</span></span></code></pre></div><p>あとは2, 3, 4を実装してあげれば完成です。</p>
 <p>雑にそれっぽい成果が欲しい方は真似してみて下さい。</p>
                     </section>
                 </article>
