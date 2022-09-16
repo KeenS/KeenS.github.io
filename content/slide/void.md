@@ -4,11 +4,10 @@ date: 2019-01-16T08:35:35+09:00
 description:
 title: "void"
 ---
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # void
 ----------------------
 [Shinjuku.rs #2 @FORCIA](https://forcia.connpass.com/event/110888/)
@@ -205,5 +204,4 @@ fn safe_unwrap<T>(result: Result<T, Void>) -> T {
 * See also [never type](https://doc.rust-lang.org/std/primitive.never.html) と [RFC](https://github.com/rust-lang/rfcs/blob/master/text/1216-bang-type.md) - `!` を空の列挙型にする提案
 
 
-</script>
-</section>
+</textarea>

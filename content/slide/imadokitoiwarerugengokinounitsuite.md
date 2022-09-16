@@ -6,11 +6,10 @@ description: "産業界で比較的最近導入されるようになった言語
 本発表では産業界でイマドキと言われる言語機能を紹介し、最先端の研究から実用されはじめるまでのギャップを覗こうと思います。 "
 title: "イマドキと言われる言語機能について"
 ---
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # イマドキと言われる言語機能について
 ----------------------
 [第60回プログラミングシンポジウム](http://www.ipsj.or.jp/prosym/60/60program.html)
@@ -413,5 +412,4 @@ client-notification Fri Jan 11 03:54:52 2019:
 * 開発支援ツールも言語に求められるように
 
 
-</script>
-</section>
+</textarea>

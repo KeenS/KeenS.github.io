@@ -8,11 +8,10 @@ description: "特に発表予定はないけどなんとなく作ってみたス
 title: 非同期処理の「その後」の話。goto、継続、限定継続、CPS、そしてコールバック地獄。
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # 非同期処理の「その後」の話
 ----------------------
 ## goto、継続、限定継続、CPS、そしてコールバック地獄
@@ -375,5 +374,4 @@ function fact(n, callback) {
 * そもそも難しいことをやろうとしている
 * 難しいことをカバーするだけの言語の機能が足りてない
 
-</script>
-</section>
+</textarea>

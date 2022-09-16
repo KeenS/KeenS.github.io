@@ -5,11 +5,10 @@ description: null
 title: WebAssemblyとコンパイラとランタイム
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # WebAssemblyとコンパイラとランタイム
 ----------------------
 [emscripten night !! #3 - connpass](https://emsn.connpass.com/event/48100/)
@@ -759,5 +758,4 @@ let module = mb.build();
   + 将来楽になるかも
 * JS連携や将来のスレッドとかはみんなで考えよう
 
-</script>
-</section>
+</textarea>

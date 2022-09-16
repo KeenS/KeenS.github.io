@@ -5,11 +5,10 @@ description: "おもしろLT"
 title: ソフトウェアエンジニアがFPGAやってみる
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # ソフトウェアエンジニアがPYNQでFPGAやってみる
 ----------------------
 
@@ -471,5 +470,4 @@ always @( mem_data_out, axi_rvalid)
 * PYNQ便利だよ
 
 
-</script>
-</section>
+</textarea>

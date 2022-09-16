@@ -7,11 +7,10 @@ description: "Tokyo Apache Drill Meetupでの発表用
 title: ビッグデータしないDrill、ローカルで快適に使うために
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # ビッグデータしないDrill、ローカルで快適に使うために
 ----------------------
 [Tokyo Apache Drill Meetup](http://drill.connpass.com/event/27414/)  
@@ -165,5 +164,4 @@ drill-web() {
 * その時にDrillは便利だよ
 * Emacs向けのDrillプラグイン作ったよ
 
-</script>
-</section>
+</textarea>

@@ -4,11 +4,10 @@ date: 2021-09-17T00:55:32+09:00
 description: 社内勉強会のPLDI論文読み会で発表した資料です
 title: "PLDI論文読み会: Perceus: Garbage Free Reference Counting with Reuse"
 ---
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # PLDI論文読み会: Perceus: Garbage Free Reference Counting with Reuse
 ----------------------
 社内勉強会
@@ -578,5 +577,4 @@ dup/dropを除去した式でもreachableなのでprecise
 * 将来は循環参照問題や借用などに取り組みたい
 
 
-</script>
-</section>
+</textarea>

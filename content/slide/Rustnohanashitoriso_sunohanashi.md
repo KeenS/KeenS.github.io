@@ -5,11 +5,10 @@ description: "<a src='https://rust.connpass.com/event/41467/'>RustのLT会！ Ru
 title: Rustの話とリソースの話
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # Rustの話とリソースの話
 ----------------------
 [RustのLT会！ Rust入門者の集い](https://rust.connpass.com/event/41467/)  
@@ -459,5 +458,4 @@ sk.close(); // moveされたskがcolseすることが型で分かる
 
 
 
-</script>
-</section>
+</textarea>

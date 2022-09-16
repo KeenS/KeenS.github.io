@@ -5,11 +5,10 @@ description: "予備に作ったスライド"
 title: ISUCONこれまでの流れ
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # ISUCONこれまでの流れ
 ----------------------
 雑に書き殴った
@@ -110,5 +109,4 @@ title: ISUCONこれまでの流れ
 * GCPならGoogleの謎の技術によって安定するらしい。
 * @tagomoris 「もはやISUCONは予選で落ちる人の方が多くなった。その人達にとっては予選こそがISUCONなのだ」
   
-</script>
-</section>
+</textarea>

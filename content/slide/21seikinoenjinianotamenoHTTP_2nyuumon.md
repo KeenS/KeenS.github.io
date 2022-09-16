@@ -7,11 +7,10 @@ HTTPの概要から先日RFC化されたHTTP/2の新機能、使いどころを�
 title: 21世紀のエンジニアのためのHTTP/2入門
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # 21世紀のエンジニアのためのHTTP/2入門
 ----------------------
 サイバーエージェントFresh勉強会
@@ -269,5 +268,4 @@ CF [Service WorkerとHTTP/2が切り開く新しいWeb Pushの世界](http://d.h
   + 普及はかなり速いかもしれない
 * みなさんが配属された時はHTTP/2の存在を前提としてアプリを設計しましょう
 
-</script>
-</section>
+</textarea>

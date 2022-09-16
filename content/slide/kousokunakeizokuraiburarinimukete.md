@@ -6,11 +6,10 @@ http://connpass.com/event/28150/"
 title: 高速な継続ライブラリに向けて
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # 高速な継続ライブラリに向けて
 ----------------------
 [継続勉強会](http://connpass.com/event/28150/) 2016-05-22
@@ -530,5 +529,4 @@ Evaluation took:
 * でもパフォーマンや言語の問題もあるよ
 * Selective CPSを使えばパフォーマンスの問題解決出来るよ
 
-</script>
-</section>
+</textarea>

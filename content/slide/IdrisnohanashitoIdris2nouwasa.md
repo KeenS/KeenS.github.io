@@ -4,11 +4,10 @@ date: 2019-09-21T22:11:57+09:00
 description: "Proof Summit 2019での発表用。Idrisと依存型と証明"
 title: "Idrisの話とIdris2のウワサ"
 ---
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # Idrisの話とIdris2のウワサ <!-- .element: style="font-size: 60pt" -->
 ----------------------
 [Proof Summit 2019](https://proof-summit.connpass.com/event/141191/)
@@ -587,5 +586,4 @@ modusPonens' = %runElab (do
 * 命題と型、証明とプログラムは対応するよ
 * 依存型のある言語だと述語論理が証明できるよ
 
-</script>
-</section>
+</textarea>

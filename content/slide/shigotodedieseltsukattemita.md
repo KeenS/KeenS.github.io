@@ -5,11 +5,10 @@ description: null
 title: 仕事でdiesel使ってみた
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # 仕事でdiesel使ってみた
 ----------------------
 [RustのLT会！ Rust入門者の集い #2 - connpass](https://rust.connpass.com/event/48826/)
@@ -382,5 +381,4 @@ INNER JOIN hoge_entries e ON e.id = s.hoge_entry_id"))
 * クエリは困ったらSQL生牡蠣
 * マイグレーションとかはまた今度
 
-</script>
-</section>
+</textarea>

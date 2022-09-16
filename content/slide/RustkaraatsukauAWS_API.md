@@ -4,11 +4,10 @@ date: 2019-03-12T00:23:17+09:00
 description: "Shinjuku.rs #3 での発表用。rusotoについて"
 title: "Rustから扱うAWS API"
 ---
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # Rustから扱うAWS API
 ----------------------
 [Shinjuku.rs #3 @FORCIA ](https://forcia.connpass.com/event/117142/)
@@ -258,5 +257,4 @@ $ cargo run
 
 
 
-</script>
-</section>
+</textarea>

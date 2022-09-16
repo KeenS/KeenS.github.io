@@ -8,11 +8,10 @@ Common Lispで限定継続をサポートするライブラリ、cl-contの紹�
 title: Common Lispで限定継続と遊ぶ
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # Common Lispで限定継続と遊ぶ
 ----------------------
 [Lisp Meet Up #27](https://atnd.org/events/64988)
@@ -492,5 +491,4 @@ in main thread 3
 * [コルーチンをCommon Lispで簡単に定義 - さくらんぼのlambda日記](http://lambdasakura.hatenablog.com/entry/20111026/1319598590)
 * [継続渡しスタイル - Wikipedia](http://ja.wikipedia.org/wiki/%E7%B6%99%E7%B6%9A%E6%B8%A1%E3%81%97%E3%82%B9%E3%82%BF%E3%82%A4%E3%83%AB)
 * [M.Hiroi's Home Page / お気楽 Scheme プログラミング入門](http://www.geocities.jp/m_hiroi/func/abcscm20.html)
-</script>
-</section>
+</textarea>

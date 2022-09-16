@@ -4,11 +4,10 @@ date: 2019-11-18T15:28:52+09:00
 description: "IIJ Labでの発表用。主にシステムプログラミング言語経験者向けの内容"
 title: "安全なシステムプログラミング言語Rustへの招待"
 ---
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # 安全なシステムプログラミング言語Rustへの招待
 ----------------------
 [IIJ Labセミナー](https://iijlab-seminars.connpass.com/event/152079/)
@@ -1045,5 +1044,4 @@ error[E0133]: dereference of raw pointer is unsafe and requires unsafe function 
 * お試しとしても新天地としても良い言語なんじゃないでしょうか
 
 
-</script>
-</section>
+</textarea>

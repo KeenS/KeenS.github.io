@@ -5,11 +5,10 @@ description: null
 title: 最近のSML#の話題
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # 最近のSML#の話題
 ----------------------
 [ML勉強会 #2 - connpass](https://ml-lang.connpass.com/event/58151/)
@@ -577,5 +576,4 @@ val it =
 * SQL、JSON、Concurrency
 * みんなもSML# 使おうね
 
-</script>
-</section>
+</textarea>

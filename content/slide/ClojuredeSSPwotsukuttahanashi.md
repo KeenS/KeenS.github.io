@@ -5,11 +5,10 @@ description: "Lisp Meet Upでの発表用。アドテクコンペのためにSSP
 title: ClojureでSSPを作った話
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # ClojureでSSPを作った話
 ----------------------
 
@@ -249,5 +248,4 @@ Master側で100ms毎にに200個だけZeroMQのキューに積む
 * [アドテクコンペ | 株式会社サイバーエージェント](https://www.cyberagent.co.jp/recruit/fresh/program_detail/id=11303&season=2016)
 * [ビジネスモデルもエンジニアリングも学べるアドテクスタジオの育成プログラムとは | 株式会社サイバーエージェント](https://www.cyberagent.co.jp/techinfo_detail/id=11380)
 
-</script>
-</section>
+</textarea>

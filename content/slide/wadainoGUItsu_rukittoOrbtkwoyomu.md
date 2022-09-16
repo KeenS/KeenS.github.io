@@ -4,11 +4,10 @@ date: 2019-12-10T23:00:58+09:00
 description: "Rust LT #7 での発表用。GUIツールキットOrbtkのコードの軽い解説"
 title: "話題のGUIツールキットOrbtkを読む"
 ---
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # 話題のGUIツールキットOrbtkを読む
 ----------------------
 [Rust LT #7 - connpass](https://rust.connpass.com/event/156436/)
@@ -205,5 +204,4 @@ from [decs](https://gitlab.redox-os.org/redox-os/dces-rust)
 * 今後に期待
 
 
-</script>
-</section>
+</textarea>

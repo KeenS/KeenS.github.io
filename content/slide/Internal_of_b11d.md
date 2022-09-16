@@ -7,11 +7,10 @@ description: "AdTech Studioの新卒研修の最終発表用。
 title: Internal of b11d
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # Internal of b11d
 ----------------------
 サイバーエージェント新卒研修  
@@ -114,5 +113,4 @@ title: Internal of b11d
 * Unix Domain Socket使うの忘れてた
 * データベースにタイムスタンプ入れるの忘れてた………orz
 
-</script>
-</section>
+</textarea>

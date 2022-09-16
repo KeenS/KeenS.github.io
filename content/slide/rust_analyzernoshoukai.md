@@ -4,11 +4,10 @@ date: 2020-04-27T23:38:53+09:00
 description: "下町.rsでの発表用。rust-analyzerについて。"
 title: "rust-analyzerの紹介"
 ---
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # rust-analyzerの紹介
 ----------------------
 [下町.rs #1 (オンライン） - connpass](https://shitamachi.connpass.com/event/173972/)
@@ -139,5 +138,4 @@ title: "rust-analyzerの紹介"
 * 多分そのうち公式になるから覚えておいてね
 
 
-</script>
-</section>
+</textarea>

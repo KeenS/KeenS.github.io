@@ -7,11 +7,10 @@ description: "
 title: Scala 2.12.0変更点
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # Scala 2.12.0変更点
 ----------------------
 サイバーエージェント ScalaMeetUp
@@ -305,5 +304,4 @@ $ javap -c Foo
 * Changed syntax trees (affects macro and compiler plugin authors)
   + 変わったらしい
 
-</script>
-</section>
+</textarea>

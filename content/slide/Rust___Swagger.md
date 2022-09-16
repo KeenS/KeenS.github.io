@@ -4,11 +4,10 @@ date: 2017-12-18T19:35:19+09:00
 description: "RustのLT会での飛び込み"
 title: "Rust & Swagger"
 ---
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # Rust & Swagger
 ----------------------
 [【増席】RustのLT会！ Rust入門者の集い #4 ](https://rust.connpass.com/event/72649/)
@@ -41,5 +40,4 @@ title: "Rust & Swagger"
   + [petstore](http://petstore.swagger.io/)
 * [issue](https://github.com/swagger-api/swagger-codegen/issues)なげよう
 
-</script>
-</section>
+</textarea>

@@ -6,11 +6,10 @@ description: "月初会で飛び入りLTのために作った雑なスライド�
 title: SMLでPNGデコーダを作ろうとして分かったこと
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # SMLでPNGデコーダを作ろうとして分かったこと
 ------------------------------------------
 サイバーエージェント アドテクスタジオ  
@@ -203,5 +202,4 @@ deflate…実装するか
 * [PNG](http://www.w3.org/TR/2003/REC-PNG-20031110/)
 * [RFC-1950 ZLIB](https://www.ietf.org/rfc/rfc1950.txt)
 * [RFC-1951 DEFLATE](https://www.ietf.org/rfc/rfc1950.txt)
-</script>
-</section>
+</textarea>

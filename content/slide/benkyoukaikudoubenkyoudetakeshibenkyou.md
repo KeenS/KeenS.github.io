@@ -9,11 +9,10 @@ description: "
 title: 勉強会駆動勉強で猛勉強
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # 勉強会駆動勉強で勉強
 ----------------------
 サイバーエージェント15卒FRESH勉強会
@@ -163,5 +162,4 @@ title: 勉強会駆動勉強で猛勉強
 <!-- .slide: class="center" -->
 
 
-</script>
-</section>
+</textarea>

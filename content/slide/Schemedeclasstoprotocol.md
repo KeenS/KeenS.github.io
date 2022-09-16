@@ -5,11 +5,10 @@ description: null
 title: SchemeでClassとProtocol
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # ClassとProtocol
 ----------------------
 [Lisp Meet Up presented by Shibuya.lisp #46](https://lisp.connpass.com/event/45517/) Scheme回
@@ -159,5 +158,4 @@ title: SchemeでClassとProtocol
 * 型相当のものがあればダイナミックディスパッチ出来るよ
 * picrinに実装されてるよ `(picrin class)` `(picrin protocol)`
 
-</script>
-</section>
+</textarea>

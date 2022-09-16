@@ -5,11 +5,10 @@ description: "ジェネリクス勉強会での発表用"
 title: ジェネリクス ディスパッチ 表裏
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 
 # ジェネリクス ディスパッチ 表裏
 ----------------------
@@ -650,5 +649,4 @@ equal_type(foo::<bool>(false), foo::<i32>(0)); // ERROR, `impl Trait {foo<bool>}
 * 2種類の実装は言語機能や型システムに密着してるよ
 
 
-</script>
-</section>
+</textarea>

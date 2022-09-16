@@ -5,11 +5,10 @@ description: "コンパイラ勉強会での発表用"
 title: コンパイラの人からみたWebAssembly
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 
 # コンパイラの人からみたWebAssembly
 ----------------------
@@ -806,5 +805,4 @@ fetch('demo.wasm').then(response =>
 * ランタイム難しいよ
 * Compiling With Continuations
 
-</script>
-</section>
+</textarea>

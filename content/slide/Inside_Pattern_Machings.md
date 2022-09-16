@@ -4,11 +4,10 @@ date: 2018-09-16T01:26:15+09:00
 description: "ML Day #2 での発表用。パターンマッチの実装について"
 title: "Inside Pattern Matchings"
 ---
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # Inside Pattern Matchings
 ----------------------
 [ML Day #2](https://ml-lang.connpass.com/event/94284/)
@@ -572,5 +571,4 @@ with (failwith "Patrtial match")
 
 
 
-</script>
-</section>
+</textarea>

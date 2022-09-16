@@ -5,11 +5,10 @@ description: "Lisp Meet Upでの発表用。AdTech Studioでの研修でDSPをCl
 title: ClojureでDSPを作った話
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # ClojureでDSPを作った話
 ----------------------
 Lisp Meet Up #3
@@ -207,5 +206,4 @@ Lisp Meet Up #3
 
 * [Internal of b11d | κeenのHappy Hacκing Blog](//KeenS.github.io/slide/Internal_of_b11d/)
 
-</script>
-</section>
+</textarea>

@@ -6,11 +6,10 @@ description: "<a src='https://kbkz.connpass.com/event/40629/'>歌舞伎座.tech#
 title: Rustで非同期Thriftしたい
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 
 # Rustで非同期Thrift
 ----------------------
@@ -533,5 +532,4 @@ resultにデータの所有権を渡してしまう
 * RPCはインターフェースベースであるべき
 * 多重化はRPCより下のレイヤーで出来る
 
-</script>
-</section>
+</textarea>

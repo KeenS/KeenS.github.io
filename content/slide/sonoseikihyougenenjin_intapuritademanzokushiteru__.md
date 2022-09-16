@@ -16,11 +16,10 @@ title: "その正規表現エンジン、インタプリタで満足してる？
 }
 </style>
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # その正規表現エンジン、<br /><span class="narrow"><span>イ</span><span>ン</span><span>タ</span><span>プ</span><span>リ</span><span>タ</span></span>で<ruby>満足<rp>(</rp><rt>サティスファイ</rt><rp>)</rp></ruby>してる？！
 ----------------------
 [Regex Festa - connpass](https://opt.connpass.com/event/140566/)
@@ -562,5 +561,4 @@ match result with
 * [コード](https://github.com/KeenS/satysfi-rejit)
 
 
-</script>
-</section>
+</textarea>

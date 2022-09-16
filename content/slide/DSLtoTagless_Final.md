@@ -7,11 +7,10 @@ Tagless Finalについて。あまりScala関係ない…
 title: DSLとTagless Final
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # DSLとTagless Final
 ----------------------
 サイバーエージェント アドテクスタジオ  
@@ -423,5 +422,4 @@ val Right(_) = runScenario(scenario, "user")
 * Rust便利
 * [参考](http://okmij.org/ftp/tagless-final/course/)
 
-</script>
-</section>
+</textarea>

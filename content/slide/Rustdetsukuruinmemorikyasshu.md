@@ -4,11 +4,10 @@ date: 2020-10-18T18:22:00+09:00
 description: "shinjuku.rsでの発表用。"
 title: "Rustで作るインメモリキャッシュ"
 ---
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 
 # Rustで作るインメモリキャッシュ
 ----------------------
@@ -1347,8 +1346,7 @@ td {
 * Rustの `HashMap` は改造できるよ
 
 
-</script>
-</section>
+</textarea>
 
 <svg
    xmlns:svg="http://www.w3.org/2000/svg"

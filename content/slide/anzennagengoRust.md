@@ -4,11 +4,10 @@ date: 2020-06-25T09:31:42+09:00
 description: "フィンテックエンジニア養成勉強会9での発表用。Rustの紹介。"
 title: "「安全」な言語Rust"
 ---
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # 安全な言語Rust
 ----------------------
 [【オンライン】フィンテックエンジニア養成勉強会9（最新技術特集） - connpass](https://fintech-engineer.connpass.com/event/178015/)
@@ -353,5 +352,4 @@ if y == 0 {
 * Rustは色々な言語から便利な機能を取り入れている
 * Rustは意識外の例外が飛んできたりしないという意味で「安全」
 
-</script>
-</section>
+</textarea>

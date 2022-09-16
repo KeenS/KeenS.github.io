@@ -5,11 +5,10 @@ description: "社内勉強会「AdTech Scala Meetup」でのLT大会の資料で
 title: HAMT ~ イミュータブルで高速なハッシュマップ ~
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # <span style="font-size: 90%">Hash-Array Mapped Trie</span>
 ----------------------
  ~ イミュータブルで高速なハッシュマップ ~  
@@ -223,5 +222,4 @@ hash("key")
 * [Optimizing Hash-Array Mapped Tries for Fast and Lean Immutable JVM Collections | the morning paper](http://blog.acolyer.org/2015/11/27/hamt/)
   + CHAMPを解説したブログ
 
-</script>
-</section>
+</textarea>

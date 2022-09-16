@@ -5,11 +5,10 @@ description: "Clack Meet Up #1で使うかもしれないLT資料"
 title: caveman2、ningle…Common LispのWeb周りのフレームワークを快適に使うためのたった1つのコト
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # caveman2、ningle、datafly…Common LispのWeb周りのフレームワークを快適に使うためのたった1つのコト
 ----------------------
 Clack Meet Up #1  
@@ -102,5 +101,4 @@ CL-USER> :username
 * `(setf (readtable-case *readtable*) :invert)`を使うと快適だよ
 
 
-</script>
-</section>
+</textarea>

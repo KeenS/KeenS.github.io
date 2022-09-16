@@ -4,11 +4,10 @@ date: 2018-07-01T21:58:14+09:00
 description: "Rust Workshopでの発表用"
 title: "Rustと3種のDSL"
 ---
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # Rustと3種のDSL
 ----------------------
 [Running Rust in Production](https://d-cube.connpass.com/event/90317/)
@@ -424,5 +423,4 @@ struct {
 * みぞの鏡の外部DSL
   + なんでも出来るけど溺れるな
 
-</script>
-</section>
+</textarea>

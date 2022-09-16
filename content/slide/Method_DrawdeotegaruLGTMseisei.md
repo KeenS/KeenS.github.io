@@ -5,11 +5,10 @@ description: "某会の余興"
 title: Method Drawでお手軽LGTM生成
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # Method Drawでお手軽LGTM生成
 ----------------------
 
@@ -43,5 +42,4 @@ title: Method Drawでお手軽LGTM生成
 Have a happy hacking life
 <!-- .slide: class="center" -->
 
-</script>
-</section>
+</textarea>

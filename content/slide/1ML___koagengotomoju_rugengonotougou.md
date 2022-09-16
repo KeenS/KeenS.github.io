@@ -5,11 +5,10 @@ description: "<a src='https://connpass.com/event/63454/'>型システム論文�
 <a src='https://people.mpi-sws.org/~rossberg/1ml/1ml.pdf>1ML – Core and Modules United (F-ing First-Class Modules)</a>についてざくっと解説"
 title: "1ML - コア言語とモジュール言語の統合"
 ---
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # 1ML - コア言語とモジュール言語の統合
 ----------------------
 [型システム論文読書会 Vol.1 - connpass](https://connpass.com/event/63454/)
@@ -658,5 +657,4 @@ Map (Key : EQ) :> MAP where (type .key = Key.t) = {type key = Key.t;
 * Recursive Module(既にSystem Fに落とす先行研究がある)
 * 依存型
 
-</script>
-</section>
+</textarea>

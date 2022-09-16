@@ -4,7 +4,7 @@ date: 2022-05-14T16:36:25+09:00
 description: "tfconでの発表用"
 title: "DropとFutureとDropのfuture"
 ---
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
@@ -14,4 +14,4 @@ title: "DropとFutureとDropのfuture"
 
 [PDF](/pdf/tfcon.pdf)
 
-</section>
+</textarea>

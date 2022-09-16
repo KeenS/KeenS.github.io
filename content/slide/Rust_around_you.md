@@ -4,11 +4,10 @@ date: 2018-10-07T12:38:57+09:00
 description:
 title: "Rust around you"
 ---
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # Rust around you
 ----------------------
 [第51回 情報科学若手の会](https://wakate.org/2018/07/28/51th-general/)
@@ -128,5 +127,4 @@ title: "Rust around you"
 * [ndarray](https://github.com/bluss/ndarray): 多次元配列ライブラリ
 
 
-</script>
-</section>
+</textarea>

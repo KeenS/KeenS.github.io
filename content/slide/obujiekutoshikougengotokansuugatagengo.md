@@ -4,11 +4,10 @@ date: 2018-03-14T22:22:40+09:00
 description: "manabiya.techでの発表資料。オブジェクト指向と関数型についてのスピリチュアルな話"
 title: "オブジェクト指向言語と関数型言語"
 ---
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 
 # はじめに
 ----------
@@ -997,7 +996,6 @@ tarai(int x, int y, int z)
 * これ以外にも新しい言語にも注目
 
 
-</script>
-</section>
+</textarea>
 
 

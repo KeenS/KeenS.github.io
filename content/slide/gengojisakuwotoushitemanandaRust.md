@@ -4,11 +4,10 @@ date: 2020-10-26T21:24:22+09:00
 description: "Rustに入門してはじめてまとまった量のコードを書いたのが自作のLispインタプリタでした。当時の自分にはインタプリタは複雑すぎる題材でしたが、それゆえに多くのことを学びました。その後もシェルやMLコンパイラなどいくつかの言語を作っていきながらRustの機能を学んできました。本講演では言語自作を通して学んできたことをベースに、Rustに入門したての段階でのありがちなトラブルや意外と知られていない機能、Rustコンパイラの進化などを紹介します。Rustの入門体験記は色々ありますが、1つのテーマに沿って何度もプログラムを書いたことで徐々に問題へのアプローチが上手くなっていく点や、言語実装者が新たな言語を学んでいくという側面にも触れられたらなと思います。"
 title: "言語自作を通して学んだRust"
 ---
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # 言語自作を通して学んだRust<!-- .element: style="font-size: calc(var(--title-font-size) * 0.8)" -->
 ----------------------
 [RustFest Global 2020](https://rustfest.global/)
@@ -878,5 +877,4 @@ Note:
 最後にRustは進化しつづけている言語ということでした。
 ありがとうございました。
 
-</script>
-</section>
+</textarea>

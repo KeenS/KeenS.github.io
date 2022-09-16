@@ -5,11 +5,10 @@ description: 会社の新卒エンジニア勉強会での発表用
 title: 静的なメモリ管理の話。リージョン推論とλ計算からRustまで
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # 静的なメモリ管理の話。リージョン推論とλ計算からRustまで
 ----------------------
 サイバーエージェント新卒エンジニア勉強会
@@ -470,5 +469,4 @@ fn main() {
 * [Allocators in Rust - Baby Steps](http://smallcultfollowing.com/babysteps/blog/2014/11/14/allocators-in-rust/)
 
 <!-- .slide: class="center" -->
-</script>
-</section>
+</textarea>

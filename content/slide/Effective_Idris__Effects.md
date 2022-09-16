@@ -4,11 +4,10 @@ date: 2019-05-25T15:27:24+09:00
 description: "effect system勉強会での発表用。EffectのHandlerを書く話"
 title: "Effective Idris: Effects"
 ---
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # Effective Idris: Effects
 ----------------------
 [effect system勉強会](https://connpass.com/event/124786/)
@@ -404,5 +403,4 @@ $ ./main
 * Edwin Brady. 2013. Programming and reasoning with algebraic effects and dependent types. SIGPLAN Not. 48, 9 (September 2013)
 
 
-</script>
-</section>
+</textarea>

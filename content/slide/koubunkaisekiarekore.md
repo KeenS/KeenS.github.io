@@ -7,11 +7,10 @@ description: "PEGと構文解析に関するアレコレの勉強会 Vol.1 あ�
 title: 構文解析にまつわる小話たち
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 
 # 構文解析にまつわる小話たち
 ----------------------
@@ -516,5 +515,4 @@ Definition fact_in_coq : com :=
   1. 副作用を許さない
   2. 副作用は自己責任
   3. 一旦先読みで正しいパスを記憶してから正しいパスでもう一度パース
-</script>
-</section>
+</textarea>

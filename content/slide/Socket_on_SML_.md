@@ -7,11 +7,10 @@ ML勉強会での発表用
 title: Socket on SML#
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # Socket on SML&#x23;
 ----------------------
 [ML勉強会](http://connpass.com/event/32752/) 2016-07-09
@@ -294,5 +293,4 @@ end)
 * BasisのAPI使うと非同期HTTPサーバ作れるよ
 * SML#のFFIはやっぱりつらいよ
 
-</script>
-</section>
+</textarea>

@@ -4,11 +4,10 @@ date: 2018-06-26T16:02:24+09:00
 description: "Rust LTでの発表用"
 title: "nom勘所"
 ---
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # nom勘所
 ----------------------
 [Rust LT](https://rust.connpass.com/event/88656/)
@@ -313,5 +312,4 @@ error: no rules expected the token `i`
 * コード: [KeenS/calc](https://github.com/KeenS/calc)
 
 
-</script>
-</section>
+</textarea>

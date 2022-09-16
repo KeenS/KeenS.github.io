@@ -4,11 +4,10 @@ date: 2018-08-25T16:09:33+09:00
 description: "LLイベントでの発表用"
 title: "Rustのこれまでとこれから"
 ---
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 
 # Rustこれまでとこれから<!-- .element: style="font-size: calc(var(--title-font-size) * 0.8)"-->
 ----------------------
@@ -303,5 +302,4 @@ fn main() {
 * アウトリーチの努力がすごいよ
 * 今も継続的に改善されてるよ
 
-</script>
-</section>
+</textarea>

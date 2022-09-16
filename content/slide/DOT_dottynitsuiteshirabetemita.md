@@ -5,11 +5,10 @@ description: "Scala Meet Upでの発表用"
 title: DOT/dottyについて調べてみた
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 
 # DOT/dottyについて調べてみた
 ----------------------
@@ -232,5 +231,4 @@ object DaysOfTheWeek{
 * [Dotty: exploring the future of scala](https://d-d.me/talks/scalaworld2015/)
 * [Dotty and types: the story so far](http://guillaume.martres.me/talks/typelevel-summit-oslo/)
 
-</script>
-</section>
+</textarea>

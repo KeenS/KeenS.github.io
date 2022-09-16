@@ -5,11 +5,10 @@ description: "Lisp Meet Up #29での発表資料"
 title: Common Lisp処理系拡張の探求 SBCLのマルチスレッドサポート
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 ### Common Lisp 処理系拡張の探求
 SBCLのマルチスレッドサポート
 
@@ -169,5 +168,4 @@ Lisp Meet Up #29
 * SBCLのマルチスレッドサポートはbordeaux-threadsよりもリッチ
 * 処理系の独自サポート面白い
 * 処理系に依存してしまってもいいんじゃないだろうか
-</script>
-</section>
+</textarea>

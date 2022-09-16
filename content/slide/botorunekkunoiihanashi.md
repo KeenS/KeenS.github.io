@@ -6,11 +6,10 @@ description: "社内勉強会用のスライド。ボトルネックって難し
 title: ボトルネックのイイ話
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # ボトルネックのイイ話
 ----------------------
 サイバーエージェント15新卒  
@@ -282,5 +281,4 @@ FRESH勉強会
 * [ISUCONの話(夏期講習2014)](http://www.slideshare.net/tagomoris/isucon2014)
 * [kamipoさんはすごい人](https://twitter.com/search?q=kamipo%E3%81%95%E3%82%93%E3%81%AF%E3%81%99%E3%81%94%E3%81%84%E4%BA%BA&src=typd&vertical=default&f=tweets)
 
-</script>
-</section>
+</textarea>

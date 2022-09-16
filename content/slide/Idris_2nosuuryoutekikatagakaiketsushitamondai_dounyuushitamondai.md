@@ -4,11 +4,10 @@ date: 2021-09-26T16:53:22+09:00
 description: 関数型言語Idrisの次世代版として開発されているIdris 2の大きな特徴の1つとして型システムに数量的型理論（Quantitative Type Theory）を導入していることが挙げられます。このシステムではIdris 1にあった証明環境での利用可能な値の問題や、本来ならば実行時に不要な型を持ってしまっていた問題を解決します。一方で数量的型を便利に使うための仕組みであった多重度の部分型付けにより非健全性が入るなどの問題もありました。本発表ではIdris 2の数量的型のそういった特徴を紹介します。
 title: "Idris 2の数量的型が解決した問題、導入した問題"
 ---
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # Idris2の数量的型が解決した問題導入した問題
 ----------------------
 [第一回関数型プログラミング（仮）の会 - connpass](https://opt.connpass.com/event/222709/)
@@ -347,5 +346,4 @@ hole : Vect (plus n m) a
 * 関数の世界が分かれるので扱いづらい面も
   + 将来改善されるかもね
 
-</script>
-</section>
+</textarea>

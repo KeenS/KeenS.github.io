@@ -4,11 +4,10 @@ date: 2018-11-10T00:49:26+09:00
 description:
 title: "WebAssemblyとABI"
 ---
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # WebAssemblyとABI
 ----------------------
 [コンパイラ勉強会 - connpass](https://connpass.com/event/103976/)
@@ -369,5 +368,4 @@ WASM  [...|   |...|ptr|size|...|   |...]
 * 任意のコンパイラ - JS連携できるよ
 * RustからJSオブジェクトを扱う話はしてないよ
 
-</script>
-</section>
+</textarea>

@@ -4,11 +4,10 @@ date: 2018-10-05T19:55:29+09:00
 description:
 title: "Futureとその周辺"
 ---
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # Futureとその周辺
 ----------------------
 [情報科学若手の会 #51](https://wakate.org/2018/07/28/51th-general/)
@@ -566,8 +565,5 @@ https://tour.golang.org/concurrency/1
 * Lispはなんでもできる
 
 
-</script>
-</section>
+</textarea>
 
-<script src="https://unpkg.com/mermaid@7.0.4/dist/mermaid.min.js"></script>
-<script>mermaid.initialize({startOnLoad:true});</script>

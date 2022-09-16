@@ -7,11 +7,10 @@ description: "
 title: 正しいScalaのコードが欲しい
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # 正しいScalaのコードが欲しい
 ----------------------
 
@@ -189,5 +188,4 @@ export_code append
 * Isabelleで証明が出来るよ
 * Isabelleで証明したら正しいScalaのコードが手に入るよ
 
-</script>
-</section>
+</textarea>

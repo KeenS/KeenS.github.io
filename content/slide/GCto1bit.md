@@ -4,11 +4,10 @@ date: 2018-06-24T15:11:23+09:00
 description: "TCFMミートアップでの発表用"
 title: "GCと1bit"
 ---
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # GCと1bit
 ----------------------
 [TCFMミートアップ](https://techplay.jp/event/680870)
@@ -206,5 +205,4 @@ type t = {a: string, b: int, c: int list}
 * ランタイムとデータ表現面白いよ
 
 
-</script>
-</section>
+</textarea>

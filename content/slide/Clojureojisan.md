@@ -5,11 +5,10 @@ description: "Clojureおじさん"
 title: Clojureおじさん
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # Clojureおじさん
 ----------------------
 サイバーエージント新卒  
@@ -173,5 +172,4 @@ title: Clojureおじさん
 <span style="font-size:200%;">Why not start Clojure?</span>
 <!-- .slide: class="center" -->
 
-</script>
-</section>
+</textarea>

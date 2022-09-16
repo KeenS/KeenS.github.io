@@ -5,11 +5,10 @@ description: "Rustプログラマミートアップでの発表用"
 title: Rust in Production
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # Rust in Production
 ----------------------
 [Rust プログラマーミートアップ / Rust programmers' meetup - connpass](https://rust.connpass.com/event/49304/)
@@ -400,5 +399,4 @@ target/
 * テストとかデプロイとかまだ知見が足りない
 
 
-</script>
-</section>
+</textarea>

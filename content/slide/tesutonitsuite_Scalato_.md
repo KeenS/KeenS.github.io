@@ -7,11 +7,10 @@ description: "社内勉強会での発表用。
 title: テストについて、Scalaと。
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # テストについて、Scalaと。
 ----------------------
 サイバーエージェント アドテクスタジオ  
@@ -191,5 +190,4 @@ ScalaMeetUp テスト回
 * Gatlingについて紹介したよ
 
 
-</script>
-</section>
+</textarea>

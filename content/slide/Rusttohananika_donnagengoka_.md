@@ -7,11 +7,10 @@ description: "異種プログラミング言語格闘勉強会での発表用。
 title: Rustとは何か。どんな言語か。
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # Rustとは何か。どんな言語か。
 ----------------------
 [異種プログラミング言語格闘勉強会](http://kbkz.connpass.com/event/26677/)  
@@ -239,5 +238,4 @@ fn main(){
 
 
 
-</script>
-</section>
+</textarea>

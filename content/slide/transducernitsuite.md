@@ -5,11 +5,10 @@ description: "朝の3分スピーチ用"
 title: Transducerについて
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # Transducerについて
 ----------------------
 サイバーエージェント  
@@ -126,5 +125,4 @@ title: Transducerについて
 * [Clojure 1.7のtransducersを動かしてみよう - Qiita](http://qiita.com/tokomakoma123/items/1ca3fb0dddc5b901b032)
 * [core.async+transducers Shibuya.lisp #21](http://www.slideshare.net/ktsujister/coreasynctransducers-shibuyalisp-21)
 * [Hadoop Combinerメモ(Hishidama's Hadoop Combiner Memo)](http://www.ne.jp/asahi/hishidama/home/tech/apache/hadoop/Combiner.html)
-</script>
-</section>
+</textarea>

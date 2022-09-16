@@ -5,11 +5,10 @@ description: null
 title: SMLで函数型的正規表現マッチ
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # SMLで函数型的正規表現マッチ
 ----------------------
 
@@ -187,5 +186,4 @@ val it = true : bool
 
 * [KeenS/regexp](https://github.com/KeenS/regexp)
 
-</script>
-</section>
+</textarea>

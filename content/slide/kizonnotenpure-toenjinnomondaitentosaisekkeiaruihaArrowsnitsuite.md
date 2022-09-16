@@ -6,11 +6,10 @@ Arrowsについて。
 date: 2015-03-02T23:36:03+09:00
 title: 既存のテンプレートエンジンの問題点と再設計
 ---
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 <style type="text/css">
 .red {
 color: red;
@@ -347,5 +346,4 @@ Template flies like an arrow
   + メモリアロケーションをあまりしない
   + ユーザー側の速度まで考慮した
   + 柔軟
-</script>
-</section>
+</textarea>

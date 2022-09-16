@@ -4,11 +4,10 @@ date: 2020-11-15T15:54:34+09:00
 description:
 title: "Rust with Fearless Concurrency"
 ---
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # Rust with Fearless Concurrency
 ----------------------
 
@@ -1102,6 +1101,5 @@ async fn async_do() -> Result<(), io::Error> {
 * Rustを使うとある種の並行性由来のバグをコンパイルエラーにできる
 * Rustには並行性を上手く扱ってくれるライブラリが揃ってる
 
-</script>
-</section>
+</textarea>
 

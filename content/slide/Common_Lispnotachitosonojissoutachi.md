@@ -4,11 +4,10 @@ date: 2018-11-15T22:55:10+09:00
 description: "言語処理系勉強会での発表用"
 title: "Common Lispの多値とその実装達"
 ---
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # Common Lispの多値とその実装達
 ----------------------
 [言語処理系勉強会 Vol.1 - connpass](https://connpass.com/event/104863/)
@@ -617,5 +616,4 @@ SBCL
 * レジスタマシンの多値はハックが詰まってるよ
 * [コード](https://gitlab.com/snippets/1779413)
 
-</script>
-</section>
+</textarea>

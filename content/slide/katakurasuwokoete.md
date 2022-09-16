@@ -7,11 +7,10 @@ description: "
 title: 型クラスを越えて
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # 型クラスを越えて
 ----------------------
 [歌舞伎座.tech#10「型クラス勉強会」](http://kbkz.connpass.com/event/32420/)
@@ -376,5 +375,4 @@ println!("{:?} == {:?} ?: {:?}",
 * 型クラスの実装は効率的に出来るよ
 * 型クラスを使うと言語設計も変わるよ
 
-</script>
-</section>
+</textarea>

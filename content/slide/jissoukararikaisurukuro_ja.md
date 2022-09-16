@@ -8,11 +8,10 @@ description: "<p>新人研修でクロージャで躓いてる人が多いよう
 title: 実装から理解するクロージャ
 ---
 
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # 実装から理解するクロージャ
 ----------------------
 
@@ -348,5 +347,4 @@ AA略
 
 ※あくまで実装の1例です
 
-</script>
-</section>
+</textarea>
