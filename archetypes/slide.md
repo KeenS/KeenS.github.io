@@ -4,11 +4,10 @@ date: {{ .Date }}
 description:
 title: "{{ replace .TranslationBaseName "-" " " | title }}"
 ---
-<section data-markdown
+<textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-<script type="text/template">
 # {{ replace .TranslationBaseName "-" " " | title }}
 ----------------------
 
@@ -25,5 +24,4 @@ title: "{{ replace .TranslationBaseName "-" " " | title }}"
 * [Idein Inc.](https://idein.jp/)のエンジニア
 * Lisp, ML, Rust, Shell Scriptあたりを書きます
 
-</script>
-</section>
+</textarea>
