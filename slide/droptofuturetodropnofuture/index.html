@@ -15,39 +15,29 @@
 
         <meta http-equiv="content-type" content="text/html; charset=utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-
-        <meta name="twitter:card" content="summary" />
-        <meta name="twitter:site" content="@blackenedgold" />
-        <meta name="twitter:title" content="DropとFutureとDropのfuture | κeenのHappy Hacκing Blog"/>
-        <meta name="twitter:description" content="tfconでの発表用" />
 
         <title>DropとFutureとDropのfuture | κeenのHappy Hacκing Blog</title>
-        <link rel="stylesheet" href="https://KeenS.github.io/reveal.js/css/reveal.css">
-        <link rel='stylesheet' href='//fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css'>
+        <link rel="stylesheet" href='//fonts.googleapis.com/css?family=Open+Sans:400,300,600' type='text/css' />
         <link rel="stylesheet" href="https://KeenS.github.io/libraries/normalize.3.0.1.css" />
         <link rel="stylesheet" href="https://KeenS.github.io/css/liquorice.css" />
-        <link rel="stylesheet" href="https://KeenS.github.io/highlight.js/styles/agate.css">
-        <link rel="stylesheet" href="https://KeenS.github.io/css/cleanveal.css" type="text/css" />
         <link rel="apple-touch-icon" sizes="180x180" href="https://KeenS.github.io/apple-touch-icon.png">
         <link rel="icon" type="image/png" href="https://KeenS.github.io/favicon-32x32.png" sizes="32x32">
         <link rel="icon" type="image/png" href="https://KeenS.github.io/favicon-16x16.png" sizes="16x16">
         <link rel="manifest" href="https://KeenS.github.io/manifest.json">
         <link rel="mask-icon" href="https://KeenS.github.io/safari-pinned-tab.svg" color="#5bbad5">
+        <meta name="theme-color" content="#ffffff">
         <link rel="apple-touch-icon-precomposed" href="https://KeenS.github.io/apple-touch-icon-144-precomposed.png" sizes="144x144" />
         
-        <script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
-        <script>
-         if( window.location.search.match( /print-pdf/gi ) ) {
-             var link = document.createElement( 'link' );
-             link.rel = 'stylesheet';
-             link.type = 'text/css';
-             link.href = 'https:\/\/KeenS.github.io\/reveal.js/css/print/pdf.css';
-             document.getElementsByTagName( 'head' )[0].appendChild( link );
-         }
-        </script>
         
+        <link rel="stylesheet" href="https://KeenS.github.io/css/syntax-monokai.css" />
+<script type="text/x-mathjax-config">
+ MathJax.Hub.Config({ tex2jax: { inlineMath: [['$','$'], ["\\(","\\)"]] } });
+</script>
+<script async src="//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS_CHTML"></script>
+</script>
+<meta http-equiv="X-UA-Compatible" CONTENT="IE=EmulateIE7" />
+<link rel="stylesheet" href="//unpkg.com/mermaid@7.0.4/dist/mermaid.forest.min.css">
+
     </head>
     <body class="li-body">
 
@@ -116,21 +106,14 @@
 </div>
 
     </header>
-    <div class="reveal">
-        <div class="slides">
-            <textarea data-markdown
-    data-separator="\n===\n"
-    data-vertical="\n---\n"
-    data-notes="^Note:">
-
-
-[tfcon](https://techfeed.io/events/techfeed-conference-2022)での発表資料。
-
-[PDF](/pdf/tfcon.pdf)
-
-</textarea>
-
+    <div id="pdf-viewer-wrap" style="width: 100%">
+        <canvas id="pdf-viewer-canvas"></canvas>
+        <div>
+            <button id="pdf-viewer-prev">←</button>
+            <div style="display:inline"><input style="width:2.5em;text-align:right;" id="pdf-viewer-current-page">/<span id="page_count"></span></div>
+            <button id="pdf-viewer-next">→</button>
         </div>
+        <a href="https://KeenS.github.io/pdf/tfcon.pdf">View PDF</a>
     </div>
 </article>
 
@@ -148,41 +131,162 @@
         </div>
     </div>
 </footer>
-
-<script src="https://KeenS.github.io/reveal.js/js/reveal.js"></script>
-
+<script src="//cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js">
+</script>
 <script>
+ 
+ let page_header = document.getElementById('page-header');
+ let article_header = document.getElementById('article-header');
+ let article = document.getElementById('article-container');
+
+
+ function displayHeader() {
+     article_header.style.display = 'block';
+     page_header.style.display = 'block';
+     let height = 'calc(100% - ' + page_header.clientHeight + 'px)';
+     article.style.height = height;
+
+ }
+ function hideHeader() {
+     article_header.style.display = 'none';
+     page_header.style.display = 'none';
+     article.style.height = '100%';
+ }
 
  
+ var pdfDoc = null,
+     pageNum = 1,
+     pageRendering = false,
+     pageNumPending = null,
+     scale = 1,
+     outputScale = window.devicePixelRatio || 1,
+     canvas = document.getElementById('pdf-viewer-canvas'),
+     wrap = document.getElementById("pdf-viewer-wrap"),
+     ctx = canvas.getContext('2d'),
+     current_page = document.getElementById('pdf-viewer-current-page');
+
+
+ function renderPage(num) {
+     pageRendering = true;
+     
+     pdfDoc.getPage(num).then(function(page) {
+         if (num == 1) {
+             displayHeader()
+         } else {
+             hideHeader()
+         }
+         current_page.value = num;
+         var viewport = page.getViewport({scale: 1});
+         scale = wrap.offsetWidth / (viewport.width * outputScale);
+         viewport = page.getViewport({scale: scale});
+         canvas.height = Math.floor(viewport.height * outputScale);
+         canvas.width = Math.floor(viewport.width * outputScale);
+
+         var transform = outputScale !== 1
+                       ? [outputScale, 0, 0, outputScale, 0, 0]
+                       : null;
+
+         
+         var renderContext = {
+             canvasContext: ctx,
+             viewport: viewport,
+             transform: transform,
+         };
+         var renderTask = page.render(renderContext);
+
+         
+         renderTask.promise.then(function() {
+             pageRendering = false;
+             if (pageNumPending !== null) {
+                 
+                 renderPage(pageNumPending);
+                 pageNumPending = null;
+             }
+         });
+     });
+ }
+
+
+
  
- Reveal.initialize({
-     controls: true,
-     progress: true,
-     history: false,
-     center: false,
-     slideNumber: true,
+
+ function queueRenderPage(num) {
+     if (pageRendering) {
+         pageNumPending = num;
+     } else {
+         renderPage(num);
+     }
+ }
+
+ 
+
+
+ function onInputPage() {
+     var num = Number(current_page.value)
+     if (num <= 1 || num >= pdfDoc.numPages) {
+         return
+     }
+
+     queueRenderPage(num);
+ }
+
+ 
+
+ function onPrevPage() {
+     if (pageNum <= 1) {
+         return;
+     }
+     pageNum--;
+     queueRenderPage(pageNum);
+ }
+
+ 
+
+ function onNextPage() {
+     if (pageNum >= pdfDoc.numPages) {
+         return;
+     }
+     pageNum++;
+     queueRenderPage(pageNum);
+ }
+
+
+
+ 
+
+ pdfjsLib.getDocument('\/pdf\/tfcon.pdf').promise.then(function(pdfDoc_) {
+     pdfDoc = pdfDoc_;
+     document.getElementById('page_count').textContent = pdfDoc.numPages;
 
      
-     transition: Reveal.getQueryHash().transition || 'none', 
 
-     
-     
-     
 
+     let queryParams = new URLSearchParams(window.location.search);
+     console.log(queryParams.get('page'));
+     current_page.value = queryParams.get('page') || 1;
+     var num = Number(current_page.value)
+     if (num < 1 || num > pdfDoc.numPages) {
+         num = 1;
+     }
      
-     dependencies: [
-	 { src: 'https:\/\/KeenS.github.io\/reveal.js/plugin/markdown/marked.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
-	 { src: 'https:\/\/KeenS.github.io\/reveal.js/plugin/markdown/markdown.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
-	 { src: 'https:\/\/KeenS.github.io\/highlight.js/highlight.min.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } },
-	 { src: 'https:\/\/KeenS.github.io\/reveal.js/plugin/zoom-js/zoom.js', async: true, condition: function() { return !!document.body.classList; } },
-	 { src: 'https:\/\/KeenS.github.io\/reveal.js/plugin/notes/notes.js', async: true, condition: function() { return !!document.body.classList; } },
-         { src: 'https:\/\/KeenS.github.io\/reveal.js/plugin/math/math.js', async: true }
-     ]
+     renderPage(num);
  });
 
+ 
+ document.getElementById('pdf-viewer-prev').addEventListener('click', onPrevPage);
+ document.getElementById('pdf-viewer-next').addEventListener('click', onNextPage);
+ window.addEventListener('resize', function() { queueRenderPage(pageNum) });
+ window.addEventListener('keydown', function(ev) {
+     if (ev.key == 'ArrowRight') {
+         onNextPage()
+     }
+     if (ev.key == 'ArrowLeft') {
+         onPrevPage()
+     }
+ });
+ current_page.addEventListener('change', onInputPage);
 </script>
 
-<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+"://platform.twitter.com/widgets.js";fjs.parentNode.insertBefore(js,fjs);}}(document,"script","twitter-wjs");</script>
 <script type="text/javascript">
  function toggle(id) {
      var e = document.getElementById(id);
@@ -197,37 +301,3 @@
 </html>
 
 
-<script>
- window.onload = 
-     
-     (function(document, Reveal) {
-         return function() {
-             let page_header = document.getElementById("page-header");
-             let article_header = document.getElementById("article-header");
-             let article = document.getElementById("article-container");
-
-
-             function displayHeader() {
-                 article_header.style.display = "block";
-                 page_header.style.display = "block";
-                 let height = "calc(100% - " + page_header.clientHeight + "px)";
-                 article.style.height = height;
-
-             }
-             function hideHeader() {
-                 article_header.style.display = "none";
-                 page_header.style.display = "none";
-                 article.style.height = "100%";
-             }
-             Reveal.addEventListener( 'slidechanged', function( event ) {
-                 if (event.indexh === 0 && event.indexv === 0) {
-                     displayHeader();
-                 } else {
-                     hideHeader();
-                 }
-             } );
-             displayHeader()
-
-         }
-     })(document, Reveal);
-</script>
