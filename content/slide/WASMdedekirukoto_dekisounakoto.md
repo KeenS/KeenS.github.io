@@ -1,14 +1,14 @@
 ---
 categories: [WebAssembly]
 date: 2022-11-02T21:31:40+09:00
-description: みんなのPython勉強会での発表用。比較的低レベルなWASMの入門
-title: "WASMでできること、できそうなこと"
+description: みんなのPython勉強会での発表用。比較的低レベルなWasmの入門
+title: "Wasmでできること、できそうなこと"
 ---
 <textarea data-markdown
     data-separator="\n===\n"
     data-vertical="\n---\n"
     data-notes="^Note:">
-# WASMでできること、できそうなこと
+# Wasmでできること、できそうなこと
 ----------------------
 
 [みんなのPython勉強会#87 - connpass](https://startpython.connpass.com/event/263565/)
@@ -23,19 +23,19 @@ title: "WASMでできること、できそうなこと"
 * [@blackenedgold](https://twitter.com/blackenedgold)
 * [Idein Inc.](https://idein.jp/)のエンジニア
 * Lisp, ML, Rust, Idrisあたりを書きます
-* WASM関連プロジェクト: [WebML](https://github.com/KeenS/webml)、[WebAssembler-rs](https://github.com/KeenS/WebAssembler-rs)
+* Wasm関連プロジェクト: [WebML](https://github.com/KeenS/webml)、[WebAssembler-rs](https://github.com/KeenS/WebAssembler-rs)
 
 ===
 # 今日の話
 ----------
 
 * × ツールの使い方
-* × WASMでのアプリケーションの作り方
-* ○ WebAssembly(WASM)がどんな技術なのか
-* ○ WASMをどこで使うといいのか
+* × Wasmでのアプリケーションの作り方
+* ○ WebAssembly(Wasm)がどんな技術なのか
+* ○ Wasmをどこで使うといいのか
 
 ===
-# WASMって何？
+# Wasmって何？
 ------------------------------
 
 * ブラウザで(も)動くアセンブリっぽいもの
@@ -100,7 +100,7 @@ $ wasm-rs -o out.wasm hello.wat
 この `out.wasm` をブラウザで `fetch` したりしてロードする
 
 ===
-# WASMの実行
+# Wasmの実行
 ------------
 
 バイナリをロードしてコンパイルすると関数が参照できるのでJSから呼ぶ
@@ -118,15 +118,15 @@ console.log(results.instance.exports.sum(10));
 → [デモ](https://github.com/KeenS/wasm-hello-demo)
 
 ===
-# WASMの目的
+# Wasmの目的
 ------------
 
 * Cから変換できる、ロードが高速、実行が高速の3拍子
   + C→JSの変換は以前からemscriptenというのがあった
   + 高速な実行は以前からasm.jsというのがあった
   + これらはロードの遅さが課題だった
-* WASMの当初の目標は **ロード** が高速
-* WASMはJSを置き換えるもの **ではない**
+* Wasmの当初の目標は **ロード** が高速
+* WasmはJSを置き換えるもの **ではない**
   + Cのライブラリをブラウザで動かすなどの用途
   + 速度面でJSを補完する働き
 * 基本はJSよりできることが少ない
@@ -134,7 +134,7 @@ console.log(results.instance.exports.sum(10));
 
 ===
 
-# 言語としてのWASM
+# 言語としてのWasm
 -----------------
 
 * 整数や浮動小数点数など基本的な型のみ
@@ -147,25 +147,25 @@ console.log(results.instance.exports.sum(10));
   + コンパイラなどで生成する前提
 
 ===
-# WASMとブラウザ
+# Wasmとブラウザ
 -------------------------
 
-* JS APIでWASMをコンパイルしたり実行したりできる
+* JS APIでWasmをコンパイルしたり実行したりできる
   + コンパイルはバイナリ→機械語
-* JSとWASM間で関数の相互呼出ができる
-  + `console.log` とかをWASMにインポートもできる
-* JSからWASMのメモリを操作できる
+* JSとWasm間で関数の相互呼出ができる
+  + `console.log` とかをWasmにインポートもできる
+* JSからWasmのメモリを操作できる
   + 文字列などのやりとりはこれを使ってやる
   + オブジェクトもJSONシリアライズしてやりとり
   + 参考: [WebAssembly と JavaScript との間で自在にデータをやりとりする](https://zenn.dev/a24k/articles/20221107-wasmple-passing-buffer)
 
 ===
 
-# JSをWASMから呼ぶ
+# JSをWasmから呼ぶ
 ---------------------------
 →[デモ](https://github.com/KeenS/wasm-hello-demo)
 
-WASM
+Wasm
 ```lisp
 (module
   ; "console" の "log" をインポートする
@@ -189,10 +189,10 @@ results.instance.exports.printLog();
 ```
 
 ===
-# WASMでできないこと
+# Wasmでできないこと
 -------------------
 
-* WASMの外部への作用が基本できない
+* Wasmの外部への作用が基本できない
   + DOM操作
   + HTTP操作
   + etc...
@@ -202,7 +202,7 @@ results.instance.exports.printLog();
   + JSとの役割分けは使ってみて判断
 
 ===
-# WASMの利用例
+# Wasmの利用例
 --------------
 
 * (教育用に)PostgreSQLをブラウザで[動かす](https://supabase.com/blog/postgres-wasm)
@@ -214,10 +214,10 @@ results.instance.exports.printLog();
   + Unityから出力したゲームみたいにロードが重いゲームが軽くなる
 
 ===
-# (オフトピ)Web外WASM
+# (オフトピ)Web外Wasm
 -----------
 
-* WASMは単体ではブラウザと密結合してないのでブラウザ外でも使える
+* Wasmは単体ではブラウザと密結合してないのでブラウザ外でも使える
 * プラグインとかそういうった仕組みに向いてる
   + 素のままでは外界に作用できないので安全性が高い
   + 外部から関数を与えられるので簡単にカスタマイズできる
@@ -246,7 +246,7 @@ results.instance.exports.printLog();
 
 
 ===
-# WASMで動かせる言語
+# Wasmで動かせる言語
 -------------------
 
 * Q: 逆にブラウザで動かすのに向いた言語は？
@@ -258,14 +258,14 @@ results.instance.exports.printLog();
   + クロスコンパイルが簡単
 
 ===
-# WASMで動かせる言語
+# Wasmで動かせる言語
 -------------------
 
 * 今のところRustが有力候補
   + ✅事前コンパイル
   + ✅GCはない
   + ✅標準ライブラリを省ける
-  + ✅WASM向けのクロスコンパイルサポートが充実
+  + ✅Wasm向けのクロスコンパイルサポートが充実
 * C/C++と違ってメモリ安全なのでアプリケーションを書くのに向いてる
   + とはいえC/C++は既存のライブラリをブラウザで動かす用途で重要
 
@@ -291,21 +291,22 @@ request
 
 
 ===
-# WASM = Rust?
+# Wasm = Rust?
 ------------
 
-* Q: WASM使ってブラウザでコードを動かすのにRustは必須？
+* Q: Wasm使ってブラウザでコードを動かすのにRustは必須？
 * A: 難しいところ
   + 今のところお勧めできる選択肢がRustくらいしかない
     - Unityとかツールから出力するならまた話は別
-  + ツールの充実やWASMの進化で状況変わるかも
+  + ツールの充実やWasmの進化で状況変わるかも
 
 ===
-# WASMの発展
+# Wasmの発展
 ------------
 
 * ちょくちょく「今のところは」とか出てきたやつ。
-* WASMは最低限の機能(MVP)から[proposals](https://github.com/WebAssembly/proposals)という形でインクリメンタルに拡張していっている
+* Wasmは最低限の機能(MVP)から[proposals](https://github.com/WebAssembly/proposals)という形でインクリメンタルに拡張していっている
+  + → Proposalsを集めて[Wasm 2.0](https://webassembly.github.io/spec/core/intro/introduction.html)が策定中
 * パフォーマンスのためのものやWAMSでできることを増やすものなど様々
 
 ===
@@ -324,7 +325,7 @@ request
 # まとめ
 ---------
 
-* WASMはブラウザで動く第二の言語だよ
+* Wasmはブラウザで動く第二の言語だよ
   + 手で書くものではなく他言語からコンパイルされるよ
   + JSを置き換えるのではなく相補的なものだよ
 * JSより速く動くけどユーザとの作用はJSに依存するよ
