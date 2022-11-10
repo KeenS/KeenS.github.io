@@ -94,7 +94,7 @@ title: "Wasmでできること、できそうなこと"
 
 
 ```shell
-$ wasm-rs -o out.wasm hello.wat
+$ wasm-as -o out.wasm hello.wat
 ```
 
 この `out.wasm` をブラウザで `fetch` したりしてロードする
