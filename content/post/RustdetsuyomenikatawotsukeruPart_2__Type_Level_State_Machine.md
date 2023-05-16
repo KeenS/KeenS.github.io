@@ -89,7 +89,7 @@ struct PersonBuilderAge {
 }
 impl PersonBuilderAge {
     // ageは最後
-    pub fn name(self, age: u32) -> PersonBuilder {
+    pub fn age(self, age: u32) -> PersonBuilder {
         PersonBuilder {
             id: self.id,
             name: self.name,
