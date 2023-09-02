@@ -92,7 +92,7 @@ def extract_metadata(file)
   input = IO.read(file)
   yaml= input.split("---")[1]
 
-  data = YAML.load(yaml)
+  data = YAML.load(yaml, permitted_classes: [Time])
 
   titles = p(tokenize(data["title"]).map {|frag|CGI.escapeHTML(frag)})
   date = data["date"].to_date
