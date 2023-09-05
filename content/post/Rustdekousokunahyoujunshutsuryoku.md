@@ -220,10 +220,15 @@ fn main() {
     let out = stdout();
     let mut out = BufWriter::new(out.lock());
     for _ in 0..10_000_000 {
-        out.write(b"yes\n").unwrap();
+        write!(out, "yes\n").unwrap();
     }
 }
 ```
+
+2023-09-05 追記: 
+コードが間違っていたので直しました。今日の三井君さんありがとうございます。
+<blockquote class="twitter-tweet"><p lang="ja" dir="ltr"><a href="https://twitter.com/blackenedgold?ref_src=twsrc%5Etfw">@blackenedgold</a> <br>下記の記事で、「ということで実験してみましょう。まずは指摘されたコード。」以降に書かれている2つのコードが全く同じなので、どちらかのコードが記載まちがえていそうです。<br><br>postscript.<br>この記事、おもしろくて学びも多かったです。<a href="https://t.co/oRdcKNWTK8">https://t.co/oRdcKNWTK8</a></p>&mdash; 今日の三井君 (@todays_mitsui) <a href="https://twitter.com/todays_mitsui/status/1698579738774962329?ref_src=twsrc%5Etfw">September 4, 2023</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script> 
+/追記
 
 ``` console
 $ rustc -O yes.rs
