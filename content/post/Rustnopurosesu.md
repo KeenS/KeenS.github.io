@@ -126,7 +126,7 @@ let mut child2 = Command::new("grep")
 
 {
     // Someと分かっているのでunwrapする。
-    // この辺はrustの型システテムの限界。
+    // この辺はrustの型システムの限界。
     let out = child1.stdout.as_mut().unwrap();
     let in_ = child2.stdin.as_mut().unwrap();
     // 1つめのプロセスの出力から2つめのプロセスの入力へデータをコピーする
@@ -157,7 +157,7 @@ Unixに依存することを認めてしまえばもうちょっと色々なこ�
 use std::os::unix::process::CommandExt;
 ```
 
-するといくつか追加のメソドが生えてくる仕組みになってます。
+するといくつか追加のメソッドが生えてくる仕組みになってます。
 
 例えば、`exec` が使えます。
 
