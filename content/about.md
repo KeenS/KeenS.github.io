@@ -14,12 +14,13 @@ categiores: []
 - 2011-04 - 2013-03 東京大学理科I類
 - 2013-04 - 2015-03 東京大学理学部数学科(中退)
 - 2015-04 - 2016-12 サイバーエージェント(エンジニア)
-- 2017-01 - 現在    Idein Inc. (エンジニア)
+- 2017-01 - 2023-08    Idein Inc. (エンジニア)
+- 2023-09 - 現在    株式会社Preferred Networks
 
 ## Activities
 
 - 2014-06 - 2017-01 [Shibuya.lisp](http://shibuya.lisp-users.org/)の運営
-- 2016-02 - 現在    [Rustドキュメント翻訳プロジェクト](https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/)
+- 2016-02 - 2019-10 [Rustドキュメント(1版)翻訳プロジェクト](https://rust-lang-ja.github.io/the-rust-programming-language-ja/1.6/book/)
 - 2013 [ISUCON3](http://isucon.net) 学生賞
 - 2014 [ISUCON4](http://isucon.net) 学生賞
 
