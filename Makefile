@@ -12,13 +12,13 @@ THEME_ORIGIN=git@github.com:KeenS/liquorice-k.git
 default: preview
 
 preview:
-	$(HUGO) server -D -vw -t $(THEME)
+	$(HUGO) server -D --logLevel info -w -t $(THEME)
 
 build:
-	$(HUGO) -v -t $(THEME)
+	$(HUGO) --logLevel info -t $(THEME)
 
 deploy:
-	$(HUGO) -v -t $(THEME)
+	$(HUGO) --logLevel info -t $(THEME)
 	cd $(BLOG_PATH) && \
 		$(GIT) add . && \
 		$(GIT) commit -m "Site updated at `date '+%Y-%m-%d %H:%M:%S UTC'`" && \
