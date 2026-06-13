@@ -67,7 +67,371 @@
       <pubDate>Sat, 10 Nov 2018 00:49:26 +0900</pubDate>
       
       <guid>https://KeenS.github.io/slide/webassemblytoabi/</guid>
-      <description># WebAssemblyとABI ---------------------- [コンパイラ勉強会 - connpass](https://connpass.com/event/103976/) &lt;!-- .slide: class=&#34;center&#34; --&gt; === # About Me --------- ![κeenのアイコン](/images/kappa.png) &lt;!-- .element:</description>
+      <description>&lt;textarea data-markdown
+    data-separator=&#34;\n===\n&#34;
+    data-vertical=&#34;\n---\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+# WebAssemblyとABI
+----------------------
+[コンパイラ勉強会 - connpass](https://connpass.com/event/103976/)
+
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+===
+# About Me
+---------
+![κeenのアイコン](/images/kappa.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; width=&#34;20%&#34; --&gt;
+
+ * κeen
+ * [@blackenedgold](https://twitter.com/blackenedgold)
+ * Github: [KeenS](https://github.com/KeenS)
+ * [Idein Inc.](https://idein.jp/)のエンジニア
+ * Lisp, ML, Rust, Shell Scriptあたりを書きます
+
+===
+
+# WebAssmblyとは
+----------------
+
+* Webブラウザで動く&lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;1&#34; --&gt;
+* アセンブリ&lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;2&#34; --&gt;
+* ではない&lt;!-- .element: class=&#34;fragment&#34; data-fragment-index=&#34;3&#34; --&gt;
+
+===
+# WASMの動作環境
+------------------------
+
+* ブラウザ
+* NodeJS
+* [CommonWA](https://github.com/CommonWA/cwa-spec)
+* [losfair/IceCore](https://github.com/losfair/IceCore) : Build efficient and reliable backend applications in WebAssembly.
+* [Introducing Wasmjit: A kernel mode WebAssembly runtime for Linux | Packt Hub](https://hub.packtpub.com/introducing-wasmjit-a-kernel-mode-webassembly-runtime-for-linux/)
+* [piranna/wasmachine: Put WebAssembly in your washing machine](https://github.com/piranna/wasmachine)
+
+===
+
+# 言語としてのWASM
+-----------------
+
+* アセンブラっぽい雰囲気
+* スタックマシン
+* 無限のレジスタ(変数)とスタックがある
+* コードの単位は関数
+* 上位にモジュールがある
+* モジュール毎に1仮想マシン(インスタンス)
+
+===
+
+# コード例1
+-----------
+
+```webassembly
+(module
+  (func $add (param $lhs i32) (param $rhs i32) (result i32)
+    get_local $lhs
+    get_local $rhs
+    i32.add)
+  (export &#34;add&#34; (func $add)))
+```
+
+===
+
+# コード例2
+-----------
+
+``` webassembly
+(func $sum1 (param $n i32) (result i32) (local $sum i32) (local $i i32)
+  block $break
+    loop $loop
+      get_local $i
+      get_local $n
+      i32.ge_s
+      br_if $break
+      get_local $sum
+      get_local $i
+      i32.add
+      set_local $sum
+      get_local $i
+      i32.const 1
+      i32.add
+      set_local $i
+      br $loop
+    end
+  end
+  get_local $sum
+  return)
+```
+
+===
+# コード例3
+------------
+
+``` webassembly
+(func $sum2 (param $n i32) (result i32) (local $sum i32) (local $i i32)
+  (block $break
+    (loop $loop
+      (br_if $break (i32.ge_s (get_local $i) (get_local $n)))
+      (set_local $sum (i32.add (get_local $sum) (get_local $i)))
+      (set_local $i (i32.add (get_local $i) (i32.const 1)))
+      (br $loop)))
+  (return (get_local $sum)))
+```
+
+===
+
+# WASM詳細
+-----------
+
+* 型は4つ (`i32`, `i64`, `f32`, `f64`)
+* モジュールに色々ついてくる
+  * メモリ
+  * 関数import/export
+  * グローバル変数
+* インスタンスの情報はJS側から色々アクセスできる
+
+===
+# import/export
+----------------
+
+``` webassembly
+(module
+  (type $alert_type (func (param i32)))
+  (import &#34;module&#34; &#34;alert&#34; (func $alert (type $alert_type)))
+  (func $add (param $lhs i32) (param $rhs i32) (result i32)
+    get_local $lhs
+    get_local $rhs
+    i32.add)
+  (func $run
+    (call $alert (call $add (i32.const 1) (i32.const 2))))
+  (export &#34;run&#34; (func $run)))
+```
+
+===
+# import/export
+----------------
+
+``` webassembly
+fetch(&#39;../out/main.wasm&#39;).then(response =&gt;
+  response.arrayBuffer()
+).then(bytes =&gt;
+   WebAssembly.instantiate(bytes, {&#34;module&#34;: {&#34;alert&#34;: alert}})
+).then(results =&gt; {
+  instance = results.instance;
+  instance.exports.run();
+}).catch(console.error);
+```
+
+===
+# メモリのexport
+----------------
+
+``` webassembly
+(module
+  (memory $mem 10)
+  (export &#34;memory&#34; (memory $mem)))
+```
+
+``` javascript
+// メモリを直接いじれる
+instance.exports.memory.buffer
+
+```
+
+===
+# 本題
+------
+
+* この仕様でJS-WASM間のABIどうしたらいい？
+  + 型は4種類の即値のみ
+  + メモリは触れる
+===
+
+# 答え
+------
+
+* Rustが既に実装している
+* [Rust and WebAssembly](https://github.com/rustwasm)
+* 以後追っていく
+
+===
+# JS -&gt; Rust
+-------------
+
+* Rustでメモリを確保してJSが渡す
+
+===
+# JS -&gt; Rust
+-------------
+
+
+``` webassembly
+#[wasm_bindgen]
+fn greet(name: &amp;str) {
+  alert(&amp;format!(&#34;hello, {}!&#34;, name))
+}
+```
+
+===
+# JS -&gt; Rust
+-------------
+
+
+``` webassembly
+function passStringToWasm(arg) {
+    const buf = cachedTextEncoder.encode(arg);
+    const ptr = wasm.__wbindgen_malloc(buf.length);
+    getUint8Memory().set(buf, ptr);
+    return [ptr, buf.length];
+}
+```
+
+===
+# JS -&gt; Rust
+-------------
+
+``` webassembly
+export function greet(arg0) {
+    const [ptr0, len0] = passStringToWasm(arg0);
+    try {
+        return wasm.greet(ptr0, len0);
+
+    } finally {
+        wasm.__wbindgen_free(ptr0, len0 * 1);
+
+    }
+
+}
+```
+
+===
+# Rust -&gt; JS
+------------
+
+* 可能ならポインタのまま渡す
+* 不可能なら指定されたメモリに書き込む
+
+===
+
+# Rust -&gt; JS
+------------
+ポインタ
+
+``` rust
+#[wasm_bindgen]
+impl Universe {
+    pub fn new() -&gt; Universe {
+        // ...
+    }
+}
+```
+
+===
+# Rust -&gt; JS
+------------
+ポインタ
+
+``` javascript
+export class Universe {
+    static __wrap(ptr) {
+        const obj = Object.create(Universe.prototype);
+        obj.ptr = ptr;
+
+        return obj;
+    }
+
+    free() {
+        const ptr = this.ptr;
+        this.ptr = 0;
+        freeUniverse(ptr);
+    }
+
+    /**
+    * @returns {Universe}
+    */
+    static new() {
+        return Universe.__wrap(wasm.universe_new());
+    }
+}
+```
+
+===
+# Rust -&gt;  JS
+--------
+メモリ
+
+``` rust
+#[wasm_bindgen]
+impl Universe {
+    pub fn render(&amp;self) -&gt; String {
+        self.to_string()
+    }
+}
+
+```
+
+===
+# Rust -&gt; JS
+--------
+メモリ
+
+``` javascript
+
+export class Universe {
+    render() {
+        const retptr = globalArgumentPtr();
+        wasm.universe_render(retptr, this.ptr);
+        const mem = getUint32Memory();
+        const rustptr = mem[retptr / 4];
+        const rustlen = mem[retptr / 4 + 1];
+
+        const realRet = getStringFromWasm(rustptr, rustlen).slice();
+        wasm.__wbindgen_free(rustptr, rustlen * 1);
+        return realRet;
+
+    }
+}
+```
+===
+# メモリ
+------------
+メモリ
+
+``` javascript
+let cachedGlobalArgumentPtr = null;
+function globalArgumentPtr() {
+    if (cachedGlobalArgumentPtr === null) {
+        cachedGlobalArgumentPtr = wasm.__wbindgen_global_argument_ptr();
+    }
+    return cachedGlobalArgumentPtr;
+}
+```
+
+===
+# Rust -&gt; JS
+--------
+メモリ
+
+
+``` text
+JS     retprt
+            |      rustptr
+----        |      |            データ
+            v      v            v
+WASM  [...|   |...|ptr|size|...|   |...]
+           |       ^ |          ^
+           +-------+ +----------+
+```
+
+===
+# まとめ
+---------
+
+* WebAssemblyというWebとは限らないアセンブリでないものがあるよ
+* シンプルな仕様だよ
+* 任意のコンパイラ - JS連携できるよ
+* RustからJSオブジェクトを扱う話はしてないよ
+
+&lt;/textarea&gt;</description>
     </item>
     
     <item>
@@ -85,7 +449,332 @@
       <pubDate>Thu, 16 Feb 2017 15:46:21 +0900</pubDate>
       
       <guid>https://KeenS.github.io/slide/webassemblytokonpairatorantaimu/</guid>
-      <description># WebAssemblyとコンパイラとランタイム ---------------------- [emscripten night !! #3 - connpass](https://emsn.connpass.com/event/48100/) &lt;!-- .slide: class=&#34;center&#34; --&gt; === # About Me --------- ![κeenのアイコン](/images/kappa.png</description>
+      <description>&lt;textarea data-markdown
+    data-separator=&#34;\n===\n&#34;
+    data-vertical=&#34;\n---\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+# WebAssemblyとコンパイラとランタイム
+----------------------
+[emscripten night !! #3 - connpass](https://emsn.connpass.com/event/48100/)
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+===
+# About Me
+---------
+![κeenのアイコン](/images/kappa.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; width=&#34;20%&#34; --&gt;
+
+ * κeen
+ * [@blackenedgold](https://twitter.com/blackenedgold)
+ * Github: [KeenS](https://github.com/KeenS)
+ * [Idein Inc.](https://idein.jp/)のエンジニア
+ * Lisp, ML, Rust, Shell Scriptあたりを書きます
+
+===
+# 何の話
+---------
+
+* WebAssemblyをバックエンドに使う言語を作りたい
+* [KeenS/webml: An ML like toy language compiler](https://github.com/KeenS/webml)
+* 既に発表したものの補足記事的な
+  + [コンパイラの人からみたWebAssembly | κeenのHappy Hacκing Blog](https://keens.github.io/slide/konpairanoninkaramitaWebAssembly/)
+  + ある程度再度説明します
+
+===
+# アジェンダ
+------------
+
+* なぜWebAssembly
+* コンパイラ
+* コード生成
+* ランタイム
+
+===
+
+# なぜWebAssembly
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+===
+# なぜWebAssembly
+----------------
+
+* なんかバイナリでテンション上がる
+* ポータブルでコンパクトで速い
+* 機能的にJSを越えるかもしれない…？
+* コンパイラがブラウザで動くと言語導入のハードル下がる
+  + 気軽に試せる
+  + コンパイラだけでなく吐いたコードもブラウザで動かしたい
+
+===
+# WASM over LLVM
+----------------
+
+* 既存のJS環境と協調する
+  + JSとの相互呼び出しとか
+* **non-determinismが少ない**
+* 細かいアラインメント考える必要がない
+* **API安定しそう**
+
+===
+
+# WASM over asm.js
+--------------------
+
+* ブラウザ以外への組込みもサポート
+  + Node.jsとか
+  + **JITエンジンに使えそう**
+* プラットフォーム
+* 実行までのレイテンシが短かい
+* asm.jsより速度を出しやすい設計
+* テキストフォーマットで生成コードの文法エラーが怖い
+* 将来機能が増えるかも
+
+===
+# WebAssemblyの現状
+-------------------
+
+* Minimum Viable Product(MVP)
+* 機能を削ってとりあえず動くものを作ってる
+* 今はC/C++からLLVMを通して吐けるのが目標
+  + C/C++には不要でも自分の言語に欲しい機能は……
+* 今後SIMDとかスレッドとかDOM APIとか増えていく
+
+===
+
+# コンパイラ
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+===
+# WASM概要
+----------
+
+* WASMには以下がある
+  + 関数
+    - 関数内ローカル変数
+  + リニアメモリ
+  + グローバル変数
+  + テーブル
+  + importテーブル
+  + exportテーブル
+
+===
+# WASM実行モデル
+--------------
+
+* i32,i64,f32,f64のみ
+* **スタックマシン**
+  + 命令のオペランドや関数の引数はスタック経由で渡す
+  + 1 passのコード生成が楽そう
+* 無限のローカル変数が使える
+  + 型がある
+* 関数の引数はローカル変数経由で渡される
+* コントロールフローはgotoじゃなくてstructured
+  + 静的検証がしやすいらしい
+  + 安全だけどコンパイラ的には…
+
+===
+
+# コントロールフロー
+-------------------
+
+* `loop` + `br` (名前付き)
+* `block` + `br` (名前付き)
+* `br_if` or `br_table`
+* `if` + `else` + `end`
+* `return`
+* 等
+
+===
+
+# コントロールフロー
+-------------------
+
+* gotoがない
+  + `br` はブランチじゃなくてブレイク
+* gotoからstructuredに[変換出来る](https://github.com/kripken/emscripten/blob/master/docs/paper.pdf)
+    + loop, block, br, br_ifを使う
+* 高級言語から変換するなら `if` を使う
+  + ifが2系統あることになる
+
+===
+# サンプル
+---------
+
+``` javascript
+function geometricMean(start, end) {
+  start = start|0; // start has type int
+  end = end|0;     // end has type int
+  return +exp(+logSum(start, end) / +((end - start)|0));
+}
+...
+```
+
+===
+# サンプル
+---------
+
+```wasm
+(module
+  (type (;0;) (func (param i64 i64) (result f64)))
+  (type (;1;) (func (param i64 i64) (result f64)))
+  (type (;2;) (func (param f64) (result f64)))
+  (func (;0;) (type 0) (param i64 i64) (result f64)
+    (get_local 0)
+    (get_local 1)
+    (call 1)
+    (get_local 1)
+    (get_local 0)
+    (i64.sub)
+    (f64.convert_s/i64)
+    (f64.div)
+    (call 2))
+  ...)
+```
+
+===
+# サンプル
+---------
+
+```wasm
+(module
+  (type (;0;) (func (param i64 i64) (result f64)))
+  (type (;1;) (func (param i64 i64) (result f64)))
+  (type (;2;) (func (param f64) (result f64)))
+  (func (;0;) (type 0) (param i64 i64) (result f64)
+    (call 2
+      (f64.div
+       (call 1 (get_local 0) (get_local 1))
+       (f64.convert_s/i64
+        (i64.sub
+         (get_local 1)
+         (get_local 0))))))
+  ...)
+```
+
+===
+
+# WebMLコンパイラ
+------------
+
+* パーサ、AST、HIR、MIR、LIR
+* LIRがRTLなのでそれをWASMに変換したい
+* gotoからstructured control flow…
+
+===
+
+```
+[コード]
+   | パーサ
+ [AST] 型推論とか
+   | AST2HIR
+ [HIR] 早期最適化、K正規化、A正規化など
+   | HIR2MIR
+ [MIR] 諸々の最適化
+   | MIL2LIR
+ [LIR] シリアライズ、レジスタ割り当てなど
+   | コード生成
+ [WASM]
+```
+
+===
+
+# 変数
+------
+
+* LIRはレジスタで計算する
+* LIRはCFG由来の大量の変数を使う
+  + レジスタ割り当ては一旦置いとく
+* WASMはスタックで計算する
+* どうコード生成すると最適か？
+
+===
+
+```
+fun main: () -&gt; i64 = {
+    entry@0:
+        r0: i64 &lt;- 1
+        r1: i32 &lt;- 0
+        r2: i64 &lt;- 1
+        r3: i64 &lt;- 2
+        r4: i64 &lt;- 3
+        r5: i64 &lt;- r3 * r4
+        r6: i64 &lt;- 4
+        r7: i64 &lt;- r5 + r6
+        r8: i64 &lt;- r2 + r7
+        r9: i64 &lt;- 1
+        r10: i64 &lt;- 2
+        r11: i64 &lt;- r9 + r10
+        r12: i64 &lt;- 3
+        r13: i64 &lt;- r11 * r12
+        r14: i64 &lt;- 4
+        r15: i64 &lt;- r13 + r14
+        r16: i32 &lt;- 1
+        jump_if_zero r16 then@1
+        jump else@2
+    then@1:
+        r17: i64 &lt;- r8
+        jump join@3
+    else@2:
+        r17: i64 &lt;- r15
+        jump join@3
+    join@3:
+        r18: i64 &lt;- 1
+        r19: i64 &lt;- r18 + r15
+        r20: i64 &lt;- 1
+        r21: i64 &lt;- call d@9(r20, )
+        r22: i64 &lt;- 2
+        r23: i64 &lt;- call #g37(r22, )
+        r24: i64 &lt;- 1
+        r25: i64 &lt;- heapalloc(16)
+        [r25+0] &lt;- &lt;anonfun&gt;@11
+        [r25+8] &lt;- r24
+        r26: i64 &lt;- 0
+        ret r26
+}
+```
+
+===
+
+# 変数割り当て
+--------------
+
+* SSAの1変数 = WASMの1ローカル変数
+* スタックの効率利用を完全に無視
+* 計算はLV→スタック→LVに書き戻し
+* どうせスタックもLVもレジスタ扱いにしてレジスタ割り当てされるでしょ
+* （測ってないけど）多分速度は変わらない
+
+===
+
+# CFG
+-----
+
+* コンパイラが一旦gotoを使うコントロールフローグラフを作る
+* WASMにはgotoがない
+* どうやったら生成出来るか？
+* そもそも生成出来るの？
+
+===
+
+# blockと前方ジャンプ
+------------
+
+* `block` + `break` で前方ジャンプ
+* 閉じ括弧の位置にジャンプ
+* `block` の位置は自由
+
+===
+
+&lt;pre&gt;
+&lt;code&gt;
+(&lt;span class=&#39;hljs-keyword&#39;&gt;block&lt;/span&gt;
+  ...
+  (&lt;span class=&#39;hljs-keyword&#39;&gt;br&lt;/span&gt; 0)--+
+  ...     |
+  )&lt;------+
+&lt;/code&gt;
+&lt;/pre&gt;
+&lt;p&gt;===&lt;/p&gt;</description>
     </item>
     
     <item>

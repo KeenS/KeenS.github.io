@@ -17,7 +17,9 @@
       <pubDate>Sun, 03 Oct 2021 17:17:23 +0900</pubDate>
       
       <guid>https://KeenS.github.io/blog/2021/10/03/sml_noexistential_typedeasobu/</guid>
-      <description>κeenです。SML# 3.7.0から実験的機能として _dynamiccase に存在型のサポートが入ったので試してみます。 本記事はSML# 4.0.0 with LLVM 12.0.0で動作確</description>
+      <description>&lt;p&gt;κeenです。SML# 3.7.0から実験的機能として &lt;code&gt;_dynamiccase&lt;/code&gt; に存在型のサポートが入ったので試してみます。&lt;/p&gt;
+&lt;!-- more --&gt;
+&lt;p&gt;本記事はSML# 4.0.0 with LLVM 12.0.0で動作確認を行っています。&lt;/p&gt;</description>
     </item>
     
     <item>
@@ -130,7 +132,578 @@ n月刊ラムダノートに書いた「代数的データ型とパターンマ�
       <pubDate>Mon, 17 Jul 2017 21:04:57 +0900</pubDate>
       
       <guid>https://KeenS.github.io/slide/saikinnosml_nowadai/</guid>
-      <description># 最近のSML#の話題 ---------------------- [ML勉強会 #2 - connpass](https://ml-lang.connpass.com/event/58151/) &lt;!-- .slide: class=&#34;center&#34; --&gt; === # About Me --------- ![κeenのアイコン](/images/kappa.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; width=&#34;20%&#34; --&gt; * κee</description>
+      <description>&lt;textarea data-markdown
+    data-separator=&#34;\n===\n&#34;
+    data-vertical=&#34;\n---\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+# 最近のSML#の話題
+----------------------
+[ML勉強会 #2 - connpass](https://ml-lang.connpass.com/event/58151/)
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+===
+# About Me
+---------
+![κeenのアイコン](/images/kappa.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; width=&#34;20%&#34; --&gt;
+
+ * κeen
+ * [@blackenedgold](https://twitter.com/blackenedgold)
+ * Github: [KeenS](https://github.com/KeenS)
+ * [Idein Inc.](https://idein.jp/)のエンジニア
+ * Lisp, ML, Rust, Shell Scriptあたりを書きます
+
+===
+# 話すこと
+------
+
+* SML# 3.0。0以降立て続けにリリースが続いてる
+* 最近の変更を追いきれないのでまとめて追う
+
+ver.  | date
+------|-----
+3.3.0 | 2017-06-20
+3.2.0 | 2016-09-16
+3.1.1 | 2016-07-15
+3.1.0 | 2016-05-26
+3.0.1 | 2016-04-04
+3.0.0 | 2016-03-31
+2.0.0 | 2014-04-04
+1.2.0 | 2012-11-14
+
+
+===
+
+# そもそもSML#って？
+-------------------
+
+* SML &#39;97 互換のコンパイラ
+  + [The Definition of Standard ML, Revised](http://sml-family.org/sml97-defn.pdf)
+  + Self Hosted
+  + 2.0.0からLLVMベース
+* 実用的な処理系を目指して作られてる
+* 独自機能も多数
+* コンパイラとして使いやすい
+  + 分割コンパイル
+  + REPL
+* 速度は遅め
+
+===
+# SML#の独自機能
+----------------
+3.0.0以降の変更を追うのに一部前提知識として必要。  
+とりあえず型を読めるようになって
+
+* 第一級オーバーロード
+* ランク1多相
+* 多相レコード
+* SQL連携
+* C FFI
+* マルチスレッドサポート
+
+===
+# ランク1多相
+-------------
+
+* SMLでは冠頭多相しかない
+  ``` sml
+  - fun pair x y = (x, y);
+  val pair = fn : &#39;a -&gt; &#39;b -&gt; &#39;a * &#39;b
+  (* pair 1: &#39;b -&gt; (int, &#39;b) にはならない *)
+  - pair 1;
+  stdIn:4.1-4.7 Warning: type vars not generalized because of
+     value restriction are instantiated to dummy types (X1,X2,...)
+  val it = fn : ?.X1 -&gt; int * ?.X1
+  ```
+* SML#では返り値の関数も多相にできる
+  ``` sml
+  # fun pair x y = (x , y);
+  val pair = fn : [&#39;a. &#39;a -&gt; [&#39;b. &#39;b -&gt; &#39;a * &#39;b]]
+  # pair 1;
+  val it = fn : [&#39;a. &#39;a -&gt; int * &#39;a]
+  ```
+* `[&#39;a. ty]` が ${}^\forall a. ty$ の気分
+* 因みに冠頭多相な型パラメータは`,`で並べる
+  ``` sml
+  val pair = fn : [&#39;a, &#39;b. &#39;a -&gt; &#39;b -&gt; &#39;a * &#39;b]
+  ```
+
+
+===
+# 第一級オーバーロード
+---------------------
+
+* SMLの演算子はオーバーロードされてるけど中途半端
+  + 関数として多相になれなくて、推論できなければデフォルトint
+  + `1.0 + 2.0: real` だけど `op+: int * int -&gt; int`
+* SML#はオーバーロードされた関数をサポート
+  + `op+: [&#39;a::{int, word, int64, word64,...}. &#39;a * &#39;a -&gt; &#39;a]`
+* `[&#39;a. ty]` に条件が付いた感じの型
+* 自分でオーバーロードも書けるけど今回は触れない
+
+===
+# 多相レコード
+-------------
+
+* SMLでのレコードのフィールドの選択は多相になれない
+  + アノテーションを与えないといけない
+
+  ``` sml
+  - #id;
+  stdIn:1.2-1.5 Error: unresolved flex record
+     (can&#39;t tell what fields there are besides #id)
+  - #id: {id:int, name: string} -&gt; int;
+  val it = fn : {id:int, name:string} -&gt; int
+  ```
+* SML#は多相になれる
+  ``` sml
+  # #id;
+  val it = fn : [&#39;a#{id: &#39;b}, &#39;b. &#39;a -&gt; &#39;b]
+  ```
+* 適用可能なレコードの上限がついた感じの型
+
+
+
+===
+# SQL連携
+---------
+
+``` sml
+(* DBの宣言。テーブルの型は全て手で書く *)
+val server =
+    _sqlserver &#34;postgres://hoge:password@localhost/sample1&#34;
+    : {people: {name:string, age:int}};
+(* `_sql` に続けてSMLでSQLっぽ書ける *)
+val q = _sql db =&gt;
+         insert into #db.people (name, age)
+         values (&#34;Alice&#34;, 24);
+(* コネクションを作って実行 *)
+val conn = SQL.connect server;
+val _ = _sqlexec q conn;
+```
+
+===
+
+# SQL連携
+---------
+select 文は型に注目
+
+``` sml
+# _sql db =&gt;
+&gt;    select #person.name as name,
+&gt;           #person.age as age
+&gt;    from #db.people as person
+&gt;    where  SQL.&gt;=(#person.age, 25);
+val it = fn
+  : [&#39;a#{people: &#39;b},
+     &#39;b#{age: int, name: &#39;c},
+     &#39;c::{int, intInf, word, char,...},
+     &#39;d::{int, intInf, word, char,...}.
+       &#39;a SQL.db -&gt; {age: int, name: &#39;c} SQL.query]
+```
+
+===
+# C FFI
+--------
+
+* `_import` 一行でCの関数を呼べる
+* そのためにGCをnon-movingにしたり工夫している
+
+``` sml
+# val puts = _import &#34;puts&#34;: (string) -&gt; ();
+val puts = fn : string -&gt; unit
+# puts &#34;hello&#34;;
+hello
+val it = () : unit
+```
+
+===
+
+# マルチスレッドサポート
+-----------------------
+
+* `_import` で`pthread_create`を呼べる
+
+``` sml
+type pthread_t = unit ptr;
+val pthread_create =
+    _import &#34;pthread_create&#34;
+    : (pthread_t ref, unit ptr, unit ptr -&gt; unit ptr, unit ptr) -&gt; int
+fun create f =
+    let
+      val ret = ref _NULL
+      val err = pthread_create (ret, _NULL, f, _NULL)
+      val ref th = ret
+    in
+      if err = 0 then () else raise Fail &#34;pthread_create&#34;;
+      th
+    end
+```
+
+===
+
+# 最近のSML#
+-----------
+Changesベース
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+===
+
+# 3.0.0
+-------
+
+* 64bit化
+  + 逆に32bitサポートは怪しくなった
+* pthreadサポート（あれ？今までは？）
+  + デフォルトでサポートONになったらしい
+* Fully Concurrent GC
+  + [A Fully Concurrent Garbage Collector for Functional Programs on Multicore Processors. Katsuhiro Ueno, Atsushi Ohori. To appear in Proc. ICFP, 2016.](http://www.pllab.riec.tohoku.ac.jp/papers/icfp2016UenoOhori-preprint.pdf)
+===
+
+# Fully Concurrent GC
+---------------------
+
+* SML#のBit Map GCベース
+* アロケーションはスレッド毎にセグメントを割り当てる
+* コレクタはSnap Shotっぽいやつ
+  1. Filledなセグメントは自動でルートセットに
+  2. Currentなセグメントは各スレッドとハンドシェイク
+     + コレクタとミューテータは別スレッド
+     + スレッドが自分が管理しているルートセットを計算する
+     + ライトバリアをonに
+  3. 各ミューテータスレッドからルートセットが返ってくる
+  4. あとはsnap shotと同じ
+  5. ライトバリアをoffにできる
+* 関数型言語なのでライトバリアが響かない
+
+
+===
+
+# 3.1.0
+--------
+
+* JSONサポート
+  + [A Calculus with Partially Dynamic Records for Typeful Manipulation of JSON Objects. Atsushi Ohori, Katsuhiro Ueno, Tomohiro Sasaki, Daisuke Kikuchi. To appear in Proc. ECOOP Conference, 2016.](http://www.pllab.riec.tohoku.ac.jp/papers/ecoopPreversion.pdf)
+===
+# JSONサポート
+-------------
+コードは3.3.0より引用
+
+
+``` sml
+structure JSON =
+struct
+  exception AttemptToReturnVOIDValue
+  exception RuntimeTypeError
+  exception TypeIsNotJsonKind
+  exception AttemptToViewNull
+
+  exception NaturalJoin
+
+  datatype null = datatype JSONTypes.null
+  datatype void = datatype JSONTypes.void
+  datatype jsonTy = datatype JSONTypes.jsonTy
+  datatype json = datatype JSONTypes.json
+  datatype dyn = datatype JSONTypes.dyn
+
+  val view : &#39;a dyn -&gt; &#39;a
+  val import : string -&gt; void dyn
+  val importJson :JSONParser.utJson -&gt; void dyn
+  val typeOf : json -&gt; jsonTy
+  val printJsonTy : jsonTy -&gt; unit
+  val jsonToJsonDyn : json -&gt; void dyn
+  val jsonToString : json -&gt; string
+  val jsonDynToString : &#39;a dyn -&gt; string
+  val jsonDynToJson : &#39;a dyn -&gt; json
+
+  val toJson : [&#39;a#dynamic.&#39;a -&gt; json]
+  val dynamicToJson : PolyDynamic.dynamic -&gt; json
+  val toJsonDyn : [&#39;a#dynamic.&#39;a -&gt; void dyn]
+end
+```
+
+
+===
+# JSONサポート
+-------------
+
+SML3.3に合わせてコードを変えてある
+
+``` sml
+val json = JSON.import &#34;{\&#34;name\&#34;:\&#34;SML#\&#34;, \&#34;version\&#34;:\&#34;3.1\&#34;}&#34;
+val name = _jsoncase json of
+    {name=x:string, ...} =&gt; x;
+val reco =  _json json as {name: string, version: string}
+val versions =  _json JSON.import &#34;{\&#34;name\&#34;:\&#34;SML#\&#34;, \&#34;version\&#34;:\&#34;3.1\&#34;}&#34; as {name: string, version: string}
+val data = JSON.jsonToString (JSON.toJson {name = &#34;SML#&#34;, version = &#34;3.1&#34;})
+```
+
+demo
+
+===
+# 3.1.1
+-------
+* inner join
+* 実行されるsqlクエリの改善
+  + 差分取りづらいので断念
+
+===
+# Inner Join
+------------
+
+``` sml
+_sql db =&gt; select #P.name as name, #P.age as age, #S.salary
+      from #db.Persons as P
+      inner join #db.Salaries as S
+      on #P.id = #S.person_id
+      where SQL.&gt;(#S.salary, 10000) ;
+```
+
+```
+[&#39;a#{Persons: &#39;b list, Salaries: &#39;c list},
+ &#39;b#{age: &#39;f, id: &#39;j, name: &#39;h},
+ &#39;c#{person_id: &#39;j, salary: &#39;d},
+ &#39;d::{int, intInf, &#39;e option},
+ &#39;e::{int, intInf},
+ &#39;f::{int, intInf, word, char,...},
+ &#39;g::{int, intInf, word, char,...},
+ &#39;h::{int, intInf, word, char,...},
+ &#39;i::{int, intInf, word, char,...},
+ &#39;j::{int, intInf, word, char,...},
+ &#39;k::{int, intInf, word, char,...}.
+   &#39;a SQL.conn -&gt; {3: &#39;d, age: &#39;f, name: &#39;h} list SQL.cursor]
+```
+
+
+===
+# 3.2
+------
+
+* DBのnatural joinの型システム
+  + [SML# with Natural Join - ICFP 2016](http://conf.researchr.org/event/icfp-2016/mlfamilyworkshop-2016-papers-sml-with-natural-join)
+  + [A. Ohori and P. Buneman. Type inference in a database programming language. In Proc. ACM Conference on LISP and Functional Programming, pages 174–183, 1988.](http://www.pllab.riec.tohoku.ac.jp/~ohori/research/lfp88.pdf)の実現っぽい？
+* jsonのNULLサポート
+
+===
+# Natural Join
+--------------
+
+``` sml
+_sql db =&gt; select #P.name as name, #P.age as age, #S.salary
+      from #db.Persons as P
+      natural join #db.Salaries as S
+      where SQL.&gt;(#S.salary, 10000) ;
+```
+
+```
+[&#39;a#{Persons: &#39;b list, Salaries: &#39;c list},
+ &#39;b#{age: &#39;f, name: &#39;h}#reify,
+ &#39;c#{salary: &#39;d}#reify,
+ &#39;d::{int, intInf, &#39;e option},
+ &#39;e::{int, intInf},
+ &#39;f::{int, intInf, word, char,...},
+ &#39;g::{int, intInf, word, char,...},
+ &#39;h::{int, intInf, word, char,...},
+ &#39;i::{int, intInf, word, char,...},
+ &#39;j#{}#reify. (* この辺がnatural join型 *)
+   (&#39;j = &#39;b join &#39;c) =&gt;
+   &#39;a SQL.conn -&gt; {3: &#39;d, age: &#39;f, name: &#39;h} list SQL.cursor]
+```
+
+
+===
+# Nullable in JSON
+------------------
+
+``` sml
+val json2 = JSON.import &#34;{\&#34;name\&#34;:\&#34;SML#\&#34;, \&#34;version\&#34;:\&#34;3.1\&#34;, \&#34;date\&#34;: null}&#34;
+val reco2 =  _json json2 as {name: string, version: string, date: string option}
+
+```
+
+===
+
+# 3.3.0
+------
+
+* massive threadsサポート
+  + [Making SML# a General-purpose High-performance Language. Atsushi Ohori, Kenjiro Taura, Katsuhiro Ueno.](http://www.pllab.riec.tohoku.ac.jp/papers/ml2017Preversion.pdf)
+  + [massivethreads/massivethreads: Light weight thread library](https://github.com/massivethreads/massivethreads)
+  + [細粒度マルチスレッド処理系 MassiveThreads](http://www.yl.is.s.u-tokyo.ac.jp/raw-attachment/wiki/GeneralMeeting/20110627-massive.pdf)
+  + 100万個スレッド作れるらしい
+  + IOスケジューリングも頑張るらしい
+* Concurrent, Myth, CMLモジュールが増えた
+  + ようやく処理系提供のスレッドライブラリ
+  + CMLはMLtonとかと互換
+
+===
+
+# 3.3.0
+------
+* SQLの向上
+  + 中置演算子がそのままな感じに
+  + テーブルの型がlistに
+  + sqlexcとsqlevalが廃止されてコネクションを渡されたら実行するように
+  + リフレクション導入？（reifyできる型に対して`pp`が導入された）
+* type reification
+* ML式の自然結合
+
+
+===
+# Massive Threads
+------------------
+
+* Myth: ベースバインディング
+  - [Thread](https://github.com/smlsharp/smlsharp/blob/master/src/thread/main/myth.smi#L7)
+  - [Mutex](https://github.com/smlsharp/smlsharp/blob/master/src/thread/main/myth.smi#L19)
+  - [Cond](https://github.com/smlsharp/smlsharp/blob/master/src/thread/main/myth.smi#L30)
+  - [Barrier](https://github.com/smlsharp/smlsharp/blob/master/src/thread/main/myth.smi#L41)
+* Concurrent: 便利ライブラリ
+  - [MVar](https://github.com/smlsharp/smlsharp/blob/master/src/thread/main/concurrent.smi#L7)
+  - [IVar](https://github.com/smlsharp/smlsharp/blob/master/src/thread/main/concurrent.smi#L15)
+  - [Couple](https://github.com/smlsharp/smlsharp/blob/master/src/thread/main/concurrent.smi#L23)
+  - [Thread](https://github.com/smlsharp/smlsharp/blob/master/src/thread/main/concurrent.smi#L31)
+  - [Future](https://github.com/smlsharp/smlsharp/blob/master/src/thread/main/concurrent.smi#L37)
+* [CML](https://github.com/smlsharp/smlsharp/blob/master/src/thread/main/cml.smi): Concurrent ML互換インタフェース
+  - なんかCSPっぽい作りらしい？
+
+===
+# Massive Threads
+------------------
+
+* なんか[並列処理構文](https://github.com/smlsharp/smlsharp/blob/master/benchmark/benchmarks_massive/suffixsum.sml#L17-L38)も入ったらしい？
+* 長い
+
+``` sml
+_foreach id in dataExp [where setUpExp]
+with pat do iteratorExp while predicateExp
+end
+```
+
+
+===
+# 中置演算子
+-----------
+
+``` sml
+_sql db =&gt; select #P.name as name, #P.age as age, #S.salary
+      from #db.Persons as P inner join #db.Salaries as S on #P.id = #S.person_id
+      where #S.salary &gt; 10000 ;
+```
+
+===
+# SQL式の分割
+------------
+
+``` sml
+# val sel = _sql select #t.name;
+val sel = _
+  : [&#39;a#{t: &#39;b},
+     &#39;b#{name: &#39;c},
+     &#39;c::{int, intInf, word, char,...},
+     &#39;d::{int, intInf, word, char,...},
+     &#39;e.
+       (&#39;a list, {1: &#39;c} list, &#39;e) SQL.select]
+# val frm = fn db =&gt; _sql from #db.people as t
+&gt; ;
+val frm = fn
+  : [&#39;a#{people: &#39;b list}, &#39;b, &#39;c.
+       (&#39;a, &#39;c) SQL.db -&gt; ({t: &#39;b} list, &#39;c) SQL.from]
+# val whr = fn () =&gt; _sql where (#t.age = 25 and #t.salary &gt; 300);
+val whr = fn
+  : [&#39;a#{t: &#39;b},
+     &#39;b#{age: &#39;d, salary: &#39;f},
+     &#39;c,
+     &#39;d::{int, intInf, &#39;e option},
+     &#39;e::{int, intInf},
+     &#39;f::{int, intInf, &#39;g option},
+     &#39;g::{int, intInf}.
+       unit -&gt; (&#39;a list -&gt; &#39;a list, &#39;c) SQL.whr]
+# val q = _sql db =&gt; select...(sel) from...(frm db) where...(whr ());
+val q = fn
+  : [&#39;a#{people: &#39;b list},
+     &#39;b#{age: &#39;e, name: &#39;c, salary: &#39;g},
+     &#39;c::{int, intInf, word, char,...},
+     &#39;d::{int, intInf, word, char,...},
+     &#39;e::{int, intInf, &#39;f option},
+     &#39;f::{int, intInf},
+     &#39;g::{int, intInf, &#39;h option},
+     &#39;h::{int, intInf}.
+       &#39;a SQL.conn -&gt; {1: &#39;c} list SQL.cursor]
+
+```
+
+===
+# Type Reification
+------------------
+
+* 値をreifyしてdatatypeとして取り出せる
+* いわゆるリフレクション？
+* [コード](https://github.com/smlsharp/smlsharp/blob/master/src/compiler-utils/reflection/main/ReifiedTerm.ppg#L59)
+
+``` sml
+structure ReifyTerm =
+struct
+  val toReifiedTerm : [&#39;a#reify.&#39;a -&gt; ReifiedTerm.reifiedTerm]
+  val sizeOf : ReifiedTy.reifiedTy -&gt; word
+  val setCdr : [&#39;a#reify. &#39;a list * &#39;a list -&gt; unit]
+end
+
+```
+
+
+===
+
+# Type Reification
+------------------
+
+``` sml
+fun (&#39;a#reify) pp (x:&#39;a) = 
+    (TextIO.print (ReifiedTerm.reifiedTermToString (ReifyTerm.toReifiedTerm x));
+     TextIO.print  &#34;\n&#34;)
+```
+
+```
+# pp;
+val it = fn : [&#39;a#reify. &#39;a -&gt; unit]
+# pp (1 + 1);
+2
+val it = () : unit
+# pp {name = &#34;keen&#34;, age = 25};
+{age = 25, name = &#34;keen&#34;}
+val it = () : unit
+
+```
+
+===
+# ML式の自然結合
+----------------
+
+``` sml
+# _join(1, 1);
+val it = 1 : int
+# _join(1, 2);
+uncaught exception NaturalJoin.NaturalJoin at (interactive):2
+# _join([1, 2, 3], [2, 3, 4]);
+val it = [2, 3] : int list
+# val l1 = [{id = 1, age = 10}, {id = 2, age = 20}, {id = 3, age = 30}];
+val l1 =
+  [{age = 10, id = 1}, {age = 20, id = 2}, {age = 30, id = 3}] : {age: int, id: int} list
+# val l2 = [{id = 2, salary = 200}, {id = 3, salary = 300}, {id = 4, salary = 400}];
+val l2 =
+  [{id = 2, salary = 200}, {id = 3, salary = 300}, {id = 4, salary = 400}] : {id: int, salary: int} list
+# _join(l1, l2);
+val it =
+  [{age = 20, id = 2, salary = 200}, {age = 30, id = 3, salary = 300}] : {age: int, id: int, salary: int} list
+```
+
+===
+# まとめ
+--------
+
+* SML# 3系の変更を追ったよ
+* SQL、JSON、Concurrency
+* みんなもSML# 使おうね
+
+&lt;/textarea&gt;</description>
     </item>
     
     <item>
@@ -168,7 +741,188 @@ n月刊ラムダノートに書いた「代数的データ型とパターンマ�
       <pubDate>Tue, 29 Mar 2016 01:44:39 +0900</pubDate>
       
       <guid>https://KeenS.github.io/slide/smldekansuukatatekiseikihyougenmatchi/</guid>
-      <description># SMLで函数型的正規表現マッチ ---------------------- &lt;!-- .slide: class=&#34;center&#34; --&gt; === # About Me --------- ![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt; + κeen + [@blackenedgold](https://twitter.com/blackenedgold) + Github: [KeenS](https://github.com/KeenS)</description>
+      <description>&lt;textarea data-markdown
+    data-separator=&#34;\n===\n&#34;
+    data-vertical=&#34;\n---\n&#34;
+    data-notes=&#34;^Note:&#34;&gt;
+# SMLで函数型的正規表現マッチ
+----------------------
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+===
+# About Me
+---------
+![κeenのアイコン](/images/icon.png) &lt;!-- .element: style=&#34;position:absolute;right:0;z-index:-1&#34; --&gt;
+
+ + κeen
+ + [@blackenedgold](https://twitter.com/blackenedgold)
+ + Github: [KeenS](https://github.com/KeenS)
+ + サイバーエージェントのエンジニア
+ + Lisp, ML, Rust, Shell Scriptあたりを書きます
+
+===
+# 元ネタ
+--------
+[関数型的正規表現マッチ | Preferred Research](https://research.preferred.jp/2010/11/regexp-play/)
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+===
+# 正規表現
+----------
+
+必要最小限の要素は5つだけ
+
+1. 空文字
+2. アルファベット1つ
+3. 正規表現のOR結合
+4. 正規表現のAND結合
+5. 正規表現の繰り返し
+
+===
+# SMLで表してみる
+-----------------
+
+``` sml
+datatype  reg
+  = Empty
+  | Sym of t
+  | Or of reg * reg
+  | And of reg * reg
+  | Rep of reg
+```
+===
+# 本当に大丈夫？
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+===
+# `/(a|b)*c/`
+-----------
+
+``` sml
+And(Rep(Or(Sym &#34;a&#34;, Sym &#34;b&#34;)), Sym &#34;c&#34;)
+```
+
+===
+# `/https?:\/\/[a-z]*/`
+-----------
+
+``` sml
+val a_z = Or(Sym&#34;a&#34;, Or(Sym &#34;b&#34;, Or(Sym &#34;d&#34;, ...)))
+And(Sym &#34;http&#34;, And(Or(Sym &#34;s&#34;, Empty), And(Sym &#34;://&#34;, Rep a_z)))
+```
+
+===
+# 実装してみる
+
+&lt;!-- .slide: class=&#34;center&#34; --&gt;
+
+===
+# `Empty`, `Sym`, `Or`
+----------------
+trivial
+
+``` sml
+fun match Empty u = isEmpty u
+  | match (Sym a) u = a = u
+  | match (Or(p, q)) u = match p u orelse match q u
+```
+
+===
+# `And`
+--------
+
+`And(p, q)` に入力が`u`の時`p`がどこまでマッチするか分からないので
+
+* `u` から一部取ってきて`p`にマッチするか確認
+* 残りの文字列が`q`にマッチするか確認
+
+===
+# `And`
+--------
+`match (And (Sym &#34;a&#34;, Sym &#34;b&#34;)) &#34;abd&#34;` の時
+
+* (Sym &#34;a&#34;と&#34;&#34;)、(Sym &#34;b&#34;と&#34;abd&#34;)
+* (Sym &#34;a&#34;と&#34;a&#34;)、(Sym &#34;b&#34;と&#34;bd&#34;)
+* (Sym &#34;a&#34;と&#34;ab&#34;)、(Sym &#34;b&#34;と&#34;d&#34;)
+* (Sym &#34;a&#34;と&#34;abd&#34;)、(Sym &#34;b&#34;と&#34;&#34;)
+
+
+===
+# `And`
+--------
+
+``` sml
+  | match (And(p, q)) u = 
+    withSprits u (fn (u1, u2) =&gt; 
+      match p u1 andalso match q u2)
+
+```
+
+`withSprits u f` は`u`を2分割するパターン全通りに対して`f`を呼び、最初に`true`になったものを返す。
+
+===
+# `Rep`
+-------
+
+`Rep(r)` に入力が`u`の時、`r`がどこまでマッチするかも`Rep`が何回繰り返すかも分からないので
+
+* `u` を任意の個数に分割し
+* その全てが`r`にマッチするか確認
+
+===
+===
+# `Rep`
+--------
+`match (Rep (Sym &#34;a&#34;)) &#34;abd&#34;` の時
+
+* (Sym &#34;a&#34;と&#34;abd&#34;)
+* (Sym &#34;a&#34;と&#34;a&#34;)、(Sym &#34;a&#34;と&#34;bd&#34;)
+* (Sym &#34;a&#34;と&#34;ab&#34;)、(Sym &#34;a&#34;と&#34;d&#34;)
+* (Sym &#34;a&#34;と&#34;a&#34;)、(Sym &#34;a&#34;と&#34;b&#34;)、(Sym &#34;a&#34;と&#34;d&#34;)
+
+
+
+===
+# `Rep`
+--------
+
+``` sml
+  | match (Rep(r)) u =
+    withParts u (fn input =&gt;
+      List.all (match r) input)
+```
+
+`withParts u f` は`u`を分割するパターン全通りに対して`f`を呼び、最初に`true`になったものを返す。
+
+
+===
+# チェック
+----------
+
+```
+# match (And(Rep(Or(Sym &#34;a&#34;, Sym &#34;b&#34;)), Sym &#34;c&#34;)) &#34;ababbca&#34;;
+val it = false : bool
+# match (And(Rep(Or(Sym &#34;a&#34;, Sym &#34;b&#34;)), Sym &#34;c&#34;)) &#34;ababbc&#34;;
+val it = true : bool
+# match (And(Rep(Or(Sym &#34;a&#34;, Sym &#34;b&#34;)), Sym &#34;c&#34;)) &#34;c&#34;;
+val it = true : bool
+```
+
+===
+# まとめ
+--------
+
+* 適当に実装したら正規表現も簡単に実装出来るよ
+* SMLで正規表現実装したよ
+
+===
+# 参考
+------
+
+* [KeenS/regexp](https://github.com/KeenS/regexp)
+
+&lt;/textarea&gt;</description>
     </item>
     
     <item>
